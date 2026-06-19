@@ -1829,6 +1829,66 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
                 "default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
             )
         ),
+        "matrix_release_decision_release_quality_publication_guard_final_evidence_ready": (
+            summary.get(
+                "matrix_release_decision_release_quality_publication_guard_final_evidence_ready"
+            )
+        ),
+        "matrix_release_decision_release_quality_publication_guard_final_evidence_match": (
+            summary.get(
+                "matrix_release_decision_release_quality_publication_guard_final_evidence_match"
+            )
+        ),
+        "matrix_release_decision_release_quality_publication_guard_raw_final_evidence_ready": (
+            summary.get(
+                "matrix_release_decision_release_quality_publication_guard_raw_final_evidence_ready"
+            )
+        ),
+        "matrix_release_decision_release_quality_publication_guard_phase2_final_evidence_ready": (
+            summary.get(
+                "matrix_release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
+            )
+        ),
+        "matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready": (
+            summary.get(
+                "matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready"
+            )
+        ),
+        "matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_match": (
+            summary.get(
+                "matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_match"
+            )
+        ),
+        "matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready": (
+            summary.get(
+                "matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready"
+            )
+        ),
+        "matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready": (
+            summary.get(
+                "matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
+            )
+        ),
+        "default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready": (
+            summary.get(
+                "default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready"
+            )
+        ),
+        "default_promotion_release_decision_release_quality_publication_guard_final_evidence_match": (
+            summary.get(
+                "default_promotion_release_decision_release_quality_publication_guard_final_evidence_match"
+            )
+        ),
+        "default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready": (
+            summary.get(
+                "default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready"
+            )
+        ),
+        "default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready": (
+            summary.get(
+                "default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
+            )
+        ),
         "github_plan_matrix_resident_fastpath_handoff_ready": summary.get(
             "github_plan_matrix_resident_fastpath_handoff_ready"
         ),
@@ -4084,36 +4144,21 @@ def build_phase2_status(
             preflight.get(field) is not None
             for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS
         )
-        release_quality_guard_final_evidence_present = any(
-            preflight.get(field) is not None
-            for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_FIELDS
+        preflight_status_payload = {"publish_preflight": preflight}
+        release_quality_guard_final_evidence_present = (
+            _publish_preflight_release_quality_publication_guard_final_evidence_present(
+                preflight_status_payload
+            )
+        )
+        release_quality_guard_final_evidence_detail_present = (
+            _publish_preflight_release_quality_publication_guard_final_evidence_detail_present(
+                preflight_status_payload
+            )
         )
         release_quality_guard_final_evidence_passed = (
             not release_quality_guard_final_evidence_present
-            or all(
-                (
-                    preflight.get(f"{prefix}_final_checks_ready") is True
-                    and preflight.get(f"{prefix}_final_checks_match") is True
-                    and (
-                        (
-                            preflight.get(f"{prefix}_raw_final_checks_ready")
-                            is True
-                            and preflight.get(
-                                f"{prefix}_phase2_final_checks_ready"
-                            )
-                            is True
-                        )
-                        or (
-                            preflight.get(f"{prefix}_raw_final_checks_ready")
-                            is None
-                            and preflight.get(
-                                f"{prefix}_phase2_final_checks_ready"
-                            )
-                            is None
-                        )
-                    )
-                )
-                for prefix in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES
+            or _publish_preflight_release_quality_publication_guard_final_evidence_passed(
+                preflight_status_payload
             )
         )
         checks.append(
@@ -4280,6 +4325,9 @@ def build_phase2_status(
                     "final_evidence_present": (
                         release_quality_guard_final_evidence_present
                     ),
+                    "final_evidence_detail_present": (
+                        release_quality_guard_final_evidence_detail_present
+                    ),
                     "final_evidence_passed": (
                         release_quality_guard_final_evidence_passed
                     ),
@@ -4333,6 +4381,42 @@ def build_phase2_status(
                     ),
                     "default_promotion_phase2_final_checks_ready": preflight.get(
                         "default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+                    ),
+                    "matrix_final_evidence_ready": preflight.get(
+                        "matrix_release_decision_release_quality_publication_guard_final_evidence_ready"
+                    ),
+                    "matrix_final_evidence_match": preflight.get(
+                        "matrix_release_decision_release_quality_publication_guard_final_evidence_match"
+                    ),
+                    "matrix_raw_final_evidence_ready": preflight.get(
+                        "matrix_release_decision_release_quality_publication_guard_raw_final_evidence_ready"
+                    ),
+                    "matrix_phase2_final_evidence_ready": preflight.get(
+                        "matrix_release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
+                    ),
+                    "matrix_default_final_evidence_ready": preflight.get(
+                        "matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready"
+                    ),
+                    "matrix_default_final_evidence_match": preflight.get(
+                        "matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_match"
+                    ),
+                    "matrix_default_raw_final_evidence_ready": preflight.get(
+                        "matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready"
+                    ),
+                    "matrix_default_phase2_final_evidence_ready": preflight.get(
+                        "matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
+                    ),
+                    "default_promotion_final_evidence_ready": preflight.get(
+                        "default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready"
+                    ),
+                    "default_promotion_final_evidence_match": preflight.get(
+                        "default_promotion_release_decision_release_quality_publication_guard_final_evidence_match"
+                    ),
+                    "default_promotion_raw_final_evidence_ready": preflight.get(
+                        "default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready"
+                    ),
+                    "default_promotion_phase2_final_evidence_ready": preflight.get(
+                        "default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
                     ),
                     "failed_checks": preflight.get("failed_checks"),
                 },
@@ -6011,6 +6095,24 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{preflight.get('default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready')}"
                 ),
                 (
+                    "- Release quality publication guard final evidence detail: "
+                    "matrix="
+                    f"{preflight.get('matrix_release_decision_release_quality_publication_guard_final_evidence_ready')}/"
+                    f"{preflight.get('matrix_release_decision_release_quality_publication_guard_final_evidence_match')}/"
+                    f"{preflight.get('matrix_release_decision_release_quality_publication_guard_raw_final_evidence_ready')}/"
+                    f"{preflight.get('matrix_release_decision_release_quality_publication_guard_phase2_final_evidence_ready')}, "
+                    "matrix-default="
+                    f"{preflight.get('matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready')}/"
+                    f"{preflight.get('matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_match')}/"
+                    f"{preflight.get('matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready')}/"
+                    f"{preflight.get('matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready')}, "
+                    "default="
+                    f"{preflight.get('default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready')}/"
+                    f"{preflight.get('default_promotion_release_decision_release_quality_publication_guard_final_evidence_match')}/"
+                    f"{preflight.get('default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready')}/"
+                    f"{preflight.get('default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready')}"
+                ),
+                (
                     "- Resident winsorized sweep statuses: "
                     f"matrix={preflight.get('matrix_resident_winsorized_sweep_status')}, "
                     "default-promotion="
@@ -6722,17 +6824,35 @@ _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES = (
     "default_promotion_release_decision_release_quality_publication_guard",
 )
 
-_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_SUFFIXES = (
+_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_SUFFIXES = (
     "final_checks_ready",
     "final_checks_match",
     "raw_final_checks_ready",
     "phase2_final_checks_ready",
 )
 
-_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_FIELDS = tuple(
+_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_FIELDS = tuple(
     f"{prefix}_{suffix}"
     for prefix in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES
-    for suffix in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_SUFFIXES
+    for suffix in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_SUFFIXES
+)
+
+_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_SUFFIXES = (
+    "final_evidence_ready",
+    "final_evidence_match",
+    "raw_final_evidence_ready",
+    "phase2_final_evidence_ready",
+)
+
+_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS = tuple(
+    f"{prefix}_{suffix}"
+    for prefix in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES
+    for suffix in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_SUFFIXES
+)
+
+_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_FIELDS = (
+    *_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_FIELDS,
+    *_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS,
 )
 
 _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_STATUS_FIELDS = (
@@ -7207,29 +7327,52 @@ def _publish_preflight_release_quality_publication_guard_final_evidence_present(
     )
 
 
+def _publish_preflight_release_quality_publication_guard_legacy_final_evidence_present(
+    payload: dict[str, Any],
+) -> bool:
+    return any(
+        _status_value(payload, "publish_preflight", field) is not None
+        for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_FIELDS
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_final_evidence_detail_present(
+    payload: dict[str, Any],
+) -> bool:
+    return any(
+        _status_value(payload, "publish_preflight", field) is not None
+        for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS
+    )
+
+
 def _publish_preflight_release_quality_publication_guard_final_evidence_layer_passed(
     payload: dict[str, Any],
     prefix: str,
+    *,
+    ready_suffix: str,
+    match_suffix: str,
+    raw_ready_suffix: str,
+    phase2_ready_suffix: str,
 ) -> bool:
     final_ready = _status_value(
         payload,
         "publish_preflight",
-        f"{prefix}_final_checks_ready",
+        f"{prefix}_{ready_suffix}",
     )
     final_match = _status_value(
         payload,
         "publish_preflight",
-        f"{prefix}_final_checks_match",
+        f"{prefix}_{match_suffix}",
     )
     raw_ready = _status_value(
         payload,
         "publish_preflight",
-        f"{prefix}_raw_final_checks_ready",
+        f"{prefix}_{raw_ready_suffix}",
     )
     phase2_ready = _status_value(
         payload,
         "publish_preflight",
-        f"{prefix}_phase2_final_checks_ready",
+        f"{prefix}_{phase2_ready_suffix}",
     )
     if (
         final_ready is None
@@ -7252,17 +7395,75 @@ def _publish_preflight_release_quality_publication_guard_final_evidence_layer_pa
     )
 
 
-def _publish_preflight_release_quality_publication_guard_final_evidence_passed(
+def _publish_preflight_release_quality_publication_guard_legacy_final_evidence_layer_passed(
+    payload: dict[str, Any],
+    prefix: str,
+) -> bool:
+    return _publish_preflight_release_quality_publication_guard_final_evidence_layer_passed(
+        payload,
+        prefix,
+        ready_suffix="final_checks_ready",
+        match_suffix="final_checks_match",
+        raw_ready_suffix="raw_final_checks_ready",
+        phase2_ready_suffix="phase2_final_checks_ready",
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_final_evidence_detail_layer_passed(
+    payload: dict[str, Any],
+    prefix: str,
+) -> bool:
+    return _publish_preflight_release_quality_publication_guard_final_evidence_layer_passed(
+        payload,
+        prefix,
+        ready_suffix="final_evidence_ready",
+        match_suffix="final_evidence_match",
+        raw_ready_suffix="raw_final_evidence_ready",
+        phase2_ready_suffix="phase2_final_evidence_ready",
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_final_evidence_detail_passed(
     payload: dict[str, Any],
 ) -> bool:
-    return _publish_preflight_release_quality_publication_guard_final_evidence_present(
+    return _publish_preflight_release_quality_publication_guard_final_evidence_detail_present(
         payload
     ) and all(
-        _publish_preflight_release_quality_publication_guard_final_evidence_layer_passed(
+        _publish_preflight_release_quality_publication_guard_final_evidence_detail_layer_passed(
             payload,
             prefix,
         )
         for prefix in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_legacy_final_evidence_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return _publish_preflight_release_quality_publication_guard_legacy_final_evidence_present(
+        payload
+    ) and all(
+        _publish_preflight_release_quality_publication_guard_legacy_final_evidence_layer_passed(
+            payload,
+            prefix,
+        )
+        for prefix in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_final_evidence_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return (
+        _publish_preflight_release_quality_publication_guard_final_evidence_detail_passed(
+            payload
+        )
+        if _publish_preflight_release_quality_publication_guard_final_evidence_detail_present(
+            payload
+        )
+        else _publish_preflight_release_quality_publication_guard_legacy_final_evidence_passed(
+            payload
+        )
     )
 
 
@@ -8567,6 +8768,49 @@ def build_phase2_status_compare(
                 ),
                 "final_evidence_passed": (
                     _publish_preflight_release_quality_publication_guard_final_evidence_passed(
+                        candidate
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_release_quality_publication_guard_statuses(
+                        candidate
+                    )
+                ),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_release_quality_publication_guard_final_evidence_detail_preserved",
+            not _publish_preflight_release_quality_publication_guard_final_evidence_detail_passed(
+                baseline
+            )
+            or _publish_preflight_release_quality_publication_guard_final_evidence_detail_passed(
+                candidate
+            ),
+            baseline={
+                "final_evidence_detail_present": (
+                    _publish_preflight_release_quality_publication_guard_final_evidence_detail_present(
+                        baseline
+                    )
+                ),
+                "final_evidence_detail_passed": (
+                    _publish_preflight_release_quality_publication_guard_final_evidence_detail_passed(
+                        baseline
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_release_quality_publication_guard_statuses(
+                        baseline
+                    )
+                ),
+            },
+            candidate={
+                "final_evidence_detail_present": (
+                    _publish_preflight_release_quality_publication_guard_final_evidence_detail_present(
+                        candidate
+                    )
+                ),
+                "final_evidence_detail_passed": (
+                    _publish_preflight_release_quality_publication_guard_final_evidence_detail_passed(
                         candidate
                     )
                 ),

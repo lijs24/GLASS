@@ -6981,6 +6981,29 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 388: Phase2 Publish Preflight Final Evidence Detail Handoff
+
+- Carry Gate387 publish-preflight final release quality evidence detail into
+  `glass phase2-status`.
+- Preserve legacy compatibility for older publish-preflight artifacts that only
+  provide the historical `final_checks_*` evidence names, while requiring
+  `final_evidence_*` ready/match/raw/Phase2 detail fields to pass once present.
+- Block Phase2 status when publish-preflight final evidence detail fails or is
+  partially dropped after being emitted by the local preflight.
+- Extend `glass phase2-status-compare` with a dedicated final-evidence-detail
+  preservation check so candidates cannot lose a previously passing Gate387
+  detail handoff while still accepting legacy status payloads.
+- Surface final evidence detail readiness, match status, raw fields, and Phase2
+  fields in Phase2 status JSON evidence and Markdown.
+- Add focused tests for green detail surfacing, compatible-missing detail,
+  legacy-only compatibility, failed detail evidence, and compare-time loss of
+  detail fields.
+- Keep this gate Phase2 status/compare scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

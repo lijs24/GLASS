@@ -1604,7 +1604,7 @@ def _write_publish_preflight(
                 if release_quality_publication_guard_final_evidence_compatible_missing
                 else final_evidence_ready
             )
-            final_evidence_fields = {
+            legacy_final_evidence_fields = {
                 "final_checks_ready": (
                     True
                     if release_quality_publication_guard_final_evidence_compatible_missing
@@ -1614,12 +1614,24 @@ def _write_publish_preflight(
                 "raw_final_checks_ready": final_raw_ready,
                 "phase2_final_checks_ready": final_phase2_ready,
             }
+            final_evidence_detail_fields = {
+                "final_evidence_ready": (
+                    True
+                    if release_quality_publication_guard_final_evidence_compatible_missing
+                    else final_evidence_ready
+                ),
+                "final_evidence_match": True,
+                "raw_final_evidence_ready": final_raw_ready,
+                "phase2_final_evidence_ready": final_phase2_ready,
+            }
             for prefix in (
                 "matrix_release_decision_release_quality_publication_guard",
                 "matrix_default_promotion_release_decision_release_quality_publication_guard",
                 "default_promotion_release_decision_release_quality_publication_guard",
             ):
-                for suffix, value in final_evidence_fields.items():
+                for suffix, value in legacy_final_evidence_fields.items():
+                    summary[f"{prefix}_{suffix}"] = value
+                for suffix, value in final_evidence_detail_fields.items():
                     summary[f"{prefix}_{suffix}"] = value
         if not release_quality_publication_guard_passed:
             failed_checks = [
@@ -2859,6 +2871,32 @@ def _status_payload(
                     "final_checks_match",
                     "raw_final_checks_ready",
                     "phase2_final_checks_ready",
+                )
+            },
+            **{
+                f"{prefix}_{suffix}": (
+                    (
+                        True
+                        if suffix in {"final_evidence_ready", "final_evidence_match"}
+                        else None
+                    )
+                    if publish_preflight_release_quality_publication_guard_final_evidence_compatible_missing
+                    else publish_preflight_release_quality_publication_guard_final_evidence_passed
+                    if suffix != "final_evidence_match"
+                    else True
+                )
+                if publish_preflight_release_quality_publication_guard_final_evidence_present
+                else None
+                for prefix in (
+                    "matrix_release_decision_release_quality_publication_guard",
+                    "matrix_default_promotion_release_decision_release_quality_publication_guard",
+                    "default_promotion_release_decision_release_quality_publication_guard",
+                )
+                for suffix in (
+                    "final_evidence_ready",
+                    "final_evidence_match",
+                    "raw_final_evidence_ready",
+                    "phase2_final_evidence_ready",
                 )
             },
             "github_plan_matrix_resident_fastpath_handoff_ready": (
@@ -4634,10 +4672,21 @@ def test_phase2_status_surfaces_publish_preflight_release_quality_publication_gu
     assert guard_check["evidence"]["matrix_final_checks_ready"] is True
     assert guard_check["evidence"]["matrix_raw_final_checks_ready"] is True
     assert guard_check["evidence"]["default_promotion_phase2_final_checks_ready"] is True
+    assert guard_check["evidence"]["final_evidence_detail_present"] is True
+    assert guard_check["evidence"]["matrix_final_evidence_ready"] is True
+    assert guard_check["evidence"]["matrix_raw_final_evidence_ready"] is True
+    assert guard_check["evidence"]["default_promotion_phase2_final_evidence_ready"] is True
+    assert (
+        status["publish_preflight"][
+            "matrix_release_decision_release_quality_publication_guard_final_evidence_ready"
+        ]
+        is True
+    )
     assert "Release quality publication guard evidence" in text
     assert "Release quality publication guard checks" in text
     assert "Release quality publication guard final checks" in text
     assert "Release quality publication guard final evidence" in text
+    assert "Release quality publication guard final evidence detail" in text
 
 
 def test_phase2_status_allows_missing_publish_preflight_release_quality_publication_guard(
@@ -4774,6 +4823,10 @@ def test_phase2_status_allows_compatible_missing_publish_preflight_release_quali
     assert guard_check["evidence"]["matrix_final_checks_ready"] is True
     assert guard_check["evidence"]["matrix_raw_final_checks_ready"] is None
     assert guard_check["evidence"]["matrix_phase2_final_checks_ready"] is None
+    assert guard_check["evidence"]["final_evidence_detail_present"] is True
+    assert guard_check["evidence"]["matrix_final_evidence_ready"] is True
+    assert guard_check["evidence"]["matrix_raw_final_evidence_ready"] is None
+    assert guard_check["evidence"]["matrix_phase2_final_evidence_ready"] is None
 
 
 def test_phase2_status_blocks_failed_publish_preflight_release_quality_final_evidence(
@@ -4808,6 +4861,85 @@ def test_phase2_status_blocks_failed_publish_preflight_release_quality_final_evi
     assert guard_check["evidence"]["final_evidence_passed"] is False
     assert guard_check["evidence"]["matrix_final_checks_ready"] is False
     assert guard_check["evidence"]["matrix_raw_final_checks_ready"] is False
+    assert guard_check["evidence"]["final_evidence_detail_present"] is True
+    assert guard_check["evidence"]["matrix_final_evidence_ready"] is False
+    assert guard_check["evidence"]["matrix_raw_final_evidence_ready"] is False
+
+
+def test_phase2_status_allows_legacy_publish_preflight_release_quality_final_evidence_without_detail(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=388)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(publish_preflight)
+    payload = read_json(publish_preflight)
+    for prefix in (
+        "matrix_release_decision_release_quality_publication_guard",
+        "matrix_default_promotion_release_decision_release_quality_publication_guard",
+        "default_promotion_release_decision_release_quality_publication_guard",
+    ):
+        for suffix in (
+            "final_evidence_ready",
+            "final_evidence_match",
+            "raw_final_evidence_ready",
+            "phase2_final_evidence_ready",
+        ):
+            payload["summary"][f"{prefix}_{suffix}"] = None
+    write_json(publish_preflight, payload)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    guard_check = checks[
+        "windows_publish_preflight_release_quality_publication_guard_passed"
+    ]
+
+    assert status["status"] == "green"
+    assert guard_check["passed"] is True
+    assert guard_check["evidence"]["final_evidence_present"] is True
+    assert guard_check["evidence"]["final_evidence_detail_present"] is False
+    assert guard_check["evidence"]["final_evidence_passed"] is True
+    assert guard_check["evidence"]["matrix_final_checks_ready"] is True
+    assert guard_check["evidence"]["matrix_final_evidence_ready"] is None
+
+
+def test_phase2_status_blocks_failed_publish_preflight_release_quality_final_evidence_detail(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=388)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(publish_preflight)
+    payload = read_json(publish_preflight)
+    payload["summary"][
+        "matrix_release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
+    ] = False
+    write_json(publish_preflight, payload)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    guard_check = checks[
+        "windows_publish_preflight_release_quality_publication_guard_passed"
+    ]
+
+    assert status["status"] == "attention_required"
+    assert guard_check["passed"] is False
+    assert guard_check["evidence"]["final_evidence_detail_present"] is True
+    assert guard_check["evidence"]["final_evidence_passed"] is False
+    assert guard_check["evidence"]["matrix_phase2_final_checks_ready"] is True
+    assert guard_check["evidence"]["matrix_phase2_final_evidence_ready"] is False
 
 
 def test_phase2_status_blocks_failed_stack_publication_policy_handoff(
@@ -7333,6 +7465,58 @@ def test_phase2_status_compare_flags_missing_publish_preflight_release_quality_f
     assert (
         payload["candidate"]["publish_preflight_release_quality_publication_guard"][
             "matrix_release_decision_release_quality_publication_guard_final_checks_ready"
+        ]
+        is None
+    )
+
+
+def test_phase2_status_compare_flags_missing_publish_preflight_release_quality_final_evidence_detail(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=388))
+    candidate_payload = _status_payload(gate=388)
+    for prefix in (
+        "matrix_release_decision_release_quality_publication_guard",
+        "matrix_default_promotion_release_decision_release_quality_publication_guard",
+        "default_promotion_release_decision_release_quality_publication_guard",
+    ):
+        for suffix in (
+            "final_evidence_ready",
+            "final_evidence_match",
+            "raw_final_evidence_ready",
+            "phase2_final_evidence_ready",
+        ):
+            candidate_payload["publish_preflight"][f"{prefix}_{suffix}"] = None
+    write_json(candidate, candidate_payload)
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    detail_check = checks[
+        "windows_publish_preflight_release_quality_publication_guard_final_evidence_detail_preserved"
+    ]
+    legacy_check = checks[
+        "windows_publish_preflight_release_quality_publication_guard_final_evidence_preserved"
+    ]
+
+    assert payload["status"] == "regressed"
+    assert legacy_check["passed"] is True
+    assert detail_check["passed"] is False
+    assert (
+        detail_check["evidence"]["baseline"]["final_evidence_detail_present"] is True
+    )
+    assert (
+        detail_check["evidence"]["candidate"]["final_evidence_detail_present"]
+        is False
+    )
+    assert (
+        payload["candidate"]["publish_preflight_release_quality_publication_guard"][
+            "matrix_release_decision_release_quality_publication_guard_final_evidence_ready"
         ]
         is None
     )
