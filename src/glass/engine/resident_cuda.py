@@ -41,10 +41,12 @@ from glass.engine.resident_master_cache import (
     validate_resident_master_cache_payload,
 )
 from glass.engine.resident_source_dq import (
+    apply_resident_inline_cosmetic_thresholds,
     apply_resident_source_invalid_mask,
     build_resident_source_dq_execution_group,
     build_resident_source_dq_summary,
     combine_source_invalid_masks,
+    inline_cosmetic_thresholds_from_array,
     source_invalid_mask_from_array,
     source_invalid_mask_from_inline_cosmetic,
     source_invalid_mask_from_sidecar_path,
@@ -1608,9 +1610,9 @@ def _resident_source_invalid_mask_from_frame(
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
 ) -> tuple[np.ndarray | None, dict[str, Any]]:
-    components: list[tuple[np.ndarray | None, dict[str, Any]]] = [
-        source_invalid_mask_from_array(data, height=height, width=width)
-    ]
+    components: list[tuple[np.ndarray | None, dict[str, Any]]] = []
+    if resident_inline_source_dq != "cosmetic_cuda":
+        components.append(source_invalid_mask_from_array(data, height=height, width=width))
     if resident_inline_source_dq == "cosmetic":
         components.append(
             source_invalid_mask_from_inline_cosmetic(
@@ -1648,6 +1650,26 @@ def _resident_source_invalid_mask_from_frame(
             )
         )
     return combine_source_invalid_masks(components, height=height, width=width)
+
+
+def _resident_source_inline_cosmetic_thresholds_from_frame(
+    data: Any,
+    *,
+    height: int,
+    width: int,
+    resident_inline_source_dq: str = "off",
+    resident_inline_source_dq_hot_sigma: float = 8.0,
+    resident_inline_source_dq_cold_sigma: float = 8.0,
+) -> dict[str, Any] | None:
+    if resident_inline_source_dq != "cosmetic_cuda":
+        return None
+    return inline_cosmetic_thresholds_from_array(
+        data,
+        height=height,
+        width=width,
+        hot_sigma=resident_inline_source_dq_hot_sigma,
+        cold_sigma=resident_inline_source_dq_cold_sigma,
+    )
 
 
 def _resident_dq_coverage_provenance(
@@ -3105,8 +3127,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident CUDA mode supports integration weighting=none or simple_snr")
     if resident_output_maps not in _RESIDENT_OUTPUT_MAP_POLICIES:
         raise ValueError("resident_output_maps must be audit, science, or minimal")
-    if resident_inline_source_dq not in {"off", "cosmetic"}:
-        raise ValueError("resident_inline_source_dq must be off or cosmetic")
+    if resident_inline_source_dq not in {"off", "cosmetic", "cosmetic_cuda"}:
+        raise ValueError("resident_inline_source_dq must be off, cosmetic, or cosmetic_cuda")
     if resident_inline_source_dq_hot_sigma <= 0.0:
         raise ValueError("resident_inline_source_dq_hot_sigma must be positive")
     if resident_inline_source_dq_cold_sigma <= 0.0:
@@ -3712,6 +3734,7 @@ def run_resident_calibration_integration(
                         source_dq_pending_by_index: dict[
                             int, tuple[str, np.ndarray | None, dict[str, Any]]
                         ] = {}
+                        source_dq_threshold_pending_by_index: dict[int, tuple[str, dict[str, Any]]] = {}
                         for item_index, frame, light, _exposure in batch_items:
                             invalid_mask, mask_info = _resident_source_invalid_mask_from_frame(
                                 frame,
@@ -3724,11 +3747,29 @@ def run_resident_calibration_integration(
                                 resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
                                 resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                             )
-                            source_dq_pending_by_index[int(item_index)] = (
-                                str(frame["id"]),
-                                invalid_mask,
-                                mask_info,
+                            if (
+                                resident_inline_source_dq != "cosmetic_cuda"
+                                or str(mask_info.get("source_model") or "") != "none"
+                                or int(mask_info.get("invalid_samples") or 0) > 0
+                            ):
+                                source_dq_pending_by_index[int(item_index)] = (
+                                    str(frame["id"]),
+                                    invalid_mask,
+                                    mask_info,
+                                )
+                            threshold_info = _resident_source_inline_cosmetic_thresholds_from_frame(
+                                light,
+                                height=height,
+                                width=width,
+                                resident_inline_source_dq=resident_inline_source_dq,
+                                resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
+                                resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                             )
+                            if threshold_info is not None:
+                                source_dq_threshold_pending_by_index[int(item_index)] = (
+                                    str(frame["id"]),
+                                    threshold_info,
+                                )
                         batch_light_exposures = [item[3] for item in batch_items]
                         batch_dark_exposures = [
                             np.nan if current_dark_exposure is None else float(current_dark_exposure)
@@ -3891,6 +3932,18 @@ def run_resident_calibration_integration(
                                         source="resident_calibrated_batch_input",
                                     )
                                 )
+                            threshold_pending = source_dq_threshold_pending_by_index.get(int(item_index))
+                            if threshold_pending is not None:
+                                threshold_frame_id, threshold_info = threshold_pending
+                                source_dq_rows.append(
+                                    apply_resident_inline_cosmetic_thresholds(
+                                        stack,
+                                        frame_index=int(item_index),
+                                        frame_id=threshold_frame_id,
+                                        threshold_info=threshold_info,
+                                        source="resident_calibrated_batch_input_cosmetic_cuda",
+                                    )
+                                )
                             frame_weight = 0.0 if _matches_any_token(frame, excluded_tokens) else 1.0
                             frame_weights[str(frame["id"])] = frame_weight
                             frame_weight_values.append(frame_weight)
@@ -3986,6 +4039,14 @@ def run_resident_calibration_integration(
                             resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
                             resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                         )
+                        threshold_info = _resident_source_inline_cosmetic_thresholds_from_frame(
+                            light,
+                            height=height,
+                            width=width,
+                            resident_inline_source_dq=resident_inline_source_dq,
+                            resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
+                            resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
+                        )
                         calibrate_start = perf_counter()
                         try:
                             if resident_h2d_mode == "pinned_async":
@@ -4014,16 +4075,31 @@ def run_resident_calibration_integration(
                                 )
                         finally:
                             light_prefetch.release(index)
-                        source_dq_rows.append(
-                            apply_resident_source_invalid_mask(
-                                stack,
-                                frame_index=int(index),
-                                frame_id=str(frame["id"]),
-                                invalid_mask=invalid_mask,
-                                mask_info=mask_info,
-                                source="resident_calibrated_input",
+                        if (
+                            resident_inline_source_dq != "cosmetic_cuda"
+                            or str(mask_info.get("source_model") or "") != "none"
+                            or int(mask_info.get("invalid_samples") or 0) > 0
+                        ):
+                            source_dq_rows.append(
+                                apply_resident_source_invalid_mask(
+                                    stack,
+                                    frame_index=int(index),
+                                    frame_id=str(frame["id"]),
+                                    invalid_mask=invalid_mask,
+                                    mask_info=mask_info,
+                                    source="resident_calibrated_input",
+                                )
                             )
-                        )
+                        if threshold_info is not None:
+                            source_dq_rows.append(
+                                apply_resident_inline_cosmetic_thresholds(
+                                    stack,
+                                    frame_index=int(index),
+                                    frame_id=str(frame["id"]),
+                                    threshold_info=threshold_info,
+                                    source="resident_calibrated_input_cosmetic_cuda",
+                                )
+                            )
                         per_frame_calibrate_s.append(perf_counter() - calibrate_start)
                         per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)))
                         per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)))
@@ -8011,6 +8087,19 @@ def run_resident_calibration_integration(
                         "fits_read_mode_resolution": resident_fits_read_mode_resolution_payload,
                         "resident_fits_auto_selection": resident_fits_auto_selection,
                         "resident_inline_source_dq": resident_inline_source_dq,
+                        "resident_inline_source_dq_detector": (
+                            "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+                            if resident_inline_source_dq == "cosmetic_cuda"
+                            else "glass.cpu.cosmetic.correct_cosmetic_defects"
+                            if resident_inline_source_dq == "cosmetic"
+                            else None
+                        ),
+                        "resident_inline_source_dq_threshold_source": (
+                            "cpu_median_mad_scalar" if resident_inline_source_dq == "cosmetic_cuda" else None
+                        ),
+                        "resident_inline_source_dq_detector_execution": (
+                            "cuda_threshold_apply" if resident_inline_source_dq == "cosmetic_cuda" else None
+                        ),
                         "resident_inline_source_dq_hot_sigma": float(resident_inline_source_dq_hot_sigma),
                         "resident_inline_source_dq_cold_sigma": float(resident_inline_source_dq_cold_sigma),
                         "resident_inline_source_dq_materializes_cache": False,

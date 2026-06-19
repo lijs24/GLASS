@@ -1641,6 +1641,97 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_source_dq_without_cache(t
     )
 
 
+def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_mask_upload(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_cosmetic_cache_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "rdq_inline_cosmetic_cuda"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-inline-source-dq",
+            "cosmetic_cuda",
+            "--resident-inline-source-dq-hot-sigma",
+            "2.0",
+            "--resident-inline-source-dq-cold-sigma",
+            "8.0",
+            "--resident-runtime-preset",
+            "manual",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-output-maps",
+            "audit",
+        ]
+    ) == 0
+
+    integration = read_json(run / "integration_results.json")
+    output = integration["outputs"][0]
+    master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
+    weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
+    resident = read_json(run / "resident_artifacts.json")
+    artifact = resident["artifacts"][0]
+    source_dq = artifact["source_dq_summary"]
+    strategy = read_json(run / "resident_source_dq_strategy.json")
+    timing = read_json(run / "run_timing.json")
+
+    assert master[4, 5] == pytest.approx(100.0)
+    assert weight[4, 5] == pytest.approx(1.0)
+    assert weight[0, 0] == pytest.approx(2.0)
+    assert source_dq["passed"] is True
+    assert source_dq["input_invalid_samples_before_rejection"] == 1
+    assert source_dq["source_dq_flag_counts"] == {"cosmetic_corrected": 1, "hot_pixel": 1}
+    assert source_dq["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+    assert source_dq["native_methods"] == ["ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"]
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq"] == "cosmetic_cuda"
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector"] == (
+        "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+    )
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector_execution"] == "cuda_threshold_apply"
+    assert strategy["inline_source_dq"]["mode"] == "cosmetic_cuda"
+    assert strategy["inline_source_dq"]["detector"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+    assert strategy["inline_source_dq"]["threshold_source"] == "cpu_median_mad_scalar"
+    assert timing["resident_inline_source_dq"] == "cosmetic_cuda"
+    assert not (run / "resident_source_dq_cache_route.json").exists()
+    applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
+    assert len(applied_rows) == 1
+    assert applied_rows[0]["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+    assert applied_rows[0]["native"]["mask_upload_s"] == 0.0
+    assert applied_rows[0]["detector_execution"] == "cuda_threshold_apply"
+    assert applied_rows[0]["threshold_source"] == "cpu_median_mad_scalar"
+    assert applied_rows[0]["component_summaries"][0]["source_model"] == "inline_cosmetic_cuda_thresholds"
+
+
 def test_cli_resident_cuda_run_consumes_two_phase_cosmetic_calibration_cache(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_cosmetic_cache_dataset(tmp_path)

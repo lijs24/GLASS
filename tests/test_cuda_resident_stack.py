@@ -1329,6 +1329,41 @@ def test_resident_stack_apply_invalid_mask_frame_excludes_finite_source_dq_sampl
     assert np.allclose(weight_map, np.array([[3, 2], [3, 3]], dtype=np.float32))
 
 
+def test_resident_stack_apply_cosmetic_threshold_mask_frame_excludes_hot_cold_nonfinite_samples():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_cosmetic_threshold_mask_frame"):
+        raise AssertionError("ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame is missing")
+
+    frames = [
+        np.full((2, 3), 10.0, dtype=np.float32),
+        np.array([[20.0, 999.0, -999.0], [np.nan, 20.0, 20.0]], dtype=np.float32),
+        np.full((2, 3), 30.0, dtype=np.float32),
+    ]
+    stack = module.ResidentCalibratedStack(len(frames), 2, 3)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    result = stack.apply_cosmetic_threshold_mask_frame(1, 0.0, 100.0)
+    master, weight_map = stack.integrate_mean()
+
+    assert result["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+    assert result["hot_samples"] == 1
+    assert result["cold_samples"] == 1
+    assert result["nonfinite_samples"] == 1
+    assert result["cosmetic_corrected_samples"] == 2
+    assert result["invalid_samples"] == 3
+    assert result["applied"] is True
+    assert result["mask_upload_s"] == 0.0
+    assert result["detector_execution"] == "cuda_threshold_apply"
+    assert np.allclose(master, np.full((2, 3), 20.0, dtype=np.float32), rtol=1e-6, atol=1e-6)
+    assert np.allclose(
+        weight_map,
+        np.array([[3.0, 2.0, 2.0], [2.0, 3.0, 3.0]], dtype=np.float32),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+
+
 def test_resident_stack_source_dq_mask_matches_cpu_stack_engine_for_finite_flags():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_invalid_mask_frame"):

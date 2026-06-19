@@ -9140,6 +9140,54 @@ Completed in Gate446:
   - `runs/checkpoints/s2_gate_455_real_regression_summary.json`;
   - `runs/checkpoints/s2_gate_455_status.md`.
 
+### S2-Gate 456: Resident CUDA Inline Source-DQ Thresholds
+
+- Move Gate455 inline source-DQ from CPU mask upload toward resident CUDA
+  execution.
+- Required work:
+  - add a native resident CUDA threshold detector/application method for
+    hot/cold/nonfinite source samples;
+  - keep the existing `cosmetic` CPU-mask mode for compatibility and add a
+    clearly named `cosmetic_cuda` opt-in mode;
+  - compute only scalar median/MAD thresholds on the CPU for this gate, then
+    perform per-pixel detection and invalid-sample application on the resident
+    CUDA frame without uploading a full mask;
+  - record native method, threshold source, detector execution, and
+    `mask_upload_s=0` evidence in source-DQ rows and resident artifacts;
+  - prove with focused CUDA tests and a small CLI run that finite hot/cold and
+    nonfinite samples are excluded from integration;
+  - rerun the real 200-light audit-map benchmark and verify acceptance remains
+    green on the default path.
+- Completed in S2-Gate456:
+  - added `ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame`, backed
+    by a CUDA kernel that marks hot/cold/nonfinite resident samples as NaN and
+    returns device-side counts;
+  - added `--resident-inline-source-dq cosmetic_cuda` to `glass run` and
+    `glass audit`;
+  - added scalar threshold contract helpers in
+    `glass.engine.resident_source_dq`, explicitly recording
+    `threshold_source=cpu_median_mad_scalar` and
+    `detector_execution=cuda_threshold_apply`;
+  - updated resident source-DQ summary/execution artifacts to record mixed
+    native methods while preserving the existing mask-streaming contract;
+  - focused resident/source-DQ pytest passed with `110 passed`;
+  - full pytest passed with `1084 passed`;
+  - real 200-light audit-map contract-parity run completed in `31.352762 s`,
+    integrated `193/200` frames, and passed acceptance at `34.846723x` versus
+    the WBPP black-box timing `1092.541 s`;
+  - comparison remained inside the 200-light contract: shape matched, coverage
+    fraction `0.960815`, RMS diff `0.00168272`, and P99 abs diff
+    `0.000456926`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_456_200\contract_parity_audit_20260620`;
+  - `runs/checkpoints/s2_gate_456_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_456_status.md`.
+- Known limitation:
+  - `cosmetic_cuda` still uses CPU scalar median/MAD threshold preparation.
+    Per-frame robust threshold statistics should move to a resident CUDA
+    reduction in a later gate, especially for raw-u16 GPU decode paths where a
+    host float image should not be materialized solely for thresholding.
+
 ## Gate Rules
 
 Each gate requires:

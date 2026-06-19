@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from glass.engine.contracts import DQFlag
 from glass.engine.resident_source_dq import (
     build_resident_source_dq_execution_group,
     build_resident_source_dq_summary,
     combine_source_invalid_masks,
+    inline_cosmetic_thresholds_from_array,
     source_invalid_mask_from_array,
     source_invalid_mask_from_dq_mask,
     source_invalid_mask_from_inline_cosmetic,
@@ -72,6 +74,39 @@ def test_source_invalid_mask_from_inline_cosmetic_flags_hot_and_cold_samples_wit
     assert info["flag_counts"]["cosmetic_corrected"] == 2
     assert info["cosmetic_metrics"]["hot_pixels"] == 1
     assert info["cosmetic_metrics"]["cold_pixels"] == 1
+
+
+def test_inline_cosmetic_thresholds_match_cpu_baseline_scalar_thresholds():
+    data = np.full((5, 5), 100.0, dtype=np.float32)
+    data[1, 2] = 1000.0
+    data[3, 4] = -1000.0
+
+    _mask, cpu_info = source_invalid_mask_from_inline_cosmetic(
+        data,
+        height=5,
+        width=5,
+        hot_sigma=2.0,
+        cold_sigma=2.0,
+    )
+    threshold_info = inline_cosmetic_thresholds_from_array(
+        data,
+        height=5,
+        width=5,
+        hot_sigma=2.0,
+        cold_sigma=2.0,
+    )
+
+    median = float(cpu_info["cosmetic_metrics"]["median"])
+    sigma = float(cpu_info["cosmetic_metrics"]["sigma"])
+    assert threshold_info["source_model"] == "inline_cosmetic_cuda_thresholds"
+    assert threshold_info["inline_source_dq_detector"] == (
+        "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+    )
+    assert threshold_info["threshold_source"] == "cpu_median_mad_scalar"
+    assert threshold_info["detector_execution"] == "cuda_threshold_apply"
+    assert threshold_info["inline_source_dq_applies_replacement"] is False
+    assert threshold_info["low_threshold"] == pytest.approx(float(np.float32(median - 2.0 * sigma)))
+    assert threshold_info["high_threshold"] == pytest.approx(float(np.float32(median + 2.0 * sigma)))
 
 
 def test_source_invalid_mask_from_sidecar_path_reads_fits_dq_bits(tmp_path):

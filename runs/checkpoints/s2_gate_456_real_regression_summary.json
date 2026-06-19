@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "gate": "S2-Gate456",
+  "objective": "Resident CUDA inline source-DQ threshold detector plus real 200-light audit-map regression.",
+  "primary_run": "C:\\glass_runs\\phase2_s2_gate_456_200\\contract_parity_audit_20260620",
+  "minimal_default_run": "C:\\glass_runs\\phase2_s2_gate_456_200\\contract_parity_20260620",
+  "timing": {
+    "audit_map_total_elapsed_s": 31.352761599991936,
+    "minimal_default_total_elapsed_s": 22.352832000004128,
+    "wbpp_blackbox_elapsed_s": 1092.541,
+    "speedup_vs_wbpp_audit_map": 34.84672303955135,
+    "speedup_vs_wbpp_minimal_default": 48.87707102757531,
+    "resident_inline_source_dq": "off",
+    "resident_runtime_preset": "throughput-v1"
+  },
+  "compare": {
+    "shape_match": true,
+    "coverage_fraction": 0.9608153774784595,
+    "coverage_median": 192,
+    "coverage_max": 193,
+    "rms_diff": 0.001682719984150687,
+    "abs_diff_p99": 0.0004569261334836476,
+    "glass_scale": 8.764434957115609e-06,
+    "glass_offset": 0.0006274500691899127
+  },
+  "frame_accounting_summary": {
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "zero_weight_frames": 7,
+    "registration_accepted_frames": 193,
+    "resident_calibrated_frames": 200,
+    "resident_frame_mask_active_frames": 193,
+    "resident_frame_mask_masked_frames": 7,
+    "final_status_counts": {
+      "integrated": 193,
+      "quality_rejected": 7
+    },
+    "integration_status_counts": {
+      "used": 193,
+      "zero_weight": 7
+    }
+  },
+  "resident_source_dq_execution_summary": {
+    "applied_frame_count": 0,
+    "applied_invalid_samples": 0,
+    "estimated_all_frame_mask_bytes": 12330240000,
+    "estimated_peak_batch_mask_bytes": 493209600,
+    "execution_routes": [
+      "resident_in_memory_mask_streaming"
+    ],
+    "frame_count": 200,
+    "frame_with_invalid_count": 0,
+    "group_count": 1,
+    "input_invalid_samples_before_rejection": 0,
+    "materializes_calibrated_dq_cache": false,
+    "passed": true,
+    "status": "passed"
+  },
+  "acceptance": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_456_200\\contract_parity_audit_20260620\\phase2_contract_acceptance_audit_s2_gate_456.json",
+    "passed": true,
+    "status": "passed",
+    "failed_check_count": 0
+  },
+  "contracts": {
+    "resident_calibration_contract": "C:\\glass_runs\\phase2_s2_gate_456_200\\contract_parity_audit_20260620\\resident_calibration_contract_s2_gate_456.json",
+    "resident_result_contract": "C:\\glass_runs\\phase2_s2_gate_456_200\\contract_parity_audit_20260620\\resident_result_contract_s2_gate_456.json",
+    "pipeline_contract": "C:\\glass_runs\\phase2_s2_gate_456_200\\contract_parity_audit_20260620\\pipeline_contract_s2_gate_456.json",
+    "stack_engine_contract": "C:\\glass_runs\\phase2_s2_gate_456_200\\contract_parity_audit_20260620\\stack_engine_contract_s2_gate_456.json"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97887,
+    "driver_version": "596.21",
+    "cuda_toolkit_used_for_build": "13.2"
+  },
+  "conclusions": [
+    "Gate456 adds an opt-in resident CUDA source-DQ threshold detector without changing the default resident path.",
+    "Focused tests prove hot/cold/nonfinite samples are excluded on resident CUDA with no full-mask upload.",
+    "The real 200-light audit-map contract-parity run remains accepted and produces complete master/weight/coverage/DQ/low/high rejection artifacts.",
+    "The accepted audit-map run remains more than 34x faster than the WBPP black-box timing."
+  ]
+}

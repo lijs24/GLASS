@@ -392,6 +392,12 @@ void glass_integrate_accumulate_mean_tile_f32_launch(
     const float* frame, const float* weight, float* sum, float* weight_sum, std::size_t n);
 void glass_apply_invalid_mask_f32_launch(
     float* frame, const unsigned char* invalid_mask, std::size_t n);
+void glass_apply_cosmetic_threshold_mask_f32_launch(
+    float* frame,
+    std::size_t n,
+    float low_threshold,
+    float high_threshold,
+    unsigned long long* counts);
 void glass_integrate_resident_weighted_mean_f32_launch(
     const float* stack,
     const float* weights,
@@ -2033,6 +2039,90 @@ class ResidentCalibratedStack {
     result["kernel_enqueue_s"] = kernel_s;
     result["sync_s"] = sync_s;
     result["total_s"] = seconds_since(total_start);
+    return result;
+  }
+
+  py::dict apply_cosmetic_threshold_mask_frame(
+      std::size_t index,
+      float low_threshold,
+      float high_threshold) {
+    require_loaded(index, "resident source DQ cosmetic threshold application");
+    if (std::isnan(low_threshold) || std::isnan(high_threshold) || low_threshold > high_threshold) {
+      throw std::invalid_argument("cosmetic thresholds must be finite-or-infinite values with low <= high");
+    }
+
+    const auto total_start = Clock::now();
+    unsigned long long* d_counts = nullptr;
+    std::array<unsigned long long, 3> host_counts{0ULL, 0ULL, 0ULL};
+    double kernel_s = 0.0;
+    double sync_s = 0.0;
+    double counts_download_s = 0.0;
+    try {
+      check_cuda(
+          cudaMalloc(&d_counts, host_counts.size() * sizeof(unsigned long long)),
+          "cudaMalloc(resident cosmetic threshold counts)");
+      check_cuda(
+          cudaMemset(d_counts, 0, host_counts.size() * sizeof(unsigned long long)),
+          "cudaMemset(resident cosmetic threshold counts)");
+
+      const auto kernel_start = Clock::now();
+      glass_apply_cosmetic_threshold_mask_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          pixels_per_frame_,
+          low_threshold,
+          high_threshold,
+          d_counts);
+      check_cuda(
+          cudaGetLastError(),
+          "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame kernel launch");
+      kernel_s = seconds_since(kernel_start);
+
+      const auto sync_start = Clock::now();
+      check_cuda(
+          cudaDeviceSynchronize(),
+          "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame synchronize");
+      sync_s = seconds_since(sync_start);
+
+      const auto download_start = Clock::now();
+      check_cuda(
+          cudaMemcpy(
+              host_counts.data(),
+              d_counts,
+              host_counts.size() * sizeof(unsigned long long),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident cosmetic threshold counts)");
+      counts_download_s = seconds_since(download_start);
+    } catch (...) {
+      cudaFree(d_counts);
+      throw;
+    }
+    cudaFree(d_counts);
+
+    const unsigned long long hot_count = host_counts[0];
+    const unsigned long long cold_count = host_counts[1];
+    const unsigned long long nonfinite_count = host_counts[2];
+    const unsigned long long cosmetic_count = hot_count + cold_count;
+    const unsigned long long invalid_count = cosmetic_count + nonfinite_count;
+
+    py::dict result;
+    result["schema_version"] = 1;
+    result["native_method"] = "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame";
+    result["frame_index"] = static_cast<unsigned long long>(index);
+    result["total_pixels"] = static_cast<unsigned long long>(pixels_per_frame_);
+    result["low_threshold"] = low_threshold;
+    result["high_threshold"] = high_threshold;
+    result["hot_samples"] = hot_count;
+    result["cold_samples"] = cold_count;
+    result["nonfinite_samples"] = nonfinite_count;
+    result["cosmetic_corrected_samples"] = cosmetic_count;
+    result["invalid_samples"] = invalid_count;
+    result["applied"] = invalid_count > 0;
+    result["mask_upload_s"] = 0.0;
+    result["kernel_enqueue_s"] = kernel_s;
+    result["sync_s"] = sync_s;
+    result["device_counts_download_s"] = counts_download_s;
+    result["total_s"] = seconds_since(total_start);
+    result["detector_execution"] = "cuda_threshold_apply";
     return result;
   }
 
@@ -11873,6 +11963,12 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           &ResidentCalibratedStack::apply_invalid_mask_frame,
           py::arg("index"),
           py::arg("invalid_mask"))
+      .def(
+          "apply_cosmetic_threshold_mask_frame",
+          &ResidentCalibratedStack::apply_cosmetic_threshold_mask_frame,
+          py::arg("index"),
+          py::arg("low_threshold"),
+          py::arg("high_threshold"))
       .def(
           "calibrate_frame",
           &ResidentCalibratedStack::calibrate_frame,

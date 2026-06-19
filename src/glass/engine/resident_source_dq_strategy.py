@@ -150,6 +150,19 @@ def build_resident_source_dq_strategy(
     inline_source_dq = {
         "mode": str(resident_inline_source_dq),
         "enabled": str(resident_inline_source_dq) != "off",
+        "detector": (
+            "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+            if str(resident_inline_source_dq) == "cosmetic_cuda"
+            else "glass.cpu.cosmetic.correct_cosmetic_defects"
+            if str(resident_inline_source_dq) == "cosmetic"
+            else None
+        ),
+        "threshold_source": (
+            "cpu_median_mad_scalar" if str(resident_inline_source_dq) == "cosmetic_cuda" else None
+        ),
+        "detector_execution": (
+            "cuda_threshold_apply" if str(resident_inline_source_dq) == "cosmetic_cuda" else None
+        ),
         "hot_sigma": float(resident_inline_source_dq_hot_sigma),
         "cold_sigma": float(resident_inline_source_dq_cold_sigma),
         "materializes_calibrated_dq_cache": False,

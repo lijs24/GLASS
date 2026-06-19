@@ -4488,24 +4488,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-inline-source-dq",
-        choices=["off", "cosmetic"],
+        choices=["off", "cosmetic", "cosmetic_cuda"],
         default="off",
         help=(
-            "resident source-DQ in-memory mask generator; cosmetic detects hot/cold/nonfinite samples "
-            "during resident light loading and applies them to the resident stack without a calibrated cache"
+            "resident source-DQ in-memory detector; cosmetic uses the CPU baseline mask, while cosmetic_cuda "
+            "uses resident CUDA threshold application without a calibrated cache"
         ),
     )
     run.add_argument(
         "--resident-inline-source-dq-hot-sigma",
         type=float,
         default=8.0,
-        help="hot-pixel sigma threshold for --resident-inline-source-dq cosmetic",
+        help="hot-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_cuda",
     )
     run.add_argument(
         "--resident-inline-source-dq-cold-sigma",
         type=float,
         default=8.0,
-        help="cold-pixel sigma threshold for --resident-inline-source-dq cosmetic",
+        help="cold-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_cuda",
     )
     run.add_argument(
         "--resident-output-maps",
@@ -4926,24 +4926,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-inline-source-dq",
-        choices=["off", "cosmetic"],
+        choices=["off", "cosmetic", "cosmetic_cuda"],
         default="off",
         help=(
-            "resident source-DQ in-memory mask generator for audit; cosmetic detects hot/cold/nonfinite samples "
-            "during resident light loading without materializing a calibrated cache"
+            "resident source-DQ in-memory detector for audit; cosmetic uses the CPU baseline mask, while "
+            "cosmetic_cuda uses resident CUDA threshold application without materializing a calibrated cache"
         ),
     )
     audit.add_argument(
         "--resident-inline-source-dq-hot-sigma",
         type=float,
         default=8.0,
-        help="hot-pixel sigma threshold for resident audit inline source-DQ cosmetic mode",
+        help="hot-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_cuda mode",
     )
     audit.add_argument(
         "--resident-inline-source-dq-cold-sigma",
         type=float,
         default=8.0,
-        help="cold-pixel sigma threshold for resident audit inline source-DQ cosmetic mode",
+        help="cold-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_cuda mode",
     )
     audit.add_argument(
         "--resident-winsorized-mode",

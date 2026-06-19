@@ -131,6 +131,89 @@ def source_invalid_mask_from_inline_cosmetic(
     return invalid_mask, info
 
 
+def inline_cosmetic_thresholds_from_array(
+    data: Any,
+    *,
+    height: int,
+    width: int,
+    hot_sigma: float = 8.0,
+    cold_sigma: float = 8.0,
+) -> dict[str, Any]:
+    """Compute scalar cosmetic thresholds for resident CUDA application.
+
+    This is intentionally not a CPU mask generator. CPU computes only the
+    median/MAD-derived thresholds used by the existing cosmetic baseline; the
+    per-pixel hot/cold/nonfinite detection and invalid-sample application run
+    inside the resident CUDA stack.
+    """
+
+    shape = (int(height), int(width))
+    array = np.asarray(data)
+    if array.shape != shape:
+        return {
+            "supported": False,
+            "reason": "inline_cosmetic_cuda_source_shape_not_image",
+            "shape": list(array.shape),
+            "expected_shape": list(shape),
+            "invalid_samples": 0,
+            "flag_counts": {},
+            "source_model": "inline_cosmetic_cuda_thresholds",
+        }
+    if not np.issubdtype(array.dtype, np.number):
+        return {
+            "supported": False,
+            "reason": "inline_cosmetic_cuda_source_not_numeric",
+            "shape": list(array.shape),
+            "dtype": str(array.dtype),
+            "invalid_samples": 0,
+            "flag_counts": {},
+            "source_model": "inline_cosmetic_cuda_thresholds",
+        }
+
+    image = np.asarray(array, dtype=np.float32)
+    finite = image[np.isfinite(image)]
+    if finite.size == 0:
+        median = 0.0
+        sigma = 0.0
+        low_threshold = float("-inf")
+        high_threshold = float("inf")
+    else:
+        median = float(np.median(finite))
+        mad = float(np.median(np.abs(finite - np.float32(median))))
+        sigma = 1.4826 * mad if mad > 0 else float(np.std(finite))
+        if sigma <= 0:
+            sigma = 1.0
+        low_threshold = float(np.float32(median - float(cold_sigma) * sigma))
+        high_threshold = float(np.float32(median + float(hot_sigma) * sigma))
+
+    return {
+        "supported": True,
+        "reason": "",
+        "shape": list(image.shape),
+        "dtype": str(image.dtype),
+        "invalid_samples": 0,
+        "flagged_samples": 0,
+        "nonfinite_samples": 0,
+        "flag_counts": {},
+        "source_model": "inline_cosmetic_cuda_thresholds",
+        "inline_source_dq": True,
+        "inline_source_dq_detector": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
+        "inline_source_dq_applies_replacement": False,
+        "detector_execution": "cuda_threshold_apply",
+        "threshold_source": "cpu_median_mad_scalar",
+        "hot_sigma": float(hot_sigma),
+        "cold_sigma": float(cold_sigma),
+        "low_threshold": low_threshold,
+        "high_threshold": high_threshold,
+        "cosmetic_metrics": {
+            "median": median,
+            "sigma": float(sigma),
+            "hot_pixels": None,
+            "cold_pixels": None,
+        },
+    }
+
+
 def source_invalid_mask_from_dq_mask(
     dq: DQMask | np.ndarray,
     *,
@@ -250,6 +333,10 @@ def combine_source_invalid_masks(
                 "inline_source_dq_applies_replacement": info.get("inline_source_dq_applies_replacement"),
                 "hot_sigma": info.get("hot_sigma"),
                 "cold_sigma": info.get("cold_sigma"),
+                "low_threshold": info.get("low_threshold"),
+                "high_threshold": info.get("high_threshold"),
+                "threshold_source": info.get("threshold_source"),
+                "detector_execution": info.get("detector_execution"),
                 "cosmetic_metrics": info.get("cosmetic_metrics"),
             }
         )
@@ -338,6 +425,12 @@ def apply_resident_source_invalid_mask(
         "sidecar_path",
         "sidecar_format",
         "inline_source_dq",
+        "inline_source_dq_detector",
+        "inline_source_dq_applies_replacement",
+        "threshold_source",
+        "detector_execution",
+        "low_threshold",
+        "high_threshold",
     ):
         if key in mask_info:
             row[key] = mask_info[key]
@@ -375,6 +468,122 @@ def apply_resident_source_invalid_mask(
     return row
 
 
+def apply_resident_inline_cosmetic_thresholds(
+    stack: Any,
+    *,
+    frame_index: int,
+    frame_id: str,
+    threshold_info: dict[str, Any],
+    source: str,
+    require_native: bool = True,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "schema_version": 1,
+        "frame_id": str(frame_id),
+        "frame_index": int(frame_index),
+        "source": str(source),
+        "supported": bool(threshold_info.get("supported")),
+        "reason": str(threshold_info.get("reason") or ""),
+        "invalid_samples": 0,
+        "flagged_samples": 0,
+        "nonfinite_samples": 0,
+        "flag_counts": {},
+        "source_model": str(threshold_info.get("source_model") or "inline_cosmetic_cuda_thresholds"),
+        "inline_source_dq": bool(threshold_info.get("inline_source_dq")),
+        "inline_source_dq_detector": str(
+            threshold_info.get("inline_source_dq_detector")
+            or "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+        ),
+        "inline_source_dq_applies_replacement": bool(
+            threshold_info.get("inline_source_dq_applies_replacement")
+        ),
+        "threshold_source": str(threshold_info.get("threshold_source") or "cpu_median_mad_scalar"),
+        "detector_execution": str(threshold_info.get("detector_execution") or "cuda_threshold_apply"),
+        "hot_sigma": float(threshold_info.get("hot_sigma") or 0.0),
+        "cold_sigma": float(threshold_info.get("cold_sigma") or 0.0),
+        "low_threshold": float(threshold_info.get("low_threshold", float("-inf"))),
+        "high_threshold": float(threshold_info.get("high_threshold", float("inf"))),
+        "cosmetic_metrics": dict(threshold_info.get("cosmetic_metrics") or {}),
+        "applied": False,
+        "native_method": None,
+    }
+    if not row["supported"]:
+        row["status"] = "unsupported_no_invalid_samples"
+        return row
+    if not hasattr(stack, "apply_cosmetic_threshold_mask_frame"):
+        row["status"] = "native_method_unavailable"
+        if require_native:
+            raise RuntimeError(
+                "resident CUDA backend must expose apply_cosmetic_threshold_mask_frame "
+                f"to consume inline cosmetic source-DQ samples for {frame_id}"
+            )
+        return row
+
+    native = dict(
+        stack.apply_cosmetic_threshold_mask_frame(
+            int(frame_index),
+            float(row["low_threshold"]),
+            float(row["high_threshold"]),
+        )
+    )
+    hot = int(native.get("hot_samples") or 0)
+    cold = int(native.get("cold_samples") or 0)
+    nonfinite = int(native.get("nonfinite_samples") or 0)
+    cosmetic = int(native.get("cosmetic_corrected_samples") or (hot + cold))
+    invalid = int(native.get("invalid_samples") or (cosmetic + nonfinite))
+    flag_counts = _empty_flag_counts()
+    if hot:
+        flag_counts["hot_pixel"] = hot
+    if cold:
+        flag_counts["cold_pixel"] = cold
+    if nonfinite:
+        flag_counts["no_data"] = nonfinite
+    if cosmetic:
+        flag_counts["cosmetic_corrected"] = cosmetic
+    flag_counts = {key: value for key, value in flag_counts.items() if value}
+
+    metrics = dict(row["cosmetic_metrics"])
+    metrics["hot_pixels"] = hot
+    metrics["cold_pixels"] = cold
+    row.update(
+        {
+            "status": "applied" if invalid > 0 else "no_invalid_samples",
+            "applied": invalid > 0,
+            "native_method": str(
+                native.get("native_method")
+                or "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+            ),
+            "native": native,
+            "invalid_samples": invalid,
+            "flagged_samples": invalid,
+            "nonfinite_samples": nonfinite,
+            "flag_counts": flag_counts,
+            "cosmetic_metrics": metrics,
+            "component_summaries": [
+                {
+                    "source_model": row["source_model"],
+                    "supported": True,
+                    "reason": "",
+                    "invalid_samples": invalid,
+                    "flagged_samples": invalid,
+                    "nonfinite_samples": nonfinite,
+                    "inline_source_dq": True,
+                    "inline_source_dq_detector": row["inline_source_dq_detector"],
+                    "inline_source_dq_applies_replacement": False,
+                    "hot_sigma": row["hot_sigma"],
+                    "cold_sigma": row["cold_sigma"],
+                    "low_threshold": row["low_threshold"],
+                    "high_threshold": row["high_threshold"],
+                    "threshold_source": row["threshold_source"],
+                    "detector_execution": row["detector_execution"],
+                    "cosmetic_metrics": metrics,
+                }
+            ],
+        }
+    )
+    return row
+
+
 def build_resident_source_dq_summary(
     rows: list[dict[str, Any]],
     *,
@@ -396,12 +605,15 @@ def build_resident_source_dq_summary(
     sidecar_source_counts: dict[str, int] = {}
     sidecar_paths: set[str] = set()
     sidecar_artifact_paths: set[str] = set()
+    native_methods: set[str] = set()
     flag_counts = _empty_flag_counts()
     for row in rows:
         source = str(row.get("source") or "unknown")
         source_counts[source] = source_counts.get(source, 0) + 1
         status = str(row.get("status") or "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
+        if row.get("native_method"):
+            native_methods.add(str(row["native_method"]))
         for sidecar_source in list(row.get("sidecar_sources") or []):
             sidecar_source = str(sidecar_source)
             sidecar_source_counts[sidecar_source] = sidecar_source_counts.get(sidecar_source, 0) + 1
@@ -415,10 +627,19 @@ def build_resident_source_dq_summary(
     effective_frame_count = int(frame_count if active_frame_count is None else active_frame_count)
     input_samples = int(effective_frame_count) * int(height) * int(width)
     input_valid_before_rejection = max(0, input_samples - int(total_invalid))
+    native_method_list = sorted(native_methods)
+    summary_native_method = (
+        native_method_list[0]
+        if len(native_method_list) == 1
+        else "mixed_resident_source_dq_methods"
+        if native_method_list
+        else "ResidentCalibratedStack.apply_invalid_mask_frame"
+    )
     return {
         "schema_version": 1,
-        "source_model": "resident_source_dq_mask_to_nan",
-        "native_method": "ResidentCalibratedStack.apply_invalid_mask_frame",
+        "source_model": "resident_source_dq_invalid_to_nan",
+        "native_method": summary_native_method,
+        "native_methods": native_method_list,
         "frame_count": int(frame_count),
         "active_frame_count": int(effective_frame_count),
         "height": int(height),
@@ -443,10 +664,11 @@ def build_resident_source_dq_summary(
         "passed": len(unsupported) == 0 and len(native_missing) == 0 and applied_invalid == total_invalid,
         "rows": rows,
         "semantics": (
-            "Resident CUDA consumes source-DQ invalid samples by setting masked "
-            "resident frame pixels to NaN before integration. Existing resident "
-            "integration kernels then skip those samples before rejection, matching "
-            "the CPU StackEngine valid-sample contract."
+            "Resident CUDA consumes source-DQ invalid samples by setting resident "
+            "frame pixels to NaN before integration. Invalid samples may come from "
+            "uploaded source-DQ masks or resident CUDA threshold detection; existing "
+            "resident integration kernels then skip those samples before rejection, "
+            "matching the CPU StackEngine valid-sample contract."
         ),
     }
 
@@ -512,6 +734,7 @@ def build_resident_source_dq_execution_group(
         "passed": passed,
         "execution_route": "resident_in_memory_mask_streaming",
         "native_method": source_dq_summary.get("native_method"),
+        "native_methods": list(source_dq_summary.get("native_methods") or []),
         "materializes_calibrated_dq_cache": False,
         "frame_count": int(frame_count),
         "height": int(height),
@@ -536,8 +759,8 @@ def build_resident_source_dq_execution_group(
         "checks": checks,
         "semantics": (
             "Source-DQ invalid samples are applied to resident calibrated frames in memory "
-            "with ResidentCalibratedStack.apply_invalid_mask_frame, so resident integration "
-            "skips those samples without requiring a calibrated+DQ disk cache."
+            "with resident CUDA native methods, so resident integration skips those samples "
+            "without requiring a calibrated+DQ disk cache."
         ),
     }
 

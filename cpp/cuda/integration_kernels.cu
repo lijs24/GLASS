@@ -174,6 +174,50 @@ void glass_apply_invalid_mask_f32_launch(
   glass_apply_invalid_mask_f32_kernel<<<blocks, threads>>>(frame, invalid_mask, n);
 }
 
+__global__ void glass_apply_cosmetic_threshold_mask_f32_kernel(
+    float* frame,
+    std::size_t n,
+    float low_threshold,
+    float high_threshold,
+    unsigned long long* counts) {
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= n) {
+    return;
+  }
+
+  const float value = frame[i];
+  if (!isfinite(value)) {
+    atomicAdd(&counts[2], 1ULL);
+    frame[i] = nanf("");
+    return;
+  }
+  if (value > high_threshold) {
+    atomicAdd(&counts[0], 1ULL);
+    frame[i] = nanf("");
+    return;
+  }
+  if (value < low_threshold) {
+    atomicAdd(&counts[1], 1ULL);
+    frame[i] = nanf("");
+  }
+}
+
+void glass_apply_cosmetic_threshold_mask_f32_launch(
+    float* frame,
+    std::size_t n,
+    float low_threshold,
+    float high_threshold,
+    unsigned long long* counts) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  glass_apply_cosmetic_threshold_mask_f32_kernel<<<blocks, threads>>>(
+      frame,
+      n,
+      low_threshold,
+      high_threshold,
+      counts);
+}
+
 __global__ void glass_integrate_resident_weighted_mean_f32_kernel(
     const float* stack,
     const float* weights,
