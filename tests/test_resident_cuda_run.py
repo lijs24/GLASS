@@ -2471,8 +2471,12 @@ def test_cli_resident_cuda_triangle_default_skips_pixel_refine(tmp_path: Path):
     assert resident_registration["triangle_pixel_refine_batch_mode"] == "off"
     assert resident_registration["triangle_pixel_refine_metric_workload_model"] == "off"
     assert resident_registration["triangle_pixel_refine_workspace_bytes"] == 0
+    assert resident_registration["triangle_translation_refine"] is True
+    assert resident_registration["triangle_centroid_refine"] is False
+    assert resident_registration["triangle_centroid_refine_mode"] == "off"
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity_cuda_triangle"
+    assert "triangle_centroid_refine_enabled=false" in moving["warnings"]
     assert abs(moving["matrix"][0][2] + 3.0) < 0.5
     assert abs(moving["matrix"][1][2] - 2.0) < 0.5
     assert all("triangle_pixel_refine_mode=" not in warning for warning in moving["warnings"])

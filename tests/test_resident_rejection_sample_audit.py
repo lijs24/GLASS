@@ -107,6 +107,52 @@ def test_audit_identifies_pre_rejection_coverage_drift(tmp_path: Path) -> None:
     assert payload["top_tiles"][0]["rejected_sample_delta"] == 1
 
 
+def test_audit_can_evaluate_declared_compare_region(tmp_path: Path) -> None:
+    cpu = tmp_path / "cpu"
+    resident = tmp_path / "resident"
+    compare = tmp_path / "compare.json"
+    base = np.full((4, 4), 3.0, dtype=np.float32)
+    zeros = np.zeros((4, 4), dtype=np.float32)
+    resident_coverage = base.copy()
+    resident_coverage[0, :] = 2.0
+
+    _write_map_set(cpu, prefix="cpu", coverage=base, low=zeros, high=zeros, backend="cpu")
+    _write_map_set(
+        resident,
+        prefix="resident",
+        coverage=resident_coverage,
+        low=zeros,
+        high=zeros,
+        backend="cuda_resident_stack",
+    )
+    _write_compare_json(compare, border=1)
+
+    full = build_resident_rejection_sample_audit(
+        cpu_run=cpu,
+        resident_run=resident,
+        compare_json=compare,
+        tile_size=2,
+    )
+    cropped = build_resident_rejection_sample_audit(
+        cpu_run=cpu,
+        resident_run=resident,
+        compare_json=compare,
+        tile_size=2,
+        evaluation_region="compare_region",
+    )
+
+    assert full["status"] == "attention_required"
+    assert full["evaluation_region"] == "full_frame"
+    assert full["deltas"]["pre_rejection_sample_delta"] == -4
+    assert full["deltas"]["abs_pre_rejection_sample_delta"] == 4
+    assert cropped["status"] == "passed"
+    assert cropped["evaluation_region"] == "compare_region"
+    assert cropped["evaluation_deltas"]["pre_rejection_sample_delta"] == 0
+    assert cropped["evaluation_deltas"]["abs_pre_rejection_sample_delta"] == 0
+    assert cropped["deltas"]["abs_pre_rejection_sample_delta"] == 4
+    assert cropped["recommendation"] == "rejection_sample_accounting_ready"
+
+
 def test_audit_identifies_same_pre_rejection_semantic_delta(tmp_path: Path) -> None:
     cpu = tmp_path / "cpu"
     resident = tmp_path / "resident"
@@ -181,11 +227,14 @@ def test_resident_rejection_sample_audit_cli_writes_outputs(tmp_path: Path) -> N
             str(markdown),
             "--tile-size",
             "2",
+            "--evaluation-region",
+            "compare_region",
         ]
     )
 
     assert result == 0
     payload = read_json(out)
     assert payload["artifact_type"] == "resident_rejection_sample_audit"
+    assert payload["evaluation_region"] == "compare_region"
     assert payload["deltas"]["high_rejected_sample_delta"] == 1
     assert "Resident Rejection Sample Audit" in markdown.read_text(encoding="utf-8")

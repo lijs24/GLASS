@@ -4426,7 +4426,7 @@ def run_resident_calibration_integration(
                 triangle_centroid_refine_enabled = _policy_bool(
                     registration_policy,
                     "cuda_triangle_centroid_refine",
-                    triangle_translation_refine_enabled,
+                    False,
                 )
                 triangle_centroid_refine_radius = _policy_int(
                     registration_policy,

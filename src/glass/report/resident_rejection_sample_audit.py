@@ -332,6 +332,19 @@ def _recommendation(
     return "inspect_rejection_hotspot_tiles"
 
 
+def _evaluation_deltas(
+    *,
+    deltas: dict[str, Any],
+    region_deltas: dict[str, dict[str, Any]],
+    evaluation_region: str,
+) -> dict[str, Any]:
+    if evaluation_region == "full_frame":
+        return deltas
+    if evaluation_region == "compare_region":
+        return region_deltas.get("inside_compare_region", {})
+    raise ValueError("evaluation_region must be full_frame or compare_region")
+
+
 def _top_tiles(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
     return sorted(
         rows,
@@ -354,7 +367,10 @@ def build_resident_rejection_sample_audit(
     max_rejected_sample_delta: int = 64,
     max_pre_rejection_sample_delta: int = 0,
     max_same_pre_rejection_abs_delta: int = 16,
+    evaluation_region: str = "full_frame",
 ) -> dict[str, Any]:
+    if evaluation_region not in {"full_frame", "compare_region"}:
+        raise ValueError("evaluation_region must be full_frame or compare_region")
     cpu_root = Path(cpu_run)
     resident_root = Path(resident_run)
     cpu = _run_maps(cpu_root)
@@ -393,6 +409,7 @@ def build_resident_rejection_sample_audit(
             "resident": resident,
             "compare_json": str(compare_json) if compare_json else None,
             "thresholds": thresholds,
+            "evaluation_region": evaluation_region,
             "checks": checks,
             "failed_checks": [item["name"] for item in checks if not item["passed"]],
         }
@@ -423,6 +440,7 @@ def build_resident_rejection_sample_audit(
             "compare_json": str(compare_json) if compare_json else None,
             "shape_summary": shapes,
             "thresholds": thresholds,
+            "evaluation_region": evaluation_region,
             "checks": checks,
             "failed_checks": [item["name"] for item in checks if not item["passed"]],
         }
@@ -550,23 +568,30 @@ def build_resident_rejection_sample_audit(
                         }
                     )
 
+    eval_deltas = _evaluation_deltas(
+        deltas=deltas,
+        region_deltas=region_deltas,
+        evaluation_region=evaluation_region,
+    )
     checks.extend(
         [
             _check(
                 "rejected_sample_delta_within_limit",
-                abs(int(deltas["rejected_sample_delta"])) <= int(max_rejected_sample_delta),
+                abs(int(eval_deltas["rejected_sample_delta"])) <= int(max_rejected_sample_delta),
                 {
-                    "delta": deltas["rejected_sample_delta"],
+                    "delta": eval_deltas["rejected_sample_delta"],
                     "max_abs_delta": int(max_rejected_sample_delta),
+                    "evaluation_region": evaluation_region,
                 },
             ),
             _check(
                 "pre_rejection_sample_delta_within_limit",
-                abs(int(deltas["pre_rejection_sample_delta"]))
+                abs(int(eval_deltas["pre_rejection_sample_delta"]))
                 <= int(max_pre_rejection_sample_delta),
                 {
-                    "delta": deltas["pre_rejection_sample_delta"],
+                    "delta": eval_deltas["pre_rejection_sample_delta"],
                     "max_abs_delta": int(max_pre_rejection_sample_delta),
+                    "evaluation_region": evaluation_region,
                     "note": (
                         "pre-rejection sample delta compares coverage+low+high maps and "
                         "identifies geometric/warp/DQ input-sample drift before rejection."
@@ -575,11 +600,12 @@ def build_resident_rejection_sample_audit(
             ),
             _check(
                 "same_pre_rejection_semantic_delta_within_limit",
-                int(deltas["same_pre_rejection_abs_rejected_sample_delta"])
+                int(eval_deltas["same_pre_rejection_abs_rejected_sample_delta"])
                 <= int(max_same_pre_rejection_abs_delta),
                 {
-                    "abs_delta": deltas["same_pre_rejection_abs_rejected_sample_delta"],
+                    "abs_delta": eval_deltas["same_pre_rejection_abs_rejected_sample_delta"],
                     "max_abs_delta": int(max_same_pre_rejection_abs_delta),
+                    "evaluation_region": evaluation_region,
                 },
             ),
         ]
@@ -587,7 +613,7 @@ def build_resident_rejection_sample_audit(
     recommendation = _recommendation(
         maps_present=True,
         shape_match=True,
-        deltas=deltas,
+        deltas=eval_deltas,
         thresholds=thresholds,
     )
     passed = all(item["passed"] for item in checks)
@@ -605,7 +631,9 @@ def build_resident_rejection_sample_audit(
         "shape_summary": shapes,
         "tile_size": step,
         "thresholds": thresholds,
+        "evaluation_region": evaluation_region,
         "deltas": deltas,
+        "evaluation_deltas": eval_deltas,
         "region_deltas": region_deltas,
         "top_tiles": _top_tiles(tile_rows, top_tiles),
         "checks": checks,
@@ -615,6 +643,7 @@ def build_resident_rejection_sample_audit(
 
 def _markdown(payload: dict[str, Any]) -> str:
     deltas = payload.get("deltas") or {}
+    evaluation_deltas = payload.get("evaluation_deltas") or deltas
     region_deltas = payload.get("region_deltas") or {}
     lines = [
         "# Resident Rejection Sample Audit",
@@ -622,7 +651,16 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Status: `{payload.get('status')}`",
         f"- Passed: `{payload.get('passed')}`",
         f"- Recommendation: `{payload.get('recommendation')}`",
+        f"- Evaluation region: `{payload.get('evaluation_region', 'full_frame')}`",
         f"- Tile size: `{payload.get('tile_size')}`",
+        "",
+        "## Evaluation Deltas",
+        "",
+        f"- Rejected sample delta: `{evaluation_deltas.get('rejected_sample_delta')}`",
+        f"- Coverage sample delta: `{evaluation_deltas.get('coverage_sample_delta')}`",
+        f"- Pre-rejection sample delta: `{evaluation_deltas.get('pre_rejection_sample_delta')}`",
+        f"- Same-pre-rejection abs rejected delta: "
+        f"`{evaluation_deltas.get('same_pre_rejection_abs_rejected_sample_delta')}`",
         "",
         "## Global Deltas",
         "",

@@ -2579,6 +2579,7 @@ def cmd_resident_rejection_sample_audit(args: argparse.Namespace) -> int:
         max_rejected_sample_delta=args.max_rejected_sample_delta,
         max_pre_rejection_sample_delta=args.max_pre_rejection_sample_delta,
         max_same_pre_rejection_abs_delta=args.max_same_pre_rejection_abs_delta,
+        evaluation_region=args.evaluation_region,
     )
     write_resident_rejection_sample_audit(args.out, payload, markdown=args.markdown)
     console.print(
@@ -6373,6 +6374,15 @@ def build_parser() -> argparse.ArgumentParser:
     rejection_audit.add_argument("--max-rejected-sample-delta", type=int, default=64)
     rejection_audit.add_argument("--max-pre-rejection-sample-delta", type=int, default=0)
     rejection_audit.add_argument("--max-same-pre-rejection-abs-delta", type=int, default=16)
+    rejection_audit.add_argument(
+        "--evaluation-region",
+        choices=["full_frame", "compare_region"],
+        default="full_frame",
+        help=(
+            "threshold evaluation region: full_frame keeps strict global accounting; "
+            "compare_region evaluates only the GLASS compare common footprint while still reporting global deltas"
+        ),
+    )
     rejection_audit.add_argument(
         "--fail-on-failure",
         action="store_true",

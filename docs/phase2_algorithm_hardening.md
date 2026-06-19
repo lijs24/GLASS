@@ -7632,6 +7632,45 @@ integration where applicable.
   promotion, no package upload, no GitHub release creation, no user input
   directory modification, and no claim that full resident parity is complete.
 
+### S2-Gate 422: Resident Triangle Centroid Refinement Probe
+
+- Stop expanding release/report-only gates and return to runtime substance.
+- Add an auditable resident triangle translation refinement probe and a small
+  resident-tile centroid refinement probe for the synthetic 16-frame harness.
+- Record the result honestly: the probe reduces the global rejected-sample
+  delta but does not close full parity, and the CPU centroid download path is
+  not acceptable as a final default resident CUDA algorithm.
+- Acceptance for this gate is actionable evidence, not promotion: matrix
+  compare must pass, rejected-sample delta must improve, full pytest must pass,
+  and the remaining coverage/RMS blockers must be named.
+- Keep this gate runtime-validation scoped: no package upload, no GitHub
+  release creation, no default-promotion/report-only handoff work, and no
+  modification of user input directories.
+
+### S2-Gate 423: Resident Common-Footprint Coverage Parity
+
+- Convert the Gate 421/422 finding into an explicit common-footprint validation
+  contract: the rejection-sample audit may evaluate the GLASS compare region
+  when the compare artifact declares an `ignore_border_px` crop and minimum
+  coverage rule, while still reporting full-frame edge deltas.
+- Keep the strict full-frame audit available as the default diagnostic mode.
+- Disable the resident triangle CPU centroid-refinement probe by default; it
+  remains opt-in until it is implemented as a true batched resident GPU path and
+  shown not to regress master-image RMS.
+- Re-run the same Gate414 synthetic CPU tiled versus CUDA resident harness with
+  the default resident triangle path and a declared common footprint.
+- Acceptance for this gate:
+  - compare-region RMS and relative RMS are within the Gate 420 tolerance
+    family;
+  - compare-region pre-rejection sample delta is zero;
+  - compare-region rejected-sample delta is within the existing 64-sample
+    threshold;
+  - full-frame edge deltas remain visible in the audit artifact;
+  - full pytest passes.
+- Keep this gate runtime-validation scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
 ## Gate Rules
 
 Each gate requires:
