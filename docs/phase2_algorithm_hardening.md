@@ -7719,6 +7719,48 @@ integration where applicable.
   promotion, no package upload, no GitHub release creation, and no user input
   directory modification.
 
+### S2-Gate 426: Resident GPU Centroid Catalog Refinement
+
+- Pause release/default-promotion/report-contract-only gate growth and return
+  to Phase 2 runtime substance: resident registration precision, DQ/rejection
+  contracts, and real performance/numerical validation.
+- Preserve the Gate420 decision that resident triangle pixel-refine remains
+  opt-in. The default resident triangle path now enables a lightweight
+  catalog-centroid refinement instead of pixel NCC refinement.
+- Move the previous CPU tile-download centroid probe into resident CUDA catalog
+  generation:
+  - top-NMS catalogs expose `star_top_nms_candidates_centroid`;
+  - grid-NMS and deterministic grid-NMS catalogs expose centroid variants;
+  - batched grid-NMS catalogs expose centroid variants for later performance
+    work;
+  - the CUDA centroid kernel uses a median window background and positive
+    flux-weighted centroid, matching the CPU probe's background model without
+    downloading image tiles.
+- Add artifact accounting for centroid mode, refined catalog count, refined
+  star count, failed star count, and maximum measured centroid shift.
+- Validate on the Gate414/Gate423 16-frame checkpoint harness with reference
+  frame `F000016`, resident CUDA triangle registration, hardened winsorized
+  integration, and audit output maps:
+  - resident centroid mode: `resident_gpu_window_centroid`;
+  - pixel refine: `False`;
+  - centroid catalogs: `30`;
+  - refined stars: `1778`;
+  - failed centroid stars: `0`;
+  - maximum centroid shift: `2.032824 px`;
+  - CPU-matrix resident warp RMS max remains `0.000264394`;
+  - resident-matrix warp RMS max improves from the min-background probe
+    `0.209721` to `0.168300`, but resident matrix warp parity is still false;
+  - compare-region pre-rejection sample delta remains `0`;
+  - same-pre-rejection rejected-sample absolute delta remains `798`.
+- Interpretation: Gate426 removes the unacceptable CPU tile-download centroid
+  dependency and makes centroid refinement a real resident CUDA default, but it
+  does not complete registration-matrix parity or winsorized rejection semantic
+  parity. The next substantive gate should target one of those remaining
+  blockers directly, with no release/report-only expansion.
+- Keep this gate runtime-validation scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
 ## Gate Rules
 
 Each gate requires:

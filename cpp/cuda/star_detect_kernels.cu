@@ -647,6 +647,96 @@ __global__ void star_catalog_nms_kernel(
   *stored_count = selected;
 }
 
+__global__ void star_refine_centroids_kernel(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    unsigned char* statuses,
+    int count,
+    int width,
+    int height,
+    int radius) {
+  const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= count) {
+    return;
+  }
+  if (statuses != nullptr) {
+    statuses[i] = 0;
+  }
+  const float candidate_flux = fluxes[i];
+  if (!isfinite(candidate_flux) || candidate_flux <= -1.0e30f) {
+    return;
+  }
+  const int center_x = static_cast<int>(floorf(xs[i] + 0.5f));
+  const int center_y = static_cast<int>(floorf(ys[i] + 0.5f));
+  if (center_x < 0 || center_x >= width || center_y < 0 || center_y >= height) {
+    return;
+  }
+  constexpr int kMaxCentroidRadius = 8;
+  constexpr int kMaxCentroidSamples = (2 * kMaxCentroidRadius + 1) * (2 * kMaxCentroidRadius + 1);
+  const int window_radius = min(max(radius, 1), kMaxCentroidRadius);
+  const int x0 = max(0, center_x - window_radius);
+  const int x1 = min(width - 1, center_x + window_radius);
+  const int y0 = max(0, center_y - window_radius);
+  const int y1 = min(height - 1, center_y + window_radius);
+
+  float samples[kMaxCentroidSamples];
+  int sample_count = 0;
+  for (int y = y0; y <= y1; ++y) {
+    for (int x = x0; x <= x1; ++x) {
+      const float value = input[y * width + x];
+      if (isfinite(value) && sample_count < kMaxCentroidSamples) {
+        samples[sample_count] = value;
+        ++sample_count;
+      }
+    }
+  }
+  if (sample_count <= 0) {
+    return;
+  }
+  for (int j = 1; j < sample_count; ++j) {
+    const float value = samples[j];
+    int k = j - 1;
+    while (k >= 0 && samples[k] > value) {
+      samples[k + 1] = samples[k];
+      --k;
+    }
+    samples[k + 1] = value;
+  }
+  const float background = (sample_count & 1)
+      ? samples[sample_count / 2]
+      : 0.5f * (samples[sample_count / 2 - 1] + samples[sample_count / 2]);
+
+  double sum_weight = 0.0;
+  double sum_x = 0.0;
+  double sum_y = 0.0;
+  for (int y = y0; y <= y1; ++y) {
+    for (int x = x0; x <= x1; ++x) {
+      const float value = input[y * width + x];
+      if (!isfinite(value)) {
+        continue;
+      }
+      const float weight_f = fmaxf(value - background, 0.0f);
+      if (weight_f <= 0.0f) {
+        continue;
+      }
+      const double weight = static_cast<double>(weight_f);
+      sum_weight += weight;
+      sum_x += static_cast<double>(x) * weight;
+      sum_y += static_cast<double>(y) * weight;
+    }
+  }
+  if (sum_weight <= 0.0) {
+    return;
+  }
+  xs[i] = static_cast<float>(sum_x / sum_weight);
+  ys[i] = static_cast<float>(sum_y / sum_weight);
+  if (statuses != nullptr) {
+    statuses[i] = 1;
+  }
+}
+
 void glass_star_local_max_mask_f32_launch(
     const float* input,
     unsigned char* mask,
@@ -888,6 +978,27 @@ void glass_star_grid_top_nms_candidates_deterministic_f32_launch(
       grid_capacity,
       max_output_candidates,
       min_separation_px);
+}
+
+void glass_star_refine_centroids_f32_launch(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    unsigned char* statuses,
+    int count,
+    int width,
+    int height,
+    int radius) {
+  if (count <= 0 || radius <= 0) {
+    return;
+  }
+  if (statuses != nullptr) {
+    cudaMemset(statuses, 0, static_cast<std::size_t>(count) * sizeof(unsigned char));
+  }
+  constexpr int threads = 128;
+  const int blocks = (count + threads - 1) / threads;
+  star_refine_centroids_kernel<<<blocks, threads>>>(input, xs, ys, fluxes, statuses, count, width, height, radius);
 }
 
 void glass_star_grid_candidates_f32_launch(

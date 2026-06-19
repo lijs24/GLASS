@@ -3737,6 +3737,7 @@ def run_resident_calibration_integration(
                 )
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
+                has_top_nms_catalog_centroid = hasattr(native_stack, "star_top_nms_candidates_centroid")
                 has_grid_nms_catalog = hasattr(native_stack, "star_grid_top_nms_candidates")
                 has_grid_nms_catalog_deterministic = hasattr(
                     native_stack,
@@ -3800,6 +3801,15 @@ def run_resident_calibration_integration(
                             deterministic=resident_star_catalog_deterministic,
                         )
                     if has_top_nms_catalog:
+                        if triangle_centroid_refine_enabled and has_top_nms_catalog_centroid:
+                            return _stack.star_top_nms_candidates_centroid(
+                                frame_index,
+                                threshold,
+                                nms_scan_candidates,
+                                resident_star_max_candidates,
+                                nms_min_separation_px,
+                                triangle_centroid_refine_radius,
+                            )
                         return _stack.star_top_nms_candidates(
                             frame_index,
                             threshold,
@@ -4426,7 +4436,7 @@ def run_resident_calibration_integration(
                 triangle_centroid_refine_enabled = _policy_bool(
                     registration_policy,
                     "cuda_triangle_centroid_refine",
-                    False,
+                    True,
                 )
                 triangle_centroid_refine_radius = _policy_int(
                     registration_policy,
@@ -4443,10 +4453,16 @@ def run_resident_calibration_integration(
                     raise ValueError("cuda_triangle_centroid_refine_radius must be positive")
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
+                has_top_nms_catalog_centroid = hasattr(native_stack, "star_top_nms_candidates_centroid")
                 has_grid_nms_catalog = hasattr(native_stack, "star_grid_top_nms_candidates")
                 has_grid_nms_catalog_deterministic = hasattr(
                     native_stack,
                     "star_grid_top_nms_candidates_deterministic",
+                )
+                has_grid_nms_catalog_centroid = hasattr(native_stack, "star_grid_top_nms_candidates_centroid")
+                has_grid_nms_catalog_deterministic_centroid = hasattr(
+                    native_stack,
+                    "star_grid_top_nms_candidates_deterministic_centroid",
                 )
                 use_grid_catalog = (
                     resident_star_grid_cols > 0
@@ -4457,10 +4473,26 @@ def run_resident_calibration_integration(
                 triangle_catalog_batch_enabled = bool(
                     use_grid_catalog
                     and resident_star_threshold > 0.0
-                    and hasattr(native_stack, "star_grid_top_nms_candidates_batch")
+                    and (
+                        (
+                            triangle_centroid_refine_enabled
+                            and hasattr(native_stack, "star_grid_top_nms_candidates_batch_centroid")
+                        )
+                        or (
+                            not triangle_centroid_refine_enabled
+                            and hasattr(native_stack, "star_grid_top_nms_candidates_batch")
+                        )
+                    )
                     and (
                         not resident_star_catalog_deterministic
-                        or hasattr(native_stack, "star_grid_top_nms_candidates_batch_deterministic")
+                        or (
+                            triangle_centroid_refine_enabled
+                            and hasattr(native_stack, "star_grid_top_nms_candidates_batch_deterministic_centroid")
+                        )
+                        or (
+                            not triangle_centroid_refine_enabled
+                            and hasattr(native_stack, "star_grid_top_nms_candidates_batch_deterministic")
+                        )
                     )
                 )
                 triangle_catalog_batch_mode = (
@@ -4597,6 +4629,29 @@ def run_resident_calibration_integration(
                     _stack=stack,
                 ) -> dict[str, Any]:
                     if use_grid_catalog:
+                        if triangle_centroid_refine_enabled:
+                            if resident_star_catalog_deterministic and has_grid_nms_catalog_deterministic_centroid:
+                                return _stack.star_grid_top_nms_candidates_deterministic_centroid(
+                                    frame_index,
+                                    threshold,
+                                    resident_star_grid_cols,
+                                    resident_star_grid_rows,
+                                    grid_top_candidates_per_cell,
+                                    resident_star_max_candidates,
+                                    nms_min_separation_px,
+                                    triangle_centroid_refine_radius,
+                                )
+                            if (not resident_star_catalog_deterministic) and has_grid_nms_catalog_centroid:
+                                return _stack.star_grid_top_nms_candidates_centroid(
+                                    frame_index,
+                                    threshold,
+                                    resident_star_grid_cols,
+                                    resident_star_grid_rows,
+                                    grid_top_candidates_per_cell,
+                                    resident_star_max_candidates,
+                                    nms_min_separation_px,
+                                    triangle_centroid_refine_radius,
+                                )
                         return _stack.star_grid_top_nms_candidates(
                             frame_index,
                             threshold,
@@ -4608,6 +4663,15 @@ def run_resident_calibration_integration(
                             deterministic=resident_star_catalog_deterministic,
                         )
                     if has_top_nms_catalog:
+                        if triangle_centroid_refine_enabled and has_top_nms_catalog_centroid:
+                            return _stack.star_top_nms_candidates_centroid(
+                                frame_index,
+                                threshold,
+                                nms_scan_candidates,
+                                resident_star_max_candidates,
+                                nms_min_separation_px,
+                                triangle_centroid_refine_radius,
+                            )
                         return _stack.star_top_nms_candidates(
                             frame_index,
                             threshold,
@@ -4664,16 +4728,39 @@ def run_resident_calibration_integration(
                         cached_by_index = moving_catalog_batch_cache.get(threshold_key)
                         if cached_by_index is None:
                             batch_start = perf_counter()
-                            batch_results = _stack.star_grid_top_nms_candidates_batch(
-                                moving_catalog_batch_indices,
-                                threshold,
-                                resident_star_grid_cols,
-                                resident_star_grid_rows,
-                                grid_top_candidates_per_cell,
-                                resident_star_max_candidates,
-                                nms_min_separation_px,
-                                deterministic=resident_star_catalog_deterministic,
-                            )
+                            if triangle_centroid_refine_enabled and resident_star_catalog_deterministic:
+                                batch_results = _stack.star_grid_top_nms_candidates_batch_deterministic_centroid(
+                                    moving_catalog_batch_indices,
+                                    threshold,
+                                    resident_star_grid_cols,
+                                    resident_star_grid_rows,
+                                    grid_top_candidates_per_cell,
+                                    resident_star_max_candidates,
+                                    nms_min_separation_px,
+                                    triangle_centroid_refine_radius,
+                                )
+                            elif triangle_centroid_refine_enabled:
+                                batch_results = _stack.star_grid_top_nms_candidates_batch_centroid(
+                                    moving_catalog_batch_indices,
+                                    threshold,
+                                    resident_star_grid_cols,
+                                    resident_star_grid_rows,
+                                    grid_top_candidates_per_cell,
+                                    resident_star_max_candidates,
+                                    nms_min_separation_px,
+                                    triangle_centroid_refine_radius,
+                                )
+                            else:
+                                batch_results = _stack.star_grid_top_nms_candidates_batch(
+                                    moving_catalog_batch_indices,
+                                    threshold,
+                                    resident_star_grid_cols,
+                                    resident_star_grid_rows,
+                                    grid_top_candidates_per_cell,
+                                    resident_star_max_candidates,
+                                    nms_min_separation_px,
+                                    deterministic=resident_star_catalog_deterministic,
+                                )
                             _add_elapsed(
                                 registration_component_s,
                                 "triangle_moving_catalog_batch",
@@ -4777,6 +4864,25 @@ def run_resident_calibration_integration(
                             "failed_count": 0,
                             "max_shift_px": 0.0,
                         }
+                    existing_summary = catalog.get("centroid_refine") if isinstance(catalog, dict) else None
+                    if isinstance(existing_summary, dict) and existing_summary.get("enabled"):
+                        summary = {
+                            "enabled": True,
+                            "status": "ok",
+                            "refined_count": int(existing_summary.get("refined_count", 0) or 0),
+                            "failed_count": int(existing_summary.get("failed_count", 0) or 0),
+                            "max_shift_px": float(existing_summary.get("max_shift_px", 0.0) or 0.0),
+                            "radius": int(existing_summary.get("radius", triangle_centroid_refine_radius) or 0),
+                            "mode": str(existing_summary.get("mode", "resident_gpu_window_centroid")),
+                        }
+                        triangle_centroid_refine_catalog_count += 1
+                        triangle_centroid_refine_star_count += int(summary["refined_count"])
+                        triangle_centroid_refine_failed_star_count += int(summary["failed_count"])
+                        triangle_centroid_refine_max_shift_px = max(
+                            triangle_centroid_refine_max_shift_px,
+                            _float_or_nan(summary["max_shift_px"]),
+                        )
+                        return catalog, summary
                     cache_key = (int(frame_index), round(float(threshold_key), 6))
                     cached = centroid_refine_cache.get(cache_key)
                     if cached is not None:
@@ -7043,7 +7149,20 @@ def run_resident_calibration_integration(
                             and triangle_centroid_refine_enabled
                         ),
                         "triangle_centroid_refine_mode": (
-                            "resident_tile_download_cpu_centroid"
+                            "resident_gpu_window_centroid"
+                            if resident_registration == "similarity_cuda_triangle"
+                            and triangle_centroid_refine_enabled
+                            and (
+                                has_top_nms_catalog_centroid
+                                or (
+                                    use_grid_catalog
+                                    and (
+                                        has_grid_nms_catalog_centroid
+                                        or has_grid_nms_catalog_deterministic_centroid
+                                    )
+                                )
+                            )
+                            else "resident_tile_download_cpu_centroid"
                             if resident_registration == "similarity_cuda_triangle"
                             and triangle_centroid_refine_enabled
                             else "off"

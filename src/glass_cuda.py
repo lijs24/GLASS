@@ -3124,6 +3124,41 @@ class ResidentCalibratedStack:
             "flux": np.asarray(result["flux"], dtype=np.float32),
         }
 
+    def star_top_nms_candidates_centroid(
+        self,
+        index: int,
+        threshold: float,
+        scan_candidates: int,
+        max_output_candidates: int,
+        min_separation_px: float,
+        centroid_radius: int,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "star_top_nms_candidates_centroid"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.star_top_nms_candidates_centroid is not available"
+            )
+        result = dict(
+            self._impl.star_top_nms_candidates_centroid(
+                int(index),
+                float(threshold),
+                int(scan_candidates),
+                int(max_output_candidates),
+                float(min_separation_px),
+                int(centroid_radius),
+            )
+        )
+        return {
+            "count": int(result["count"]),
+            "stored_count": int(result["stored_count"]),
+            "scan_candidates": int(result["scan_candidates"]),
+            "max_output_candidates": int(result["max_output_candidates"]),
+            "min_separation_px": float(result["min_separation_px"]),
+            "centroid_refine": dict(result.get("centroid_refine", {})),
+            "x": np.asarray(result["x"], dtype=np.float32),
+            "y": np.asarray(result["y"], dtype=np.float32),
+            "flux": np.asarray(result["flux"], dtype=np.float32),
+        }
+
     def star_grid_top_nms_candidates(
         self,
         index: int,
@@ -3164,6 +3199,92 @@ class ResidentCalibratedStack:
             "min_separation_px": float(result["min_separation_px"]),
             "catalog_sort_mode": str(result.get("catalog_sort_mode", "unavailable")),
             "catalog_topk_mode": str(result.get("catalog_topk_mode", "unavailable")),
+            "x": np.asarray(result["x"], dtype=np.float32),
+            "y": np.asarray(result["y"], dtype=np.float32),
+            "flux": np.asarray(result["flux"], dtype=np.float32),
+        }
+
+    def star_grid_top_nms_candidates_centroid(
+        self,
+        index: int,
+        threshold: float,
+        grid_cols: int,
+        grid_rows: int,
+        candidates_per_cell: int,
+        max_output_candidates: int,
+        min_separation_px: float,
+        centroid_radius: int,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "star_grid_top_nms_candidates_centroid"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.star_grid_top_nms_candidates_centroid is not available"
+            )
+        result = dict(
+            self._impl.star_grid_top_nms_candidates_centroid(
+                int(index),
+                float(threshold),
+                int(grid_cols),
+                int(grid_rows),
+                int(candidates_per_cell),
+                int(max_output_candidates),
+                float(min_separation_px),
+                int(centroid_radius),
+            )
+        )
+        return {
+            "count": int(result["count"]),
+            "stored_count": int(result["stored_count"]),
+            "grid_cols": int(result["grid_cols"]),
+            "grid_rows": int(result["grid_rows"]),
+            "candidates_per_cell": int(result["candidates_per_cell"]),
+            "max_output_candidates": int(result["max_output_candidates"]),
+            "min_separation_px": float(result["min_separation_px"]),
+            "catalog_sort_mode": str(result.get("catalog_sort_mode", "unavailable")),
+            "catalog_topk_mode": str(result.get("catalog_topk_mode", "unavailable")),
+            "centroid_refine": dict(result.get("centroid_refine", {})),
+            "x": np.asarray(result["x"], dtype=np.float32),
+            "y": np.asarray(result["y"], dtype=np.float32),
+            "flux": np.asarray(result["flux"], dtype=np.float32),
+        }
+
+    def star_grid_top_nms_candidates_deterministic_centroid(
+        self,
+        index: int,
+        threshold: float,
+        grid_cols: int,
+        grid_rows: int,
+        candidates_per_cell: int,
+        max_output_candidates: int,
+        min_separation_px: float,
+        centroid_radius: int,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "star_grid_top_nms_candidates_deterministic_centroid"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.star_grid_top_nms_candidates_deterministic_centroid is not available"
+            )
+        result = dict(
+            self._impl.star_grid_top_nms_candidates_deterministic_centroid(
+                int(index),
+                float(threshold),
+                int(grid_cols),
+                int(grid_rows),
+                int(candidates_per_cell),
+                int(max_output_candidates),
+                float(min_separation_px),
+                int(centroid_radius),
+            )
+        )
+        return {
+            "count": int(result["count"]),
+            "stored_count": int(result["stored_count"]),
+            "grid_cols": int(result["grid_cols"]),
+            "grid_rows": int(result["grid_rows"]),
+            "candidates_per_cell": int(result["candidates_per_cell"]),
+            "max_output_candidates": int(result["max_output_candidates"]),
+            "min_separation_px": float(result["min_separation_px"]),
+            "catalog_sort_mode": str(result.get("catalog_sort_mode", "unavailable")),
+            "catalog_topk_mode": str(result.get("catalog_topk_mode", "unavailable")),
+            "centroid_refine": dict(result.get("centroid_refine", {})),
             "x": np.asarray(result["x"], dtype=np.float32),
             "y": np.asarray(result["y"], dtype=np.float32),
             "flux": np.asarray(result["flux"], dtype=np.float32),
@@ -3230,6 +3351,86 @@ class ResidentCalibratedStack:
                 }
             )
         return catalogs
+
+    def star_grid_top_nms_candidates_batch_centroid(
+        self,
+        indices: list[int] | tuple[int, ...],
+        threshold: float,
+        grid_cols: int,
+        grid_rows: int,
+        candidates_per_cell: int,
+        max_output_candidates: int,
+        min_separation_px: float,
+        centroid_radius: int,
+    ) -> list[dict[str, Any]]:
+        if not hasattr(self._impl, "star_grid_top_nms_candidates_batch_centroid"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.star_grid_top_nms_candidates_batch_centroid is not available"
+            )
+        results = self._impl.star_grid_top_nms_candidates_batch_centroid(
+            [int(index) for index in indices],
+            float(threshold),
+            int(grid_cols),
+            int(grid_rows),
+            int(candidates_per_cell),
+            int(max_output_candidates),
+            float(min_separation_px),
+            int(centroid_radius),
+        )
+        return [self._normalize_grid_catalog_result(dict(item)) for item in results]
+
+    def star_grid_top_nms_candidates_batch_deterministic_centroid(
+        self,
+        indices: list[int] | tuple[int, ...],
+        threshold: float,
+        grid_cols: int,
+        grid_rows: int,
+        candidates_per_cell: int,
+        max_output_candidates: int,
+        min_separation_px: float,
+        centroid_radius: int,
+    ) -> list[dict[str, Any]]:
+        if not hasattr(self._impl, "star_grid_top_nms_candidates_batch_deterministic_centroid"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.star_grid_top_nms_candidates_batch_deterministic_centroid is not available"
+            )
+        results = self._impl.star_grid_top_nms_candidates_batch_deterministic_centroid(
+            [int(index) for index in indices],
+            float(threshold),
+            int(grid_cols),
+            int(grid_rows),
+            int(candidates_per_cell),
+            int(max_output_candidates),
+            float(min_separation_px),
+            int(centroid_radius),
+        )
+        return [self._normalize_grid_catalog_result(dict(item)) for item in results]
+
+    @staticmethod
+    def _normalize_grid_catalog_result(result: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "frame_index": int(result["frame_index"]),
+            "count": int(result["count"]),
+            "stored_count": int(result["stored_count"]),
+            "grid_cols": int(result["grid_cols"]),
+            "grid_rows": int(result["grid_rows"]),
+            "candidates_per_cell": int(result["candidates_per_cell"]),
+            "max_output_candidates": int(result["max_output_candidates"]),
+            "min_separation_px": float(result["min_separation_px"]),
+            "catalog_sort_mode": str(result.get("catalog_sort_mode", "unavailable")),
+            "catalog_topk_mode": str(result.get("catalog_topk_mode", "unavailable")),
+            "catalog_timing_model": str(result.get("catalog_timing_model", "unavailable")),
+            "catalog_enqueue_s": float(result.get("catalog_enqueue_s", 0.0) or 0.0),
+            "catalog_sync_s": float(result.get("catalog_sync_s", 0.0) or 0.0),
+            "catalog_count_download_s": float(result.get("catalog_count_download_s", 0.0) or 0.0),
+            "catalog_centroid_refine_s": float(result.get("catalog_centroid_refine_s", 0.0) or 0.0),
+            "catalog_output_download_s": float(result.get("catalog_output_download_s", 0.0) or 0.0),
+            "catalog_native_s": float(result.get("catalog_native_s", 0.0) or 0.0),
+            "centroid_refine": dict(result.get("centroid_refine", {})),
+            "x": np.asarray(result["x"], dtype=np.float32),
+            "y": np.asarray(result["y"], dtype=np.float32),
+            "flux": np.asarray(result["flux"], dtype=np.float32),
+        }
 
     def estimate_translation_from_stars_to_reference(
         self,

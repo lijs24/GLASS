@@ -2398,7 +2398,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
 
 
-def test_cli_resident_cuda_triangle_default_skips_pixel_refine(tmp_path: Path):
+def test_cli_resident_cuda_triangle_default_uses_gpu_centroid_without_pixel_refine(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_star_dataset(tmp_path)
     manifest = tmp_path / "manifest.json"
@@ -2472,11 +2472,14 @@ def test_cli_resident_cuda_triangle_default_skips_pixel_refine(tmp_path: Path):
     assert resident_registration["triangle_pixel_refine_metric_workload_model"] == "off"
     assert resident_registration["triangle_pixel_refine_workspace_bytes"] == 0
     assert resident_registration["triangle_translation_refine"] is True
-    assert resident_registration["triangle_centroid_refine"] is False
-    assert resident_registration["triangle_centroid_refine_mode"] == "off"
+    assert resident_registration["triangle_centroid_refine"] is True
+    assert resident_registration["triangle_centroid_refine_mode"] == "resident_gpu_window_centroid"
+    assert resident_registration["triangle_centroid_refine_catalog_count"] >= 2
+    assert resident_registration["triangle_centroid_refine_star_count"] > 0
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity_cuda_triangle"
-    assert "triangle_centroid_refine_enabled=false" in moving["warnings"]
+    assert "triangle_centroid_refine_enabled=true" in moving["warnings"]
+    assert "triangle_centroid_refine_mode=resident_gpu_window_centroid" in moving["warnings"]
     assert abs(moving["matrix"][0][2] + 3.0) < 0.5
     assert abs(moving["matrix"][1][2] - 2.0) < 0.5
     assert all("triangle_pixel_refine_mode=" not in warning for warning in moving["warnings"])

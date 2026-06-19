@@ -548,6 +548,16 @@ void glass_star_grid_top_nms_candidates_deterministic_f32_launch(
     int candidates_per_cell,
     int max_output_candidates,
     float min_separation_px);
+void glass_star_refine_centroids_f32_launch(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    unsigned char* statuses,
+    int count,
+    int width,
+    int height,
+    int radius);
 void glass_star_grid_candidates_f32_launch(
     const float* input,
     float* xs,
@@ -615,6 +625,44 @@ const char* grid_catalog_topk_mode(bool deterministic = false, int candidates_pe
     return "strict_flux_precheck_per_cell_lock";
   }
   return candidates_per_cell <= 16 ? "deterministic_parallel_per_cell" : "deterministic_serial_per_cell";
+}
+
+py::dict centroid_refine_summary(
+    int centroid_radius,
+    int stored_count,
+    const std::vector<float>& before_xs,
+    const std::vector<float>& before_ys,
+    const float* after_xs,
+    const float* after_ys,
+    const std::vector<unsigned char>& statuses) {
+  int refined_count = 0;
+  int failed_count = 0;
+  double max_shift_px = 0.0;
+  if (centroid_radius > 0) {
+    for (int i = 0; i < stored_count; ++i) {
+      const bool refined =
+          i < static_cast<int>(statuses.size()) && statuses[static_cast<std::size_t>(i)] != 0;
+      if (!refined) {
+        ++failed_count;
+        continue;
+      }
+      ++refined_count;
+      if (i < static_cast<int>(before_xs.size()) && i < static_cast<int>(before_ys.size())) {
+        const double dx = static_cast<double>(after_xs[i]) - static_cast<double>(before_xs[static_cast<std::size_t>(i)]);
+        const double dy = static_cast<double>(after_ys[i]) - static_cast<double>(before_ys[static_cast<std::size_t>(i)]);
+        max_shift_px = std::max(max_shift_px, std::hypot(dx, dy));
+      }
+    }
+  }
+  py::dict summary;
+  summary["enabled"] = centroid_radius > 0;
+  summary["mode"] = centroid_radius > 0 ? "resident_gpu_window_centroid" : "off";
+  summary["radius"] = centroid_radius;
+  summary["stored_count"] = stored_count;
+  summary["refined_count"] = refined_count;
+  summary["failed_count"] = failed_count;
+  summary["max_shift_px"] = static_cast<float>(max_shift_px);
+  return summary;
 }
 
 struct CalibrationParameters {
@@ -4264,6 +4312,177 @@ class ResidentCalibratedStack {
     }
   }
 
+  py::dict star_top_nms_candidates_centroid(
+      std::size_t index,
+      float threshold,
+      int scan_candidates,
+      int max_output_candidates,
+      float min_separation_px,
+      int centroid_radius) const {
+    require_index(index);
+    if (!loaded_[index]) {
+      throw std::runtime_error("resident frame must be loaded before star detection");
+    }
+    if (scan_candidates <= 0 || max_output_candidates <= 0) {
+      throw std::invalid_argument("candidate counts must be positive");
+    }
+    if (scan_candidates < max_output_candidates) {
+      throw std::invalid_argument("scan_candidates must be greater than or equal to max_output_candidates");
+    }
+    py::array_t<float> xs({max_output_candidates});
+    py::array_t<float> ys({max_output_candidates});
+    py::array_t<float> fluxes({max_output_candidates});
+    const py::buffer_info xs_info = xs.request();
+    const py::buffer_info ys_info = ys.request();
+    const py::buffer_info flux_info = fluxes.request();
+
+    float* d_scan_xs = nullptr;
+    float* d_scan_ys = nullptr;
+    float* d_scan_fluxes = nullptr;
+    float* d_xs = nullptr;
+    float* d_ys = nullptr;
+    float* d_fluxes = nullptr;
+    int* d_count = nullptr;
+    int* d_lock = nullptr;
+    int* d_stored_count = nullptr;
+    unsigned char* d_refine_status = nullptr;
+    int total_count = 0;
+    int stored_count = 0;
+    try {
+      check_cuda(
+          cudaMalloc(&d_scan_xs, static_cast<std::size_t>(scan_candidates) * sizeof(float)),
+          "cudaMalloc(resident top nms scan xs centroid)");
+      check_cuda(
+          cudaMalloc(&d_scan_ys, static_cast<std::size_t>(scan_candidates) * sizeof(float)),
+          "cudaMalloc(resident top nms scan ys centroid)");
+      check_cuda(
+          cudaMalloc(&d_scan_fluxes, static_cast<std::size_t>(scan_candidates) * sizeof(float)),
+          "cudaMalloc(resident top nms scan fluxes centroid)");
+      check_cuda(
+          cudaMalloc(&d_xs, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+          "cudaMalloc(resident top nms star xs centroid)");
+      check_cuda(
+          cudaMalloc(&d_ys, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+          "cudaMalloc(resident top nms star ys centroid)");
+      check_cuda(
+          cudaMalloc(&d_fluxes, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+          "cudaMalloc(resident top nms star fluxes centroid)");
+      check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(resident top nms count centroid)");
+      check_cuda(cudaMalloc(&d_lock, sizeof(int)), "cudaMalloc(resident top nms lock centroid)");
+      check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(resident top nms stored count centroid)");
+      glass_star_top_nms_candidates_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          d_scan_xs,
+          d_scan_ys,
+          d_scan_fluxes,
+          d_xs,
+          d_ys,
+          d_fluxes,
+          d_count,
+          d_lock,
+          d_stored_count,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          threshold,
+          scan_candidates,
+          max_output_candidates,
+          min_separation_px);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_top_nms_candidates_centroid kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_top_nms_candidates_centroid synchronize");
+      check_cuda(cudaMemcpy(&total_count, d_count, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(resident top nms count centroid)");
+      check_cuda(
+          cudaMemcpy(&stored_count, d_stored_count, sizeof(int), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident top nms stored count centroid)");
+      std::vector<float> centroid_before_xs;
+      std::vector<float> centroid_before_ys;
+      std::vector<unsigned char> centroid_statuses;
+      if (centroid_radius > 0 && stored_count > 0) {
+        centroid_before_xs.resize(static_cast<std::size_t>(stored_count));
+        centroid_before_ys.resize(static_cast<std::size_t>(stored_count));
+        centroid_statuses.resize(static_cast<std::size_t>(stored_count));
+        check_cuda(
+            cudaMemcpy(
+                centroid_before_xs.data(),
+                d_xs,
+                static_cast<std::size_t>(stored_count) * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident top nms centroid original xs)");
+        check_cuda(
+            cudaMemcpy(
+                centroid_before_ys.data(),
+                d_ys,
+                static_cast<std::size_t>(stored_count) * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident top nms centroid original ys)");
+        check_cuda(
+            cudaMalloc(&d_refine_status, static_cast<std::size_t>(stored_count) * sizeof(unsigned char)),
+            "cudaMalloc(resident top nms centroid status)");
+        glass_star_refine_centroids_f32_launch(
+            d_stack_ + index * pixels_per_frame_,
+            d_xs,
+            d_ys,
+            d_fluxes,
+            d_refine_status,
+            stored_count,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            centroid_radius);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_top_nms_candidates_centroid refine kernel launch");
+        check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_top_nms_candidates_centroid refine synchronize");
+        check_cuda(
+            cudaMemcpy(
+                centroid_statuses.data(),
+                d_refine_status,
+                static_cast<std::size_t>(stored_count) * sizeof(unsigned char),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident top nms centroid status)");
+      }
+      check_cuda(cudaMemcpy(xs_info.ptr, d_xs, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident top nms star xs centroid)");
+      check_cuda(cudaMemcpy(ys_info.ptr, d_ys, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident top nms star ys centroid)");
+      check_cuda(cudaMemcpy(flux_info.ptr, d_fluxes, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident top nms star fluxes centroid)");
+      py::dict centroid_refine = centroid_refine_summary(
+          centroid_radius,
+          stored_count,
+          centroid_before_xs,
+          centroid_before_ys,
+          static_cast<const float*>(xs_info.ptr),
+          static_cast<const float*>(ys_info.ptr),
+          centroid_statuses);
+      py::dict result;
+      result["count"] = total_count;
+      result["stored_count"] = stored_count;
+      result["scan_candidates"] = scan_candidates;
+      result["max_output_candidates"] = max_output_candidates;
+      result["min_separation_px"] = min_separation_px;
+      result["centroid_refine"] = centroid_refine;
+      result["x"] = xs[py::slice(0, stored_count, 1)];
+      result["y"] = ys[py::slice(0, stored_count, 1)];
+      result["flux"] = fluxes[py::slice(0, stored_count, 1)];
+      cudaFree(d_scan_xs);
+      cudaFree(d_scan_ys);
+      cudaFree(d_scan_fluxes);
+      cudaFree(d_xs);
+      cudaFree(d_ys);
+      cudaFree(d_fluxes);
+      cudaFree(d_count);
+      cudaFree(d_lock);
+      cudaFree(d_stored_count);
+      cudaFree(d_refine_status);
+      return result;
+    } catch (...) {
+      cudaFree(d_scan_xs);
+      cudaFree(d_scan_ys);
+      cudaFree(d_scan_fluxes);
+      cudaFree(d_xs);
+      cudaFree(d_ys);
+      cudaFree(d_fluxes);
+      cudaFree(d_count);
+      cudaFree(d_lock);
+      cudaFree(d_stored_count);
+      throw;
+    }
+  }
+
   py::dict star_grid_top_nms_candidates_impl(
       std::size_t index,
       float threshold,
@@ -4272,7 +4491,8 @@ class ResidentCalibratedStack {
       int candidates_per_cell,
       int max_output_candidates,
       float min_separation_px,
-      bool deterministic) const {
+      bool deterministic,
+      int centroid_radius = 0) const {
     require_index(index);
     if (!loaded_[index]) {
       throw std::runtime_error("resident frame must be loaded before star detection");
@@ -4302,6 +4522,7 @@ class ResidentCalibratedStack {
     int* d_locks = nullptr;
     int* d_cell_counts = nullptr;
     int* d_stored_count = nullptr;
+    unsigned char* d_refine_status = nullptr;
     int total_count = 0;
     int stored_count = 0;
     try {
@@ -4380,6 +4601,50 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(&stored_count, d_stored_count, sizeof(int), cudaMemcpyDeviceToHost),
           "cudaMemcpy(resident grid top nms stored count)");
+      std::vector<float> centroid_before_xs;
+      std::vector<float> centroid_before_ys;
+      std::vector<unsigned char> centroid_statuses;
+      if (centroid_radius > 0 && stored_count > 0) {
+        centroid_before_xs.resize(static_cast<std::size_t>(stored_count));
+        centroid_before_ys.resize(static_cast<std::size_t>(stored_count));
+        centroid_statuses.resize(static_cast<std::size_t>(stored_count));
+        check_cuda(
+            cudaMemcpy(
+                centroid_before_xs.data(),
+                d_xs,
+                static_cast<std::size_t>(stored_count) * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident grid top nms centroid original xs)");
+        check_cuda(
+            cudaMemcpy(
+                centroid_before_ys.data(),
+                d_ys,
+                static_cast<std::size_t>(stored_count) * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident grid top nms centroid original ys)");
+        check_cuda(
+            cudaMalloc(&d_refine_status, static_cast<std::size_t>(stored_count) * sizeof(unsigned char)),
+            "cudaMalloc(resident grid top nms centroid status)");
+        glass_star_refine_centroids_f32_launch(
+            d_stack_ + index * pixels_per_frame_,
+            d_xs,
+            d_ys,
+            d_fluxes,
+            d_refine_status,
+            stored_count,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            centroid_radius);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates centroid refine kernel launch");
+        check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates centroid refine synchronize");
+        check_cuda(
+            cudaMemcpy(
+                centroid_statuses.data(),
+                d_refine_status,
+                static_cast<std::size_t>(stored_count) * sizeof(unsigned char),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident grid top nms centroid status)");
+      }
       check_cuda(
           cudaMemcpy(xs_info.ptr, d_xs, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost),
           "cudaMemcpy(resident grid top nms star xs)");
@@ -4403,6 +4668,15 @@ class ResidentCalibratedStack {
       result["min_separation_px"] = min_separation_px;
       result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
       result["catalog_topk_mode"] = grid_catalog_topk_mode(deterministic, candidates_per_cell);
+      py::dict centroid_refine = centroid_refine_summary(
+          centroid_radius,
+          stored_count,
+          centroid_before_xs,
+          centroid_before_ys,
+          static_cast<const float*>(xs_info.ptr),
+          static_cast<const float*>(ys_info.ptr),
+          centroid_statuses);
+      result["centroid_refine"] = centroid_refine;
       result["x"] = xs[py::slice(0, stored_count, 1)];
       result["y"] = ys[py::slice(0, stored_count, 1)];
       result["flux"] = fluxes[py::slice(0, stored_count, 1)];
@@ -4416,6 +4690,7 @@ class ResidentCalibratedStack {
       cudaFree(d_locks);
       cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
+      cudaFree(d_refine_status);
       return result;
     } catch (...) {
       cudaFree(d_grid_xs);
@@ -4428,6 +4703,7 @@ class ResidentCalibratedStack {
       cudaFree(d_locks);
       cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
+      cudaFree(d_refine_status);
       throw;
     }
   }
@@ -4444,6 +4720,27 @@ class ResidentCalibratedStack {
         index, threshold, grid_cols, grid_rows, candidates_per_cell, max_output_candidates, min_separation_px, false);
   }
 
+  py::dict star_grid_top_nms_candidates_centroid(
+      std::size_t index,
+      float threshold,
+      int grid_cols,
+      int grid_rows,
+      int candidates_per_cell,
+      int max_output_candidates,
+      float min_separation_px,
+      int centroid_radius) const {
+    return star_grid_top_nms_candidates_impl(
+        index,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell,
+        max_output_candidates,
+        min_separation_px,
+        false,
+        centroid_radius);
+  }
+
   py::dict star_grid_top_nms_candidates_deterministic(
       std::size_t index,
       float threshold,
@@ -4456,6 +4753,27 @@ class ResidentCalibratedStack {
         index, threshold, grid_cols, grid_rows, candidates_per_cell, max_output_candidates, min_separation_px, true);
   }
 
+  py::dict star_grid_top_nms_candidates_deterministic_centroid(
+      std::size_t index,
+      float threshold,
+      int grid_cols,
+      int grid_rows,
+      int candidates_per_cell,
+      int max_output_candidates,
+      float min_separation_px,
+      int centroid_radius) const {
+    return star_grid_top_nms_candidates_impl(
+        index,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell,
+        max_output_candidates,
+        min_separation_px,
+        true,
+        centroid_radius);
+  }
+
   py::list star_grid_top_nms_candidates_batch_impl(
       const std::vector<std::size_t>& indices,
       float threshold,
@@ -4464,7 +4782,8 @@ class ResidentCalibratedStack {
       int candidates_per_cell,
       int max_output_candidates,
       float min_separation_px,
-      bool deterministic) const {
+      bool deterministic,
+      int centroid_radius = 0) const {
     if (grid_cols <= 0 || grid_rows <= 0 || candidates_per_cell <= 0 || max_output_candidates <= 0) {
       throw std::invalid_argument("grid dimensions and candidate counts must be positive");
     }
@@ -4491,6 +4810,7 @@ class ResidentCalibratedStack {
     int* d_locks = nullptr;
     int* d_cell_counts = nullptr;
     int* d_stored_count = nullptr;
+    unsigned char* d_refine_status = nullptr;
     try {
       check_cuda(
           cudaMalloc(&d_grid_xs, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
@@ -4518,6 +4838,11 @@ class ResidentCalibratedStack {
           cudaMalloc(&d_cell_counts, static_cast<std::size_t>(cell_count) * sizeof(int)),
           "cudaMalloc(resident batch grid top nms cell counts)");
       check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(resident batch grid top nms stored count)");
+      if (centroid_radius > 0) {
+        check_cuda(
+            cudaMalloc(&d_refine_status, static_cast<std::size_t>(max_output_candidates) * sizeof(unsigned char)),
+            "cudaMalloc(resident batch grid top nms centroid status)");
+      }
 
       for (const std::size_t index : indices) {
         py::array_t<float> xs({max_output_candidates});
@@ -4582,6 +4907,51 @@ class ResidentCalibratedStack {
             cudaMemcpy(&stored_count, d_stored_count, sizeof(int), cudaMemcpyDeviceToHost),
             "cudaMemcpy(resident batch grid top nms stored count)");
         const auto count_download_end = std::chrono::steady_clock::now();
+        double centroid_refine_s = 0.0;
+        std::vector<float> centroid_before_xs;
+        std::vector<float> centroid_before_ys;
+        std::vector<unsigned char> centroid_statuses;
+        if (centroid_radius > 0 && stored_count > 0) {
+          centroid_before_xs.resize(static_cast<std::size_t>(stored_count));
+          centroid_before_ys.resize(static_cast<std::size_t>(stored_count));
+          centroid_statuses.resize(static_cast<std::size_t>(stored_count));
+          check_cuda(
+              cudaMemcpy(
+                  centroid_before_xs.data(),
+                  d_xs,
+                  static_cast<std::size_t>(stored_count) * sizeof(float),
+                  cudaMemcpyDeviceToHost),
+              "cudaMemcpy(resident batch grid top nms centroid original xs)");
+          check_cuda(
+              cudaMemcpy(
+                  centroid_before_ys.data(),
+                  d_ys,
+                  static_cast<std::size_t>(stored_count) * sizeof(float),
+                  cudaMemcpyDeviceToHost),
+              "cudaMemcpy(resident batch grid top nms centroid original ys)");
+          const auto centroid_start = std::chrono::steady_clock::now();
+          glass_star_refine_centroids_f32_launch(
+              d_stack_ + index * pixels_per_frame_,
+              d_xs,
+              d_ys,
+              d_fluxes,
+              d_refine_status,
+              stored_count,
+              static_cast<int>(width_),
+              static_cast<int>(height_),
+              centroid_radius);
+          check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid refine kernel launch");
+          check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid refine synchronize");
+          check_cuda(
+              cudaMemcpy(
+                  centroid_statuses.data(),
+                  d_refine_status,
+                  static_cast<std::size_t>(stored_count) * sizeof(unsigned char),
+                  cudaMemcpyDeviceToHost),
+              "cudaMemcpy(resident batch grid top nms centroid status)");
+          centroid_refine_s = std::chrono::duration<double>(
+              std::chrono::steady_clock::now() - centroid_start).count();
+        }
         check_cuda(
             cudaMemcpy(
                 xs_info.ptr,
@@ -4629,8 +4999,18 @@ class ResidentCalibratedStack {
         result["catalog_enqueue_s"] = enqueue_s;
         result["catalog_sync_s"] = sync_s;
         result["catalog_count_download_s"] = count_download_s;
+        result["catalog_centroid_refine_s"] = centroid_refine_s;
         result["catalog_output_download_s"] = catalog_download_s;
         result["catalog_native_s"] = native_s;
+        py::dict centroid_refine = centroid_refine_summary(
+            centroid_radius,
+            stored_count,
+            centroid_before_xs,
+            centroid_before_ys,
+            static_cast<const float*>(xs_info.ptr),
+            static_cast<const float*>(ys_info.ptr),
+            centroid_statuses);
+        result["centroid_refine"] = centroid_refine;
         result["x"] = xs[py::slice(0, stored_count, 1)];
         result["y"] = ys[py::slice(0, stored_count, 1)];
         result["flux"] = fluxes[py::slice(0, stored_count, 1)];
@@ -4647,6 +5027,7 @@ class ResidentCalibratedStack {
       cudaFree(d_locks);
       cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
+      cudaFree(d_refine_status);
       return results;
     } catch (...) {
       cudaFree(d_grid_xs);
@@ -4659,6 +5040,7 @@ class ResidentCalibratedStack {
       cudaFree(d_locks);
       cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
+      cudaFree(d_refine_status);
       throw;
     }
   }
@@ -4675,6 +5057,27 @@ class ResidentCalibratedStack {
         indices, threshold, grid_cols, grid_rows, candidates_per_cell, max_output_candidates, min_separation_px, false);
   }
 
+  py::list star_grid_top_nms_candidates_batch_centroid(
+      const std::vector<std::size_t>& indices,
+      float threshold,
+      int grid_cols,
+      int grid_rows,
+      int candidates_per_cell,
+      int max_output_candidates,
+      float min_separation_px,
+      int centroid_radius) const {
+    return star_grid_top_nms_candidates_batch_impl(
+        indices,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell,
+        max_output_candidates,
+        min_separation_px,
+        false,
+        centroid_radius);
+  }
+
   py::list star_grid_top_nms_candidates_batch_deterministic(
       const std::vector<std::size_t>& indices,
       float threshold,
@@ -4685,6 +5088,27 @@ class ResidentCalibratedStack {
       float min_separation_px) const {
     return star_grid_top_nms_candidates_batch_impl(
         indices, threshold, grid_cols, grid_rows, candidates_per_cell, max_output_candidates, min_separation_px, true);
+  }
+
+  py::list star_grid_top_nms_candidates_batch_deterministic_centroid(
+      const std::vector<std::size_t>& indices,
+      float threshold,
+      int grid_cols,
+      int grid_rows,
+      int candidates_per_cell,
+      int max_output_candidates,
+      float min_separation_px,
+      int centroid_radius) const {
+    return star_grid_top_nms_candidates_batch_impl(
+        indices,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell,
+        max_output_candidates,
+        min_separation_px,
+        true,
+        centroid_radius);
   }
 
   py::dict estimate_translation_from_stars_to_reference(
@@ -10847,14 +11271,25 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       .def("star_candidates", &ResidentCalibratedStack::star_candidates)
       .def("star_top_candidates", &ResidentCalibratedStack::star_top_candidates)
       .def("star_top_nms_candidates", &ResidentCalibratedStack::star_top_nms_candidates)
+      .def("star_top_nms_candidates_centroid", &ResidentCalibratedStack::star_top_nms_candidates_centroid)
       .def("star_grid_top_nms_candidates", &ResidentCalibratedStack::star_grid_top_nms_candidates)
+      .def("star_grid_top_nms_candidates_centroid", &ResidentCalibratedStack::star_grid_top_nms_candidates_centroid)
       .def(
           "star_grid_top_nms_candidates_deterministic",
           &ResidentCalibratedStack::star_grid_top_nms_candidates_deterministic)
+      .def(
+          "star_grid_top_nms_candidates_deterministic_centroid",
+          &ResidentCalibratedStack::star_grid_top_nms_candidates_deterministic_centroid)
       .def("star_grid_top_nms_candidates_batch", &ResidentCalibratedStack::star_grid_top_nms_candidates_batch)
+      .def(
+          "star_grid_top_nms_candidates_batch_centroid",
+          &ResidentCalibratedStack::star_grid_top_nms_candidates_batch_centroid)
       .def(
           "star_grid_top_nms_candidates_batch_deterministic",
           &ResidentCalibratedStack::star_grid_top_nms_candidates_batch_deterministic)
+      .def(
+          "star_grid_top_nms_candidates_batch_deterministic_centroid",
+          &ResidentCalibratedStack::star_grid_top_nms_candidates_batch_deterministic_centroid)
       .def(
           "estimate_translation_from_stars_to_reference",
           &ResidentCalibratedStack::estimate_translation_from_stars_to_reference,
