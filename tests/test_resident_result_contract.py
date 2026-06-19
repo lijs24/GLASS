@@ -179,6 +179,34 @@ def test_resident_result_contract_passes_with_pixel_verify(tmp_path: Path) -> No
     assert payload["outputs"][0]["rejection_semantics"]["descriptor"]["cpu_baseline_parity"] is False
 
 
+def test_resident_result_contract_resolves_cwd_relative_map_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run = tmp_path / "run"
+    _write_resident_run(run)
+    payload = read_json(run / "integration_results.json")
+    output = payload["outputs"][0]
+    for key in (
+        "master_path",
+        "weight_map_path",
+        "coverage_map_path",
+        "dq_map_path",
+        "low_rejection_map_path",
+        "high_rejection_map_path",
+    ):
+        output[key] = str(Path("run") / Path(output[key]).relative_to(run))
+    write_json(run / "integration_results.json", payload)
+    monkeypatch.chdir(tmp_path)
+
+    contract = build_resident_result_contract(run, pixel_verify=True, pixel_verify_tile_size=1)
+
+    checks = {item["name"]: item for item in contract["outputs"][0]["checks"]}
+    assert contract["passed"] is True
+    assert checks["required_maps_exist"]["passed"] is True
+    assert checks["pixel_maps_match_summaries"]["passed"] is True
+
+
 def test_resident_result_contract_accepts_hardened_winsorized_parity_descriptor(
     tmp_path: Path,
 ) -> None:

@@ -7497,6 +7497,24 @@ integration where applicable.
   handoff work, no package upload, no GitHub release creation, no CUDA kernel
   change, and no modification of user input directories.
 
+### S2-Gate 416: Resident Result-Contract Path Resolution
+
+- Fix the runtime-validation blocker exposed by S2-Gate 415: resident
+  result-contract map checks must resolve both run-root-relative paths and
+  current-working-directory-relative GLASS artifact paths.
+- Preserve existing run-root-relative behavior while accepting the path shape
+  written by `integration_results.json` in the external-transform resident
+  validation run.
+- Re-run the synthetic CPU tiled vs CUDA resident external-matrix validation
+  artifacts so the resident result contract and parity summary both pass.
+- Acceptance for this gate is a real contract/parity transition from
+  "numerical parity but failed contract" to "numerical parity and contract
+  ready"; it does not claim that resident triangle registration is fixed.
+- Keep this gate runtime-validation scoped: no default-promotion/report-only
+  handoff work, no package upload, no GitHub release creation, no CUDA kernel
+  change, no registration math change, no integration math change, and no
+  modification of user input directories.
+
 ## Gate Rules
 
 Each gate requires:
