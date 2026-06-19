@@ -7437,6 +7437,23 @@ integration where applicable.
   change, no CUDA kernel change, no package upload, no GitHub release creation,
   and no real-data benchmark rerun.
 
+### S2-Gate 413: Default-Promotion Publication-Audit Benchmark Profile Handoff
+
+- Carry the S2-Gate412 Phase2 publication-audit benchmark profile chain into
+  `glass default-promotion-manifest`.
+- Require `stack_engine_publication_audit_benchmark_profile_chain_passed` before
+  a default-promotion manifest can recommend promotion.
+- Surface raw and Phase2 publication-audit benchmark profile layers in the
+  default-promotion JSON and Markdown.
+- Validate ready, missing-publication-audit, and failed benchmark-profile chain
+  paths with focused default-promotion tests.
+- Keep this gate default-promotion-policy scoped: no runtime execution change,
+  no benchmark contract check semantic change, no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no DQ pixel
+  semantics change, no CUDA kernel change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

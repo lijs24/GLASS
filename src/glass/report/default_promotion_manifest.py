@@ -490,6 +490,19 @@ def _publication_audit_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         )
         else {}
     )
+    benchmark_profile_layer = (
+        audit.get("publish_preflight_benchmark_profile_handoff")
+        if isinstance(audit.get("publish_preflight_benchmark_profile_handoff"), dict)
+        else {}
+    )
+    phase2_benchmark_profile_layer = (
+        audit.get("phase2_publish_preflight_benchmark_profile_handoff")
+        if isinstance(
+            audit.get("phase2_publish_preflight_benchmark_profile_handoff"),
+            dict,
+        )
+        else {}
+    )
     passed_check = _phase2_check_passed(phase2, "stack_engine_publication_audit_passed")
     policy_check = _phase2_check_passed(
         phase2,
@@ -499,6 +512,10 @@ def _publication_audit_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         phase2,
         "stack_engine_publication_audit_resident_winsorized_chain_passed",
     )
+    benchmark_profile_check = _phase2_check_passed(
+        phase2,
+        "stack_engine_publication_audit_benchmark_profile_chain_passed",
+    )
     ready = (
         bool(audit)
         and audit.get("status") == "passed"
@@ -506,6 +523,7 @@ def _publication_audit_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         and passed_check is True
         and policy_check is True
         and winsorized_check is True
+        and benchmark_profile_check is True
         and audit.get("publish_preflight_integration_engine_policy_ready") is True
         and audit.get("phase2_publish_preflight_integration_engine_policy_ready")
         is True
@@ -518,6 +536,13 @@ def _publication_audit_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         is True
         and audit.get(
             "phase2_publish_preflight_resident_winsorized_matches_publish_preflight"
+        )
+        is True
+        and audit.get("publish_preflight_benchmark_profile_handoff_ready") is True
+        and audit.get("phase2_publish_preflight_benchmark_profile_handoff_ready")
+        is True
+        and audit.get(
+            "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight"
         )
         is True
     )
@@ -534,6 +559,7 @@ def _publication_audit_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         "phase2_audit_check_passed": passed_check,
         "policy_chain_phase2_check_passed": policy_check,
         "resident_winsorized_chain_phase2_check_passed": winsorized_check,
+        "benchmark_profile_chain_phase2_check_passed": benchmark_profile_check,
         "publish_preflight_policy_layer": policy_layer,
         "phase2_policy_layer": phase2_policy_layer,
         "publish_preflight_policy_ready": audit.get(
@@ -555,6 +581,17 @@ def _publication_audit_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         ),
         "resident_winsorized_agreement": audit.get(
             "phase2_publish_preflight_resident_winsorized_matches_publish_preflight"
+        ),
+        "publish_preflight_benchmark_profile_layer": benchmark_profile_layer,
+        "phase2_benchmark_profile_layer": phase2_benchmark_profile_layer,
+        "publish_preflight_benchmark_profile_ready": audit.get(
+            "publish_preflight_benchmark_profile_handoff_ready"
+        ),
+        "phase2_benchmark_profile_ready": audit.get(
+            "phase2_publish_preflight_benchmark_profile_handoff_ready"
+        ),
+        "benchmark_profile_agreement": audit.get(
+            "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight"
         ),
     }
 
@@ -2314,6 +2351,37 @@ def build_default_promotion_manifest(
             },
         ),
         _check(
+            "stack_engine_publication_benchmark_profile_chain_passed",
+            publication_audit.get("publish_preflight_benchmark_profile_ready")
+            is True
+            and publication_audit.get("phase2_benchmark_profile_ready") is True
+            and publication_audit.get("benchmark_profile_agreement") is True
+            and publication_audit.get(
+                "benchmark_profile_chain_phase2_check_passed"
+            )
+            is True,
+            {
+                "publish_preflight_benchmark_profile_ready": publication_audit.get(
+                    "publish_preflight_benchmark_profile_ready"
+                ),
+                "phase2_benchmark_profile_ready": publication_audit.get(
+                    "phase2_benchmark_profile_ready"
+                ),
+                "benchmark_profile_agreement": publication_audit.get(
+                    "benchmark_profile_agreement"
+                ),
+                "phase2_check_passed": publication_audit.get(
+                    "benchmark_profile_chain_phase2_check_passed"
+                ),
+                "publish_preflight_layer": publication_audit.get(
+                    "publish_preflight_benchmark_profile_layer"
+                ),
+                "phase2_layer": publication_audit.get(
+                    "phase2_benchmark_profile_layer"
+                ),
+            },
+        ),
+        _check(
             "default_memory_mode_candidate",
             default_memory_mode == "resident",
             {"actual": default_memory_mode, "required": "resident"},
@@ -2769,6 +2837,17 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{publication_audit.get('resident_winsorized_agreement')}` "
             "phase2-check="
             f"`{publication_audit.get('resident_winsorized_chain_phase2_check_passed')}`"
+        ),
+        (
+            "- Benchmark profile chain: "
+            "raw="
+            f"`{publication_audit.get('publish_preflight_benchmark_profile_ready')}` "
+            "phase2="
+            f"`{publication_audit.get('phase2_benchmark_profile_ready')}` "
+            "agreement="
+            f"`{publication_audit.get('benchmark_profile_agreement')}` "
+            "phase2-check="
+            f"`{publication_audit.get('benchmark_profile_chain_phase2_check_passed')}`"
         ),
         "",
         "## Release Machine",
