@@ -21,7 +21,31 @@ def _release_quality_final_evidence_fields(
         f"{prefix}_final_checks_match": True,
         f"{prefix}_raw_final_checks_ready": raw_ready,
         f"{prefix}_phase2_final_checks_ready": phase2_ready,
+        f"{prefix}_final_evidence_ready": final_ready,
+        f"{prefix}_final_evidence_match": True,
+        f"{prefix}_raw_final_evidence_ready": raw_ready,
+        f"{prefix}_phase2_final_evidence_ready": phase2_ready,
     }
+
+
+_RELEASE_QUALITY_FINAL_EVIDENCE_PREFIXES = (
+    "matrix",
+    "matrix_default",
+    "default_promotion",
+)
+
+_RELEASE_QUALITY_FINAL_EVIDENCE_DETAIL_SUFFIXES = (
+    "final_evidence_ready",
+    "final_evidence_match",
+    "raw_final_evidence_ready",
+    "phase2_final_evidence_ready",
+)
+
+
+def _clear_release_quality_final_evidence_detail(section: dict[str, object]) -> None:
+    for prefix in _RELEASE_QUALITY_FINAL_EVIDENCE_PREFIXES:
+        for suffix in _RELEASE_QUALITY_FINAL_EVIDENCE_DETAIL_SUFFIXES:
+            section[f"{prefix}_{suffix}"] = None
 
 
 def _write_acceptance(
@@ -1372,8 +1396,14 @@ def test_release_promotion_decision_accepts_publication_runtime_default(
     assert release_quality["raw_matrix_final_checks_ready"] is True
     assert release_quality["raw_matrix_raw_final_checks_ready"] is True
     assert release_quality["raw_matrix_phase2_final_checks_ready"] is True
+    assert release_quality["raw_matrix_final_evidence_ready"] is True
+    assert release_quality["raw_matrix_final_evidence_match"] is True
+    assert release_quality["raw_matrix_raw_final_evidence_ready"] is True
+    assert release_quality["raw_matrix_phase2_final_evidence_ready"] is True
     assert release_quality["phase2_matrix_final_checks_ready"] is True
     assert release_quality["phase2_matrix_phase2_final_checks_ready"] is True
+    assert release_quality["phase2_matrix_final_evidence_ready"] is True
+    assert release_quality["phase2_matrix_phase2_final_evidence_ready"] is True
 
 
 def test_release_promotion_decision_blocks_failed_publication_runtime_default(
@@ -1641,6 +1671,11 @@ def test_release_promotion_decision_allows_compatible_missing_publication_releas
     assert release_quality["raw_matrix_raw_final_checks_ready"] is None
     assert release_quality["raw_matrix_phase2_final_checks_ready"] is None
     assert release_quality["phase2_matrix_raw_final_checks_ready"] is None
+    assert release_quality["raw_matrix_final_evidence_ready"] is True
+    assert release_quality["raw_matrix_final_evidence_match"] is True
+    assert release_quality["raw_matrix_raw_final_evidence_ready"] is None
+    assert release_quality["raw_matrix_phase2_final_evidence_ready"] is None
+    assert release_quality["phase2_matrix_raw_final_evidence_ready"] is None
 
 
 def test_release_promotion_decision_allows_legacy_publication_release_quality_without_final_evidence(
@@ -1678,6 +1713,46 @@ def test_release_promotion_decision_allows_legacy_publication_release_quality_wi
     assert release_quality["phase2_matrix_final_checks_ready"] is None
 
 
+def test_release_promotion_decision_allows_legacy_publication_release_quality_final_evidence_without_detail(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication)
+    payload = read_json(publication)
+    _clear_release_quality_final_evidence_detail(
+        payload["layers"]["publish_preflight_release_quality_publication_guard"]
+    )
+    _clear_release_quality_final_evidence_detail(
+        payload["layers"][
+            "phase2_publish_preflight_release_quality_publication_guard"
+        ]
+    )
+    write_json(publication, payload)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    release_quality = payload["stack_engine_publication_release_quality_guard"]
+    assert payload["release_candidate_ready"] is True
+    assert checks["stack_engine_publication_release_quality_guard_passed"][
+        "passed"
+    ] is True
+    assert release_quality["final_evidence_ready"] is True
+    assert release_quality["final_evidence_match"] is True
+    assert release_quality["raw_matrix_final_checks_ready"] is True
+    assert release_quality["raw_matrix_final_evidence_ready"] is None
+    assert release_quality["phase2_matrix_final_evidence_ready"] is None
+
+
 def test_release_promotion_decision_blocks_failed_publication_release_quality_final_evidence(
     tmp_path: Path,
 ) -> None:
@@ -1712,6 +1787,43 @@ def test_release_promotion_decision_blocks_failed_publication_release_quality_fi
     assert release_quality["raw_matrix_final_checks_ready"] is False
     assert release_quality["raw_matrix_raw_final_checks_ready"] is False
     assert release_quality["raw_matrix_phase2_final_checks_ready"] is False
+    assert release_quality["raw_matrix_final_evidence_ready"] is False
+    assert release_quality["raw_matrix_raw_final_evidence_ready"] is False
+    assert release_quality["raw_matrix_phase2_final_evidence_ready"] is False
+
+
+def test_release_promotion_decision_blocks_failed_publication_release_quality_final_evidence_detail(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication)
+    payload = read_json(publication)
+    payload["layers"]["publish_preflight_release_quality_publication_guard"][
+        "matrix_phase2_final_evidence_ready"
+    ] = False
+    write_json(publication, payload)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    release_quality = payload["stack_engine_publication_release_quality_guard"]
+    assert payload["release_candidate_ready"] is False
+    assert checks["stack_engine_publication_release_quality_guard_passed"][
+        "passed"
+    ] is False
+    assert release_quality["raw_final_evidence_ready"] is False
+    assert release_quality["final_evidence_ready"] is False
+    assert release_quality["raw_matrix_phase2_final_checks_ready"] is True
+    assert release_quality["raw_matrix_phase2_final_evidence_ready"] is False
 
 
 def test_release_promotion_decision_blocks_failed_phase2_publication_release_quality_final_evidence(
@@ -1746,6 +1858,8 @@ def test_release_promotion_decision_blocks_failed_phase2_publication_release_qua
     assert release_quality["final_evidence_ready"] is False
     assert release_quality["phase2_matrix_final_checks_ready"] is False
     assert release_quality["phase2_matrix_raw_final_checks_ready"] is False
+    assert release_quality["phase2_matrix_final_evidence_ready"] is False
+    assert release_quality["phase2_matrix_raw_final_evidence_ready"] is False
 
 
 def test_release_promotion_decision_blocks_missing_phase2_publication_release_quality_final_evidence(
@@ -1780,12 +1894,53 @@ def test_release_promotion_decision_blocks_missing_phase2_publication_release_qu
     assert release_quality["final_evidence_ready"] is False
     assert release_quality["raw_matrix_final_checks_ready"] is True
     assert release_quality["phase2_matrix_final_checks_ready"] is None
+    assert release_quality["raw_matrix_final_evidence_ready"] is True
+    assert release_quality["phase2_matrix_final_evidence_ready"] is None
     assert (
         release_quality["checks"][
             "phase2_publish_preflight_release_quality_publication_guard_matches_publish_preflight"
         ]
         is False
     )
+
+
+def test_release_promotion_decision_blocks_phase2_publication_release_quality_final_evidence_detail_loss(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication)
+    payload = read_json(publication)
+    _clear_release_quality_final_evidence_detail(
+        payload["layers"][
+            "phase2_publish_preflight_release_quality_publication_guard"
+        ]
+    )
+    write_json(publication, payload)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    release_quality = payload["stack_engine_publication_release_quality_guard"]
+    assert payload["release_candidate_ready"] is False
+    assert checks["stack_engine_publication_release_quality_guard_passed"][
+        "passed"
+    ] is False
+    assert release_quality["raw_final_evidence_ready"] is True
+    assert release_quality["phase2_final_evidence_ready"] is True
+    assert release_quality["final_evidence_match"] is False
+    assert release_quality["final_evidence_ready"] is False
+    assert release_quality["raw_matrix_final_evidence_ready"] is True
+    assert release_quality["phase2_matrix_final_evidence_ready"] is None
+    assert release_quality["phase2_matrix_final_checks_ready"] is True
 
 
 def test_release_promotion_decision_blocks_failed_publication_release_quality_guard(

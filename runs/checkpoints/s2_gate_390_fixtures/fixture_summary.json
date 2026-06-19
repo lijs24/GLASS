@@ -1,0 +1,34 @@
+{
+  "cases": [
+    {
+      "case": "ready_final_evidence_detail",
+      "final_evidence_ready": true,
+      "phase2_matrix_final_evidence_ready": true,
+      "raw_matrix_final_evidence_ready": true,
+      "release_candidate_ready": true
+    },
+    {
+      "case": "legacy_only_final_checks",
+      "final_evidence_ready": true,
+      "raw_matrix_final_checks_ready": true,
+      "raw_matrix_final_evidence_ready": null,
+      "release_candidate_ready": true
+    },
+    {
+      "case": "failed_raw_matrix_phase2_final_evidence_detail",
+      "final_evidence_ready": false,
+      "raw_matrix_phase2_final_checks_ready": true,
+      "raw_matrix_phase2_final_evidence_ready": false,
+      "release_candidate_ready": false
+    },
+    {
+      "case": "phase2_final_evidence_detail_loss",
+      "final_evidence_match": false,
+      "final_evidence_ready": false,
+      "phase2_matrix_final_evidence_ready": null,
+      "raw_matrix_final_evidence_ready": true,
+      "release_candidate_ready": false
+    }
+  ],
+  "gate": "S2-Gate 390"
+}

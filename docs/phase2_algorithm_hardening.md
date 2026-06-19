@@ -7026,6 +7026,27 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 390: Release-Promotion Final Evidence Detail Handoff
+
+- Carry Gate389 StackEngine publication-audit final release quality evidence
+  detail into `glass release-promotion-decision`.
+- Preserve legacy compatibility for publication-audit artifacts that only
+  provide historical `final_checks_*` evidence names, while requiring
+  `final_evidence_*` ready/match/raw/Phase2 detail fields to pass once present.
+- Block release-candidate readiness when raw publication-audit detail evidence
+  fails, Phase2 detail evidence fails, or Phase2 loses detail fields carried by
+  raw publish-preflight evidence.
+- Surface final-evidence-detail fields in release-promotion JSON evidence and
+  Markdown.
+- Add focused tests for green detail surfacing, compatible-missing detail,
+  legacy-only compatibility, failed raw detail evidence, failed Phase2 detail
+  evidence, and Phase2 detail-loss mismatch.
+- Keep this gate release-decision scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
