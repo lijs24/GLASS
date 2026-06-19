@@ -79,6 +79,10 @@ from glass.report.resident_parity_summary import (
     build_resident_parity_summary,
     write_resident_parity_summary,
 )
+from glass.report.resident_rejection_sample_audit import (
+    build_resident_rejection_sample_audit,
+    write_resident_rejection_sample_audit,
+)
 from glass.report.resident_winsorized_benchmark import (
     build_resident_winsorized_benchmark,
     write_resident_winsorized_benchmark,
@@ -2556,6 +2560,32 @@ def cmd_resident_parity_summary(args: argparse.Namespace) -> int:
             "status": payload.get("status"),
             "passed": payload.get("passed"),
             "parity_passed": payload.get("parity_passed"),
+            "recommendation": payload.get("recommendation"),
+            "failed_checks": payload.get("failed_checks"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failure and not payload.get("passed") else 0
+
+
+def cmd_resident_rejection_sample_audit(args: argparse.Namespace) -> int:
+    payload = build_resident_rejection_sample_audit(
+        cpu_run=args.cpu_run,
+        resident_run=args.resident_run,
+        compare_json=args.compare_json,
+        tile_size=args.tile_size,
+        top_tiles=args.top_tiles,
+        max_rejected_sample_delta=args.max_rejected_sample_delta,
+        max_pre_rejection_sample_delta=args.max_pre_rejection_sample_delta,
+        max_same_pre_rejection_abs_delta=args.max_same_pre_rejection_abs_delta,
+    )
+    write_resident_rejection_sample_audit(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
             "recommendation": payload.get("recommendation"),
             "failed_checks": payload.get("failed_checks"),
             "out": args.out,
@@ -6321,6 +6351,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless parity and required contracts pass",
     )
     resident_parity.set_defaults(func=cmd_resident_parity_summary)
+
+    rejection_audit = sub.add_parser(
+        "resident-rejection-sample-audit",
+        help="compare CPU tiled and CUDA resident coverage/rejection/DQ sample accounting",
+    )
+    rejection_audit.add_argument("--cpu-run", required=True, help="CPU tiled GLASS run directory")
+    rejection_audit.add_argument(
+        "--resident-run",
+        required=True,
+        help="CUDA resident GLASS run directory",
+    )
+    rejection_audit.add_argument(
+        "--compare-json",
+        help="optional GLASS compare JSON; its comparison_region is reused for region splits",
+    )
+    rejection_audit.add_argument("--out", required=True, help="output rejection sample audit JSON")
+    rejection_audit.add_argument("--markdown", help="optional output Markdown summary")
+    rejection_audit.add_argument("--tile-size", type=int, default=2048)
+    rejection_audit.add_argument("--top-tiles", type=int, default=10)
+    rejection_audit.add_argument("--max-rejected-sample-delta", type=int, default=64)
+    rejection_audit.add_argument("--max-pre-rejection-sample-delta", type=int, default=0)
+    rejection_audit.add_argument("--max-same-pre-rejection-abs-delta", type=int, default=16)
+    rejection_audit.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless the audit passes all thresholds",
+    )
+    rejection_audit.set_defaults(func=cmd_resident_rejection_sample_audit)
 
     resident_winsorized_benchmark = sub.add_parser(
         "resident-winsorized-benchmark",

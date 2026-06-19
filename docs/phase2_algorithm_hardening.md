@@ -7596,6 +7596,42 @@ integration where applicable.
   change, no descriptor formula change, no package upload, no GitHub release
   creation, and no modification of user input directories.
 
+### S2-Gate 421: Resident Rejection Sample Accounting Audit
+
+- Stop release/default-promotion/report-contract-only gate growth and return to
+  the remaining Gate420 runtime parity blocker.
+- Add `glass resident-rejection-sample-audit`, a tiled FITS-map audit that
+  compares CPU tiled and CUDA resident coverage, low/high rejection, and DQ maps
+  without loading the full map set into memory.
+- Split rejection-sample deltas into:
+  - post-rejection coverage delta;
+  - pre-rejection sample delta, computed as `coverage + low + high`;
+  - same-pre-rejection rejected-sample delta, which isolates rejection semantic
+    differences after the two paths have the same input sample count;
+  - inside/outside the compare JSON `comparison_region`;
+  - hotspot tiles ranked by absolute rejected-sample and pre-rejection deltas.
+- Validate against the S2-Gate 414 CPU tiled run and the S2-Gate 420
+  no-pixel-refine resident CUDA run:
+  - rejected-sample delta remains `117`;
+  - coverage-sample delta is `10085`;
+  - pre-rejection sample delta is `10202`;
+  - inside the formal compare region, pre-rejection sample delta is `0` and
+    rejected-sample delta is `-16`;
+  - outside the compare region, pre-rejection sample delta is `10202` and
+    rejected-sample delta is `133`;
+  - recommendation is `fix_resident_geometric_coverage_or_transform`.
+- Interpretation: the remaining global Gate420 rejection failure is dominated
+  by resident geometric/coverage/edge differences before rejection, while the
+  compare-region same-pre-rejection residual still gives a smaller follow-up
+  target for winsorized rejection parity.
+- Next substantive gate should be S2-Gate 422: fix resident coverage/edge or
+  transform parity first, then rerun the same Gate414/Gate420 harness and require
+  pre-rejection sample delta to fall before tightening same-pre-rejection
+  rejection semantics.
+- Keep this gate runtime-diagnostic scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, no user input
+  directory modification, and no claim that full resident parity is complete.
+
 ## Gate Rules
 
 Each gate requires:
