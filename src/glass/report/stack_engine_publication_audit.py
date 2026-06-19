@@ -6,6 +6,10 @@ from typing import Any
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 from glass.report.release_quality_evidence import (
+    PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS as _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS,
+    PUBLICATION_FINAL_EVIDENCE_DETAIL_PREFIXES as _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES,
+    PUBLICATION_FINAL_EVIDENCE_FIELDS as _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_FIELDS,
+    PUBLICATION_FINAL_EVIDENCE_LEGACY_FIELDS as _RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_FIELDS,
     ensure_final_evidence_detail_ready as _release_quality_final_evidence_detail_ready,
 )
 
@@ -1320,47 +1324,6 @@ _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS = (
     "release_default_promotion_check",
     "release_matrix_default_match_check",
     "release_matrix_manifest_match_check",
-)
-
-_RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_FIELDS = (
-    "matrix_final_checks_ready",
-    "matrix_final_checks_match",
-    "matrix_raw_final_checks_ready",
-    "matrix_phase2_final_checks_ready",
-    "matrix_default_final_checks_ready",
-    "matrix_default_final_checks_match",
-    "matrix_default_raw_final_checks_ready",
-    "matrix_default_phase2_final_checks_ready",
-    "default_promotion_final_checks_ready",
-    "default_promotion_final_checks_match",
-    "default_promotion_raw_final_checks_ready",
-    "default_promotion_phase2_final_checks_ready",
-)
-
-_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS = (
-    "matrix_final_evidence_ready",
-    "matrix_final_evidence_match",
-    "matrix_raw_final_evidence_ready",
-    "matrix_phase2_final_evidence_ready",
-    "matrix_default_final_evidence_ready",
-    "matrix_default_final_evidence_match",
-    "matrix_default_raw_final_evidence_ready",
-    "matrix_default_phase2_final_evidence_ready",
-    "default_promotion_final_evidence_ready",
-    "default_promotion_final_evidence_match",
-    "default_promotion_raw_final_evidence_ready",
-    "default_promotion_phase2_final_evidence_ready",
-)
-
-_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_FIELDS = (
-    *_RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_FIELDS,
-    *_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS,
-)
-
-_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES = (
-    "matrix",
-    "matrix_default",
-    "default_promotion",
 )
 
 _RELEASE_QUALITY_PUBLICATION_GUARD_FIELDS = (

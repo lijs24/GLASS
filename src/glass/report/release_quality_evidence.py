@@ -84,6 +84,47 @@ FINAL_EVIDENCE_DETAIL_PREFIXES = (
     "phase2_default_promotion",
 )
 
+PUBLICATION_FINAL_EVIDENCE_LEGACY_FIELDS = (
+    "matrix_final_checks_ready",
+    "matrix_final_checks_match",
+    "matrix_raw_final_checks_ready",
+    "matrix_phase2_final_checks_ready",
+    "matrix_default_final_checks_ready",
+    "matrix_default_final_checks_match",
+    "matrix_default_raw_final_checks_ready",
+    "matrix_default_phase2_final_checks_ready",
+    "default_promotion_final_checks_ready",
+    "default_promotion_final_checks_match",
+    "default_promotion_raw_final_checks_ready",
+    "default_promotion_phase2_final_checks_ready",
+)
+
+PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS = (
+    "matrix_final_evidence_ready",
+    "matrix_final_evidence_match",
+    "matrix_raw_final_evidence_ready",
+    "matrix_phase2_final_evidence_ready",
+    "matrix_default_final_evidence_ready",
+    "matrix_default_final_evidence_match",
+    "matrix_default_raw_final_evidence_ready",
+    "matrix_default_phase2_final_evidence_ready",
+    "default_promotion_final_evidence_ready",
+    "default_promotion_final_evidence_match",
+    "default_promotion_raw_final_evidence_ready",
+    "default_promotion_phase2_final_evidence_ready",
+)
+
+PUBLICATION_FINAL_EVIDENCE_FIELDS = (
+    *PUBLICATION_FINAL_EVIDENCE_LEGACY_FIELDS,
+    *PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS,
+)
+
+PUBLICATION_FINAL_EVIDENCE_DETAIL_PREFIXES = (
+    "matrix",
+    "matrix_default",
+    "default_promotion",
+)
+
 
 def final_evidence_detail_prefix_ready(
     evidence: dict[str, Any],

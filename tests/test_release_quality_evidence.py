@@ -8,6 +8,10 @@ from glass.report.release_quality_evidence import (
     FINAL_EVIDENCE_DETAIL_SUMMARY_FIELDS,
     FINAL_EVIDENCE_FIELDS,
     FINAL_EVIDENCE_LEGACY_FIELDS,
+    PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS,
+    PUBLICATION_FINAL_EVIDENCE_DETAIL_PREFIXES,
+    PUBLICATION_FINAL_EVIDENCE_FIELDS,
+    PUBLICATION_FINAL_EVIDENCE_LEGACY_FIELDS,
     ensure_final_evidence_detail_ready,
     final_evidence_detail_prefix_ready,
 )
@@ -23,6 +27,16 @@ def _ready_detail_evidence() -> dict[str, Any]:
     return evidence
 
 
+def _ready_publication_detail_evidence() -> dict[str, Any]:
+    evidence: dict[str, Any] = {}
+    for prefix in PUBLICATION_FINAL_EVIDENCE_DETAIL_PREFIXES:
+        evidence[f"{prefix}_final_evidence_ready"] = True
+        evidence[f"{prefix}_final_evidence_match"] = True
+        evidence[f"{prefix}_raw_final_evidence_ready"] = True
+        evidence[f"{prefix}_phase2_final_evidence_ready"] = True
+    return evidence
+
+
 def test_release_quality_final_evidence_field_contract_has_no_duplicates():
     assert len(FINAL_EVIDENCE_FIELDS) == len(set(FINAL_EVIDENCE_FIELDS))
     assert set(FINAL_EVIDENCE_LEGACY_FIELDS).issubset(FINAL_EVIDENCE_FIELDS)
@@ -31,6 +45,23 @@ def test_release_quality_final_evidence_field_contract_has_no_duplicates():
     assert "raw_matrix_final_evidence_ready" in FINAL_EVIDENCE_FIELDS
     assert "phase2_default_promotion_phase2_final_evidence_ready" in (
         FINAL_EVIDENCE_FIELDS
+    )
+
+
+def test_release_quality_publication_evidence_field_contract_has_no_duplicates():
+    assert len(PUBLICATION_FINAL_EVIDENCE_FIELDS) == len(
+        set(PUBLICATION_FINAL_EVIDENCE_FIELDS)
+    )
+    assert set(PUBLICATION_FINAL_EVIDENCE_LEGACY_FIELDS).issubset(
+        PUBLICATION_FINAL_EVIDENCE_FIELDS
+    )
+    assert set(PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS).issubset(
+        PUBLICATION_FINAL_EVIDENCE_FIELDS
+    )
+    assert "matrix_final_evidence_ready" in PUBLICATION_FINAL_EVIDENCE_FIELDS
+    assert (
+        "default_promotion_phase2_final_evidence_ready"
+        in PUBLICATION_FINAL_EVIDENCE_FIELDS
     )
 
 
@@ -102,6 +133,20 @@ def test_release_quality_final_evidence_detail_strict_mode_blocks_partial_layers
         prefix="raw_matrix",
         allow_partial_layer_ready=False,
     ) is False
+
+
+def test_release_quality_publication_profile_strict_mode_is_ready():
+    evidence = _ready_publication_detail_evidence()
+
+    assert ensure_final_evidence_detail_ready(
+        evidence,
+        detail_fields=PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS,
+        prefixes=PUBLICATION_FINAL_EVIDENCE_DETAIL_PREFIXES,
+        allow_partial_layer_ready=False,
+    ) is True
+
+    assert evidence["final_evidence_detail_fields_present"] is True
+    assert evidence["final_evidence_detail_ready"] is True
 
 
 def test_release_quality_final_evidence_detail_honors_existing_false_summary():

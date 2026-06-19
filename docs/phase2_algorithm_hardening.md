@@ -7184,6 +7184,21 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 399: Publication Evidence Profile Contract
+
+- Add a shared publication-layer final-evidence profile for the
+  `matrix/matrix_default/default_promotion` release-quality evidence fields.
+- Move release-promotion and StackEngine publication-audit profile field lists
+  onto the shared constants while preserving their strict paired raw/Phase2
+  readiness mode and legacy `final_checks_*` compatibility.
+- Add shared-helper tests for the publication profile field contract and
+  strict-mode readiness.
+- Keep this gate report-contract scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
