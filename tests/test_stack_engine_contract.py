@@ -31,6 +31,19 @@ def test_stack_engine_contract_passes_for_cpu_audit_run(tmp_path: Path):
         )
         == 0
     )
+    assert (
+        main(
+            [
+                "stack-engine-contract",
+                "--run",
+                str(run),
+                "--out",
+                str(tmp_path / "stack_engine_contract_native_required.json"),
+                "--require-native-stack-engine-default",
+            ]
+        )
+        == 0
+    )
 
     audit = read_json(out)
     assert audit["passed"] is True
@@ -57,9 +70,19 @@ def test_stack_engine_contract_passes_for_cpu_audit_run(tmp_path: Path):
     assert promotion["status"] == "ready"
     assert promotion["actual_scope"] == "all"
     assert promotion["blocker_count"] == 0
+    default_path = audit["default_path"]
+    assert default_path["status"] == "native_stack_engine_ready"
+    assert default_path["strict_native_stack_engine_ready"] is True
+    assert default_path["resident_cuda_contract_emulation_count"] == 0
+    assert default_path["native_stack_engine_surface_count"] == adoption["surface_count"]
+    assert all(
+        item["default_path_role"] == "native_stack_engine_default"
+        for item in default_path["surfaces"]
+    )
     markdown_text = markdown.read_text(encoding="utf-8")
     assert "GLASS StackEngine Default Contract Audit" in markdown_text
     assert "StackEngine Adoption" in markdown_text
+    assert "Default Path" in markdown_text
     assert "Default Promotion Guard" in markdown_text
 
 
@@ -100,6 +123,9 @@ def test_stack_engine_contract_fails_legacy_or_missing_provenance(tmp_path: Path
     assert checks["integration_outputs_use:stack_engine_cpu"]["passed"] is False
     assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 2
     assert audit["adoption"]["recommendation"] == "stack_engine_contract_gaps_remain"
+    assert audit["default_path"]["status"] == "default_path_contract_gaps"
+    assert audit["default_path"]["strict_native_stack_engine_ready"] is False
+    assert audit["default_path"]["strict_native_stack_engine_gap_count"] == 2
     blockers = {item["name"] for item in audit["default_promotion"]["blockers"]}
     assert audit["default_promotion"]["ready"] is False
     assert "stack_engine_contract_failed" in blockers
@@ -144,6 +170,8 @@ def test_stack_engine_contract_requires_embedded_result_contract(tmp_path: Path)
     assert checks["integration_outputs_use:stack_engine_cpu"]["passed"] is False
     assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 1
     assert audit["adoption"]["gap_surfaces"][0]["gap_reason"] == "missing_or_failed_result_contract"
+    assert audit["default_path"]["status"] == "default_path_contract_gaps"
+    assert audit["default_path"]["contract_gap_count"] == 1
     blockers = {item["name"] for item in audit["default_promotion"]["blockers"]}
     assert "scope_not_all" in blockers
     assert "missing_calibration_surface" in blockers
@@ -256,6 +284,12 @@ def test_stack_engine_contract_accepts_resident_result_contract_parity(tmp_path:
     assert surface["phase2_stack_engine_default_gap"] is False
     assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 0
     assert audit["adoption"]["recommendation"] == "stack_engine_default_ready"
+    default_path = audit["default_path"]
+    assert default_path["status"] == "resident_cuda_contract_emulation"
+    assert default_path["strict_native_stack_engine_ready"] is False
+    assert default_path["resident_cuda_contract_emulation_count"] == 1
+    assert default_path["strict_native_stack_engine_gap_count"] == 1
+    assert default_path["strict_gap_surfaces"][0]["strict_gap_reason"] == "resident_cuda_contract_emulation"
     assert "phase2_stack_engine_default_gaps" not in promotion_blockers
     assert "adoption_recommendation_not_ready" not in promotion_blockers
     assert "scope_not_all" in promotion_blockers
@@ -317,6 +351,8 @@ def test_stack_engine_contract_auto_discovers_native_resident_result_contract(tm
     assert audit["resident_result_contract_path"] == str(run / "resident_result_contract.json")
     assert audit["integration"]["outputs"][0]["resident_result_contract_passed"] is True
     assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 0
+    assert audit["default_path"]["status"] == "resident_cuda_contract_emulation"
+    assert audit["default_path"]["strict_native_stack_engine_ready"] is False
 
 
 def test_stack_engine_contract_accepts_resident_calibration_for_default_ready(tmp_path: Path):
@@ -392,9 +428,107 @@ def test_stack_engine_contract_accepts_resident_calibration_for_default_ready(tm
     assert audit["calibration"]["masters"][0]["resident_calibration_contract_passed"] is True
     assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 0
     assert audit["adoption"]["cuda_resident_surface_count"] == 2
+    assert audit["default_path"]["status"] == "resident_cuda_contract_emulation"
+    assert audit["default_path"]["strict_native_stack_engine_ready"] is False
+    assert audit["default_path"]["resident_cuda_contract_emulation_count"] == 2
     assert promotion["ready"] is True
     assert promotion["status"] == "ready"
     assert promotion["blocker_count"] == 0
+
+
+def test_stack_engine_contract_does_not_duplicate_resident_calibration_surfaces(tmp_path: Path):
+    run = tmp_path / "run"
+    master = run / "integration" / "resident_master_H.fits"
+    master.parent.mkdir(parents=True)
+    write_fits_data(master, [[1.0, 2.0], [3.0, 4.0]])
+    resident_master_contract = {
+        "artifact_type": "resident_cuda_calibration_master_contract",
+        "passed": True,
+        "status": "passed",
+        "checks": [{"name": "resident_master_stats_present", "passed": True}],
+    }
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "masters": {
+                "resident_bias_H": {
+                    "type": "bias",
+                    "path": str(master),
+                    "stats": {"min": 1.0, "max": 4.0, "mean": 2.5, "median": 2.5, "std": 1.118},
+                    "tile_stack_mode": "cuda_resident_stack",
+                    "backend": "cuda_resident_stack",
+                    "stack_engine_enabled": True,
+                    "stack_engine_fallback_reason": None,
+                    "resident_calibration_contract": resident_master_contract,
+                    "dq_provenance_summary": {
+                        "engine": "cuda_resident_stack",
+                        "stage": "master_calibration",
+                    },
+                    "master_rejection": "none",
+                    "tile_size": 2,
+                }
+            }
+        },
+    )
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                    },
+                }
+            ]
+        },
+    )
+    resident_calibration_contract = {
+        "artifact_type": "resident_cuda_calibration_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "frame_count": 2,
+                "set_count": 1,
+                "bias_count": 2,
+                "dark_count": 2,
+                "flat_count": 2,
+                "checks": [{"name": "resident_output_contracts_passed", "passed": True}],
+            }
+        ],
+    }
+    resident_result_contract = {
+        "artifact_type": "resident_cuda_result_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "checks": [{"name": "resident_identity", "passed": True}],
+            }
+        ],
+    }
+
+    audit = build_stack_engine_contract_audit(
+        run,
+        expected_integration_engine="cuda_resident_stack",
+        resident_calibration_contract=resident_calibration_contract,
+        resident_result_contract=resident_result_contract,
+    )
+
+    assert audit["passed"] is True
+    assert audit["calibration"]["master_count"] == 1
+    assert audit["default_path"]["resident_cuda_contract_emulation_count"] == 2
+    assert {surface["item"] for surface in audit["default_path"]["surfaces"]} == {"resident_bias_H", "H"}
 
 
 def test_stack_engine_contract_require_default_ready_rejects_resident_only_gap(tmp_path: Path):
@@ -504,6 +638,71 @@ def test_stack_engine_contract_cli_uses_resident_result_contract_json(tmp_path: 
     assert audit["resident_result_contract_attached"] is True
     assert audit["integration"]["outputs"][0]["resident_result_contract_passed"] is True
     assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 0
+    assert audit["default_path"]["status"] == "resident_cuda_contract_emulation"
+
+
+def test_stack_engine_contract_require_native_default_rejects_resident_emulation(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    resident_contract = tmp_path / "resident_result_contract.json"
+    out = tmp_path / "stack_engine_contract.json"
+    write_json(
+        resident_contract,
+        {
+            "artifact_type": "resident_cuda_result_contract",
+            "passed": True,
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "passed": True,
+                    "status": "passed",
+                    "checks": [{"name": "resident_identity", "passed": True}],
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                    },
+                }
+            ]
+        },
+    )
+
+    assert (
+        main(
+            [
+                "stack-engine-contract",
+                "--run",
+                str(run),
+                "--scope",
+                "integration",
+                "--expected-integration-engine",
+                "cuda_resident_stack",
+                "--resident-result-contract-json",
+                str(resident_contract),
+                "--out",
+                str(out),
+                "--require-native-stack-engine-default",
+            ]
+        )
+        == 4
+    )
+
+    audit = read_json(out)
+    assert audit["passed"] is True
+    assert audit["default_path"]["status"] == "resident_cuda_contract_emulation"
+    assert audit["default_path"]["strict_native_stack_engine_ready"] is False
 
 
 def test_stack_engine_contract_cli_uses_resident_calibration_contract_json(tmp_path: Path):
@@ -591,6 +790,8 @@ def test_stack_engine_contract_cli_uses_resident_calibration_contract_json(tmp_p
     audit = read_json(out)
     assert audit["resident_calibration_contract_attached"] is True
     assert audit["default_promotion"]["ready"] is True
+    assert audit["default_path"]["status"] == "resident_cuda_contract_emulation"
+    assert audit["default_path"]["strict_native_stack_engine_ready"] is False
 
 
 def test_stack_engine_contract_requires_master_stats_and_semantics(tmp_path: Path):
@@ -646,3 +847,4 @@ def test_stack_engine_contract_requires_master_stats_and_semantics(tmp_path: Pat
     assert checks["calibration_masters_science_auditable"]["passed"] is False
     assert checks["calibration_masters_use_stack_engine"]["passed"] is False
     assert audit["adoption"]["gap_surfaces"][0]["gap_reason"] == "master_calibration_science_contract_failed"
+    assert audit["default_path"]["status"] == "default_path_contract_gaps"

@@ -3076,6 +3076,7 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
     )
     write_stack_engine_contract_audit(args.out, audit, markdown=args.markdown)
     default_promotion = audit.get("default_promotion") if isinstance(audit.get("default_promotion"), dict) else {}
+    default_path = audit.get("default_path") if isinstance(audit.get("default_path"), dict) else {}
     console.print(
         {
             "status": audit["status"],
@@ -3085,6 +3086,8 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
             "resident_result_contract_attached": audit.get("resident_result_contract_attached"),
             "resident_result_contract_json": resident_result_contract_path,
             "resident_result_contract_source": resident_result_contract_source,
+            "default_path_status": default_path.get("status"),
+            "strict_native_stack_engine_ready": default_path.get("strict_native_stack_engine_ready"),
             "default_promotion_ready": default_promotion.get("ready"),
             "default_promotion_status": default_promotion.get("status"),
             "out": args.out,
@@ -3093,6 +3096,10 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
     )
     if not audit["passed"]:
         return 2
+    if bool(getattr(args, "require_native_stack_engine_default", False)) and not default_path.get(
+        "strict_native_stack_engine_ready"
+    ):
+        return 4
     if bool(getattr(args, "require_default_ready", False)) and not default_promotion.get("ready"):
         return 3
     return 0
@@ -7101,6 +7108,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-default-ready",
         action="store_true",
         help="return a nonzero status unless the audit is ready for full StackEngine default promotion",
+    )
+    stack_contract.add_argument(
+        "--require-native-stack-engine-default",
+        action="store_true",
+        help=(
+            "return exit code 4 unless every audited surface is a native stack_engine_cpu default path; "
+            "resident CUDA contract-emulation surfaces remain explicit gaps"
+        ),
     )
     stack_contract.set_defaults(func=cmd_stack_engine_contract)
 

@@ -8732,6 +8732,60 @@ Completed in Gate444:
   frame admission.
 - Do not add release/default-promotion/report-handoff gates under this number.
 
+Completed in Gate445:
+
+- Strengthened `glass stack-engine-contract` with a `default_path` audit block
+  that separates:
+  - native `stack_engine_cpu` default surfaces;
+  - `cuda_resident_stack` contract-emulation surfaces;
+  - legacy or unknown surfaces.
+- Added `--require-native-stack-engine-default`, returning exit code `4` when
+  any audited surface is not a native StackEngine default path.
+- Preserved the older `default_promotion` and adoption fields for compatibility
+  with existing release/status tooling, but added stricter Phase 2 evidence so
+  resident CUDA cannot be mistaken for native StackEngine adoption.
+- Fixed resident calibration contract path resolution so run artifacts may use
+  absolute paths, run-root-relative paths, or current-working-directory-relative
+  GLASS artifact paths.
+- Fixed StackEngine contract resident calibration surface accounting so an
+  attached resident calibration contract does not duplicate per-master
+  `calibration_artifacts.json` surfaces.
+- Small synthetic validation:
+  - CPU/tiled synthetic audit:
+    `runs/checkpoints/s2_gate_445_cpu_native_stackengine_contract.json`;
+  - resident CUDA contract-emulation audit:
+    `runs/checkpoints/s2_gate_445_resident_contract_emulation.json`;
+  - resident calibration contract:
+    `runs/checkpoints/s2_gate_445_resident_calibration_contract.json`.
+- Results:
+  - CPU/tiled run: `default_path.status=native_stack_engine_ready`,
+    `strict_native_stack_engine_ready=true`, 4 native StackEngine surfaces;
+  - resident CUDA run:
+    `default_path.status=resident_cuda_contract_emulation`,
+    `strict_native_stack_engine_ready=false`, 4 strict gaps for 3 resident
+    master-calibration surfaces plus 1 resident integration surface;
+  - the resident strict-native gate returned the expected exit code `4`.
+- This gate did not change image math, frame admission, resident kernels, or
+  output pixels. The 200-light benchmark was not rerun.
+
+### S2-Gate 446: Resident CUDA StackEngine Surface Closure Plan
+
+- Start closing the strict resident gap exposed by Gate445.
+- Define the minimal resident CUDA StackEngine surface contract needed for the
+  production resident path to become a true StackEngine backend rather than a
+  contract-emulation surface.
+- Required work:
+  - map resident master-calibration surfaces to the same StackRequest,
+    StackResult, DQ, coverage, weight, and rejection semantics used by CPU
+    StackEngine;
+  - map resident light integration outputs to the same surface schema without
+    losing the current resident performance path;
+  - add small CPU-vs-resident fixture comparisons for master maps and final
+    maps;
+  - keep the 200-light baseline unchanged unless resident math or frame
+    admission changes.
+- Do not add release/default-promotion/report-handoff gates under this number.
+
 ## Gate Rules
 
 Each gate requires:

@@ -80,6 +80,23 @@ def test_resident_calibration_contract_passes_for_resident_artifacts(tmp_path: P
     assert all(item["passed"] for item in payload["outputs"][0]["checks"])
 
 
+def test_resident_calibration_contract_resolves_cwd_relative_paths(tmp_path: Path, monkeypatch) -> None:
+    run = tmp_path / "run"
+    _write_resident_calibration_run(run)
+    payload = read_json(run / "resident_artifacts.json")
+    output = payload["artifacts"][0]
+    output["master_path"] = str(Path("run") / "integration" / "resident_master_H.fits")
+    set_payload = output["master_stats"]["sets"]["set-H"]
+    set_payload["cache_dir"] = str(Path("run") / "calib_cache" / "resident_masters")
+    write_json(run / "resident_artifacts.json", payload)
+    monkeypatch.chdir(tmp_path)
+
+    contract = build_resident_calibration_contract(run)
+
+    assert contract["passed"] is True
+    assert contract["outputs"][0]["master_path_exists"] is True
+
+
 def test_resident_calibration_contract_cli_writes_markdown(tmp_path: Path) -> None:
     run = tmp_path / "run"
     out = tmp_path / "resident_calibration_contract.json"

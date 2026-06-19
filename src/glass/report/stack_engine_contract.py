@@ -543,6 +543,96 @@ def _build_adoption_summary(
     }
 
 
+def _default_path_surface(surface: dict[str, Any]) -> dict[str, Any]:
+    family = str(surface.get("engine_family") or "unknown")
+    contract_ready = bool(surface.get("stack_engine_contract_ready"))
+    if family == "stack_engine_cpu":
+        role = "native_stack_engine_default"
+        strict_gap = not contract_ready
+        gap_reason = "" if contract_ready else surface.get("gap_reason") or "stack_engine_contract_not_ready"
+    elif family == "cuda_resident_stack":
+        role = "resident_cuda_contract_emulation"
+        strict_gap = True
+        gap_reason = "resident_cuda_contract_emulation"
+    else:
+        role = "legacy_or_unknown_engine"
+        strict_gap = True
+        gap_reason = surface.get("gap_reason") or "legacy_or_unknown_engine"
+    return {
+        "surface": surface.get("surface"),
+        "item": surface.get("item"),
+        "type": surface.get("type"),
+        "engine_family": family,
+        "default_path_role": role,
+        "contract_ready": contract_ready,
+        "strict_native_stack_engine_gap": strict_gap,
+        "strict_gap_reason": gap_reason,
+        "result_contract_passed": surface.get("result_contract_passed"),
+        "stack_result_contract_passed": surface.get("stack_result_contract_passed"),
+        "resident_result_contract_passed": surface.get("resident_result_contract_passed"),
+        "resident_calibration_contract_passed": surface.get("resident_calibration_contract_passed"),
+        "science_contract_ok": surface.get("science_contract_ok"),
+        "fallback_reason": surface.get("fallback_reason"),
+    }
+
+
+def _build_default_path_audit(adoption: dict[str, Any]) -> dict[str, Any]:
+    surfaces = adoption.get("surfaces") if isinstance(adoption.get("surfaces"), list) else []
+    rows = [_default_path_surface(surface) for surface in surfaces if isinstance(surface, dict)]
+    strict_gaps = [row for row in rows if row["strict_native_stack_engine_gap"]]
+    resident_emulation = [row for row in rows if row["default_path_role"] == "resident_cuda_contract_emulation"]
+    contract_gaps = [row for row in rows if not row["contract_ready"]]
+    if not rows:
+        status = "no_surfaces_to_audit"
+    elif contract_gaps:
+        status = "default_path_contract_gaps"
+    elif not strict_gaps:
+        status = "native_stack_engine_ready"
+    elif resident_emulation and len(resident_emulation) == len(strict_gaps):
+        status = "resident_cuda_contract_emulation"
+    else:
+        status = "strict_default_gaps"
+    return {
+        "schema_version": 1,
+        "target_engine": "stack_engine_cpu",
+        "status": status,
+        "surface_count": len(rows),
+        "native_stack_engine_surface_count": sum(
+            1 for row in rows if row["default_path_role"] == "native_stack_engine_default"
+        ),
+        "resident_cuda_contract_emulation_count": len(resident_emulation),
+        "legacy_or_unknown_surface_count": sum(
+            1 for row in rows if row["default_path_role"] == "legacy_or_unknown_engine"
+        ),
+        "contract_gap_count": len(contract_gaps),
+        "strict_native_stack_engine_gap_count": len(strict_gaps),
+        "strict_native_stack_engine_ready": bool(rows) and not strict_gaps,
+        "all_surfaces_contract_ready": bool(rows) and not contract_gaps,
+        "strict_gap_surfaces": [
+            {
+                "surface": row.get("surface"),
+                "item": row.get("item"),
+                "engine_family": row.get("engine_family"),
+                "default_path_role": row.get("default_path_role"),
+                "strict_gap_reason": row.get("strict_gap_reason"),
+                "contract_ready": row.get("contract_ready"),
+            }
+            for row in strict_gaps
+        ],
+        "contract_gap_surfaces": [
+            {
+                "surface": row.get("surface"),
+                "item": row.get("item"),
+                "engine_family": row.get("engine_family"),
+                "default_path_role": row.get("default_path_role"),
+                "strict_gap_reason": row.get("strict_gap_reason"),
+            }
+            for row in contract_gaps
+        ],
+        "surfaces": rows,
+    }
+
+
 def _build_default_promotion_summary(
     *,
     scope: str,
@@ -650,7 +740,8 @@ def build_stack_engine_contract_audit(
     if include_calibration:
         master_payloads = calibration.get("masters") if isinstance(calibration.get("masters"), dict) else {}
         masters = [_master_record(str(name), payload, run_root) for name, payload in master_payloads.items()]
-        masters.extend(_resident_calibration_records(resident_calibration_contract or {}))
+        if not masters:
+            masters.extend(_resident_calibration_records(resident_calibration_contract or {}))
         calibration_artifact_available = calibration_path.exists() or bool(resident_calibration_contracts)
         checks.extend(
             [
@@ -729,6 +820,7 @@ def build_stack_engine_contract_audit(
         )
 
     adoption = _build_adoption_summary(masters, integration_records)
+    default_path = _build_default_path_audit(adoption)
     passed = all(item["passed"] for item in checks)
     default_promotion = _build_default_promotion_summary(
         scope=scope,
@@ -766,6 +858,7 @@ def build_stack_engine_contract_audit(
             "outputs": integration_records,
         },
         "adoption": adoption,
+        "default_path": default_path,
         "default_promotion": default_promotion,
     }
 
@@ -782,6 +875,8 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
         f"- Resident result contract attached: `{audit.get('resident_result_contract_attached')}`",
         f"- StackEngine adoption recommendation: `{(audit.get('adoption') or {}).get('recommendation')}`",
         f"- Phase 2 StackEngine default gaps: `{(audit.get('adoption') or {}).get('phase2_stack_engine_default_gap_count')}`",
+        f"- Strict native StackEngine default ready: `{(audit.get('default_path') or {}).get('strict_native_stack_engine_ready')}`",
+        f"- Default path status: `{(audit.get('default_path') or {}).get('status')}`",
         f"- Default promotion ready: `{(audit.get('default_promotion') or {}).get('ready')}`",
         "",
         "## Checks",
@@ -810,6 +905,25 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
                 f"reason={surface.get('gap_reason')}"
             )
     promotion = audit.get("default_promotion") if isinstance(audit.get("default_promotion"), dict) else {}
+    default_path = audit.get("default_path") if isinstance(audit.get("default_path"), dict) else {}
+    if default_path:
+        lines.extend(["", "## Default Path", ""])
+        lines.append(f"- Status: `{default_path.get('status')}`")
+        lines.append(f"- Strict native ready: `{default_path.get('strict_native_stack_engine_ready')}`")
+        lines.append(f"- Native StackEngine surfaces: `{default_path.get('native_stack_engine_surface_count')}`")
+        lines.append(
+            f"- Resident CUDA contract-emulation surfaces: `{default_path.get('resident_cuda_contract_emulation_count')}`"
+        )
+        lines.append(f"- Strict gap count: `{default_path.get('strict_native_stack_engine_gap_count')}`")
+        for surface in default_path.get("surfaces") or []:
+            lines.append(
+                "- "
+                f"{surface.get('surface')}:{surface.get('item')} "
+                f"role={surface.get('default_path_role')} "
+                f"contract_ready={surface.get('contract_ready')} "
+                f"strict_gap={surface.get('strict_native_stack_engine_gap')} "
+                f"reason={surface.get('strict_gap_reason')}"
+            )
     if promotion:
         lines.extend(["", "## Default Promotion Guard", ""])
         lines.append(f"- Status: `{promotion.get('status')}`")

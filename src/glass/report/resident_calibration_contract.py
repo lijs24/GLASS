@@ -27,7 +27,11 @@ def _resolve_path(path_value: Any, run_root: Path) -> Path | None:
     if not path_value:
         return None
     path = Path(str(path_value))
-    return path if path.is_absolute() else run_root / path
+    if path.is_absolute():
+        return path
+    if path.exists():
+        return path
+    return run_root / path
 
 
 def _path_exists(path_value: Any, run_root: Path) -> bool:

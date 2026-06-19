@@ -1,0 +1,223 @@
+{
+  "artifact_type": "resident_cuda_calibration_contract",
+  "audit_type": "resident_cuda_calibration_contract",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default\\resident_artifacts.json"
+      },
+      "name": "resident_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "resident_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": []
+      },
+      "name": "resident_output_contracts_passed",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-19T16:01:14+00:00",
+  "output_count": 1,
+  "outputs": [
+    {
+      "bias_count": 1,
+      "calibration_group_policy": "planner_matching_groups_per_light",
+      "checks": [
+        {
+          "evidence": {
+            "filter": "H",
+            "master_stats_present": true
+          },
+          "name": "resident_artifact_identity",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 1,
+            "reported_set_count": 1
+          },
+          "name": "master_set_records_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "failed": []
+          },
+          "name": "master_set_contracts_passed",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "bias_count": 1,
+            "dark_count": 1,
+            "flat_count": 1
+          },
+          "name": "aggregate_source_counts_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "frame_id_count": 2
+          },
+          "name": "light_frame_ids_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "fine_light_calibrate_store_total": 0.0001725119948387146,
+            "light_calibrate_store": 0.0001725119948387146,
+            "master_build_or_load": 0.009150199999567121
+          },
+          "name": "resident_calibration_timing_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "master_path": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default\\integration\\resident_master_H.fits"
+          },
+          "name": "resident_master_output_exists",
+          "note": "The resident calibration surface is accepted only when its downstream resident master artifact exists.",
+          "passed": true
+        }
+      ],
+      "contract_type": "resident_cuda_calibration_contract",
+      "dark_count": 1,
+      "filter": "H",
+      "flat_count": 1,
+      "frame_count": 2,
+      "index": 0,
+      "master_path": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default\\integration\\resident_master_H.fits",
+      "master_path_exists": true,
+      "passed": true,
+      "reported_set_count": 1,
+      "resident_bytes_allocated_after_master_upload": 20736,
+      "set_count": 1,
+      "sets": [
+        {
+          "bias_count": 1,
+          "bias_group": "Ga8f40c9e17",
+          "cache_dir": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default\\calib_cache\\resident_masters",
+          "cache_files": [
+            {
+              "exists": true,
+              "master_type": "bias",
+              "path": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default\\calib_cache\\resident_masters\\H_24x24_bias-Ga8f40c9e17_dark-G409bfdf826_flat-G9e8d28c798_997b3fbda8ecfcc1_master_bias.npy",
+              "required": true
+            },
+            {
+              "exists": true,
+              "master_type": "dark",
+              "path": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default\\calib_cache\\resident_masters\\H_24x24_bias-Ga8f40c9e17_dark-G409bfdf826_flat-G9e8d28c798_997b3fbda8ecfcc1_master_dark.npy",
+              "required": true
+            },
+            {
+              "exists": true,
+              "master_type": "flat",
+              "path": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default\\calib_cache\\resident_masters\\H_24x24_bias-Ga8f40c9e17_dark-G409bfdf826_flat-G9e8d28c798_997b3fbda8ecfcc1_master_flat.npy",
+              "required": true
+            },
+            {
+              "exists": true,
+              "master_type": "stats",
+              "path": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default\\calib_cache\\resident_masters\\H_24x24_bias-Ga8f40c9e17_dark-G409bfdf826_flat-G9e8d28c798_997b3fbda8ecfcc1_master_stats.json",
+              "required": true
+            }
+          ],
+          "cache_hit": false,
+          "cache_key": "H_24x24_bias-Ga8f40c9e17_dark-G409bfdf826_flat-G9e8d28c798_997b3fbda8ecfcc1",
+          "cache_scope": "run",
+          "checks": [
+            {
+              "evidence": {
+                "bias_count": 1,
+                "dark_count": 1,
+                "flat_count": 1
+              },
+              "name": "source_counts_present",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bias_stats": true,
+                "dark_stats": true,
+                "flat_stats": true
+              },
+              "name": "master_statistics_present",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "missing": []
+              },
+              "name": "cache_paths_present",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "missing": []
+              },
+              "name": "cache_files_exist",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "shape": {
+                  "height": 24,
+                  "width": 24
+                }
+              },
+              "name": "shape_present",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "dark_count": 1,
+          "dark_exposure_s": 60.0,
+          "dark_group": "G409bfdf826",
+          "filter": "H",
+          "flat_bias_group": "Ga8f40c9e17",
+          "flat_count": 1,
+          "flat_group": "G9e8d28c798",
+          "key": "H_24x24_bias-Ga8f40c9e17_dark-G409bfdf826_flat-G9e8d28c798",
+          "master_dark_includes_bias": true,
+          "passed": true,
+          "status": "passed"
+        }
+      ],
+      "status": "passed",
+      "timing_s": {
+        "light_calibrate_store": 0.0001725119948387146,
+        "light_calibration_batch_native_total": 0.0005152,
+        "master_build_or_load": 0.009150199999567121,
+        "resident_allocate_and_master_upload": 0.04304039999260567
+      }
+    }
+  ],
+  "passed": true,
+  "resident_artifact_path": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default\\resident_artifacts.json",
+  "run_dir": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default",
+  "schema_version": 1,
+  "status": "passed"
+}
