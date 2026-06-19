@@ -5,6 +5,11 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.release_quality_evidence import (
+    FINAL_EVIDENCE_DETAIL_FIELDS as _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS,
+    FINAL_EVIDENCE_LEGACY_FIELDS as _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_LEGACY_FIELDS,
+    ensure_final_evidence_detail_ready as _release_quality_final_evidence_detail_ready,
+)
 
 
 def _read_json_object(path: str | Path) -> dict[str, Any]:
@@ -1366,63 +1371,10 @@ def _release_decision_release_quality_publication_guard(
     raw_ready = guard.get("raw_ready") is True
     phase2_ready = guard.get("phase2_ready") is True
     final_evidence_legacy_field_names = (
-        "final_evidence_compatible_missing",
-        "final_evidence_ready",
-        "final_evidence_match",
-        "raw_final_evidence_present",
-        "raw_final_evidence_ready",
-        "phase2_final_evidence_present",
-        "phase2_final_evidence_ready",
-        "raw_matrix_final_checks_ready",
-        "raw_matrix_final_checks_match",
-        "raw_matrix_raw_final_checks_ready",
-        "raw_matrix_phase2_final_checks_ready",
-        "raw_matrix_default_final_checks_ready",
-        "raw_matrix_default_final_checks_match",
-        "raw_matrix_default_raw_final_checks_ready",
-        "raw_matrix_default_phase2_final_checks_ready",
-        "raw_default_promotion_final_checks_ready",
-        "raw_default_promotion_final_checks_match",
-        "raw_default_promotion_raw_final_checks_ready",
-        "raw_default_promotion_phase2_final_checks_ready",
-        "phase2_matrix_final_checks_ready",
-        "phase2_matrix_final_checks_match",
-        "phase2_matrix_raw_final_checks_ready",
-        "phase2_matrix_phase2_final_checks_ready",
-        "phase2_matrix_default_final_checks_ready",
-        "phase2_matrix_default_final_checks_match",
-        "phase2_matrix_default_raw_final_checks_ready",
-        "phase2_matrix_default_phase2_final_checks_ready",
-        "phase2_default_promotion_final_checks_ready",
-        "phase2_default_promotion_final_checks_match",
-        "phase2_default_promotion_raw_final_checks_ready",
-        "phase2_default_promotion_phase2_final_checks_ready",
+        _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_LEGACY_FIELDS
     )
     final_evidence_detail_field_names = (
-        "raw_matrix_final_evidence_ready",
-        "raw_matrix_final_evidence_match",
-        "raw_matrix_raw_final_evidence_ready",
-        "raw_matrix_phase2_final_evidence_ready",
-        "raw_matrix_default_final_evidence_ready",
-        "raw_matrix_default_final_evidence_match",
-        "raw_matrix_default_raw_final_evidence_ready",
-        "raw_matrix_default_phase2_final_evidence_ready",
-        "raw_default_promotion_final_evidence_ready",
-        "raw_default_promotion_final_evidence_match",
-        "raw_default_promotion_raw_final_evidence_ready",
-        "raw_default_promotion_phase2_final_evidence_ready",
-        "phase2_matrix_final_evidence_ready",
-        "phase2_matrix_final_evidence_match",
-        "phase2_matrix_raw_final_evidence_ready",
-        "phase2_matrix_phase2_final_evidence_ready",
-        "phase2_matrix_default_final_evidence_ready",
-        "phase2_matrix_default_final_evidence_match",
-        "phase2_matrix_default_raw_final_evidence_ready",
-        "phase2_matrix_default_phase2_final_evidence_ready",
-        "phase2_default_promotion_final_evidence_ready",
-        "phase2_default_promotion_final_evidence_match",
-        "phase2_default_promotion_raw_final_evidence_ready",
-        "phase2_default_promotion_phase2_final_evidence_ready",
+        _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS
     )
     final_evidence_field_names = (
         *final_evidence_legacy_field_names,
@@ -1452,9 +1404,13 @@ def _release_decision_release_quality_publication_guard(
         guard.get(field) is not None
         for field in final_evidence_legacy_field_names
     )
-    final_evidence_detail_fields_present = any(
-        guard.get(field) is not None
+    final_evidence_detail = {
+        field: guard.get(field)
         for field in final_evidence_detail_field_names
+    }
+    _release_quality_final_evidence_detail_ready(final_evidence_detail)
+    final_evidence_detail_fields_present = (
+        final_evidence_detail["final_evidence_detail_fields_present"]
     )
     final_evidence_fields_present = (
         final_evidence_legacy_fields_present
@@ -1501,39 +1457,7 @@ def _release_decision_release_quality_publication_guard(
         or final_evidence_compatible_missing
     )
 
-    def _final_evidence_detail_prefix_ready(prefix: str) -> bool:
-        final_ready = guard.get(f"{prefix}_final_evidence_ready")
-        final_match = guard.get(f"{prefix}_final_evidence_match")
-        raw_ready = guard.get(f"{prefix}_raw_final_evidence_ready")
-        phase2_ready = guard.get(f"{prefix}_phase2_final_evidence_ready")
-        if (
-            final_ready is None
-            and final_match is None
-            and raw_ready is None
-            and phase2_ready is None
-        ):
-            return False
-        return (
-            final_ready is True
-            and final_match is True
-            and (raw_ready is None or raw_ready is True)
-            and (phase2_ready is None or phase2_ready is True)
-        )
-
-    final_evidence_detail_ready = (
-        not final_evidence_detail_fields_present
-        or all(
-            _final_evidence_detail_prefix_ready(prefix)
-            for prefix in (
-                "raw_matrix",
-                "raw_matrix_default",
-                "raw_default_promotion",
-                "phase2_matrix",
-                "phase2_matrix_default",
-                "phase2_default_promotion",
-            )
-        )
-    )
+    final_evidence_detail_ready = final_evidence_detail["final_evidence_detail_ready"]
     decision_check_ready = check_passed is True or (
         check_passed is None and compatible_missing and not guard_present
     )

@@ -7138,6 +7138,20 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 396: Default Promotion Shared Evidence Contract
+
+- Move default-promotion release-quality final-evidence field lists onto the
+  shared report helper introduced in Gate394.
+- Replace default-promotion local final-evidence detail prefix-readiness logic
+  with the shared evaluator while preserving existing present/ready semantics
+  and emitted field names.
+- Validate with focused default-promotion and shared-helper tests.
+- Keep this gate default-promotion report-contract scoped: no quality metric
+  math change, no default quality threshold, no star detector algorithm change,
+  no registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
