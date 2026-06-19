@@ -2110,6 +2110,8 @@ def _write_stack_engine_publication_audit(
     resident_winsorized_ready: bool = True,
     resident_result_contract_ready: bool = True,
     direct_runtime_ready: bool = True,
+    benchmark_profile_ready: bool = True,
+    include_benchmark_profile_handoff: bool = True,
 ) -> None:
     artifact_ready = (
         passed
@@ -2117,6 +2119,7 @@ def _write_stack_engine_publication_audit(
         and resident_winsorized_ready
         and resident_result_contract_ready
         and direct_runtime_ready
+        and (benchmark_profile_ready if include_benchmark_profile_handoff else True)
     )
     status = "passed" if artifact_ready else "blocked"
     policy_status = (
@@ -2130,6 +2133,12 @@ def _write_stack_engine_publication_audit(
     )
     direct_runtime_status = (
         "publish_preflight_ready" if direct_runtime_ready else "blocked"
+    )
+    benchmark_profile_status = (
+        "publish_preflight_ready" if benchmark_profile_ready else "blocked"
+    )
+    benchmark_profile = (
+        RESIDENT_CUDA_DQ_PROFILE_NAME if benchmark_profile_ready else "legacy_profile"
     )
     failed_checks = []
     if not passed:
@@ -2164,6 +2173,14 @@ def _write_stack_engine_publication_audit(
                 "publish_preflight_direct_runtime_evidence_ready",
                 "phase2_publish_preflight_direct_runtime_evidence_ready",
                 "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
+            ]
+        )
+    if include_benchmark_profile_handoff and not benchmark_profile_ready:
+        failed_checks.extend(
+            [
+                "publish_preflight_benchmark_profile_handoff_ready",
+                "phase2_publish_preflight_benchmark_profile_handoff_ready",
+                "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight",
             ]
         )
     checks = [
@@ -2220,6 +2237,136 @@ def _write_stack_engine_publication_audit(
             "passed": direct_runtime_ready,
         },
     ]
+    if include_benchmark_profile_handoff:
+        checks.extend(
+            [
+                {
+                    "name": "publish_preflight_benchmark_profile_handoff_ready",
+                    "passed": benchmark_profile_ready,
+                },
+                {
+                    "name": "phase2_publish_preflight_benchmark_profile_handoff_ready",
+                    "passed": benchmark_profile_ready,
+                },
+                {
+                    "name": (
+                        "phase2_publish_preflight_benchmark_profile_handoff_"
+                        "matches_publish_preflight"
+                    ),
+                    "passed": benchmark_profile_ready,
+                },
+            ]
+        )
+    layers = {
+        "source_contract": {"status": "passed", "ready": passed, "gap_count": 0},
+        "phase2_direct_contract": {
+            "status": "passed",
+            "ready": passed,
+            "gap_count": 0,
+        },
+        "publish_preflight": {
+            "status": "publish_preflight_ready",
+            "ready": passed,
+            "gap_count": 0,
+        },
+        "phase2_publish_preflight": {
+            "status": "publish_preflight_ready",
+            "ready": passed,
+            "gap_count": 0,
+        },
+        "publish_preflight_resident_winsorized_sweep": {
+            "status": winsorized_status,
+            "ready": resident_winsorized_ready,
+        },
+        "phase2_publish_preflight_resident_winsorized_sweep": {
+            "status": winsorized_status,
+            "ready": resident_winsorized_ready,
+        },
+        "publish_preflight_resident_result_contract": {
+            "status": resident_result_status,
+            "ready": resident_result_contract_ready,
+        },
+        "phase2_publish_preflight_resident_result_contract": {
+            "status": resident_result_status,
+            "ready": resident_result_contract_ready,
+        },
+        "publish_preflight_integration_engine_policy": {
+            "status": policy_status,
+            "ready": integration_engine_policy_ready,
+        },
+        "phase2_publish_preflight_integration_engine_policy": {
+            "status": policy_status,
+            "ready": integration_engine_policy_ready,
+        },
+        "publish_preflight_direct_runtime_evidence": {
+            "status": direct_runtime_status,
+            "ready": direct_runtime_ready,
+        },
+        "phase2_publish_preflight_direct_runtime_evidence": {
+            "status": direct_runtime_status,
+            "ready": direct_runtime_ready,
+        },
+    }
+    if include_benchmark_profile_handoff:
+        benchmark_layer = {
+            "status": benchmark_profile_status,
+            "ready": benchmark_profile_ready,
+            "present": True,
+            "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+            "matrix_release_benchmark_profile": benchmark_profile,
+            "matrix_release_benchmark_profile_ready": benchmark_profile_ready,
+            "matrix_release_benchmark_profile_check_passed": benchmark_profile_ready,
+            "matrix_benchmark_profile_handoff_ready": benchmark_profile_ready,
+            "matrix_benchmark_profile_handoff_required_profile": (
+                RESIDENT_CUDA_DQ_PROFILE_NAME
+            ),
+            "matrix_benchmark_profile_handoff_profiles_agree": benchmark_profile_ready,
+            "matrix_benchmark_profile_handoff_decision_profile": benchmark_profile,
+            "matrix_benchmark_profile_handoff_phase2_profile": benchmark_profile,
+            "matrix_benchmark_profile_handoff_default_route_profile": (
+                benchmark_profile
+            ),
+            "default_promotion_benchmark_profile_handoff_ready": (
+                benchmark_profile_ready
+            ),
+            "default_promotion_benchmark_profile_handoff_required_profile": (
+                RESIDENT_CUDA_DQ_PROFILE_NAME
+            ),
+            "default_promotion_benchmark_profile_handoff_profiles_agree": (
+                benchmark_profile_ready
+            ),
+            "default_promotion_benchmark_profile_handoff_decision_profile": (
+                benchmark_profile
+            ),
+            "default_promotion_benchmark_profile_handoff_phase2_profile": (
+                benchmark_profile
+            ),
+            "default_promotion_benchmark_profile_handoff_default_route_profile": (
+                benchmark_profile
+            ),
+            "matrix_release_decision_benchmark_contract_profile_passed": (
+                benchmark_profile_ready
+            ),
+            "matrix_benchmark_contract_profile_handoff_passed": (
+                benchmark_profile_ready
+            ),
+            "default_promotion_benchmark_contract_profile_handoff_passed": (
+                benchmark_profile_ready
+            ),
+            "matrix_release_decision_benchmark_profile_matches_handoff": (
+                benchmark_profile_ready
+            ),
+            "matrix_benchmark_contract_profile_handoff_matches_default_promotion": (
+                benchmark_profile_ready
+            ),
+        }
+        layers["publish_preflight_benchmark_profile_handoff"] = dict(
+            benchmark_layer
+        )
+        layers["phase2_publish_preflight_benchmark_profile_handoff"] = {
+            **benchmark_layer,
+            "phase2_check_passed": benchmark_profile_ready,
+        }
     write_json(
         path,
         {
@@ -2231,56 +2378,7 @@ def _write_stack_engine_publication_audit(
             if artifact_ready
             else "fix_stack_engine_publication_chain",
             "failed_checks": failed_checks,
-            "layers": {
-                "source_contract": {"status": "passed", "ready": passed, "gap_count": 0},
-                "phase2_direct_contract": {
-                    "status": "passed",
-                    "ready": passed,
-                    "gap_count": 0,
-                },
-                "publish_preflight": {
-                    "status": "publish_preflight_ready",
-                    "ready": passed,
-                    "gap_count": 0,
-                },
-                "phase2_publish_preflight": {
-                    "status": "publish_preflight_ready",
-                    "ready": passed,
-                    "gap_count": 0,
-                },
-                "publish_preflight_resident_winsorized_sweep": {
-                    "status": winsorized_status,
-                    "ready": resident_winsorized_ready,
-                },
-                "phase2_publish_preflight_resident_winsorized_sweep": {
-                    "status": winsorized_status,
-                    "ready": resident_winsorized_ready,
-                },
-                "publish_preflight_resident_result_contract": {
-                    "status": resident_result_status,
-                    "ready": resident_result_contract_ready,
-                },
-                "phase2_publish_preflight_resident_result_contract": {
-                    "status": resident_result_status,
-                    "ready": resident_result_contract_ready,
-                },
-                "publish_preflight_integration_engine_policy": {
-                    "status": policy_status,
-                    "ready": integration_engine_policy_ready,
-                },
-                "phase2_publish_preflight_integration_engine_policy": {
-                    "status": policy_status,
-                    "ready": integration_engine_policy_ready,
-                },
-                "publish_preflight_direct_runtime_evidence": {
-                    "status": direct_runtime_status,
-                    "ready": direct_runtime_ready,
-                },
-                "phase2_publish_preflight_direct_runtime_evidence": {
-                    "status": direct_runtime_status,
-                    "ready": direct_runtime_ready,
-                },
-            },
+            "layers": layers,
             "checks": checks,
         },
     )
@@ -2386,6 +2484,7 @@ def _status_payload(
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
     stack_publication_resident_result_contract_ready: bool = True,
+    stack_publication_benchmark_profile_ready: bool = True,
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
@@ -3305,7 +3404,7 @@ def _status_payload(
             "recommendation": "publication_chain_ready"
             if stack_publication_passed
             else "fix_stack_engine_publication_chain",
-            "check_count": 24,
+            "check_count": 27,
             "failed_check_count": 0
             if (
                 stack_publication_passed
@@ -3313,6 +3412,7 @@ def _status_payload(
                 and stack_publication_resident_winsorized_ready
                 and stack_publication_resident_result_contract_ready
                 and publish_preflight_direct_runtime_ready
+                and stack_publication_benchmark_profile_ready
             )
             else 1,
             "publish_preflight_integration_engine_policy_ready": (
@@ -3350,6 +3450,15 @@ def _status_payload(
             ),
             "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight": (
                 publish_preflight_direct_runtime_ready
+            ),
+            "publish_preflight_benchmark_profile_handoff_ready": (
+                stack_publication_benchmark_profile_ready
+            ),
+            "phase2_publish_preflight_benchmark_profile_handoff_ready": (
+                stack_publication_benchmark_profile_ready
+            ),
+            "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight": (
+                stack_publication_benchmark_profile_ready
             ),
         },
         "pipeline_contract": {
@@ -3650,6 +3759,30 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
             "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight"
         ]
         is True
+    )
+    assert (
+        payload["stack_engine_publication_audit"][
+            "publish_preflight_benchmark_profile_handoff_ready"
+        ]
+        is True
+    )
+    assert (
+        payload["stack_engine_publication_audit"][
+            "phase2_publish_preflight_benchmark_profile_handoff_ready"
+        ]
+        is True
+    )
+    assert (
+        payload["stack_engine_publication_audit"][
+            "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight"
+        ]
+        is True
+    )
+    assert (
+        payload["stack_engine_publication_audit"][
+            "publish_preflight_benchmark_profile_handoff"
+        ]["matrix_release_benchmark_profile"]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
     )
     assert payload["publish_preflight"]["asset_count"] == 4
     assert payload["publish_preflight"]["primary_package"] == "cuda13"
@@ -5318,6 +5451,75 @@ def test_phase2_status_blocks_failed_stack_publication_resident_result_handoff(
     )
 
 
+def test_phase2_status_blocks_failed_stack_publication_benchmark_profile_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=411)
+    publication_audit = tmp_path / "stack_engine_publication_audit.json"
+    _write_stack_engine_publication_audit(
+        publication_audit,
+        benchmark_profile_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        stack_engine_publication_audit=publication_audit,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    benchmark_check = checks[
+        "stack_engine_publication_audit_benchmark_profile_chain_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["stack_engine_publication_audit"]["status"] == "blocked"
+    assert checks["stack_engine_publication_audit_passed"]["passed"] is False
+    assert benchmark_check["passed"] is False
+    assert benchmark_check["evidence"]["raw_ready_check"] is False
+    assert benchmark_check["evidence"]["phase2_ready_check"] is False
+    assert benchmark_check["evidence"]["agreement_check"] is False
+    assert (
+        benchmark_check["evidence"]["raw_layer"]["matrix_release_benchmark_profile"]
+        == "legacy_profile"
+    )
+    assert (
+        "publish_preflight_benchmark_profile_handoff_ready"
+        in benchmark_check["evidence"]["failed_checks"]
+    )
+
+
+def test_phase2_status_blocks_missing_stack_publication_benchmark_profile_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=411)
+    publication_audit = tmp_path / "stack_engine_publication_audit.json"
+    _write_stack_engine_publication_audit(
+        publication_audit,
+        include_benchmark_profile_handoff=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        stack_engine_publication_audit=publication_audit,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    benchmark_check = checks[
+        "stack_engine_publication_audit_benchmark_profile_chain_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert benchmark_check["passed"] is False
+    assert benchmark_check["evidence"]["raw_ready_check"] is None
+    assert benchmark_check["evidence"]["phase2_ready_check"] is None
+    assert benchmark_check["evidence"]["agreement_check"] is None
+    assert benchmark_check["evidence"]["raw_layer"]["present"] is None
+
+
 def test_phase2_status_blocks_stack_engine_default_contract_gap(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -6472,6 +6674,7 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
         checks["pipeline_resident_result_contract_failure_count_not_increased"]
         is True
     )
+    assert checks["stack_engine_publication_benchmark_profile_chain_preserved"] is True
     assert checks["acceptance_pipeline_integration_engine_policy_preserved"] is True
     assert (
         checks[
@@ -7198,6 +7401,48 @@ def test_phase2_status_compare_flags_stack_publication_policy_regression(
     assert (
         payload["candidate"]["stack_engine_publication_audit"][
             "policy_checks_passed"
+        ]
+        is False
+    )
+
+
+def test_phase2_status_compare_flags_stack_publication_benchmark_profile_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=411))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=412,
+            status="attention_required",
+            stack_publication_passed=False,
+            stack_publication_benchmark_profile_ready=False,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    benchmark_check = checks[
+        "stack_engine_publication_benchmark_profile_chain_preserved"
+    ]
+    assert payload["status"] == "regressed"
+    assert checks["stack_engine_publication_audit_passed_preserved"]["passed"] is False
+    assert benchmark_check["passed"] is False
+    assert benchmark_check["evidence"]["baseline"][
+        "publish_preflight_benchmark_profile_handoff_ready"
+    ] is True
+    assert benchmark_check["evidence"]["candidate"][
+        "publish_preflight_benchmark_profile_handoff_ready"
+    ] is False
+    assert (
+        payload["candidate"]["stack_engine_publication_audit"][
+            "benchmark_profile_checks_passed"
         ]
         is False
     )

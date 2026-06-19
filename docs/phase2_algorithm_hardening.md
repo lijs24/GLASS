@@ -7417,6 +7417,26 @@ integration where applicable.
   change, no CUDA kernel change, no package upload, no GitHub release creation,
   and no real-data benchmark rerun.
 
+### S2-Gate 412: Phase2 Publication-Audit Benchmark Profile Handoff
+
+- Carry the S2-Gate411 StackEngine publication-audit benchmark profile handoff
+  into `glass phase2-status --stack-engine-publication-audit`.
+- Surface the raw and Phase2 publication-audit benchmark profile layers in
+  Phase2 status JSON and Markdown.
+- Add `stack_engine_publication_audit_benchmark_profile_chain_passed` so Phase2
+  status cannot be green when the publication audit loses, fails, or mismatches
+  the benchmark profile handoff.
+- Extend `glass phase2-status-compare` with
+  `stack_engine_publication_benchmark_profile_chain_preserved`.
+- Validate ready, failed-profile, missing-layer, and compare-regression paths
+  with focused Phase2 status tests.
+- Keep this gate status/compare scoped: no runtime execution change, no
+  benchmark contract check semantic change, no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no package upload, no GitHub release creation,
+  and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

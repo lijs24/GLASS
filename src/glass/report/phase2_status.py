@@ -2176,6 +2176,29 @@ def _publication_audit_layer(payload: dict[str, Any], name: str) -> dict[str, An
     }
 
 
+def _publication_audit_benchmark_profile_layer(
+    payload: dict[str, Any],
+    name: str,
+) -> dict[str, Any]:
+    layers = payload.get("layers") if isinstance(payload.get("layers"), dict) else {}
+    layer = layers.get(name) if isinstance(layers.get(name), dict) else {}
+    return {
+        "status": layer.get("status"),
+        "ready": layer.get("ready"),
+        "present": layer.get("present"),
+        "required_profile": layer.get("required_profile"),
+        "phase2_check_passed": layer.get("phase2_check_passed"),
+        **{
+            field: layer.get(field)
+            for field in _PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_STATUS_FIELDS
+        },
+        **{
+            field: layer.get(field)
+            for field in _PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_CHECK_FIELDS
+        },
+    }
+
+
 def _publication_audit_check(payload: dict[str, Any], name: str) -> bool | None:
     return _check_passed(payload, name)
 
@@ -2266,6 +2289,18 @@ def _stack_engine_publication_audit_summary(
                 "phase2_publish_preflight_direct_runtime_evidence",
             )
         ),
+        "publish_preflight_benchmark_profile_handoff": (
+            _publication_audit_benchmark_profile_layer(
+                payload,
+                "publish_preflight_benchmark_profile_handoff",
+            )
+        ),
+        "phase2_publish_preflight_benchmark_profile_handoff": (
+            _publication_audit_benchmark_profile_layer(
+                payload,
+                "phase2_publish_preflight_benchmark_profile_handoff",
+            )
+        ),
         "source_contract_ready": _publication_audit_check(
             payload,
             "source_contract_ready",
@@ -2352,6 +2387,24 @@ def _stack_engine_publication_audit_summary(
             _publication_audit_check(
                 payload,
                 "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
+            )
+        ),
+        "publish_preflight_benchmark_profile_handoff_ready": (
+            _publication_audit_check(
+                payload,
+                "publish_preflight_benchmark_profile_handoff_ready",
+            )
+        ),
+        "phase2_publish_preflight_benchmark_profile_handoff_ready": (
+            _publication_audit_check(
+                payload,
+                "phase2_publish_preflight_benchmark_profile_handoff_ready",
+            )
+        ),
+        "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight": (
+            _publication_audit_check(
+                payload,
+                "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight",
             )
         ),
     }
@@ -5262,6 +5315,43 @@ def build_phase2_status(
                 },
             }
         )
+        checks.append(
+            {
+                "name": "stack_engine_publication_audit_benchmark_profile_chain_passed",
+                "passed": (
+                    publication_audit.get(
+                        "publish_preflight_benchmark_profile_handoff_ready"
+                    )
+                    is True
+                    and publication_audit.get(
+                        "phase2_publish_preflight_benchmark_profile_handoff_ready"
+                    )
+                    is True
+                    and publication_audit.get(
+                        "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight"
+                    )
+                    is True
+                ),
+                "evidence": {
+                    "raw_layer": publication_audit.get(
+                        "publish_preflight_benchmark_profile_handoff"
+                    ),
+                    "phase2_layer": publication_audit.get(
+                        "phase2_publish_preflight_benchmark_profile_handoff"
+                    ),
+                    "raw_ready_check": publication_audit.get(
+                        "publish_preflight_benchmark_profile_handoff_ready"
+                    ),
+                    "phase2_ready_check": publication_audit.get(
+                        "phase2_publish_preflight_benchmark_profile_handoff_ready"
+                    ),
+                    "agreement_check": publication_audit.get(
+                        "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight"
+                    ),
+                    "failed_checks": publication_audit.get("failed_checks"),
+                },
+            }
+        )
     if pipeline is not None:
         checks.append(
             {
@@ -6434,6 +6524,19 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"phase2={publication_audit.get('phase2_publish_preflight_resident_result_contract_ready')}, "
                     "agreement="
                     f"{publication_audit.get('phase2_publish_preflight_resident_result_contract_matches_publish_preflight')}"
+                ),
+                (
+                    "- Benchmark profile layers: "
+                    f"raw={publication_audit.get('publish_preflight_benchmark_profile_handoff')}, "
+                    "phase2="
+                    f"{publication_audit.get('phase2_publish_preflight_benchmark_profile_handoff')}"
+                ),
+                (
+                    "- Benchmark profile checks: "
+                    f"raw={publication_audit.get('publish_preflight_benchmark_profile_handoff_ready')}, "
+                    f"phase2={publication_audit.get('phase2_publish_preflight_benchmark_profile_handoff_ready')}, "
+                    "agreement="
+                    f"{publication_audit.get('phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight')}"
                 ),
             ]
         )
@@ -8166,6 +8269,12 @@ _STACK_PUBLICATION_DIRECT_RUNTIME_FIELDS = (
     "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
 )
 
+_STACK_PUBLICATION_BENCHMARK_PROFILE_FIELDS = (
+    "publish_preflight_benchmark_profile_handoff_ready",
+    "phase2_publish_preflight_benchmark_profile_handoff_ready",
+    "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight",
+)
+
 
 def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
     audit = _status_value(payload, "stack_engine_publication_audit")
@@ -8180,6 +8289,7 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
             "resident_winsorized_checks_passed": False,
             "resident_result_contract_checks_passed": False,
             "direct_runtime_checks_passed": False,
+            "benchmark_profile_checks_passed": False,
         }
     policy = {
         field: audit.get(field)
@@ -8197,6 +8307,10 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
         field: audit.get(field)
         for field in _STACK_PUBLICATION_DIRECT_RUNTIME_FIELDS
     }
+    benchmark_profile = {
+        field: audit.get(field)
+        for field in _STACK_PUBLICATION_BENCHMARK_PROFILE_FIELDS
+    }
     return {
         "present": True,
         "passed": audit.get("passed") is True,
@@ -8208,6 +8322,7 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "resident_winsorized_checks": resident_winsorized,
         "resident_result_contract_checks": resident_result_contract,
         "direct_runtime_checks": direct_runtime,
+        "benchmark_profile_checks": benchmark_profile,
         "policy_checks_passed": all(value is True for value in policy.values()),
         "resident_winsorized_checks_passed": all(
             value is True for value in resident_winsorized.values()
@@ -8217,6 +8332,9 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "direct_runtime_checks_passed": all(
             value is True for value in direct_runtime.values()
+        ),
+        "benchmark_profile_checks_passed": all(
+            value is True for value in benchmark_profile.values()
         ),
     }
 
@@ -9420,6 +9538,13 @@ def build_phase2_status_compare(
             or candidate_publication.get("direct_runtime_checks_passed") is True,
             baseline=baseline_publication.get("direct_runtime_checks"),
             candidate=candidate_publication.get("direct_runtime_checks"),
+        ),
+        _compare_check(
+            "stack_engine_publication_benchmark_profile_chain_preserved",
+            baseline_publication.get("benchmark_profile_checks_passed") is not True
+            or candidate_publication.get("benchmark_profile_checks_passed") is True,
+            baseline=baseline_publication.get("benchmark_profile_checks"),
+            candidate=candidate_publication.get("benchmark_profile_checks"),
         ),
         _compare_check(
             "pipeline_contract_passed_preserved",
