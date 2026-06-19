@@ -1,0 +1,95 @@
+{
+  "cuda": {
+    "cuda_available": true,
+    "devices": [
+      {
+        "compute_capability": "12.0",
+        "device_id": 0,
+        "driver_version": "596.21",
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      }
+    ],
+    "native_extension_loaded": true,
+    "probe_skipped": false,
+    "wrapper_importable": true
+  },
+  "product": "GLASS",
+  "recommendation": "cuda",
+  "schema_version": 1,
+  "windows_cuda_packages": {
+    "fallbacks": [
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+    "ordered_try_list": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "packages": [
+      {
+        "architectures": [
+          "5.0",
+          "5.2",
+          "6.0",
+          "6.1",
+          "7.0",
+          "7.5",
+          "8.0",
+          "8.6"
+        ],
+        "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+        "compatible": true,
+        "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+        "label": "cuda11",
+        "match": "ptx_jit_forward",
+        "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+        "toolkit": "11.8"
+      },
+      {
+        "architectures": [
+          "7.5",
+          "8.0",
+          "8.6",
+          "8.9",
+          "9.0"
+        ],
+        "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+        "compatible": true,
+        "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+        "label": "cuda12",
+        "match": "ptx_jit_forward",
+        "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+        "toolkit": "12.4"
+      },
+      {
+        "architectures": [
+          "8.6",
+          "8.9",
+          "9.0",
+          "10.0",
+          "12.0"
+        ],
+        "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+        "compatible": true,
+        "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+        "label": "cuda13",
+        "match": "native_cubin",
+        "note": "This package contains native GPU code for this compute capability.",
+        "toolkit": "13.0"
+      }
+    ],
+    "primary": "cuda13",
+    "ptx_forward_compatibility": true,
+    "selected_device": {
+      "compute_capability": "12.0",
+      "compute_capability_code": 120,
+      "device_id": 0,
+      "driver_version": "596.21",
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+    }
+  }
+}
