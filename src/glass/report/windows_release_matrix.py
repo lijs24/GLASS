@@ -6,6 +6,7 @@ from typing import Any
 from glass.gpu.compatibility import WINDOWS_CUDA_PACKAGES
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 from glass.report.release_quality_evidence import (
     FINAL_EVIDENCE_DETAIL_FIELDS as _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS,
     FINAL_EVIDENCE_FIELDS as _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_FIELDS,
@@ -55,6 +56,37 @@ def _check_passed(payload: dict[str, Any], name: str) -> bool | None:
         if isinstance(item, dict) and item.get("name") == name:
             return item.get("passed") is True
     return None
+
+
+def _release_benchmark_contract_profile_summary(
+    decision: dict[str, Any],
+) -> dict[str, Any]:
+    contract = (
+        decision.get("acceptance_benchmark_contract")
+        if isinstance(decision.get("acceptance_benchmark_contract"), dict)
+        else {}
+    )
+    profile = contract.get("profile")
+    check_passed = _check_passed(decision, "acceptance_benchmark_contract_profile")
+    ready = (
+        bool(contract)
+        and profile == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and check_passed is True
+        and contract.get("ready") is not False
+    )
+    return {
+        "schema_version": 1,
+        "present": bool(contract),
+        "ready": ready,
+        "check_passed": check_passed,
+        "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+        "source": contract.get("source"),
+        "path": contract.get("path"),
+        "profile": profile,
+        "name": contract.get("name"),
+        "contract_schema_version": contract.get("contract_schema_version")
+        or contract.get("schema_version"),
+    }
 
 
 def _direct_publication_guard_from_decision(
@@ -560,6 +592,26 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         )
         else {}
     )
+    benchmark_handoff = (
+        payload.get("benchmark_contract_profile_handoff")
+        if isinstance(payload.get("benchmark_contract_profile_handoff"), dict)
+        else {}
+    )
+    benchmark_decision = (
+        benchmark_handoff.get("decision")
+        if isinstance(benchmark_handoff.get("decision"), dict)
+        else {}
+    )
+    benchmark_phase2 = (
+        benchmark_handoff.get("phase2_acceptance")
+        if isinstance(benchmark_handoff.get("phase2_acceptance"), dict)
+        else {}
+    )
+    benchmark_default_route = (
+        benchmark_handoff.get("default_route")
+        if isinstance(benchmark_handoff.get("default_route"), dict)
+        else {}
+    )
     return {
         "present": True,
         "artifact_type": payload.get("artifact_type"),
@@ -576,6 +628,35 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "default_route_route_contract_passed": default_route.get("route_contract_passed"),
         "default_route_route_check_count": default_route.get("route_check_count"),
         "default_route_speedup_vs_reference": default_route.get("speedup_vs_reference"),
+        "benchmark_contract_profile_handoff": benchmark_handoff,
+        "benchmark_contract_profile_handoff_ready": benchmark_handoff.get("ready"),
+        "benchmark_contract_profile_handoff_required_profile": (
+            benchmark_handoff.get("required_profile")
+        ),
+        "benchmark_contract_profile_handoff_profiles_agree": (
+            benchmark_handoff.get("profiles_agree")
+        ),
+        "benchmark_contract_profile_handoff_decision_profile": (
+            benchmark_decision.get("profile")
+        ),
+        "benchmark_contract_profile_handoff_phase2_profile": (
+            benchmark_phase2.get("profile")
+        ),
+        "benchmark_contract_profile_handoff_default_route_profile": (
+            benchmark_default_route.get("profile")
+        ),
+        "benchmark_contract_profile_handoff_decision_check_passed": (
+            benchmark_decision.get("check_passed")
+        ),
+        "benchmark_contract_profile_handoff_decision_ready": (
+            benchmark_decision.get("ready")
+        ),
+        "benchmark_contract_profile_handoff_phase2_ready": (
+            benchmark_phase2.get("ready")
+        ),
+        "benchmark_contract_profile_handoff_default_route_ready": (
+            benchmark_default_route.get("ready")
+        ),
         "quality_metrics_compare": quality_metrics_compare,
         "quality_metrics_compare_present": quality_metrics_compare.get("present"),
         "quality_metrics_compare_ready": quality_metrics_compare.get("ready"),
@@ -1400,6 +1481,9 @@ def build_windows_release_matrix(
     expected_primary = expected_primary_package or primary
     runtime_repeat = decision.get("runtime_repeat") if isinstance(decision.get("runtime_repeat"), dict) else {}
     runtime_ratio = _number(runtime_repeat.get("elapsed_ratio_vs_best"))
+    release_benchmark_profile = _release_benchmark_contract_profile_summary(
+        decision
+    )
     release_direct_publication_guard = _direct_publication_guard_from_decision(
         decision,
         min_resident_lights=200,
@@ -1472,6 +1556,15 @@ def build_windows_release_matrix(
             {"actual": decision.get("recommendation"), "required": "promote_default_candidate"},
         ),
         _check(
+            "release_decision_benchmark_contract_profile_passed",
+            release_benchmark_profile.get("ready") is True,
+            release_benchmark_profile,
+            note=(
+                "Windows release matrix requires release-decision acceptance "
+                "to use the resident CUDA DQ benchmark profile."
+            ),
+        ),
+        _check(
             "release_decision_direct_runtime_publication_guard_passed",
             release_direct_publication_guard.get("ready") is True,
             release_direct_publication_guard,
@@ -1512,6 +1605,69 @@ def build_windows_release_matrix(
                 "passed": default_promotion.get("passed"),
                 "default_change_ready": default_promotion.get("default_change_ready"),
             },
+        ),
+        _check(
+            "default_promotion_benchmark_contract_profile_handoff_passed",
+            (
+                default_promotion.get("benchmark_contract_profile_handoff_ready")
+                is True
+                and default_promotion.get(
+                    "benchmark_contract_profile_handoff_profiles_agree"
+                )
+                is True
+                and default_promotion.get(
+                    "benchmark_contract_profile_handoff_decision_profile"
+                )
+                == RESIDENT_CUDA_DQ_PROFILE_NAME
+                and default_promotion.get(
+                    "benchmark_contract_profile_handoff_phase2_profile"
+                )
+                == RESIDENT_CUDA_DQ_PROFILE_NAME
+                and default_promotion.get(
+                    "benchmark_contract_profile_handoff_default_route_profile"
+                )
+                == RESIDENT_CUDA_DQ_PROFILE_NAME
+                and default_promotion.get(
+                    "benchmark_contract_profile_handoff_decision_check_passed"
+                )
+                is True
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "ready": default_promotion.get(
+                    "benchmark_contract_profile_handoff_ready"
+                ),
+                "profiles_agree": default_promotion.get(
+                    "benchmark_contract_profile_handoff_profiles_agree"
+                ),
+                "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+                "decision_profile": default_promotion.get(
+                    "benchmark_contract_profile_handoff_decision_profile"
+                ),
+                "decision_check_passed": default_promotion.get(
+                    "benchmark_contract_profile_handoff_decision_check_passed"
+                ),
+                "decision_ready": default_promotion.get(
+                    "benchmark_contract_profile_handoff_decision_ready"
+                ),
+                "phase2_profile": default_promotion.get(
+                    "benchmark_contract_profile_handoff_phase2_profile"
+                ),
+                "phase2_ready": default_promotion.get(
+                    "benchmark_contract_profile_handoff_phase2_ready"
+                ),
+                "default_route_profile": default_promotion.get(
+                    "benchmark_contract_profile_handoff_default_route_profile"
+                ),
+                "default_route_ready": default_promotion.get(
+                    "benchmark_contract_profile_handoff_default_route_ready"
+                ),
+            },
+            note=(
+                "Windows release matrix requires the default-promotion "
+                "benchmark profile handoff from S2-Gate407."
+            ),
         ),
         _check(
             "default_promotion_default_route_passed",
@@ -2968,6 +3124,7 @@ def build_windows_release_matrix(
             "release_decision_status": decision.get("status"),
             "default_change_ready": decision.get("default_change_ready"),
         },
+        "release_decision_benchmark_contract_profile": release_benchmark_profile,
         "release_decision_direct_runtime_publication_guard": (
             release_direct_publication_guard
         ),
@@ -3041,6 +3198,14 @@ def _markdown(payload: dict[str, Any]) -> str:
         )
         else {}
     )
+    release_benchmark_profile = (
+        payload.get("release_decision_benchmark_contract_profile")
+        if isinstance(
+            payload.get("release_decision_benchmark_contract_profile"),
+            dict,
+        )
+        else {}
+    )
     default_release_quality_detail_preserved = (
         _default_promotion_release_quality_detail_preserved(
             release_quality_publication_guard,
@@ -3065,6 +3230,23 @@ def _markdown(payload: dict[str, Any]) -> str:
                 "- Default route contract/checks: "
                 f"`{default_promotion.get('default_route_route_contract_passed')}`/"
                 f"`{default_promotion.get('default_route_route_check_count')}`"
+            ),
+            (
+                "- Benchmark profile handoff: "
+                f"ready=`{default_promotion.get('benchmark_contract_profile_handoff_ready')}` "
+                "required="
+                f"`{default_promotion.get('benchmark_contract_profile_handoff_required_profile')}` "
+                "agreement="
+                f"`{default_promotion.get('benchmark_contract_profile_handoff_profiles_agree')}`"
+            ),
+            (
+                "- Benchmark profiles: "
+                f"release=`{release_benchmark_profile.get('profile')}` "
+                "default-decision="
+                f"`{default_promotion.get('benchmark_contract_profile_handoff_decision_profile')}` "
+                f"phase2=`{default_promotion.get('benchmark_contract_profile_handoff_phase2_profile')}` "
+                "default-route="
+                f"`{default_promotion.get('benchmark_contract_profile_handoff_default_route_profile')}`"
             ),
             (
                 "- Rejection sample accounting: "

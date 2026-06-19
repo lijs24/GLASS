@@ -7328,6 +7328,28 @@ integration where applicable.
   change, no CUDA kernel change, no package upload, no GitHub release creation,
   and no real-data benchmark rerun.
 
+### S2-Gate 408: Windows Release Matrix Benchmark Profile Handoff
+
+- Carry the release decision's `acceptance_benchmark_contract` evidence into
+  `windows-release-matrix`.
+- Require the release decision's
+  `acceptance_benchmark_contract_profile` check to pass with
+  `resident_cuda_dq_v1` before the Windows release matrix can pass.
+- Require the default-promotion
+  `benchmark_contract_profile_handoff` to be ready, profile-agreeing, and
+  aligned to `resident_cuda_dq_v1` across release decision, Phase2 acceptance,
+  and default-route acceptance.
+- Surface the release/default benchmark profile handoff in Windows release
+  matrix Markdown.
+- Validate the ready path, release-decision profile drift, and default-promotion
+  handoff drift with focused Windows release matrix tests.
+- Keep this gate release-matrix-policy scoped: no runtime execution change, no
+  benchmark contract check semantic change, no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no package upload, no GitHub release creation,
+  and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

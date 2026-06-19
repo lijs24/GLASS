@@ -5,6 +5,7 @@ from pathlib import Path
 from glass.cli import main
 from glass.gpu.compatibility import recommend_windows_cuda_packages
 from glass.io.json_io import read_json, write_json
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 from glass.report.windows_release_matrix import build_windows_release_matrix
 
 
@@ -189,7 +190,15 @@ def _release_decision(
     phase2_release_quality_publication_final_checks_ready: bool | None = None,
     include_release_quality_publication_final_checks: bool = True,
     include_phase2_release_quality_publication_final_checks: bool = True,
+    benchmark_contract_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_contract_source: str | None = "profile",
+    benchmark_contract_check_passed: bool | None = None,
 ) -> None:
+    benchmark_contract_check_passed = (
+        benchmark_contract_profile == RESIDENT_CUDA_DQ_PROFILE_NAME
+        if benchmark_contract_check_passed is None
+        else benchmark_contract_check_passed
+    )
     phase2_quality_publication_guard_ready = (
         quality_publication_guard_ready
         if phase2_quality_publication_guard_ready is None
@@ -244,6 +253,12 @@ def _release_decision(
                 "passed": direct_publication_guard_ready,
             }
         )
+    checks.append(
+        {
+            "name": "acceptance_benchmark_contract_profile",
+            "passed": benchmark_contract_check_passed,
+        }
+    )
     quality_status = "passed" if quality_publication_guard_ready else "blocked"
     phase2_quality_status = (
         "passed" if phase2_quality_publication_guard_ready else "blocked"
@@ -516,6 +531,21 @@ def _release_decision(
             "stack_engine_publication_direct_runtime_evidence": direct_guard
             if include_direct_publication_guard
             else {},
+            "acceptance_benchmark_contract": {
+                "schema_version": 1,
+                "present": benchmark_contract_profile is not None,
+                "ready": benchmark_contract_check_passed,
+                "source": benchmark_contract_source,
+                "path": None,
+                "profile": benchmark_contract_profile,
+                "name": "fixture_resident_cuda_dq_contract"
+                if benchmark_contract_profile is not None
+                else None,
+                "contract_schema_version": 1
+                if benchmark_contract_profile is not None
+                else None,
+                "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+            },
             "stack_engine_publication_quality_metrics_compare": quality_guard,
             "stack_engine_publication_release_quality_guard": release_quality_guard,
             "checks": checks,
@@ -579,6 +609,11 @@ def _default_promotion(
     resident_fastpath_release_handoff_ready: bool = True,
     include_quality_metrics_compare: bool = True,
     quality_metrics_compare_ready: bool = True,
+    benchmark_profile_handoff_ready: bool = True,
+    benchmark_profile_decision_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_phase2_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_default_route_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_decision_check_passed: bool = True,
 ) -> None:
     phase2_release_quality_publication_guard_ready = (
         release_quality_publication_guard_ready
@@ -657,6 +692,17 @@ def _default_promotion(
         if include_stack_publication_audit
         else True
     )
+    benchmark_profiles_agree = (
+        benchmark_profile_decision_profile
+        == benchmark_profile_phase2_profile
+        == benchmark_profile_default_route_profile
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    benchmark_handoff_ready = (
+        benchmark_profile_handoff_ready
+        and benchmark_profiles_agree
+        and benchmark_profile_decision_check_passed
+    )
     manifest_ready = (
         ready
         and resident_result_contract_ready
@@ -684,6 +730,7 @@ def _default_promotion(
         and pipeline_runtime_default_chain_ready
         and resident_fastpath_release_handoff_ready
         and publication_audit_chain_ready
+        and benchmark_handoff_ready
         and (stack_engine_ready if include_stack_engine_contract else True)
         and (
             resident_winsorized_sweep_ready
@@ -751,6 +798,62 @@ def _default_promotion(
                 "route_contract_passed": ready,
                 "route_check_count": 4 if ready else 2,
                 "speedup_vs_reference": 28.75,
+            },
+            "benchmark_contract_profile_handoff": {
+                "schema_version": 1,
+                "ready": benchmark_handoff_ready,
+                "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+                "profiles_agree": benchmark_profiles_agree,
+                "decision": {
+                    "present": benchmark_profile_decision_profile is not None,
+                    "ready": (
+                        benchmark_profile_decision_profile
+                        == RESIDENT_CUDA_DQ_PROFILE_NAME
+                        and benchmark_profile_decision_check_passed
+                    ),
+                    "check_passed": benchmark_profile_decision_check_passed,
+                    "source": "profile",
+                    "path": None,
+                    "profile": benchmark_profile_decision_profile,
+                    "name": "fixture_resident_cuda_dq_contract"
+                    if benchmark_profile_decision_profile is not None
+                    else None,
+                    "schema_version": 1
+                    if benchmark_profile_decision_profile is not None
+                    else None,
+                },
+                "phase2_acceptance": {
+                    "present": benchmark_profile_phase2_profile is not None,
+                    "ready": (
+                        benchmark_profile_phase2_profile
+                        == RESIDENT_CUDA_DQ_PROFILE_NAME
+                    ),
+                    "source": "profile",
+                    "path": None,
+                    "profile": benchmark_profile_phase2_profile,
+                    "name": "fixture_resident_cuda_dq_contract"
+                    if benchmark_profile_phase2_profile is not None
+                    else None,
+                    "schema_version": 1
+                    if benchmark_profile_phase2_profile is not None
+                    else None,
+                },
+                "default_route": {
+                    "present": True,
+                    "ready": (
+                        benchmark_profile_default_route_profile
+                        == RESIDENT_CUDA_DQ_PROFILE_NAME
+                    ),
+                    "source": "profile",
+                    "path": None,
+                    "profile": benchmark_profile_default_route_profile,
+                    "name": "fixture_resident_cuda_dq_contract"
+                    if benchmark_profile_default_route_profile is not None
+                    else None,
+                    "schema_version": 1
+                    if benchmark_profile_default_route_profile is not None
+                    else None,
+                },
             },
             "pipeline_contract": {
                 "status": "passed" if manifest_ready else "failed",
@@ -1438,6 +1541,41 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert checks["default_promotion_manifest_present"] is True
     assert checks["default_promotion_manifest_ready"] is True
     assert checks["default_promotion_default_route_passed"] is True
+    assert checks["release_decision_benchmark_contract_profile_passed"] is True
+    assert (
+        checks["default_promotion_benchmark_contract_profile_handoff_passed"]
+        is True
+    )
+    assert payload["release_decision_benchmark_contract_profile"][
+        "profile"
+    ] == RESIDENT_CUDA_DQ_PROFILE_NAME
+    assert payload["default_promotion_manifest"][
+        "benchmark_contract_profile_handoff_ready"
+    ] is True
+    assert (
+        payload["default_promotion_manifest"][
+            "benchmark_contract_profile_handoff_required_profile"
+        ]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    assert (
+        payload["default_promotion_manifest"][
+            "benchmark_contract_profile_handoff_decision_profile"
+        ]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    assert (
+        payload["default_promotion_manifest"][
+            "benchmark_contract_profile_handoff_phase2_profile"
+        ]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    assert (
+        payload["default_promotion_manifest"][
+            "benchmark_contract_profile_handoff_default_route_profile"
+        ]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
     assert checks["default_promotion_quality_metrics_compare_handoff_passed"] is True
     assert payload["default_promotion_manifest"]["quality_metrics_compare_present"] is True
     assert payload["default_promotion_manifest"]["quality_metrics_compare_ready"] is True
@@ -1598,6 +1736,82 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert checks["required_cuda_package_compatible:cuda12"] is True
     assert checks["required_cuda_package_compatible:cuda11"] is True
     assert [row["label"] for row in payload["packages"]] == ["cuda11", "cuda12", "cuda13", "cpu"]
+
+
+def test_windows_release_matrix_blocks_release_decision_benchmark_profile_drift(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(
+        decision,
+        benchmark_contract_profile="legacy_profile",
+        benchmark_contract_check_passed=False,
+    )
+    _default_promotion(default_promotion)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["release_decision_benchmark_contract_profile_passed"][
+        "passed"
+    ] is False
+    assert "release_decision_benchmark_contract_profile_passed" in payload[
+        "failed_checks"
+    ]
+    assert checks["release_decision_benchmark_contract_profile_passed"][
+        "evidence"
+    ]["profile"] == "legacy_profile"
+    assert checks["release_decision_benchmark_contract_profile_passed"][
+        "evidence"
+    ]["required_profile"] == RESIDENT_CUDA_DQ_PROFILE_NAME
+
+
+def test_windows_release_matrix_blocks_default_promotion_benchmark_handoff_drift(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(
+        default_promotion,
+        benchmark_profile_handoff_ready=False,
+        benchmark_profile_decision_profile="legacy_profile",
+        benchmark_profile_decision_check_passed=False,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    handoff = checks["default_promotion_benchmark_contract_profile_handoff_passed"]
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert handoff["passed"] is False
+    assert "default_promotion_benchmark_contract_profile_handoff_passed" in payload[
+        "failed_checks"
+    ]
+    assert handoff["evidence"]["decision_profile"] == "legacy_profile"
+    assert handoff["evidence"]["phase2_profile"] == RESIDENT_CUDA_DQ_PROFILE_NAME
+    assert handoff["evidence"][
+        "default_route_profile"
+    ] == RESIDENT_CUDA_DQ_PROFILE_NAME
+    assert handoff["evidence"]["profiles_agree"] is False
 
 
 def test_windows_release_matrix_allows_missing_quality_publication_guards(
@@ -3459,6 +3673,15 @@ def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
     assert "GLASS Windows Release Matrix" in markdown_text
     assert "Default Promotion Manifest" in markdown_text
     assert "Default route contract/checks: `True`/`4`" in markdown_text
+    assert (
+        "Benchmark profile handoff: ready=`True` "
+        "required=`resident_cuda_dq_v1` agreement=`True`"
+    ) in markdown_text
+    assert (
+        "Benchmark profiles: release=`resident_cuda_dq_v1` "
+        "default-decision=`resident_cuda_dq_v1` "
+        "phase2=`resident_cuda_dq_v1` default-route=`resident_cuda_dq_v1`"
+    ) in markdown_text
     assert "Rejection sample accounting: `passed` failed=`0`" in markdown_text
     assert "Quality metrics compare: present=`True` ready=`True`" in markdown_text
     assert "Sample accounting closure: `passed` present=`1` failed=`0`" in markdown_text
