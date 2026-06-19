@@ -7088,6 +7088,26 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 393: Windows Publish Preflight Final Evidence Detail Handoff
+
+- Carry Gate392 Windows release-matrix final release quality evidence detail
+  into `glass windows-publish-preflight`.
+- Preserve legacy compatibility for matrix/default-promotion artifacts that
+  only provide historical `final_checks_*` evidence names.
+- Block publish-preflight readiness when matrix detail evidence fails, when
+  matrix default-promotion detail evidence fails, or when standalone
+  default-promotion drops detail fields carried by the release matrix.
+- Surface final-evidence-detail readiness and raw/Phase2 matrix detail fields
+  in publish-preflight JSON summary, check evidence, and Markdown.
+- Add focused tests for green detail surfacing, compatible-missing detail,
+  legacy-only compatibility, failed matrix detail evidence, and manifest detail
+  loss.
+- Keep this gate Windows publish-preflight scoped: no quality metric math
+  change, no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
