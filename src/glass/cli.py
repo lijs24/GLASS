@@ -87,6 +87,10 @@ from glass.report.resident_rejection_input_audit import (
     build_resident_rejection_input_audit,
     write_resident_rejection_input_audit,
 )
+from glass.report.resident_warp_input_audit import (
+    build_resident_warp_input_audit,
+    write_resident_warp_input_audit,
+)
 from glass.report.resident_winsorized_benchmark import (
     build_resident_winsorized_benchmark,
     write_resident_winsorized_benchmark,
@@ -2611,6 +2615,32 @@ def cmd_resident_rejection_input_audit(args: argparse.Namespace) -> int:
         max_same_pre_rejection_abs_delta=args.max_same_pre_rejection_abs_delta,
     )
     write_resident_rejection_input_audit(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "recommendation": payload.get("recommendation"),
+            "failed_checks": payload.get("failed_checks"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failure and not payload.get("passed") else 0
+
+
+def cmd_resident_warp_input_audit(args: argparse.Namespace) -> int:
+    payload = build_resident_warp_input_audit(
+        cpu_run=args.cpu_run,
+        resident_run=args.resident_run,
+        compare_json=args.compare_json,
+        frame_ids=args.frame_id,
+        max_frames=args.max_frames,
+        interpolation=args.interpolation,
+        cpu_matrix_rms_tolerance=args.cpu_matrix_rms_tolerance,
+        resident_matrix_rms_tolerance=args.resident_matrix_rms_tolerance,
+    )
+    write_resident_warp_input_audit(args.out, payload, markdown=args.markdown)
     console.print(
         {
             "artifact_type": payload.get("artifact_type"),
@@ -6457,6 +6487,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless exact-input parity and resident output thresholds pass",
     )
     rejection_input_audit.set_defaults(func=cmd_resident_rejection_input_audit)
+
+    warp_input_audit = sub.add_parser(
+        "resident-warp-input-audit",
+        help=(
+            "compare resident CUDA warped samples against CPU registered_cache "
+            "under CPU and resident registration matrices"
+        ),
+    )
+    warp_input_audit.add_argument("--cpu-run", required=True, help="CPU tiled GLASS run directory")
+    warp_input_audit.add_argument("--resident-run", required=True, help="CUDA resident GLASS run directory")
+    warp_input_audit.add_argument("--compare-json", help="optional GLASS compare JSON for border crop")
+    warp_input_audit.add_argument("--out", required=True, help="output warp input audit JSON")
+    warp_input_audit.add_argument("--markdown", help="optional output Markdown summary")
+    warp_input_audit.add_argument(
+        "--frame-id",
+        action="append",
+        help="frame id to audit; may be repeated. Defaults to common frames up to --max-frames",
+    )
+    warp_input_audit.add_argument("--max-frames", type=int, default=8)
+    warp_input_audit.add_argument("--interpolation", choices=["bilinear"], default="bilinear")
+    warp_input_audit.add_argument("--cpu-matrix-rms-tolerance", type=float, default=5.0e-4)
+    warp_input_audit.add_argument("--resident-matrix-rms-tolerance", type=float, default=0.1)
+    warp_input_audit.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless the warp-input attribution audit passes",
+    )
+    warp_input_audit.set_defaults(func=cmd_resident_warp_input_audit)
 
     resident_winsorized_benchmark = sub.add_parser(
         "resident-winsorized-benchmark",

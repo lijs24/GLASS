@@ -7696,6 +7696,29 @@ integration where applicable.
   promotion, no package upload, no GitHub release creation, and no user input
   directory modification.
 
+### S2-Gate 425: Resident Warp Input Parity Attribution
+
+- Continue from Gate 424 by moving upstream from rejection to the resident
+  registration/warp input path.
+- Add an auditable `resident-warp-input-audit` command that uploads CPU
+  calibrated checkpoint frames to `ResidentCalibratedStack`, then replays the
+  resident CUDA warp kernel with:
+  - the CPU registration matrix for the frame;
+  - the resident CUDA registration matrix for the same frame.
+- Compare both resident CUDA warped outputs against the CPU `registered_cache`
+  and `coverage_cache` inside the declared compare/common footprint.
+- Acceptance for this gate:
+  - using the CPU matrix, resident CUDA warp matches CPU registered-cache pixels
+    within a tight RMS tolerance;
+  - using the resident matrix, any remaining mismatch is quantified separately;
+  - matrix translation/Frobenius deltas are recorded per frame;
+  - the artifact distinguishes warp-kernel parity failure from resident
+    registration-matrix precision failure;
+  - focused tests and full pytest pass.
+- Keep this gate runtime-validation scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
 ## Gate Rules
 
 Each gate requires:
