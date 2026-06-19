@@ -1070,6 +1070,7 @@ def register_calibrated_frames(
             "native_cuda_required": True,
             "model": "cuda_triangle_descriptor_similarity_preview",
             "descriptor": "triangle_similarity",
+            "pixel_refine_default": False,
         },
         "min_inliers": min_inliers,
         "max_rms_px": max_rms_px,

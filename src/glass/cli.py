@@ -1013,6 +1013,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_triangle_grid_top_per_cell=args.resident_triangle_grid_top_per_cell,
                 resident_triangle_nms_scan_candidates=args.resident_triangle_nms_scan_candidates,
                 resident_triangle_nms_min_separation_px=args.resident_triangle_nms_min_separation_px,
+                resident_triangle_pixel_refine=args.resident_triangle_pixel_refine,
                 resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
                 resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
@@ -1132,6 +1133,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_triangle_grid_top_per_cell=args.resident_triangle_grid_top_per_cell,
                 resident_triangle_nms_scan_candidates=args.resident_triangle_nms_scan_candidates,
                 resident_triangle_nms_min_separation_px=args.resident_triangle_nms_min_separation_px,
+                resident_triangle_pixel_refine=args.resident_triangle_pixel_refine,
                 resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
                 resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
@@ -4240,6 +4242,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="override resident triangle catalog NMS minimum star separation in pixels",
     )
     run.add_argument(
+        "--resident-triangle-pixel-refine",
+        action="store_true",
+        default=None,
+        help="opt in to resident triangle pixel-refine; default is off unless enabled in the processing plan",
+    )
+    run.add_argument(
         "--resident-triangle-pixel-refine-coarse-stride",
         type=int,
         help="override resident triangle pixel-refine coarse sample stride",
@@ -4570,6 +4578,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--resident-triangle-nms-min-separation-px",
         type=float,
         help="override resident triangle catalog NMS minimum star separation in pixels for resident audit",
+    )
+    audit.add_argument(
+        "--resident-triangle-pixel-refine",
+        action="store_true",
+        default=None,
+        help="opt in to resident triangle pixel-refine for resident audit; default is off unless enabled in the plan",
     )
     audit.add_argument(
         "--resident-triangle-pixel-refine-coarse-stride",

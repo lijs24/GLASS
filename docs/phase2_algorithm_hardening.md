@@ -7577,6 +7577,25 @@ integration where applicable.
   change, no registration formula promotion, no package upload, no GitHub
   release creation, and no modification of user input directories.
 
+### S2-Gate 420: Resident Triangle Pixel-Refine Default Guard
+
+- Use the S2-Gate 419 finding to remove a known-bad default from the resident
+  triangle registration path: `cuda_triangle_pixel_refine` now defaults to
+  disabled unless the processing plan or CLI explicitly opts in.
+- Preserve the existing CUDA pixel-refine implementation and tests as an
+  opt-in diagnostic/experimental path through `cuda_triangle_pixel_refine=true`
+  or `--resident-triangle-pixel-refine`.
+- Validate the synthetic 16-frame quality-reference harness against the
+  S2-Gate 414 CPU registration baseline:
+  - strict matrix compare passes with max translation delta `0.008781854 px`;
+  - image RMS falls from the Gate417/Gate419 `2.56847` blocker to `0.099694`;
+  - resident result contract passes;
+  - rejected-sample delta remains blocked at `117` versus the strict `64`
+    threshold.
+- Keep this gate scoped to default safety and matrix parity: no CUDA kernel
+  change, no descriptor formula change, no package upload, no GitHub release
+  creation, and no modification of user input directories.
+
 ## Gate Rules
 
 Each gate requires:

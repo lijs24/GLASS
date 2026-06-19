@@ -1,0 +1,1491 @@
+﻿{
+    "calibration_plan":  {
+                             "bias_dark_semantics_warning":  "Default policy treats master dark frames as including bias; override in later gates when darks are bias-subtracted.",
+                             "calibration_policy":  {
+                                                        "allow_legacy_stack_fallback":  false,
+                                                        "cosmetic_cold_sigma":  8.0,
+                                                        "cosmetic_correction_enabled":  false,
+                                                        "cosmetic_hot_sigma":  8.0,
+                                                        "dark_scaling_enabled":  true,
+                                                        "flat_floor":  1E-06,
+                                                        "flat_normalization":  "median",
+                                                        "master_dark_includes_bias":  true,
+                                                        "master_rejection":  "winsorized_sigma",
+                                                        "master_rejection_high_sigma":  3.0,
+                                                        "master_rejection_iterations":  1,
+                                                        "master_rejection_low_sigma":  3.0,
+                                                        "master_rejection_max_fraction":  0.5,
+                                                        "master_rejection_min_samples":  3,
+                                                        "overscan_columns":  0,
+                                                        "overscan_enabled":  false,
+                                                        "overscan_rows":  0,
+                                                        "pedestal":  0.0,
+                                                        "saturation_level":  null,
+                                                        "trim_overscan":  true
+                                                    },
+                             "dark_scaling_policy":  "scale_by_exposure_when_enabled",
+                             "master_bias_groups":  [
+                                                        "Ga64e61576a"
+                                                    ],
+                             "master_dark_groups":  [
+                                                        "G50716c3520"
+                                                    ],
+                             "master_flat_groups":  [
+                                                        "G2d74eca839"
+                                                    ]
+                         },
+    "created_at":  "2026-06-19T06:11:41+00:00",
+    "executable":  true,
+    "frames":  [
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  0.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "bias",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  0.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "bias",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000001",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\bias\\bias_000.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  0.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "bias",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  0.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "bias",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000002",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\bias\\bias_001.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  0.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "bias",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  0.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "bias",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000003",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\bias\\bias_002.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  0.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "bias",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  0.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "bias",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000004",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\bias\\bias_003.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "dark",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "dark",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000005",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\dark\\dark_000.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "dark",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "dark",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000006",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\dark\\dark_001.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "dark",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "dark",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000007",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\dark\\dark_002.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "dark",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "dark",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000008",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\dark\\dark_003.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "flat",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "flat",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000009",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\flat\\flat_000.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "flat",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "flat",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000010",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\flat\\flat_001.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "flat",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "flat",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000011",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\flat\\flat_002.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "flat",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "flat",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000012",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\flat\\flat_003.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000013",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_000.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000014",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_001.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000015",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_002.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000016",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_003.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000017",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_004.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000018",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_005.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000019",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_006.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000020",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_007.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000021",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_008.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000022",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_009.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000023",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_010.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000024",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_011.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000025",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_012.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000026",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_013.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000027",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_014.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   },
+                   {
+                       "binning_x":  1,
+                       "binning_y":  1,
+                       "camera":  "GLASS-SYNTH",
+                       "checksum_optional":  null,
+                       "date_obs":  null,
+                       "dec":  null,
+                       "exposure_s":  60.0,
+                       "file_format":  "fits",
+                       "filter":  "H",
+                       "frame_type":  "light",
+                       "gain":  100.0,
+                       "header_summary":  {
+                                              "CCD-TEMP":  -10.0,
+                                              "EXPTIME":  60.0,
+                                              "FILTER":  "H",
+                                              "GAIN":  100.0,
+                                              "IMAGETYP":  "light",
+                                              "INSTRUME":  "GLASS-SYNTH",
+                                              "NAXIS1":  512,
+                                              "NAXIS2":  512,
+                                              "OFFSET":  20.0,
+                                              "XBINNING":  1,
+                                              "YBINNING":  1
+                                          },
+                       "height":  512,
+                       "id":  "F000028",
+                       "object_name":  null,
+                       "offset":  20.0,
+                       "path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_source\\light\\light_015.fits",
+                       "ra":  null,
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ],
+                       "width":  512
+                   }
+               ],
+    "global_warnings":  [
+
+                        ],
+    "groups":  [
+                   {
+                       "binning":  [
+                                       1,
+                                       1
+                                   ],
+                       "exposure_s":  null,
+                       "filter":  null,
+                       "frames":  [
+                                      "F000001",
+                                      "F000002",
+                                      "F000003",
+                                      "F000004"
+                                  ],
+                       "gain":  100.0,
+                       "group_id":  "Ga64e61576a",
+                       "group_type":  "bias",
+                       "offset":  20.0,
+                       "shape":  [
+                                     512,
+                                     512
+                                 ],
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ]
+                   },
+                   {
+                       "binning":  [
+                                       1,
+                                       1
+                                   ],
+                       "exposure_s":  60.0,
+                       "filter":  null,
+                       "frames":  [
+                                      "F000005",
+                                      "F000006",
+                                      "F000007",
+                                      "F000008"
+                                  ],
+                       "gain":  100.0,
+                       "group_id":  "G50716c3520",
+                       "group_type":  "dark",
+                       "offset":  20.0,
+                       "shape":  [
+                                     512,
+                                     512
+                                 ],
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ]
+                   },
+                   {
+                       "binning":  [
+                                       1,
+                                       1
+                                   ],
+                       "exposure_s":  null,
+                       "filter":  "H",
+                       "frames":  [
+                                      "F000009",
+                                      "F000010",
+                                      "F000011",
+                                      "F000012"
+                                  ],
+                       "gain":  100.0,
+                       "group_id":  "G2d74eca839",
+                       "group_type":  "flat",
+                       "offset":  20.0,
+                       "shape":  [
+                                     512,
+                                     512
+                                 ],
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ]
+                   },
+                   {
+                       "binning":  [
+                                       1,
+                                       1
+                                   ],
+                       "exposure_s":  60.0,
+                       "filter":  "H",
+                       "frames":  [
+                                      "F000013",
+                                      "F000014",
+                                      "F000015",
+                                      "F000016",
+                                      "F000017",
+                                      "F000018",
+                                      "F000019",
+                                      "F000020",
+                                      "F000021",
+                                      "F000022",
+                                      "F000023",
+                                      "F000024",
+                                      "F000025",
+                                      "F000026",
+                                      "F000027",
+                                      "F000028"
+                                  ],
+                       "gain":  100.0,
+                       "group_id":  "Ga98266f901",
+                       "group_type":  "light",
+                       "offset":  20.0,
+                       "shape":  [
+                                     512,
+                                     512
+                                 ],
+                       "temperature_c":  -10.0,
+                       "warnings":  [
+
+                                    ]
+                   }
+               ],
+    "integration_policy":  {
+                               "allow_cuda_streaming_accumulator_fast_path":  false,
+                               "combine":  "mean",
+                               "high_sigma":  3.0,
+                               "iterations":  1,
+                               "low_sigma":  3.0,
+                               "output_coverage_map":  true,
+                               "output_rejection_maps":  true,
+                               "output_variance_map":  true,
+                               "output_weight_map":  true,
+                               "rejection":  "none",
+                               "weighting":  "none"
+                           },
+    "light_plans":  [
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000013"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000014"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000015"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000016"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000017"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000018"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000019"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000020"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000021"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000022"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000023"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000024"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000025"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000026"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000027"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        },
+                        {
+                            "calibration_status":  "ready",
+                            "filter":  "H",
+                            "frames":  [
+                                           "F000028"
+                                       ],
+                            "integration_status":  "pending",
+                            "local_normalization_status":  "pending",
+                            "matching_bias_group":  "Ga64e61576a",
+                            "matching_dark_group":  "G50716c3520",
+                            "matching_flat_group":  "G2d74eca839",
+                            "registration_status":  "pending",
+                            "warnings":  [
+
+                                         ]
+                        }
+                    ],
+    "local_normalization_policy":  {
+                                       "background_mask_policy":  "sigma",
+                                       "enabled":  false,
+                                       "outlier_policy":  "clip",
+                                       "reference_mode":  "registration_reference",
+                                       "tile_radius":  64
+                                   },
+    "manifest_path":  "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\manifest.json",
+    "next_steps":  [
+                       "run calibration"
+                   ],
+    "project_id":  "glass-project",
+    "registration_policy":  {
+                                "max_rms_px":  2.0,
+                                "min_inliers":  6,
+                                "min_stars":  8,
+                                "reference_mode":  "auto",
+                                "reject_failed_frames":  true,
+                                "save_registered":  false,
+                                "transform_model":  "translation",
+                                "cuda_triangle_pixel_refine":  false
+                            }
+}

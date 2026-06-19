@@ -1,0 +1,121 @@
+{
+  "abs_diff_p50": 0.01214599609375,
+  "abs_diff_p90": 0.06935882568359375,
+  "abs_diff_p99": 0.22672576904296893,
+  "abs_diff_p999": 1.4910752868652635,
+  "candidate_transform": {
+    "applied": false,
+    "clip_high": null,
+    "clip_low": null,
+    "offset": 0.0,
+    "scale": 1.0
+  },
+  "comparison_region": {
+    "compared_pixels": 246016,
+    "compared_shape": [
+      496,
+      496
+    ],
+    "coverage_fraction": 1.0,
+    "coverage_max": 16.0,
+    "coverage_median": 16.0,
+    "coverage_min": 10.0,
+    "coverage_p1": 15.0,
+    "coverage_valid_pixels": 246016,
+    "full_shape": [
+      512,
+      512
+    ],
+    "glass_coverage_map": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+    "ignore_border_px": 8,
+    "min_coverage": 1.0
+  },
+  "diagnostics": {
+    "abs_diff_preview_png": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_compare_diagnostics\\abs_diff_preview.png",
+    "directory": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_compare_diagnostics",
+    "glass_preview_png": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_compare_diagnostics\\glass_preview.png",
+    "hotspot_tile_size": 512,
+    "hotspots": [
+      {
+        "max_abs_diff": 12.409027099609375,
+        "mean_diff": -0.0016674738144502044,
+        "p99_abs_diff": 1.0469331359863316,
+        "pixels": 262144,
+        "rms_diff": 0.24782485559035497,
+        "x0": 0,
+        "x1": 512,
+        "y0": 0,
+        "y1": 512
+      }
+    ],
+    "hotspots_json": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_compare_diagnostics\\hotspots.json",
+    "preview_max_size": 1024,
+    "reference_preview_png": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_compare_diagnostics\\reference_preview.png",
+    "signed_diff_preview_png": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_compare_diagnostics\\signed_diff_preview.png"
+  },
+  "full_frame_stats": {
+    "abs_diff_p50": 0.0124359130859375,
+    "abs_diff_p90": 0.0883331298828125,
+    "abs_diff_p99": 1.0469331359863316,
+    "abs_diff_p999": 3.4595527648926474,
+    "max_abs_diff": 12.409027099609375,
+    "mean_diff": -0.0016674738144502044,
+    "relative_rms_diff": 0.0011282644750060496,
+    "rms_diff": 0.24782485559035497
+  },
+  "glass_format": "fits",
+  "linear_fit_to_reference": {
+    "available": true,
+    "offset": 0.12116822649562664,
+    "scale": 0.9994476351194759,
+    "stats": {
+      "abs_diff_p50": 0.012165904901152658,
+      "abs_diff_p90": 0.0696714497274229,
+      "abs_diff_p99": 0.2264598091385864,
+      "abs_diff_p999": 1.4772533227842741,
+      "max_abs_diff": 3.3494217159188793,
+      "mean_diff": -8.976979178509174e-15,
+      "relative_rms_diff": 0.00044339430874946485,
+      "rms_diff": 0.09751435730052528
+    }
+  },
+  "max_abs_diff": 3.08880615234375,
+  "mean_diff": -0.0014606958001262811,
+  "reference_format": "fits",
+  "relative_rms_diff": 0.00045330609093521205,
+  "rms_diff": 0.0996942253107213,
+  "robust_linear_fit_to_reference": {
+    "available": true,
+    "fit_fraction": 0.9899315491675338,
+    "fit_pixels": 243539,
+    "offset": 0.051314063917402564,
+    "scale": 0.9997685543532635,
+    "stats_all_pixels": {
+      "abs_diff_p50": 0.01196754313419035,
+      "abs_diff_p90": 0.06961777495372701,
+      "abs_diff_p99": 0.22650234343090872,
+      "abs_diff_p999": 1.4811143762771712,
+      "max_abs_diff": 3.1974627877267494,
+      "mean_diff": -0.00030511921226137944,
+      "relative_rms_diff": 0.000446750116533649,
+      "rms_diff": 0.09825238986621551
+    },
+    "stats_fit_pixels": {
+      "abs_diff_p50": 0.01187592644362212,
+      "abs_diff_p90": 0.06468852152702886,
+      "abs_diff_p99": 0.2076005047025531,
+      "abs_diff_p999": 1.4112856757849614,
+      "max_abs_diff": 2.6464367837727707,
+      "mean_diff": -1.6699019058124199e-15,
+      "relative_rms_diff": 0.00039933304571388014,
+      "rms_diff": 0.08598463767933169
+    }
+  },
+  "shape_match": true,
+  "timing": {
+    "glass_label": "cuda_resident_triangle_no_pixel_refine_refF16",
+    "glass_time_seconds": null,
+    "reference_label": "cpu_tile",
+    "reference_time_seconds": null
+  }
+}

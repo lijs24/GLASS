@@ -39,6 +39,7 @@ _RESIDENT_WINSORIZED_MODES = {
     RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
 }
+_DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE = False
 
 
 def _cuda_module_required():
@@ -2343,6 +2344,7 @@ def run_resident_calibration_integration(
     resident_triangle_grid_top_per_cell: int | None = None,
     resident_triangle_nms_scan_candidates: int | None = None,
     resident_triangle_nms_min_separation_px: float | None = None,
+    resident_triangle_pixel_refine: bool | None = None,
     resident_triangle_pixel_refine_coarse_stride: int | None = None,
     resident_triangle_pixel_refine_final_stride: int | None = None,
     resident_triangle_pixel_refine_fast_coarse: bool = False,
@@ -2530,7 +2532,9 @@ def run_resident_calibration_integration(
             raise ValueError("flat_floor override must be positive")
         policy.flat_floor = float(flat_floor)
     integration_policy = plan.get("integration_policy", {})
-    registration_policy = plan.get("registration_policy", {})
+    registration_policy = dict(plan.get("registration_policy", {}))
+    if resident_triangle_pixel_refine is not None:
+        registration_policy["cuda_triangle_pixel_refine"] = bool(resident_triangle_pixel_refine)
     excluded_tokens = {str(item) for item in (exclude_frame_ids or []) if str(item)}
     weighting_mode = (
         str(integration_policy.get("weighting") or "none")
@@ -4211,7 +4215,11 @@ def run_resident_calibration_integration(
                     triangle_agreement_min_weight = float(resident_triangle_agreement_min_weight)
                 if triangle_agreement_min_weight < 0.0 or triangle_agreement_min_weight > 1.0:
                     raise ValueError("cuda_triangle_agreement_min_weight must be in [0, 1]")
-                pixel_refine_enabled = _policy_bool(registration_policy, "cuda_triangle_pixel_refine", True)
+                pixel_refine_enabled = _policy_bool(
+                    registration_policy,
+                    "cuda_triangle_pixel_refine",
+                    _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE,
+                )
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
                 has_grid_nms_catalog = hasattr(native_stack, "star_grid_top_nms_candidates")
@@ -6612,7 +6620,7 @@ def run_resident_calibration_integration(
                         "triangle_pixel_refine": _policy_bool(
                             registration_policy,
                             "cuda_triangle_pixel_refine",
-                            True,
+                            _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE,
                         ),
                         "triangle_catalog_batch": bool(
                             resident_registration == "similarity_cuda_triangle"

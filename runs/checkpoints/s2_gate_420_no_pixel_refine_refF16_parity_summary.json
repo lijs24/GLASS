@@ -1,0 +1,281 @@
+{
+  "artifact_type": "resident_parity_summary",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu"
+      },
+      "name": "cpu_run_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened"
+      },
+      "name": "resident_run_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cpu_frame_count": 16,
+        "delta": 0,
+        "resident_frame_count": 16
+      },
+      "name": "frame_count_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cpu_reference_frame_id": "F000016",
+        "resident_reference_frame_id": "F000016"
+      },
+      "name": "registration_reference_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cpu_rows": 16,
+        "resident_rows": 16
+      },
+      "name": "registration_row_count_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "shape_match": true
+      },
+      "name": "compare_shape_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "max_rms_diff": 0.1,
+        "rms_diff": 0.0996942253107213
+      },
+      "name": "compare_rms_within_limit",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "max_relative_rms_diff": 0.001,
+        "relative_rms_diff": 0.00045330609093521205
+      },
+      "name": "compare_relative_rms_within_limit",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cpu_rejected_samples": 14796,
+        "delta": 117,
+        "max_abs_delta": 64,
+        "resident_rejected_samples": 14913
+      },
+      "name": "rejected_sample_delta_within_limit",
+      "note": "",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "passed": true,
+        "path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\resident_result_contract.json",
+        "present": true,
+        "status": "passed"
+      },
+      "name": "resident_result_contract_passed",
+      "note": "Required for top-level pass unless require_resident_contract is false.",
+      "passed": true
+    }
+  ],
+  "compare": {
+    "abs_diff_p90": 0.06935882568359375,
+    "abs_diff_p99": 0.22672576904296893,
+    "glass_label": null,
+    "max_abs_diff": 3.08880615234375,
+    "path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_compare.json",
+    "reference_label": null,
+    "relative_rms_diff": 0.00045330609093521205,
+    "rms_diff": 0.0996942253107213,
+    "shape_match": true
+  },
+  "cpu": {
+    "exists": true,
+    "integration": {
+      "backend": "cpu",
+      "coverage_map_path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\coverage_map_H.fits",
+      "dq_map_path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\dq_map_H.fits",
+      "frame_count": 16,
+      "high_rejected_pixels": 7100,
+      "high_rejection_map_path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\high_rejection_H.fits",
+      "low_rejected_pixels": 7200,
+      "low_rejection_map_path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\low_rejection_H.fits",
+      "master_path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\master_H.fits",
+      "present": true,
+      "rejected_samples": 14796,
+      "rejection": {
+        "final_center": "nanmean_after_winsorization",
+        "final_scale": "nanstd_after_winsorization",
+        "high_sigma": 3.0,
+        "iterations": 1,
+        "low_sigma": 3.0,
+        "max_reject_fraction": 0.5,
+        "method": "winsorized_sigma",
+        "min_samples": 3,
+        "scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+        "winsorization_center": "nanmedian",
+        "winsorization_scale": "iqr_sigma_with_standard_deviation_fallback",
+        "winsorized": true
+      },
+      "sample_accounting_status": "passed",
+      "valid_pixels": 248399,
+      "warp_edge_pixels": null
+    },
+    "label": "cpu_tile",
+    "path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu",
+    "registration": {
+      "failed_count": 0,
+      "method": "auto",
+      "path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\registration_results.json",
+      "present": true,
+      "reference_frame_id": "F000016",
+      "reference_frame_ids": [
+        "F000016"
+      ],
+      "row_count": 16,
+      "source_stage": null,
+      "status_counts": {
+        "ok": 15,
+        "reference": 1
+      },
+      "transform_models": [
+        "translation"
+      ]
+    },
+    "resident_result_contract": {
+      "failed_checks": [],
+      "passed": null,
+      "path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\resident_result_contract.json",
+      "present": false,
+      "status": null
+    },
+    "timing": {
+      "backend": "cpu",
+      "memory_mode": "tile",
+      "path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\run_timing.json",
+      "present": true,
+      "stages": {
+        "calibration": 29.822111600020435,
+        "integration": 10.09336919998168,
+        "local_normalization": 0.005703700007870793,
+        "plan": 0.00020819998462684453,
+        "quality": 0.39881070001865737,
+        "registration": 0.9028738999913912,
+        "report": 0.01846970000769943,
+        "scan": 0.11495449999347329,
+        "warp": 0.5820887000008952
+      },
+      "total_elapsed_s": 41.93859020000673
+    }
+  },
+  "created_at": "2026-06-19T07:28:18+00:00",
+  "deltas": {
+    "elapsed_ratio_resident_vs_cpu": 1.9145959679876527,
+    "frame_count_delta": 0,
+    "high_rejected_pixel_delta": 48,
+    "low_rejected_pixel_delta": 64,
+    "rejected_sample_delta": 117,
+    "valid_pixel_delta": -3381
+  },
+  "failed_checks": [
+    "rejected_sample_delta_within_limit"
+  ],
+  "parity_passed": false,
+  "passed": false,
+  "recommendation": "fix_resident_registration_or_dq_parity",
+  "require_resident_contract": true,
+  "resident": {
+    "exists": true,
+    "integration": {
+      "backend": "cuda_resident_stack",
+      "coverage_map_path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+      "dq_map_path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\integration\\resident_dq_map_H.fits",
+      "frame_count": 16,
+      "high_rejected_pixels": 7148,
+      "high_rejection_map_path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\integration\\resident_high_rejection_map_H.fits",
+      "low_rejected_pixels": 7264,
+      "low_rejection_map_path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\integration\\resident_low_rejection_map_H.fits",
+      "master_path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\integration\\resident_master_H.fits",
+      "present": true,
+      "rejected_samples": 14913,
+      "rejection": {
+        "algorithm": "median_iqr_winsorized_sigma_cuda_resident_prototype",
+        "approximation": false,
+        "cpu_baseline_parity": true,
+        "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+        "frame_limit": 256,
+        "high_sigma": 3.0,
+        "low_sigma": 3.0,
+        "mode": "winsorized_sigma",
+        "parity_status": "cpu_baseline_parity_passed_gate_261",
+        "resident_winsorized_mode": "hardened_cpu_parity",
+        "scale_estimator": "median_iqr_winsorized_standard_deviation_scale"
+      },
+      "sample_accounting_status": "passed",
+      "valid_pixels": 245018,
+      "warp_edge_pixels": 3572
+    },
+    "label": "cuda_resident_triangle_no_pixel_refine_refF16",
+    "path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened",
+    "registration": {
+      "failed_count": 0,
+      "method": null,
+      "path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\registration_results.json",
+      "present": true,
+      "reference_frame_id": "F000016",
+      "reference_frame_ids": [
+        "F000016"
+      ],
+      "row_count": 16,
+      "source_stage": "resident_calibrated_stack",
+      "status_counts": {
+        "ok": 15,
+        "reference": 1
+      },
+      "transform_models": [
+        "similarity_cuda_triangle"
+      ]
+    },
+    "resident_result_contract": {
+      "failed_checks": [],
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\resident_result_contract.json",
+      "present": true,
+      "status": "passed"
+    },
+    "timing": {
+      "backend": "cuda",
+      "memory_mode": "resident",
+      "path": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\run_timing.json",
+      "present": true,
+      "stages": {
+        "resident_calibration_integration": 80.29545570001937
+      },
+      "total_elapsed_s": 80.29545570001937
+    }
+  },
+  "schema_version": 1,
+  "status": "attention_required",
+  "thresholds": {
+    "max_rejected_sample_delta": 64,
+    "max_relative_rms_diff": 0.001,
+    "max_rms_diff": 0.1
+  }
+}

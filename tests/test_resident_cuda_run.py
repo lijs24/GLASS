@@ -2038,6 +2038,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
             "cuda_triangle_descriptor_radius": 0.08,
             "cuda_triangle_neighbors": 5,
             "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine": True,
             "cuda_triangle_pixel_refine_coarse_stride": 1,
             "cuda_triangle_pixel_refine_final_stride": 1,
             "cuda_triangle_min_pixel_ncc": 0.1,
@@ -2308,6 +2309,87 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
 
 
+def test_cli_resident_cuda_triangle_default_skips_pixel_refine(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "tri_no_refine"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_triangle_tolerance_px": 1.5,
+            "cuda_triangle_descriptor_radius": 0.08,
+            "cuda_triangle_neighbors": 5,
+            "cuda_triangle_max_descriptors": 256,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_triangle",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
+            "--resident-star-catalog-deterministic",
+            "--resident-triangle-grid-top-per-cell",
+            "2",
+            "--resident-triangle-nms-scan-candidates",
+            "96",
+            "--resident-triangle-nms-min-separation-px",
+            "2.0",
+            "--reference-frame-id",
+            "light_001",
+        ]
+    ) == 0
+
+    registration = read_json(run / "registration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    resident_registration = resident["artifacts"][0]["resident_registration"]
+    moving = [item for item in registration["results"] if item["status"] != "reference"][0]
+
+    assert resident_registration["triangle_pixel_refine"] is False
+    assert resident_registration["triangle_pixel_refine_batch"] is False
+    assert resident_registration["triangle_pixel_refine_batch_mode"] == "off"
+    assert resident_registration["triangle_pixel_refine_metric_workload_model"] == "off"
+    assert resident_registration["triangle_pixel_refine_workspace_bytes"] == 0
+    assert moving["status"] == "ok"
+    assert moving["transform_model"] == "similarity_cuda_triangle"
+    assert abs(moving["matrix"][0][2] + 3.0) < 0.5
+    assert abs(moving["matrix"][1][2] - 2.0) < 0.5
+    assert all("triangle_pixel_refine_mode=" not in warning for warning in moving["warnings"])
+    assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
+
+
 def test_cli_resident_cuda_run_similarity_triangle_uses_quality_reference(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_star_dataset(tmp_path)
@@ -2324,6 +2406,7 @@ def test_cli_resident_cuda_run_similarity_triangle_uses_quality_reference(tmp_pa
             "cuda_triangle_descriptor_radius": 0.08,
             "cuda_triangle_neighbors": 5,
             "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine": True,
             "cuda_triangle_pixel_refine_coarse_stride": 1,
             "cuda_triangle_pixel_refine_final_stride": 1,
             "cuda_triangle_min_pixel_ncc": 0.1,
@@ -2432,6 +2515,7 @@ def test_cli_resident_cuda_triangle_fused_matrix_matches_stack_dispatch(tmp_path
             "cuda_triangle_descriptor_radius": 0.08,
             "cuda_triangle_neighbors": 5,
             "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine": True,
             "cuda_triangle_pixel_refine_coarse_stride": 1,
             "cuda_triangle_pixel_refine_final_stride": 1,
             "cuda_triangle_min_pixel_ncc": 0.1,
@@ -2543,6 +2627,7 @@ def test_cli_resident_cuda_auto_dispatch_selects_verified_bilinear_fused_path(tm
             "cuda_triangle_descriptor_radius": 0.08,
             "cuda_triangle_neighbors": 5,
             "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine": True,
             "cuda_triangle_pixel_refine_coarse_stride": 1,
             "cuda_triangle_pixel_refine_final_stride": 1,
             "cuda_triangle_min_pixel_ncc": 0.1,
@@ -2634,6 +2719,7 @@ def test_cli_resident_cuda_auto_dispatch_keeps_lanczos_rejection_on_stack(tmp_pa
             "cuda_triangle_descriptor_radius": 0.08,
             "cuda_triangle_neighbors": 5,
             "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine": True,
             "cuda_triangle_pixel_refine_coarse_stride": 1,
             "cuda_triangle_pixel_refine_final_stride": 1,
             "cuda_triangle_min_pixel_ncc": 0.1,
