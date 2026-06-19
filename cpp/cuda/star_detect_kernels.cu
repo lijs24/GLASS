@@ -656,7 +656,8 @@ __global__ void star_refine_centroids_kernel(
     int count,
     int width,
     int height,
-    int radius) {
+    int radius,
+    float background_override) {
   const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   if (i >= count) {
     return;
@@ -681,32 +682,35 @@ __global__ void star_refine_centroids_kernel(
   const int y0 = max(0, center_y - window_radius);
   const int y1 = min(height - 1, center_y + window_radius);
 
-  float samples[kMaxCentroidSamples];
-  int sample_count = 0;
-  for (int y = y0; y <= y1; ++y) {
-    for (int x = x0; x <= x1; ++x) {
-      const float value = input[y * width + x];
-      if (isfinite(value) && sample_count < kMaxCentroidSamples) {
-        samples[sample_count] = value;
-        ++sample_count;
+  float background = background_override;
+  if (!isfinite(background)) {
+    float samples[kMaxCentroidSamples];
+    int sample_count = 0;
+    for (int y = y0; y <= y1; ++y) {
+      for (int x = x0; x <= x1; ++x) {
+        const float value = input[y * width + x];
+        if (isfinite(value) && sample_count < kMaxCentroidSamples) {
+          samples[sample_count] = value;
+          ++sample_count;
+        }
       }
     }
-  }
-  if (sample_count <= 0) {
-    return;
-  }
-  for (int j = 1; j < sample_count; ++j) {
-    const float value = samples[j];
-    int k = j - 1;
-    while (k >= 0 && samples[k] > value) {
-      samples[k + 1] = samples[k];
-      --k;
+    if (sample_count <= 0) {
+      return;
     }
-    samples[k + 1] = value;
+    for (int j = 1; j < sample_count; ++j) {
+      const float value = samples[j];
+      int k = j - 1;
+      while (k >= 0 && samples[k] > value) {
+        samples[k + 1] = samples[k];
+        --k;
+      }
+      samples[k + 1] = value;
+    }
+    background = (sample_count & 1)
+        ? samples[sample_count / 2]
+        : 0.5f * (samples[sample_count / 2 - 1] + samples[sample_count / 2]);
   }
-  const float background = (sample_count & 1)
-      ? samples[sample_count / 2]
-      : 0.5f * (samples[sample_count / 2 - 1] + samples[sample_count / 2]);
 
   double sum_weight = 0.0;
   double sum_x = 0.0;
@@ -734,6 +738,42 @@ __global__ void star_refine_centroids_kernel(
   ys[i] = static_cast<float>(sum_y / sum_weight);
   if (statuses != nullptr) {
     statuses[i] = 1;
+  }
+}
+
+__global__ void frame_sum_f32_kernel(
+    const float* input,
+    double* partial_sums,
+    unsigned int* partial_counts,
+    std::size_t n) {
+  constexpr int kBlockSize = 256;
+  __shared__ double sums[kBlockSize];
+  __shared__ unsigned int counts[kBlockSize];
+  const int tid = static_cast<int>(threadIdx.x);
+  double sum = 0.0;
+  unsigned int count = 0;
+  for (std::size_t i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+       i < n;
+       i += static_cast<std::size_t>(gridDim.x) * blockDim.x) {
+    const float value = input[i];
+    if (isfinite(value)) {
+      sum += static_cast<double>(value);
+      ++count;
+    }
+  }
+  sums[tid] = sum;
+  counts[tid] = count;
+  __syncthreads();
+  for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+    if (tid < stride) {
+      sums[tid] += sums[tid + stride];
+      counts[tid] += counts[tid + stride];
+    }
+    __syncthreads();
+  }
+  if (tid == 0) {
+    partial_sums[blockIdx.x] = sums[0];
+    partial_counts[blockIdx.x] = counts[0];
   }
 }
 
@@ -989,7 +1029,8 @@ void glass_star_refine_centroids_f32_launch(
     int count,
     int width,
     int height,
-    int radius) {
+    int radius,
+    float background_override) {
   if (count <= 0 || radius <= 0) {
     return;
   }
@@ -998,7 +1039,21 @@ void glass_star_refine_centroids_f32_launch(
   }
   constexpr int threads = 128;
   const int blocks = (count + threads - 1) / threads;
-  star_refine_centroids_kernel<<<blocks, threads>>>(input, xs, ys, fluxes, statuses, count, width, height, radius);
+  star_refine_centroids_kernel<<<blocks, threads>>>(
+      input, xs, ys, fluxes, statuses, count, width, height, radius, background_override);
+}
+
+void glass_frame_sum_f32_launch(
+    const float* input,
+    double* partial_sums,
+    unsigned int* partial_counts,
+    std::size_t n,
+    int blocks) {
+  if (n == 0 || blocks <= 0) {
+    return;
+  }
+  constexpr int threads = 256;
+  frame_sum_f32_kernel<<<blocks, threads>>>(input, partial_sums, partial_counts, n);
 }
 
 void glass_star_grid_candidates_f32_launch(

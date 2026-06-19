@@ -1029,6 +1029,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
                 resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
+                resident_triangle_centroid_background=args.resident_triangle_centroid_background,
                 resident_triangle_min_agreement_score=args.resident_triangle_min_agreement_score,
                 resident_triangle_agreement_rms_scale=args.resident_triangle_agreement_rms_scale,
                 resident_triangle_agreement_action=args.resident_triangle_agreement_action,
@@ -1149,6 +1150,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
                 resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
+                resident_triangle_centroid_background=args.resident_triangle_centroid_background,
                 resident_triangle_min_agreement_score=args.resident_triangle_min_agreement_score,
                 resident_triangle_agreement_rms_scale=args.resident_triangle_agreement_rms_scale,
                 resident_triangle_agreement_action=args.resident_triangle_agreement_action,
@@ -4357,6 +4359,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-triangle-centroid-background",
+        choices=["global_mean", "local_median"],
+        help="resident triangle centroid background model; default global_mean improves CPU detector parity",
+    )
+    run.add_argument(
         "--resident-triangle-min-agreement-score",
         type=float,
         help=(
@@ -4693,6 +4700,11 @@ def build_parser() -> argparse.ArgumentParser:
             "explicit fast mode: raise resident triangle pixel-refine coarse sample stride to at least "
             "the final stride for resident audit"
         ),
+    )
+    audit.add_argument(
+        "--resident-triangle-centroid-background",
+        choices=["global_mean", "local_median"],
+        help="resident triangle centroid background model for resident audit",
     )
     audit.add_argument(
         "--resident-triangle-min-agreement-score",

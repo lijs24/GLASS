@@ -2274,13 +2274,15 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     )
     assert resident_registration["triangle_warp_batch"] is True
     assert resident_registration["triangle_warp_batch_mode"] == "native_matrix_bilinear_frames"
-    assert resident_registration["triangle_warp_batch_timing_model"] == "off"
-    assert resident_registration["triangle_warp_batch_native_inverse_upload_mode"] == "off"
-    assert resident_registration["triangle_warp_batch_frame_count"] == 0
-    assert resident_registration["triangle_warp_batch_fallback_frame_count"] == 1
-    assert resident_registration["triangle_warp_batch_native_inverse_prepare_s"] == 0.0
-    assert resident_registration["triangle_warp_batch_native_inverse_batch_alloc_s"] == 0.0
-    assert resident_registration["triangle_warp_batch_native_inverse_batch_bytes"] == 0
+    assert resident_registration["triangle_warp_batch_timing_model"] == (
+        "native_loop_batched_inverse_one_sync"
+    )
+    assert resident_registration["triangle_warp_batch_native_inverse_upload_mode"] == "single_device_batch"
+    assert resident_registration["triangle_warp_batch_frame_count"] == 1
+    assert resident_registration["triangle_warp_batch_fallback_frame_count"] == 0
+    assert resident_registration["triangle_warp_batch_native_inverse_prepare_s"] >= 0.0
+    assert resident_registration["triangle_warp_batch_native_inverse_batch_alloc_s"] >= 0.0
+    assert resident_registration["triangle_warp_batch_native_inverse_batch_bytes"] > 0
     assert resident_registration["triangle_warp_batch_native_index_upload_s"] == 0.0
     assert resident_registration["triangle_warp_batch_native_inverse_upload_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_kernel_enqueue_s"] >= 0.0
@@ -2288,7 +2290,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_warp_batch_native_scatter_enqueue_s"] == 0.0
     assert resident_registration["triangle_warp_batch_native_device_copy_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_sync_s"] >= 0.0
-    assert resident_registration["triangle_warp_batch_native_total_s"] == 0.0
+    assert resident_registration["triangle_warp_batch_native_total_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_chunk_frames"] == 0
     assert resident_registration["triangle_warp_batch_native_chunk_count"] == 0
     assert resident_registration["triangle_warp_batch_native_workspace_bytes"] == 0
@@ -2355,8 +2357,8 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert registration_components["triangle_descriptor_fit_native_kernel_sync"] >= 0.0
     assert registration_components["triangle_descriptor_fit_native_output_download"] >= 0.0
     assert registration_components["triangle_warp"] >= 0.0
-    assert "triangle_warp_native_batch" not in registration_components
-    assert "triangle_warp_native_sync" not in registration_components
+    assert registration_components["triangle_warp_native_batch"] >= 0.0
+    assert registration_components["triangle_warp_native_sync"] >= 0.0
     assert registration_components["triangle_pixel_refine_batch"] >= 0.0
     assert registration_components["triangle_pixel_refine_native_coarse"] >= 0.0
     assert registration_components["triangle_pixel_refine_native_fine"] >= 0.0
@@ -2421,11 +2423,11 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
         "triangle_pixel_refine_workspace_mode=shared_flattened_candidate_metric_buffers" in warning
         for warning in moving["warnings"]
     )
-    assert any("resident_registration_application=translation_bilinear" in warning for warning in moving["warnings"])
-    assert any("triangle_warp_batch=false" in warning for warning in moving["warnings"])
+    assert any("resident_registration_application=matrix_bilinear_batch" in warning for warning in moving["warnings"])
+    assert any("triangle_warp_batch=true" in warning for warning in moving["warnings"])
     assert any("triangle_warp_batch_mode=native_matrix_bilinear_frames" in warning for warning in moving["warnings"])
     assert any(
-        "triangle_warp_batch_timing_model=per_frame" in warning
+        "triangle_warp_batch_timing_model=native_loop_batched_inverse_one_sync" in warning
         for warning in moving["warnings"]
     )
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
@@ -2506,13 +2508,15 @@ def test_cli_resident_cuda_triangle_default_uses_gpu_centroid_without_pixel_refi
     assert resident_registration["triangle_pixel_refine_workspace_bytes"] == 0
     assert resident_registration["triangle_translation_refine"] is True
     assert resident_registration["triangle_centroid_refine"] is True
-    assert resident_registration["triangle_centroid_refine_mode"] == "resident_gpu_window_centroid"
+    assert resident_registration["triangle_centroid_refine_mode"] == "resident_gpu_global_mean_centroid"
+    assert resident_registration["triangle_centroid_refine_background"] == "global_mean"
     assert resident_registration["triangle_centroid_refine_catalog_count"] >= 2
     assert resident_registration["triangle_centroid_refine_star_count"] > 0
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity_cuda_triangle"
     assert "triangle_centroid_refine_enabled=true" in moving["warnings"]
-    assert "triangle_centroid_refine_mode=resident_gpu_window_centroid" in moving["warnings"]
+    assert "triangle_centroid_refine_mode=resident_gpu_global_mean_centroid" in moving["warnings"]
+    assert "triangle_centroid_refine_background=global_mean" in moving["warnings"]
     assert abs(moving["matrix"][0][2] + 3.0) < 0.5
     assert abs(moving["matrix"][1][2] - 2.0) < 0.5
     assert all("triangle_pixel_refine_mode=" not in warning for warning in moving["warnings"])
@@ -2923,7 +2927,7 @@ def test_cli_resident_cuda_auto_dispatch_keeps_lanczos_rejection_on_stack(tmp_pa
     assert resident_registration["triangle_fused_matrix_deferred"] is False
     assert resident_registration["triangle_fused_matrix_deferred_count"] == 0
     assert resident_registration["triangle_warp_batch_mode"] == "native_matrix_lanczos3_frames"
-    assert any("resident_registration_application=matrix_lanczos3" == warning for warning in moving["warnings"])
+    assert any("resident_registration_application=matrix_lanczos3_batch" == warning for warning in moving["warnings"])
 
 
 def test_cli_resident_cuda_run_similarity_catalog_rejects_low_quality_matrix(tmp_path: Path):

@@ -557,7 +557,14 @@ void glass_star_refine_centroids_f32_launch(
     int count,
     int width,
     int height,
-    int radius);
+    int radius,
+    float background_override);
+void glass_frame_sum_f32_launch(
+    const float* input,
+    double* partial_sums,
+    unsigned int* partial_counts,
+    std::size_t n,
+    int blocks);
 void glass_star_grid_candidates_f32_launch(
     const float* input,
     float* xs,
@@ -588,6 +595,54 @@ std::size_t element_count(const py::buffer_info& info) {
     n *= static_cast<std::size_t>(dim);
   }
   return n;
+}
+
+float device_frame_mean_f32(const float* device_input, std::size_t n, const char* label) {
+  if (n == 0) {
+    return std::numeric_limits<float>::quiet_NaN();
+  }
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>(
+      std::min<std::size_t>(4096, std::max<std::size_t>(1, (n + threads - 1) / threads)));
+  double* d_sums = nullptr;
+  unsigned int* d_counts = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_sums, static_cast<std::size_t>(blocks) * sizeof(double)), label);
+    check_cuda(cudaMalloc(&d_counts, static_cast<std::size_t>(blocks) * sizeof(unsigned int)), label);
+    glass_frame_sum_f32_launch(device_input, d_sums, d_counts, n, blocks);
+    check_cuda(cudaGetLastError(), "frame mean reduction kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "frame mean reduction synchronize");
+    std::vector<double> sums(static_cast<std::size_t>(blocks));
+    std::vector<unsigned int> counts(static_cast<std::size_t>(blocks));
+    check_cuda(
+        cudaMemcpy(sums.data(), d_sums, static_cast<std::size_t>(blocks) * sizeof(double), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(frame mean sums)");
+    check_cuda(
+        cudaMemcpy(
+            counts.data(),
+            d_counts,
+            static_cast<std::size_t>(blocks) * sizeof(unsigned int),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(frame mean counts)");
+    cudaFree(d_sums);
+    cudaFree(d_counts);
+    d_sums = nullptr;
+    d_counts = nullptr;
+    double sum = 0.0;
+    std::size_t count = 0;
+    for (int i = 0; i < blocks; ++i) {
+      sum += sums[static_cast<std::size_t>(i)];
+      count += static_cast<std::size_t>(counts[static_cast<std::size_t>(i)]);
+    }
+    if (count == 0) {
+      return std::numeric_limits<float>::quiet_NaN();
+    }
+    return static_cast<float>(sum / static_cast<double>(count));
+  } catch (...) {
+    cudaFree(d_sums);
+    cudaFree(d_counts);
+    throw;
+  }
 }
 
 void require_same_shape(const py::buffer_info& a, const py::buffer_info& b) {
@@ -4318,7 +4373,8 @@ class ResidentCalibratedStack {
       int scan_candidates,
       int max_output_candidates,
       float min_separation_px,
-      int centroid_radius) const {
+      int centroid_radius,
+      bool centroid_global_mean_background = false) const {
     require_index(index);
     if (!loaded_[index]) {
       throw std::runtime_error("resident frame must be loaded before star detection");
@@ -4396,7 +4452,16 @@ class ResidentCalibratedStack {
       std::vector<float> centroid_before_xs;
       std::vector<float> centroid_before_ys;
       std::vector<unsigned char> centroid_statuses;
+      float centroid_background = std::numeric_limits<float>::quiet_NaN();
+      const char* centroid_background_mode = "local_median";
       if (centroid_radius > 0 && stored_count > 0) {
+        if (centroid_global_mean_background) {
+          centroid_background = device_frame_mean_f32(
+              d_stack_ + index * pixels_per_frame_,
+              pixels_per_frame_,
+              "cudaMalloc(resident top nms centroid background)");
+          centroid_background_mode = "global_mean";
+        }
         centroid_before_xs.resize(static_cast<std::size_t>(stored_count));
         centroid_before_ys.resize(static_cast<std::size_t>(stored_count));
         centroid_statuses.resize(static_cast<std::size_t>(stored_count));
@@ -4426,7 +4491,8 @@ class ResidentCalibratedStack {
             stored_count,
             static_cast<int>(width_),
             static_cast<int>(height_),
-            centroid_radius);
+            centroid_radius,
+            centroid_background);
         check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_top_nms_candidates_centroid refine kernel launch");
         check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_top_nms_candidates_centroid refine synchronize");
         check_cuda(
@@ -4448,6 +4514,15 @@ class ResidentCalibratedStack {
           static_cast<const float*>(xs_info.ptr),
           static_cast<const float*>(ys_info.ptr),
           centroid_statuses);
+      centroid_refine["background_mode"] = centroid_radius > 0 ? centroid_background_mode : "off";
+      centroid_refine["mode"] = centroid_radius > 0
+          ? (centroid_global_mean_background ? "resident_gpu_global_mean_centroid" : "resident_gpu_window_centroid")
+          : "off";
+      if (std::isfinite(centroid_background)) {
+        centroid_refine["background"] = centroid_background;
+      } else {
+        centroid_refine["background"] = py::none();
+      }
       py::dict result;
       result["count"] = total_count;
       result["stored_count"] = stored_count;
@@ -4492,7 +4567,8 @@ class ResidentCalibratedStack {
       int max_output_candidates,
       float min_separation_px,
       bool deterministic,
-      int centroid_radius = 0) const {
+      int centroid_radius = 0,
+      bool centroid_global_mean_background = false) const {
     require_index(index);
     if (!loaded_[index]) {
       throw std::runtime_error("resident frame must be loaded before star detection");
@@ -4604,7 +4680,16 @@ class ResidentCalibratedStack {
       std::vector<float> centroid_before_xs;
       std::vector<float> centroid_before_ys;
       std::vector<unsigned char> centroid_statuses;
+      float centroid_background = std::numeric_limits<float>::quiet_NaN();
+      const char* centroid_background_mode = "local_median";
       if (centroid_radius > 0 && stored_count > 0) {
+        if (centroid_global_mean_background) {
+          centroid_background = device_frame_mean_f32(
+              d_stack_ + index * pixels_per_frame_,
+              pixels_per_frame_,
+              "cudaMalloc(resident grid top nms centroid background)");
+          centroid_background_mode = "global_mean";
+        }
         centroid_before_xs.resize(static_cast<std::size_t>(stored_count));
         centroid_before_ys.resize(static_cast<std::size_t>(stored_count));
         centroid_statuses.resize(static_cast<std::size_t>(stored_count));
@@ -4634,7 +4719,8 @@ class ResidentCalibratedStack {
             stored_count,
             static_cast<int>(width_),
             static_cast<int>(height_),
-            centroid_radius);
+            centroid_radius,
+            centroid_background);
         check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates centroid refine kernel launch");
         check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates centroid refine synchronize");
         check_cuda(
@@ -4676,6 +4762,15 @@ class ResidentCalibratedStack {
           static_cast<const float*>(xs_info.ptr),
           static_cast<const float*>(ys_info.ptr),
           centroid_statuses);
+      centroid_refine["background_mode"] = centroid_radius > 0 ? centroid_background_mode : "off";
+      centroid_refine["mode"] = centroid_radius > 0
+          ? (centroid_global_mean_background ? "resident_gpu_global_mean_centroid" : "resident_gpu_window_centroid")
+          : "off";
+      if (std::isfinite(centroid_background)) {
+        centroid_refine["background"] = centroid_background;
+      } else {
+        centroid_refine["background"] = py::none();
+      }
       result["centroid_refine"] = centroid_refine;
       result["x"] = xs[py::slice(0, stored_count, 1)];
       result["y"] = ys[py::slice(0, stored_count, 1)];
@@ -4728,7 +4823,8 @@ class ResidentCalibratedStack {
       int candidates_per_cell,
       int max_output_candidates,
       float min_separation_px,
-      int centroid_radius) const {
+      int centroid_radius,
+      bool centroid_global_mean_background = false) const {
     return star_grid_top_nms_candidates_impl(
         index,
         threshold,
@@ -4738,7 +4834,8 @@ class ResidentCalibratedStack {
         max_output_candidates,
         min_separation_px,
         false,
-        centroid_radius);
+        centroid_radius,
+        centroid_global_mean_background);
   }
 
   py::dict star_grid_top_nms_candidates_deterministic(
@@ -4761,7 +4858,8 @@ class ResidentCalibratedStack {
       int candidates_per_cell,
       int max_output_candidates,
       float min_separation_px,
-      int centroid_radius) const {
+      int centroid_radius,
+      bool centroid_global_mean_background = false) const {
     return star_grid_top_nms_candidates_impl(
         index,
         threshold,
@@ -4771,7 +4869,8 @@ class ResidentCalibratedStack {
         max_output_candidates,
         min_separation_px,
         true,
-        centroid_radius);
+        centroid_radius,
+        centroid_global_mean_background);
   }
 
   py::list star_grid_top_nms_candidates_batch_impl(
@@ -4783,7 +4882,8 @@ class ResidentCalibratedStack {
       int max_output_candidates,
       float min_separation_px,
       bool deterministic,
-      int centroid_radius = 0) const {
+      int centroid_radius = 0,
+      bool centroid_global_mean_background = false) const {
     if (grid_cols <= 0 || grid_rows <= 0 || candidates_per_cell <= 0 || max_output_candidates <= 0) {
       throw std::invalid_argument("grid dimensions and candidate counts must be positive");
     }
@@ -4911,7 +5011,16 @@ class ResidentCalibratedStack {
         std::vector<float> centroid_before_xs;
         std::vector<float> centroid_before_ys;
         std::vector<unsigned char> centroid_statuses;
+        float centroid_background = std::numeric_limits<float>::quiet_NaN();
+        const char* centroid_background_mode = "local_median";
         if (centroid_radius > 0 && stored_count > 0) {
+          if (centroid_global_mean_background) {
+            centroid_background = device_frame_mean_f32(
+                d_stack_ + index * pixels_per_frame_,
+                pixels_per_frame_,
+                "cudaMalloc(resident batch grid top nms centroid background)");
+            centroid_background_mode = "global_mean";
+          }
           centroid_before_xs.resize(static_cast<std::size_t>(stored_count));
           centroid_before_ys.resize(static_cast<std::size_t>(stored_count));
           centroid_statuses.resize(static_cast<std::size_t>(stored_count));
@@ -4939,7 +5048,8 @@ class ResidentCalibratedStack {
               stored_count,
               static_cast<int>(width_),
               static_cast<int>(height_),
-              centroid_radius);
+              centroid_radius,
+              centroid_background);
           check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid refine kernel launch");
           check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid refine synchronize");
           check_cuda(
@@ -5010,6 +5120,15 @@ class ResidentCalibratedStack {
             static_cast<const float*>(xs_info.ptr),
             static_cast<const float*>(ys_info.ptr),
             centroid_statuses);
+        centroid_refine["background_mode"] = centroid_radius > 0 ? centroid_background_mode : "off";
+        centroid_refine["mode"] = centroid_radius > 0
+            ? (centroid_global_mean_background ? "resident_gpu_global_mean_centroid" : "resident_gpu_window_centroid")
+            : "off";
+        if (std::isfinite(centroid_background)) {
+          centroid_refine["background"] = centroid_background;
+        } else {
+          centroid_refine["background"] = py::none();
+        }
         result["centroid_refine"] = centroid_refine;
         result["x"] = xs[py::slice(0, stored_count, 1)];
         result["y"] = ys[py::slice(0, stored_count, 1)];
@@ -5065,7 +5184,8 @@ class ResidentCalibratedStack {
       int candidates_per_cell,
       int max_output_candidates,
       float min_separation_px,
-      int centroid_radius) const {
+      int centroid_radius,
+      bool centroid_global_mean_background = false) const {
     return star_grid_top_nms_candidates_batch_impl(
         indices,
         threshold,
@@ -5075,7 +5195,8 @@ class ResidentCalibratedStack {
         max_output_candidates,
         min_separation_px,
         false,
-        centroid_radius);
+        centroid_radius,
+        centroid_global_mean_background);
   }
 
   py::list star_grid_top_nms_candidates_batch_deterministic(
@@ -5098,7 +5219,8 @@ class ResidentCalibratedStack {
       int candidates_per_cell,
       int max_output_candidates,
       float min_separation_px,
-      int centroid_radius) const {
+      int centroid_radius,
+      bool centroid_global_mean_background = false) const {
     return star_grid_top_nms_candidates_batch_impl(
         indices,
         threshold,
@@ -5108,7 +5230,8 @@ class ResidentCalibratedStack {
         max_output_candidates,
         min_separation_px,
         true,
-        centroid_radius);
+        centroid_radius,
+        centroid_global_mean_background);
   }
 
   py::dict estimate_translation_from_stars_to_reference(

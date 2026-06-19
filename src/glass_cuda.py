@@ -42,6 +42,13 @@ def _native():
     return _NATIVE_MODULE
 
 
+def _centroid_uses_global_mean(background_mode: str) -> bool:
+    mode = str(background_mode or "local_median")
+    if mode not in {"local_median", "global_mean"}:
+        raise ValueError("centroid background mode must be local_median or global_mean")
+    return mode == "global_mean"
+
+
 def native_import_error() -> str | None:
     _native()
     return _NATIVE_IMPORT_ERROR
@@ -3132,6 +3139,7 @@ class ResidentCalibratedStack:
         max_output_candidates: int,
         min_separation_px: float,
         centroid_radius: int,
+        centroid_background_mode: str = "local_median",
     ) -> dict[str, Any]:
         if not hasattr(self._impl, "star_top_nms_candidates_centroid"):
             raise RuntimeError(
@@ -3145,6 +3153,7 @@ class ResidentCalibratedStack:
                 int(max_output_candidates),
                 float(min_separation_px),
                 int(centroid_radius),
+                _centroid_uses_global_mean(centroid_background_mode),
             )
         )
         return {
@@ -3214,6 +3223,7 @@ class ResidentCalibratedStack:
         max_output_candidates: int,
         min_separation_px: float,
         centroid_radius: int,
+        centroid_background_mode: str = "local_median",
     ) -> dict[str, Any]:
         if not hasattr(self._impl, "star_grid_top_nms_candidates_centroid"):
             raise RuntimeError(
@@ -3229,6 +3239,7 @@ class ResidentCalibratedStack:
                 int(max_output_candidates),
                 float(min_separation_px),
                 int(centroid_radius),
+                _centroid_uses_global_mean(centroid_background_mode),
             )
         )
         return {
@@ -3257,6 +3268,7 @@ class ResidentCalibratedStack:
         max_output_candidates: int,
         min_separation_px: float,
         centroid_radius: int,
+        centroid_background_mode: str = "local_median",
     ) -> dict[str, Any]:
         if not hasattr(self._impl, "star_grid_top_nms_candidates_deterministic_centroid"):
             raise RuntimeError(
@@ -3272,6 +3284,7 @@ class ResidentCalibratedStack:
                 int(max_output_candidates),
                 float(min_separation_px),
                 int(centroid_radius),
+                _centroid_uses_global_mean(centroid_background_mode),
             )
         )
         return {
@@ -3362,6 +3375,7 @@ class ResidentCalibratedStack:
         max_output_candidates: int,
         min_separation_px: float,
         centroid_radius: int,
+        centroid_background_mode: str = "local_median",
     ) -> list[dict[str, Any]]:
         if not hasattr(self._impl, "star_grid_top_nms_candidates_batch_centroid"):
             raise RuntimeError(
@@ -3376,6 +3390,7 @@ class ResidentCalibratedStack:
             int(max_output_candidates),
             float(min_separation_px),
             int(centroid_radius),
+            _centroid_uses_global_mean(centroid_background_mode),
         )
         return [self._normalize_grid_catalog_result(dict(item)) for item in results]
 
@@ -3389,6 +3404,7 @@ class ResidentCalibratedStack:
         max_output_candidates: int,
         min_separation_px: float,
         centroid_radius: int,
+        centroid_background_mode: str = "local_median",
     ) -> list[dict[str, Any]]:
         if not hasattr(self._impl, "star_grid_top_nms_candidates_batch_deterministic_centroid"):
             raise RuntimeError(
@@ -3403,6 +3419,7 @@ class ResidentCalibratedStack:
             int(max_output_candidates),
             float(min_separation_px),
             int(centroid_radius),
+            _centroid_uses_global_mean(centroid_background_mode),
         )
         return [self._normalize_grid_catalog_result(dict(item)) for item in results]
 

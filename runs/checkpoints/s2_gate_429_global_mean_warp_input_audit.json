@@ -1,0 +1,682 @@
+{
+  "artifact_type": "resident_warp_input_audit",
+  "checks": [
+    {
+      "evidence": {
+        "selected_frame_count": 8
+      },
+      "name": "frame_inputs_present",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "statuses": [
+          "completed"
+        ]
+      },
+      "name": "cuda_warp_replay_completed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "max_rms": 0.0002643936071558697,
+        "tolerance": 0.0005
+      },
+      "name": "cpu_matrix_resident_warp_matches_cpu_registered",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matrix_translation_delta_px_max": 0.007707665637643805,
+        "max_rms": 0.15866161883969132,
+        "resident_matrix_warp_parity_passed": false,
+        "tolerance": 0.1
+      },
+      "name": "resident_matrix_warp_delta_attributed",
+      "note": "Resident-matrix warp parity is reported separately; this attribution check passes when CPU-matrix resident warp parity proves the kernel/input contract.",
+      "passed": true
+    }
+  ],
+  "compare_json": "runs\\checkpoints\\s2_gate_423_common_footprint_compare.json",
+  "cpu_run": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu",
+  "created_at": "2026-06-19T10:56:38+00:00",
+  "failed_checks": [],
+  "frame_count": 8,
+  "frames": [
+    {
+      "cpu_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.001517299999250099,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.0155029296875,
+          "mean_abs": 0.00011544600981951504,
+          "p99_abs": 0.0005035400390625,
+          "rms": 0.0002643936071558697,
+          "shape_match": true,
+          "signed_mean": 9.173843292490376e-06
+        }
+      },
+      "frame_id": "F000013",
+      "matrix_delta": {
+        "cpu_tx": 2.9999893529665655,
+        "cpu_ty": -0.00874004648784421,
+        "frobenius": 0.007707665637643805,
+        "resident_tx": 3.00146484375,
+        "resident_ty": -0.0011749267578125,
+        "translation_delta_px": 0.007707665637643805,
+        "translation_dx": 0.0014754907834344522,
+        "translation_dy": 0.007565119730031711
+      },
+      "region": {
+        "comparison_region": {
+          "compared_pixels": 246016,
+          "compared_shape": [
+            496,
+            496
+          ],
+          "coverage_fraction": 1.0,
+          "coverage_max": 16.0,
+          "coverage_median": 16.0,
+          "coverage_min": 10.0,
+          "coverage_p1": 15.0,
+          "coverage_valid_pixels": 246016,
+          "full_shape": [
+            512,
+            512
+          ],
+          "glass_coverage_map": "runs\\checkpoints\\s2_gate_423_common_footprint_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+          "ignore_border_px": 8,
+          "min_coverage": 1.0
+        },
+        "evaluation_region": "compare_region",
+        "pixels": 246016
+      },
+      "resident_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.000976100011030212,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 6.68035888671875,
+          "mean_abs": 0.07187526103237045,
+          "p99_abs": 0.22756500244140643,
+          "rms": 0.15866161883969132,
+          "shape_match": true,
+          "signed_mean": -0.0004393402545186657
+        }
+      }
+    },
+    {
+      "cpu_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0009379999828524888,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.0093994140625,
+          "mean_abs": 7.894098696673946e-05,
+          "p99_abs": 0.0002899169921875,
+          "rms": 0.00018421133289196341,
+          "shape_match": true,
+          "signed_mean": 2.602508735458263e-07
+        }
+      },
+      "frame_id": "F000014",
+      "matrix_delta": {
+        "cpu_tx": 2.000117269395446,
+        "cpu_ty": 0.0002545627357690705,
+        "frobenius": 0.005898063933990233,
+        "resident_tx": 1.9974746704101562,
+        "resident_ty": 0.005527496337890625,
+        "translation_delta_px": 0.005898063933990233,
+        "translation_dx": -0.0026425989852896237,
+        "translation_dy": 0.0052729336021215545
+      },
+      "region": {
+        "comparison_region": {
+          "compared_pixels": 246016,
+          "compared_shape": [
+            496,
+            496
+          ],
+          "coverage_fraction": 1.0,
+          "coverage_max": 16.0,
+          "coverage_median": 16.0,
+          "coverage_min": 10.0,
+          "coverage_p1": 15.0,
+          "coverage_valid_pixels": 246016,
+          "full_shape": [
+            512,
+            512
+          ],
+          "glass_coverage_map": "runs\\checkpoints\\s2_gate_423_common_footprint_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+          "ignore_border_px": 8,
+          "min_coverage": 1.0
+        },
+        "evaluation_region": "compare_region",
+        "pixels": 246016
+      },
+      "resident_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0009719000081531703,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 5.732177734375,
+          "mean_abs": 0.06856477254387243,
+          "p99_abs": 0.2202911376953125,
+          "rms": 0.1332950163094695,
+          "shape_match": true,
+          "signed_mean": -0.00030324318902673634
+        }
+      }
+    },
+    {
+      "cpu_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0008328000258188695,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.0096435546875,
+          "mean_abs": 9.286242394740078e-05,
+          "p99_abs": 0.0003509521484375,
+          "rms": 0.00021212413677696638,
+          "shape_match": true,
+          "signed_mean": -3.626517773170749e-06
+        }
+      },
+      "frame_id": "F000015",
+      "matrix_delta": {
+        "cpu_tx": 0.9987398822904368,
+        "cpu_ty": 8.278444315124034e-05,
+        "frobenius": 0.0006306340891455485,
+        "resident_tx": 0.999237060546875,
+        "resident_ty": -0.00030517578125,
+        "translation_delta_px": 0.0006306340891455485,
+        "translation_dx": 0.0004971782564382465,
+        "translation_dy": -0.00038796022440124034
+      },
+      "region": {
+        "comparison_region": {
+          "compared_pixels": 246016,
+          "compared_shape": [
+            496,
+            496
+          ],
+          "coverage_fraction": 1.0,
+          "coverage_max": 16.0,
+          "coverage_median": 16.0,
+          "coverage_min": 10.0,
+          "coverage_p1": 15.0,
+          "coverage_valid_pixels": 246016,
+          "full_shape": [
+            512,
+            512
+          ],
+          "glass_coverage_map": "runs\\checkpoints\\s2_gate_423_common_footprint_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+          "ignore_border_px": 8,
+          "min_coverage": 1.0
+        },
+        "evaluation_region": "compare_region",
+        "pixels": 246016
+      },
+      "resident_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0010082999942824244,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.4970703125,
+          "mean_abs": 0.0048287678955745,
+          "p99_abs": 0.01513671875,
+          "rms": 0.012066018702750963,
+          "shape_match": true,
+          "signed_mean": 1.960589659945898e-05
+        }
+      }
+    },
+    {
+      "cpu_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0008578999841120094,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "p99_abs": 0.0,
+          "rms": 0.0,
+          "shape_match": true,
+          "signed_mean": 0.0
+        }
+      },
+      "frame_id": "F000016",
+      "matrix_delta": {
+        "cpu_tx": 0.0,
+        "cpu_ty": 0.0,
+        "frobenius": 0.0,
+        "resident_tx": 0.0,
+        "resident_ty": 0.0,
+        "translation_delta_px": 0.0,
+        "translation_dx": 0.0,
+        "translation_dy": 0.0
+      },
+      "region": {
+        "comparison_region": {
+          "compared_pixels": 246016,
+          "compared_shape": [
+            496,
+            496
+          ],
+          "coverage_fraction": 1.0,
+          "coverage_max": 16.0,
+          "coverage_median": 16.0,
+          "coverage_min": 10.0,
+          "coverage_p1": 15.0,
+          "coverage_valid_pixels": 246016,
+          "full_shape": [
+            512,
+            512
+          ],
+          "glass_coverage_map": "runs\\checkpoints\\s2_gate_423_common_footprint_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+          "ignore_border_px": 8,
+          "min_coverage": 1.0
+        },
+        "evaluation_region": "compare_region",
+        "pixels": 246016
+      },
+      "resident_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0008171999943442643,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "p99_abs": 0.0,
+          "rms": 0.0,
+          "shape_match": true,
+          "signed_mean": 0.0
+        }
+      }
+    },
+    {
+      "cpu_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0008475999929942191,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.0084228515625,
+          "mean_abs": 8.454543618828399e-05,
+          "p99_abs": 0.0003204345703125,
+          "rms": 0.00017397212154547965,
+          "shape_match": true,
+          "signed_mean": -4.462967554066606e-06
+        }
+      },
+      "frame_id": "F000017",
+      "matrix_delta": {
+        "cpu_tx": -0.9975822748075416,
+        "cpu_ty": -0.005071361523704354,
+        "frobenius": 0.0040095624646595785,
+        "resident_tx": -1.0008544921875,
+        "resident_ty": -0.00275421142578125,
+        "translation_delta_px": 0.0040095624646595785,
+        "translation_dx": -0.0032722173799584198,
+        "translation_dy": 0.002317150097923104
+      },
+      "region": {
+        "comparison_region": {
+          "compared_pixels": 246016,
+          "compared_shape": [
+            496,
+            496
+          ],
+          "coverage_fraction": 1.0,
+          "coverage_max": 16.0,
+          "coverage_median": 16.0,
+          "coverage_min": 10.0,
+          "coverage_p1": 15.0,
+          "coverage_valid_pixels": 246016,
+          "full_shape": [
+            512,
+            512
+          ],
+          "glass_coverage_map": "runs\\checkpoints\\s2_gate_423_common_footprint_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+          "ignore_border_px": 8,
+          "min_coverage": 1.0
+        },
+        "evaluation_region": "compare_region",
+        "pixels": 246016
+      },
+      "resident_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0008292999991681427,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 3.606201171875,
+          "mean_abs": 0.037581162323688744,
+          "p99_abs": 0.11996231079101571,
+          "rms": 0.08151853799556133,
+          "shape_match": true,
+          "signed_mean": -0.00014028849388384546
+        }
+      }
+    },
+    {
+      "cpu_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.000815200008219108,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.01287841796875,
+          "mean_abs": 7.952165157068036e-05,
+          "p99_abs": 0.0004119873046875,
+          "rms": 0.0002265175756782982,
+          "shape_match": true,
+          "signed_mean": -6.603648833752175e-06
+        }
+      },
+      "frame_id": "F000018",
+      "matrix_delta": {
+        "cpu_tx": 2.9992375289487185,
+        "cpu_ty": -1.0058746536013246,
+        "frobenius": 0.005104828736889345,
+        "resident_tx": 2.9996414184570312,
+        "resident_ty": -1.0007858276367188,
+        "translation_delta_px": 0.005104828736889345,
+        "translation_dx": 0.00040388950831271586,
+        "translation_dy": 0.005088825964605803
+      },
+      "region": {
+        "comparison_region": {
+          "compared_pixels": 246016,
+          "compared_shape": [
+            496,
+            496
+          ],
+          "coverage_fraction": 1.0,
+          "coverage_max": 16.0,
+          "coverage_median": 16.0,
+          "coverage_min": 10.0,
+          "coverage_p1": 15.0,
+          "coverage_valid_pixels": 246016,
+          "full_shape": [
+            512,
+            512
+          ],
+          "glass_coverage_map": "runs\\checkpoints\\s2_gate_423_common_footprint_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+          "ignore_border_px": 8,
+          "min_coverage": 1.0
+        },
+        "evaluation_region": "compare_region",
+        "pixels": 246016
+      },
+      "resident_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0009510999952908605,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 4.51220703125,
+          "mean_abs": 0.053706928979097616,
+          "p99_abs": 0.17072601318359393,
+          "rms": 0.1102879726559501,
+          "shape_match": true,
+          "signed_mean": -0.00030721753494548497
+        }
+      }
+    },
+    {
+      "cpu_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0008301999769173563,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.0096435546875,
+          "mean_abs": 9.258641908865938e-05,
+          "p99_abs": 0.0003509521484375,
+          "rms": 0.00021056776303832303,
+          "shape_match": true,
+          "signed_mean": -1.0953361360389162e-06
+        }
+      },
+      "frame_id": "F000019",
+      "matrix_delta": {
+        "cpu_tx": 1.9937828574277567,
+        "cpu_ty": -1.0008331969108326,
+        "frobenius": 0.0034828640675653136,
+        "resident_tx": 1.99578857421875,
+        "resident_ty": -0.99798583984375,
+        "translation_delta_px": 0.0034828640675653136,
+        "translation_dx": 0.0020057167909932616,
+        "translation_dy": 0.002847357067082612
+      },
+      "region": {
+        "comparison_region": {
+          "compared_pixels": 246016,
+          "compared_shape": [
+            496,
+            496
+          ],
+          "coverage_fraction": 1.0,
+          "coverage_max": 16.0,
+          "coverage_median": 16.0,
+          "coverage_min": 10.0,
+          "coverage_p1": 15.0,
+          "coverage_valid_pixels": 246016,
+          "full_shape": [
+            512,
+            512
+          ],
+          "glass_coverage_map": "runs\\checkpoints\\s2_gate_423_common_footprint_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+          "ignore_border_px": 8,
+          "min_coverage": 1.0
+        },
+        "evaluation_region": "compare_region",
+        "pixels": 246016
+      },
+      "resident_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0008601000008638948,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 2.863525390625,
+          "mean_abs": 0.023273884567832352,
+          "p99_abs": 0.07195816040039071,
+          "rms": 0.06367764502019464,
+          "shape_match": true,
+          "signed_mean": -0.00016728114883311705
+        }
+      }
+    },
+    {
+      "cpu_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.0007898999901954085,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 0.015380859375,
+          "mean_abs": 0.00011251173704149323,
+          "p99_abs": 0.00048828125,
+          "rms": 0.000262862319488557,
+          "shape_match": true,
+          "signed_mean": 1.4317519458846173e-06
+        }
+      },
+      "frame_id": "F000020",
+      "matrix_delta": {
+        "cpu_tx": 1.001482614433698,
+        "cpu_ty": -1.0021881404596655,
+        "frobenius": 0.0016940883521812226,
+        "resident_tx": 1.0025787353515625,
+        "resident_ty": -1.0008964538574219,
+        "translation_delta_px": 0.0016940883521812226,
+        "translation_dx": 0.0010961209178645959,
+        "translation_dy": 0.001291686602243658
+      },
+      "region": {
+        "comparison_region": {
+          "compared_pixels": 246016,
+          "compared_shape": [
+            496,
+            496
+          ],
+          "coverage_fraction": 1.0,
+          "coverage_max": 16.0,
+          "coverage_median": 16.0,
+          "coverage_min": 10.0,
+          "coverage_p1": 15.0,
+          "coverage_valid_pixels": 246016,
+          "full_shape": [
+            512,
+            512
+          ],
+          "glass_coverage_map": "runs\\checkpoints\\s2_gate_423_common_footprint_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+          "ignore_border_px": 8,
+          "min_coverage": 1.0
+        },
+        "evaluation_region": "compare_region",
+        "pixels": 246016
+      },
+      "resident_matrix": {
+        "coverage_delta": {
+          "abs_sample_delta": 0,
+          "mismatch_pixels": 0,
+          "sample_delta": 0
+        },
+        "elapsed_s": 0.000777499983087182,
+        "method": "apply_translation_bilinear_frame",
+        "status": "completed",
+        "value_delta": {
+          "compared_pixels": 246016,
+          "max_abs": 1.36505126953125,
+          "mean_abs": 0.012705934903624155,
+          "p99_abs": 0.039350128173828214,
+          "rms": 0.03247177842962697,
+          "shape_match": true,
+          "signed_mean": -7.52969785485878e-05
+        }
+      }
+    }
+  ],
+  "interpolation": "bilinear",
+  "passed": true,
+  "recommendation": "target_resident_registration_matrix_precision",
+  "resident_matrix_warp_parity": {
+    "matrix_translation_delta_px_max": 0.007707665637643805,
+    "max_rms": 0.15866161883969132,
+    "passed": false,
+    "tolerance": 0.1
+  },
+  "resident_run": "runs\\checkpoints\\s2_gate_429_global_mean_centroid_refF16_cuda_hardened",
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "attribution": "target_resident_registration_matrix_precision",
+    "cpu_matrix_rms": {
+      "count": 8,
+      "max": 0.0002643936071558697,
+      "mean": 0.00019183110707193216
+    },
+    "matrix_translation_delta_px": {
+      "count": 8,
+      "max": 0.007707665637643805,
+      "mean": 0.0035659634102593804
+    },
+    "resident_matrix_rms": {
+      "count": 8,
+      "max": 0.15866161883969132,
+      "mean": 0.07399732349415561
+    },
+    "resident_matrix_warp_parity_passed": false
+  },
+  "thresholds": {
+    "cpu_matrix_rms_tolerance": 0.0005,
+    "resident_matrix_rms_tolerance": 0.1
+  }
+}

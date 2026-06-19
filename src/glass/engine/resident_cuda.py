@@ -789,6 +789,7 @@ def _resident_refine_catalog_centroids_from_stack(
         "failed_count": int(failed_count),
         "max_shift_px": float(max_shift),
         "mode": "resident_tile_download_cpu_centroid",
+        "background_mode": "local_median",
     }
     return output, dict(output["centroid_refine"])
 
@@ -2621,6 +2622,7 @@ def run_resident_calibration_integration(
     resident_triangle_pixel_refine_coarse_stride: int | None = None,
     resident_triangle_pixel_refine_final_stride: int | None = None,
     resident_triangle_pixel_refine_fast_coarse: bool = False,
+    resident_triangle_centroid_background: str | None = None,
     resident_triangle_min_agreement_score: float | None = None,
     resident_triangle_agreement_rms_scale: float | None = None,
     resident_triangle_agreement_action: str | None = None,
@@ -4545,6 +4547,11 @@ def run_resident_calibration_integration(
                     "cuda_triangle_centroid_refine_radius",
                     4,
                 )
+                triangle_centroid_background_mode = str(
+                    registration_policy.get("cuda_triangle_centroid_background") or "global_mean"
+                )
+                if resident_triangle_centroid_background is not None:
+                    triangle_centroid_background_mode = str(resident_triangle_centroid_background)
                 if triangle_translation_refine_tolerance_px <= 0.0:
                     raise ValueError("cuda_triangle_translation_refine_tolerance_px must be positive")
                 if triangle_translation_refine_min_inliers <= 0:
@@ -4557,6 +4564,8 @@ def run_resident_calibration_integration(
                     raise ValueError("cuda_triangle_translation_refine_iteration_max_step_px must be non-negative")
                 if triangle_centroid_refine_radius <= 0:
                     raise ValueError("cuda_triangle_centroid_refine_radius must be positive")
+                if triangle_centroid_background_mode not in {"local_median", "global_mean"}:
+                    raise ValueError("cuda_triangle_centroid_background must be local_median or global_mean")
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
                 has_top_nms_catalog_centroid = hasattr(native_stack, "star_top_nms_candidates_centroid")
@@ -4747,6 +4756,7 @@ def run_resident_calibration_integration(
                                     resident_star_max_candidates,
                                     nms_min_separation_px,
                                     triangle_centroid_refine_radius,
+                                    triangle_centroid_background_mode,
                                 )
                             if (not resident_star_catalog_deterministic) and has_grid_nms_catalog_centroid:
                                 return _stack.star_grid_top_nms_candidates_centroid(
@@ -4758,6 +4768,7 @@ def run_resident_calibration_integration(
                                     resident_star_max_candidates,
                                     nms_min_separation_px,
                                     triangle_centroid_refine_radius,
+                                    triangle_centroid_background_mode,
                                 )
                         return _stack.star_grid_top_nms_candidates(
                             frame_index,
@@ -4778,6 +4789,7 @@ def run_resident_calibration_integration(
                                 resident_star_max_candidates,
                                 nms_min_separation_px,
                                 triangle_centroid_refine_radius,
+                                triangle_centroid_background_mode,
                             )
                         return _stack.star_top_nms_candidates(
                             frame_index,
@@ -4845,6 +4857,7 @@ def run_resident_calibration_integration(
                                     resident_star_max_candidates,
                                     nms_min_separation_px,
                                     triangle_centroid_refine_radius,
+                                    triangle_centroid_background_mode,
                                 )
                             elif triangle_centroid_refine_enabled:
                                 batch_results = _stack.star_grid_top_nms_candidates_batch_centroid(
@@ -4856,6 +4869,7 @@ def run_resident_calibration_integration(
                                     resident_star_max_candidates,
                                     nms_min_separation_px,
                                     triangle_centroid_refine_radius,
+                                    triangle_centroid_background_mode,
                                 )
                             else:
                                 batch_results = _stack.star_grid_top_nms_candidates_batch(
@@ -4981,6 +4995,9 @@ def run_resident_calibration_integration(
                             "max_shift_px": float(existing_summary.get("max_shift_px", 0.0) or 0.0),
                             "radius": int(existing_summary.get("radius", triangle_centroid_refine_radius) or 0),
                             "mode": str(existing_summary.get("mode", "resident_gpu_window_centroid")),
+                            "background_mode": str(
+                                existing_summary.get("background_mode", triangle_centroid_background_mode)
+                            ),
                         }
                         triangle_centroid_refine_catalog_count += 1
                         triangle_centroid_refine_star_count += int(summary["refined_count"])
@@ -5692,6 +5709,17 @@ def run_resident_calibration_integration(
                                         "triangle_centroid_refine_mode="
                                         + (
                                             str((moving_centroid_summary or {}).get("mode", "disabled"))
+                                            if triangle_centroid_refine_enabled
+                                            else "disabled"
+                                        ),
+                                        "triangle_centroid_refine_background="
+                                        + (
+                                            str(
+                                                (moving_centroid_summary or {}).get(
+                                                    "background_mode",
+                                                    triangle_centroid_background_mode,
+                                                )
+                                            )
                                             if triangle_centroid_refine_enabled
                                             else "disabled"
                                         ),
@@ -7292,7 +7320,11 @@ def run_resident_calibration_integration(
                             and triangle_centroid_refine_enabled
                         ),
                         "triangle_centroid_refine_mode": (
-                            "resident_gpu_window_centroid"
+                            (
+                                "resident_gpu_global_mean_centroid"
+                                if triangle_centroid_background_mode == "global_mean"
+                                else "resident_gpu_window_centroid"
+                            )
                             if resident_registration == "similarity_cuda_triangle"
                             and triangle_centroid_refine_enabled
                             and (
@@ -7310,6 +7342,10 @@ def run_resident_calibration_integration(
                             and triangle_centroid_refine_enabled
                             else "off"
                         ),
+                        "triangle_centroid_refine_background": triangle_centroid_background_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        and triangle_centroid_refine_enabled
+                        else None,
                         "triangle_centroid_refine_radius": int(triangle_centroid_refine_radius)
                         if resident_registration == "similarity_cuda_triangle"
                         else None,

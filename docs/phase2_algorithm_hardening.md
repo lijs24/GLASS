@@ -7826,6 +7826,84 @@ integration where applicable.
   promotion, no package upload, no GitHub release creation, and no user input
   directory modification.
 
+### S2-Gate 429: Resident GPU Global-Mean Centroid Background
+
+- Pause release/default-promotion/report-contract-only gate growth and keep the
+  gate on the Phase 2 runtime path: resident registration precision,
+  warp/rejection parity, and measurable CUDA behavior.
+- Gate400 through Gate413 remain useful as benchmark-profile and
+  default-promotion evidence-chain guards, but they did not change image math,
+  CUDA kernels, StackEngine execution defaults, real-data regression behavior,
+  or 200-light performance. Treat them as guardrails already banked, not as a
+  pattern to continue before the runtime blockers are resolved.
+- Compare resident GPU top-NMS catalogs against the CPU streaming detector on
+  the same calibrated checkpoint frames. The largest catalog/translation delta
+  came from centroid background handling:
+  - local median window background produced mean/max translation deltas of
+    about `0.009513 px` / `0.015840 px`;
+  - global mean background reduced those to about `0.003378 px` /
+    `0.007747 px`.
+- Add a resident CUDA frame-mean reduction and let resident top-NMS centroid
+  refinement use `global_mean` background by default for the triangle
+  registration path, while preserving `local_median` as an explicit override.
+- Record centroid background mode in resident registration artifacts and
+  warnings (`triangle_centroid_refine_background=global_mean`).
+- Validate on the Gate414/Gate423 16-frame checkpoint harness with reference
+  frame `F000016`, resident CUDA triangle registration, hardened winsorized
+  integration, and audit output maps:
+  - resident centroid mode: `resident_gpu_global_mean_centroid`;
+  - resident matrix translation delta max improved from Gate428
+    `0.009532 px` to `0.007708 px`;
+  - resident-matrix warp RMS max improved from Gate428 `0.196369` to
+    `0.158662`;
+  - resident output master absolute delta sum improved from `12454.689270` to
+    `6638.656708`;
+  - coverage absolute delta improved from `1376` to `706`;
+  - low/high rejection absolute deltas improved from `692`/`688` to
+    `356`/`350`;
+  - compare-region pre-rejection sample delta stayed `0`;
+  - same-pre-rejection rejected-sample absolute delta improved from `1376` to
+    `706`;
+  - `resident-rejection-input-audit` still proves exact-input CPU/CUDA
+    hardened winsorized parity, so the remaining delta is driven by resident
+    registration/warp input values rather than a standalone rejection-kernel
+    mismatch.
+- Runtime note: this small validation run is not a throughput benchmark.
+  Registration/catalog work dominated the run (`resident_registration_warp`
+  about `80.232 s`, `triangle_moving_catalog` about `75.212 s`), which makes
+  resident catalog batching and orchestration the next performance target.
+- Keep this gate runtime-algorithm scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
+### S2-Gate 430: Resident Catalog Batch Performance and Warp-Value Parity
+
+- Continue from Gate429 with a substantive runtime gate only.
+- Target the resident registration/catalog hot path and the remaining
+  rejection-map delta caused by resident warp input values.
+- Required work:
+  - batch or cache resident star catalog/background/descriptor work so the
+    16-frame checkpoint no longer spends most of wall time in per-frame catalog
+    orchestration;
+  - keep `global_mean` centroid background as the default unless an audit shows
+    a regression;
+  - preserve or improve Gate429 matrix translation, warp RMS, coverage, and
+    rejection-map deltas;
+  - keep DQ/pre-rejection sample accounting explicit, including compare-region
+    evidence;
+  - run the Gate414/Gate423 16-frame CUDA validation first; only if it improves
+    should a real 200-light regression be started.
+- Acceptance for the next gate:
+  - focused resident CUDA tests pass;
+  - `python -m pytest -q` passes;
+  - `resident-warp-input-audit`, `resident-rejection-input-audit`, and
+    `resident-rejection-sample-audit` artifacts are generated;
+  - registration/catalog timing improves versus Gate429 or a specific failed
+    experiment explains why not;
+  - numerical deltas are no worse than Gate429;
+  - no release/default-promotion/report-only code is added unless it directly
+    blocks this runtime validation.
+
 ## Gate Rules
 
 Each gate requires:
