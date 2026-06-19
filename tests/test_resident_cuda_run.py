@@ -21,6 +21,7 @@ from glass.engine.resident_cuda import (
     _resident_descriptor_signature,
     _resident_fit_signature,
     _resident_output_map_selection,
+    _resident_source_dq_calibration_artifact_candidates,
     _resident_refine_catalog_centroids_from_stack,
     _resident_registration_motion_weighting,
     _resident_triangle_agreement_policy,
@@ -214,6 +215,17 @@ def test_resident_output_map_selection_modes():
         "high_rejection": False,
         "dq": False,
     }
+
+
+def test_resident_source_dq_calibration_artifact_candidates_keep_relative_run_path():
+    candidates = _resident_source_dq_calibration_artifact_candidates(
+        {},
+        run=Path("runs/example"),
+        plan_root=Path("runs/example_plan"),
+    )
+
+    assert candidates[0] == Path("runs/example") / "calibration_artifacts.json"
+    assert candidates[1] == Path("runs/example_plan") / "calibration_artifacts.json"
 
 
 def test_resident_hardened_winsorized_contract_rejects_over_limit():
@@ -1411,6 +1423,110 @@ def test_cli_resident_cuda_run_applies_plan_source_dq_sidecar(tmp_path: Path):
     assert source_dq["status_counts"]["no_invalid_samples"] == 1
     applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
     assert applied_rows[0]["sidecar_paths"] == [str(sidecar)]
+
+
+def test_cli_resident_cuda_run_applies_calibration_artifact_dq_sidecar(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "rdq_art"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    plan_payload = read_json(plan)
+    light_by_stem = {
+        Path(frame["path"]).stem: frame for frame in plan_payload["frames"] if frame["frame_type"] == "light"
+    }
+    high_frame_id = str(light_by_stem["light_high_noise"]["id"])
+    sidecar_rel = Path("source_dq") / "light_high_noise_dq.fits"
+    sidecar = run / sidecar_rel
+    dq = np.zeros((16, 16), dtype=np.float32)
+    dq[4, 5] = float(int(DQFlag.HOT_PIXEL))
+    write_fits_data(sidecar, dq)
+    run.mkdir(parents=True, exist_ok=True)
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "artifact_type": "calibration_artifacts",
+            "calibrated_lights": [
+                {
+                    "frame_id": high_frame_id,
+                    "path": str(run / "calibrated" / f"calibrated_{high_frame_id}.fits"),
+                    "dq_mask_path": str(sidecar_rel),
+                    "dq_summary": {"hot_pixel": 1},
+                    "cosmetic_correction": {"enabled": True, "hot_pixels": 1, "cold_pixels": 0},
+                }
+            ],
+        },
+    )
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "manual",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-output-maps",
+            "audit",
+        ]
+    ) == 0
+
+    low = read_fits_data(dataset / "light" / "light_low_noise.fits", dtype=np.float32)
+    high = read_fits_data(dataset / "light" / "light_high_noise.fits", dtype=np.float32)
+    expected = ((low + high) / 2.0).astype(np.float32)
+    expected[4, 5] = low[4, 5]
+    integration = read_json(run / "integration_results.json")
+    output = integration["outputs"][0]
+    master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
+    weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
+    resident = read_json(run / "resident_artifacts.json")
+    artifact = resident["artifacts"][0]
+    source_dq = artifact["source_dq_summary"]
+
+    assert np.allclose(master, expected, rtol=2e-5, atol=2e-5)
+    assert weight[4, 5] == pytest.approx(1.0)
+    assert weight[0, 0] == pytest.approx(2.0)
+    assert source_dq["passed"] is True
+    assert source_dq["input_invalid_samples_before_rejection"] == 1
+    assert source_dq["input_flagged_samples"] == 1
+    assert source_dq["source_dq_flag_counts"] == {"hot_pixel": 1}
+    assert source_dq["sidecar_source_counts"] == {"calibration_artifacts": 1}
+    assert source_dq["sidecar_artifact_paths"] == [str(run / "calibration_artifacts.json")]
+    assert artifact["source_dq_calibration_artifact_index"]["available"] is True
+    assert artifact["source_dq_calibration_artifact_index"]["sidecar_frame_count"] == 1
+    applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
+    assert applied_rows[0]["sidecar_paths"] == [str(sidecar)]
+    assert applied_rows[0]["sidecar_sources"] == ["calibration_artifacts"]
+    assert applied_rows[0]["sidecar_artifact_paths"] == [str(run / "calibration_artifacts.json")]
 
 
 def test_cli_resident_cuda_batch_wave_releases_prefetch_slots(tmp_path: Path):

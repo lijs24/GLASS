@@ -8877,6 +8877,45 @@ Completed in Gate446:
   - `runs/checkpoints/s2_gate_448_perf/synthetic_file_sidecar_resident_cuda_vs_cpu_expected.json`;
   - `runs/checkpoints/s2_gate_448_status.md`.
 
+### S2-Gate 449: Resident Calibration-Artifact DQ Cache Routing
+
+- Route GLASS calibration/cosmetic DQ cache artifacts into resident CUDA
+  source-DQ handling without requiring manual plan edits.
+- Required work:
+  - read existing GLASS `calibration_artifacts.json` sidecars from the resident
+    run directory or explicit plan artifact path before resident calibration
+    overwrites run artifacts;
+  - match `calibrated_lights[].frame_id` to resident light frame ids;
+  - use `calibrated_lights[].dq_mask_path` as a source-DQ sidecar when no
+    explicit light-frame plan sidecar is present;
+  - preserve provenance for sidecar source, artifact path, and component
+    summary in `source_dq_summary`;
+  - prove with a resident CUDA file regression that a finite calibration-cache
+    hot pixel is excluded from resident master/weight output;
+  - run focused CUDA resident tests plus full pytest before checkpoint/commit.
+- This gate directly advances the DQ/mask pipeline contract and resident
+  default path. Do not add release/default-promotion/report-only work here.
+- Completed in S2-Gate449:
+  - resident CUDA now indexes GLASS `calibration_artifacts.json`
+    `calibrated_lights[].dq_mask_path` rows before resident execution;
+  - artifact DQ sidecars are matched by `frame_id` and used only when the
+    light-frame plan has no explicit sidecar override;
+  - `source_dq_summary` now records sidecar source counts, sidecar artifact
+    paths, and component summaries for plan/artifact sidecars;
+  - resident artifacts and integration outputs include
+    `source_dq_calibration_artifact_index`;
+  - fixed relative run-dir artifact discovery so CLI relative `--out` paths do
+    not get resolved under `plan_root` twice;
+  - focused tests prove plan sidecar priority, calibration-artifact sidecar
+    routing, and relative candidate path behavior;
+  - synthetic file-level validation on 8x64x64 light frames with 2 calibration
+    artifact hot-pixel sidecars matched CPU expected master/weight exactly:
+    `master_max_abs=0`, `weight_max_abs=0`, resident run `0.1609 s`;
+  - full pytest passed: `1070 passed in 40.14 s`.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_449_perf/synthetic_calibration_artifact_dq_cache_resident_cuda_vs_cpu_expected.json`;
+  - `runs/checkpoints/s2_gate_449_status.md`.
+
 ## Gate Rules
 
 Each gate requires:

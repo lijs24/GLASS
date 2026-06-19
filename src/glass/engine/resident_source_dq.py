@@ -154,6 +154,10 @@ def combine_source_invalid_masks(
     nonfinite_samples = 0
     source_models: list[str] = []
     sidecar_paths: list[str] = []
+    sidecar_sources: list[str] = []
+    sidecar_plan_keys: list[str] = []
+    sidecar_artifact_paths: list[str] = []
+    sidecar_artifact_frame_ids: list[str] = []
     component_summaries: list[dict[str, Any]] = []
     for mask, info in components:
         info = dict(info)
@@ -161,6 +165,14 @@ def combine_source_invalid_masks(
         source_models.append(source_model)
         if info.get("sidecar_path"):
             sidecar_paths.append(str(info["sidecar_path"]))
+        if info.get("sidecar_source"):
+            sidecar_sources.append(str(info["sidecar_source"]))
+        if info.get("sidecar_plan_key"):
+            sidecar_plan_keys.append(str(info["sidecar_plan_key"]))
+        if info.get("sidecar_artifact_path"):
+            sidecar_artifact_paths.append(str(info["sidecar_artifact_path"]))
+        if info.get("sidecar_artifact_frame_id"):
+            sidecar_artifact_frame_ids.append(str(info["sidecar_artifact_frame_id"]))
         component_summaries.append(
             {
                 "source_model": source_model,
@@ -170,6 +182,10 @@ def combine_source_invalid_masks(
                 "flagged_samples": int(info.get("flagged_samples") or 0),
                 "nonfinite_samples": int(info.get("nonfinite_samples") or 0),
                 "sidecar_path": info.get("sidecar_path"),
+                "sidecar_source": info.get("sidecar_source"),
+                "sidecar_plan_key": info.get("sidecar_plan_key"),
+                "sidecar_artifact_path": info.get("sidecar_artifact_path"),
+                "sidecar_artifact_frame_id": info.get("sidecar_artifact_frame_id"),
             }
         )
         if not bool(info.get("supported")):
@@ -211,6 +227,10 @@ def combine_source_invalid_masks(
         "source_model": "+".join(source_models) if source_models else "none",
         "component_summaries": component_summaries,
         "sidecar_paths": sidecar_paths,
+        "sidecar_sources": sidecar_sources,
+        "sidecar_plan_keys": sidecar_plan_keys,
+        "sidecar_artifact_paths": sidecar_artifact_paths,
+        "sidecar_artifact_frame_ids": sidecar_artifact_frame_ids,
     }
 
 
@@ -240,7 +260,16 @@ def apply_resident_source_invalid_mask(
         "applied": False,
         "native_method": None,
     }
-    for key in ("component_summaries", "sidecar_paths", "sidecar_path", "sidecar_format"):
+    for key in (
+        "component_summaries",
+        "sidecar_paths",
+        "sidecar_sources",
+        "sidecar_plan_keys",
+        "sidecar_artifact_paths",
+        "sidecar_artifact_frame_ids",
+        "sidecar_path",
+        "sidecar_format",
+    ):
         if key in mask_info:
             row[key] = mask_info[key]
     if not row["supported"]:
@@ -295,12 +324,22 @@ def build_resident_source_dq_summary(
     native_missing = [row for row in rows if row.get("status") == "native_method_unavailable"]
     source_counts: dict[str, int] = {}
     status_counts: dict[str, int] = {}
+    sidecar_source_counts: dict[str, int] = {}
+    sidecar_paths: set[str] = set()
+    sidecar_artifact_paths: set[str] = set()
     flag_counts = _empty_flag_counts()
     for row in rows:
         source = str(row.get("source") or "unknown")
         source_counts[source] = source_counts.get(source, 0) + 1
         status = str(row.get("status") or "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
+        for sidecar_source in list(row.get("sidecar_sources") or []):
+            sidecar_source = str(sidecar_source)
+            sidecar_source_counts[sidecar_source] = sidecar_source_counts.get(sidecar_source, 0) + 1
+        for sidecar_path in list(row.get("sidecar_paths") or []):
+            sidecar_paths.add(str(sidecar_path))
+        for artifact_path in list(row.get("sidecar_artifact_paths") or []):
+            sidecar_artifact_paths.add(str(artifact_path))
         for flag, count in dict(row.get("flag_counts") or {}).items():
             flag_counts[str(flag)] = int(flag_counts.get(str(flag), 0)) + int(count or 0)
 
@@ -328,6 +367,10 @@ def build_resident_source_dq_summary(
         "native_missing_frame_count": len(native_missing),
         "source_counts": dict(sorted(source_counts.items())),
         "status_counts": dict(sorted(status_counts.items())),
+        "sidecar_source_counts": dict(sorted(sidecar_source_counts.items())),
+        "sidecar_path_count": len(sidecar_paths),
+        "sidecar_artifact_path_count": len(sidecar_artifact_paths),
+        "sidecar_artifact_paths": sorted(sidecar_artifact_paths),
         "passed": len(unsupported) == 0 and len(native_missing) == 0 and applied_invalid == total_invalid,
         "rows": rows,
         "semantics": (

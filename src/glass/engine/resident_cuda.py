@@ -1479,7 +1479,95 @@ def _resident_source_dq_provenance_fields(source_dq_summary: dict[str, Any] | No
     return fields
 
 
-def _resident_source_dq_sidecar_path(frame: dict[str, Any], plan_root: Path) -> Path | None:
+def _resident_source_dq_calibration_artifact_candidates(
+    plan: dict[str, Any],
+    *,
+    run: Path,
+    plan_root: Path,
+) -> list[Path]:
+    raw_candidates: list[Path] = []
+    for key in (
+        "calibration_artifacts_path",
+        "source_dq_calibration_artifacts_path",
+        "input_dq_calibration_artifacts_path",
+    ):
+        if plan.get(key):
+            path = Path(str(plan[key]))
+            if not path.is_absolute():
+                path = plan_root / path
+            raw_candidates.append(path)
+    raw_candidates.extend([run / "calibration_artifacts.json", plan_root / "calibration_artifacts.json"])
+
+    candidates: list[Path] = []
+    seen: set[str] = set()
+    for path in raw_candidates:
+        key = str(path.resolve()) if path.exists() else str(path.absolute())
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(path)
+    return candidates
+
+
+def _resident_source_dq_sidecars_from_calibration_artifacts(
+    plan: dict[str, Any],
+    *,
+    run: Path,
+    plan_root: Path,
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    sidecars: dict[str, dict[str, Any]] = {}
+    candidates = _resident_source_dq_calibration_artifact_candidates(plan, run=run, plan_root=plan_root)
+    checked: list[dict[str, Any]] = []
+    for artifact_path in candidates:
+        exists = artifact_path.exists()
+        candidate_row: dict[str, Any] = {"path": str(artifact_path), "exists": exists}
+        if not exists:
+            checked.append(candidate_row)
+            continue
+        payload = read_json(artifact_path)
+        calibrated_lights = payload.get("calibrated_lights", []) if isinstance(payload, dict) else []
+        candidate_row["calibrated_light_count"] = len(calibrated_lights) if isinstance(calibrated_lights, list) else 0
+        sidecar_count = 0
+        if isinstance(calibrated_lights, list):
+            for item in calibrated_lights:
+                if not isinstance(item, dict):
+                    continue
+                frame_id = item.get("frame_id")
+                dq_mask_path = item.get("dq_mask_path")
+                if frame_id is None or dq_mask_path in {None, ""}:
+                    continue
+                sidecar = Path(str(dq_mask_path))
+                if not sidecar.is_absolute():
+                    sidecar = artifact_path.parent / sidecar
+                frame_key = str(frame_id)
+                if frame_key not in sidecars:
+                    sidecars[frame_key] = {
+                        "path": sidecar,
+                        "source": "calibration_artifacts",
+                        "artifact_path": artifact_path,
+                        "artifact_frame_id": frame_key,
+                        "dq_summary": item.get("dq_summary"),
+                        "cosmetic_correction": item.get("cosmetic_correction"),
+                    }
+                    sidecar_count += 1
+        candidate_row["sidecar_count"] = sidecar_count
+        checked.append(candidate_row)
+
+    return sidecars, {
+        "schema_version": 1,
+        "source_model": "calibration_artifacts_dq_sidecar_index",
+        "candidate_count": len(candidates),
+        "checked": checked,
+        "sidecar_frame_count": len(sidecars),
+        "available": bool(sidecars),
+    }
+
+
+def _resident_source_dq_sidecar_record(
+    frame: dict[str, Any],
+    plan_root: Path,
+    calibration_dq_sidecars: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     for key in (
         "source_dq_mask_path",
         "dq_mask_path",
@@ -1492,7 +1580,15 @@ def _resident_source_dq_sidecar_path(frame: dict[str, Any], plan_root: Path) -> 
         sidecar = Path(str(raw_path))
         if not sidecar.is_absolute():
             sidecar = plan_root / sidecar
-        return sidecar
+        return {
+            "path": sidecar,
+            "source": "plan_frame_record",
+            "plan_key": key,
+        }
+    if calibration_dq_sidecars:
+        record = calibration_dq_sidecars.get(str(frame.get("id")))
+        if record is not None:
+            return record
     return None
 
 
@@ -1503,17 +1599,35 @@ def _resident_source_invalid_mask_from_frame(
     height: int,
     width: int,
     plan_root: Path,
+    calibration_dq_sidecars: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[np.ndarray | None, dict[str, Any]]:
     components: list[tuple[np.ndarray | None, dict[str, Any]]] = [
         source_invalid_mask_from_array(data, height=height, width=width)
     ]
-    sidecar_path = _resident_source_dq_sidecar_path(frame, plan_root)
-    if sidecar_path is not None:
+    sidecar_record = _resident_source_dq_sidecar_record(frame, plan_root, calibration_dq_sidecars)
+    if sidecar_record is not None:
+        sidecar_path = Path(sidecar_record["path"])
+        sidecar_mask, sidecar_info = source_invalid_mask_from_sidecar_path(
+            sidecar_path,
+            height=height,
+            width=width,
+        )
+        sidecar_info.update(
+            {
+                "sidecar_source": str(sidecar_record.get("source") or "unknown"),
+                "sidecar_plan_key": sidecar_record.get("plan_key"),
+                "sidecar_artifact_path": None
+                if sidecar_record.get("artifact_path") is None
+                else str(sidecar_record["artifact_path"]),
+                "sidecar_artifact_frame_id": sidecar_record.get("artifact_frame_id"),
+                "sidecar_artifact_dq_summary": sidecar_record.get("dq_summary"),
+                "sidecar_artifact_cosmetic_correction": sidecar_record.get("cosmetic_correction"),
+            }
+        )
         components.append(
-            source_invalid_mask_from_sidecar_path(
-                sidecar_path,
-                height=height,
-                width=width,
+            (
+                sidecar_mask,
+                sidecar_info,
             )
         )
     return combine_source_invalid_masks(components, height=height, width=width)
@@ -3122,6 +3236,11 @@ def run_resident_calibration_integration(
     plan_root = Path(plan_path).parent
     run = Path(run_dir)
     run.mkdir(parents=True, exist_ok=True)
+    calibration_dq_sidecars, calibration_dq_sidecar_index = _resident_source_dq_sidecars_from_calibration_artifacts(
+        plan,
+        run=run,
+        plan_root=plan_root,
+    )
     shared_master_cache_dir = None if resident_master_cache_dir is None else Path(resident_master_cache_dir)
     if shared_master_cache_dir is not None:
         shared_master_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -3573,6 +3692,7 @@ def run_resident_calibration_integration(
                                 height=height,
                                 width=width,
                                 plan_root=plan_root,
+                                calibration_dq_sidecars=calibration_dq_sidecars,
                             )
                             source_dq_pending_by_index[int(item_index)] = (
                                 str(frame["id"]),
@@ -3831,6 +3951,7 @@ def run_resident_calibration_integration(
                             height=height,
                             width=width,
                             plan_root=plan_root,
+                            calibration_dq_sidecars=calibration_dq_sidecars,
                         )
                         calibrate_start = perf_counter()
                         try:
@@ -7714,6 +7835,7 @@ def run_resident_calibration_integration(
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
                     "source_dq_summary": source_dq_summary,
+                    "source_dq_calibration_artifact_index": calibration_dq_sidecar_index,
                     "stack_engine_surface_contract": stack_surface_contract,
                     "dq_flag_bits": {
                         "no_data": int(DQFlag.NO_DATA),
@@ -8751,6 +8873,7 @@ def run_resident_calibration_integration(
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
                     "source_dq_summary": source_dq_summary,
+                    "source_dq_calibration_artifact_index": calibration_dq_sidecar_index,
                     "stack_engine_surface_contract": stack_surface_contract,
                     "geometric_warp_coverage": {
                         "available": bool(geometric_warp_coverage_map is not None),
