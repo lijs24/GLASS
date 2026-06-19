@@ -7047,6 +7047,27 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 391: Default-Promotion Final Evidence Detail Handoff
+
+- Carry Gate390 release-promotion final release quality evidence detail into
+  `glass default-promotion-manifest`.
+- Preserve legacy compatibility for release-decision artifacts that only
+  provide historical `final_checks_*` evidence names, while requiring
+  `final_evidence_*` ready/match/raw/Phase2 detail fields to pass once present.
+- Block default-promotion readiness when release-decision detail evidence
+  fails or Phase2-side detail fields are dropped while raw release-decision
+  detail is present.
+- Surface final-evidence-detail readiness and raw/Phase2 matrix detail fields
+  in default-promotion JSON evidence and Markdown.
+- Add focused tests for green detail surfacing, compatible-missing detail,
+  legacy-only compatibility, failed raw detail evidence, failed Phase2 detail
+  evidence, and Phase2 detail-loss mismatch.
+- Keep this gate default-promotion scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

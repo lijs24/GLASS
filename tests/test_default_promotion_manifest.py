@@ -22,7 +22,34 @@ def _release_quality_final_evidence_fields(
         f"{prefix}_final_checks_match": True,
         f"{prefix}_raw_final_checks_ready": raw_ready,
         f"{prefix}_phase2_final_checks_ready": phase2_ready,
+        f"{prefix}_final_evidence_ready": final_ready,
+        f"{prefix}_final_evidence_match": True,
+        f"{prefix}_raw_final_evidence_ready": raw_ready,
+        f"{prefix}_phase2_final_evidence_ready": phase2_ready,
     }
+
+
+_RELEASE_QUALITY_FINAL_EVIDENCE_PREFIXES = (
+    "raw_matrix",
+    "raw_matrix_default",
+    "raw_default_promotion",
+    "phase2_matrix",
+    "phase2_matrix_default",
+    "phase2_default_promotion",
+)
+
+_RELEASE_QUALITY_FINAL_EVIDENCE_DETAIL_SUFFIXES = (
+    "final_evidence_ready",
+    "final_evidence_match",
+    "raw_final_evidence_ready",
+    "phase2_final_evidence_ready",
+)
+
+
+def _clear_release_quality_final_evidence_detail(section: dict[str, object]) -> None:
+    for prefix in _RELEASE_QUALITY_FINAL_EVIDENCE_PREFIXES:
+        for suffix in _RELEASE_QUALITY_FINAL_EVIDENCE_DETAIL_SUFFIXES:
+            section[f"{prefix}_{suffix}"] = None
 
 
 def _write_release_decision(
@@ -1683,6 +1710,13 @@ def test_default_promotion_manifest_allows_compatible_missing_release_publicatio
     assert guard["raw_matrix_raw_final_checks_ready"] is None
     assert guard["raw_matrix_phase2_final_checks_ready"] is None
     assert guard["phase2_matrix_raw_final_checks_ready"] is None
+    assert guard["final_evidence_detail_fields_present"] is True
+    assert guard["final_evidence_detail_ready"] is True
+    assert guard["raw_matrix_final_evidence_ready"] is True
+    assert guard["raw_matrix_final_evidence_match"] is True
+    assert guard["raw_matrix_raw_final_evidence_ready"] is None
+    assert guard["raw_matrix_phase2_final_evidence_ready"] is None
+    assert guard["phase2_matrix_raw_final_evidence_ready"] is None
 
 
 def test_default_promotion_manifest_allows_legacy_release_publication_quality_without_final_evidence(
@@ -1717,6 +1751,45 @@ def test_default_promotion_manifest_allows_legacy_release_publication_quality_wi
     assert guard["phase2_final_evidence_present"] is None
     assert guard["raw_matrix_final_checks_ready"] is None
     assert guard["phase2_matrix_final_checks_ready"] is None
+    assert guard["final_evidence_detail_fields_present"] is False
+    assert guard["final_evidence_detail_ready"] is True
+    assert guard["raw_matrix_final_evidence_ready"] is None
+    assert guard["phase2_matrix_final_evidence_ready"] is None
+
+
+def test_default_promotion_manifest_allows_legacy_release_publication_quality_final_evidence_without_detail(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    payload = read_json(decision)
+    _clear_release_quality_final_evidence_detail(
+        payload["stack_engine_publication_release_quality_guard"]
+    )
+    write_json(decision, payload)
+    _write_phase2_status(phase2, decision)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    assert payload["passed"] is True
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is True
+    assert guard["ready"] is True
+    assert guard["final_evidence_fields_present"] is True
+    assert guard["final_evidence_detail_fields_present"] is False
+    assert guard["final_evidence_detail_ready"] is True
+    assert guard["final_evidence_ready"] is True
+    assert guard["raw_matrix_final_checks_ready"] is True
+    assert guard["raw_matrix_final_evidence_ready"] is None
+    assert guard["phase2_matrix_final_evidence_ready"] is None
 
 
 def test_default_promotion_manifest_blocks_failed_release_publication_quality_final_evidence(
@@ -1753,6 +1826,40 @@ def test_default_promotion_manifest_blocks_failed_release_publication_quality_fi
     assert guard["final_evidence_ready"] is False
     assert guard["raw_matrix_final_checks_ready"] is False
     assert guard["raw_matrix_raw_final_checks_ready"] is False
+    assert guard["final_evidence_detail_ready"] is False
+    assert guard["raw_matrix_final_evidence_ready"] is False
+    assert guard["raw_matrix_raw_final_evidence_ready"] is False
+
+
+def test_default_promotion_manifest_blocks_failed_release_publication_quality_final_evidence_detail(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    payload = read_json(decision)
+    payload["stack_engine_publication_release_quality_guard"][
+        "raw_matrix_phase2_final_evidence_ready"
+    ] = False
+    write_json(decision, payload)
+    _write_phase2_status(phase2, decision)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    assert payload["passed"] is False
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is False
+    assert guard["ready"] is False
+    assert guard["final_evidence_detail_ready"] is False
+    assert guard["raw_matrix_phase2_final_checks_ready"] is True
+    assert guard["raw_matrix_phase2_final_evidence_ready"] is False
 
 
 def test_default_promotion_manifest_blocks_failed_phase2_release_publication_quality_final_evidence(
@@ -1784,6 +1891,9 @@ def test_default_promotion_manifest_blocks_failed_phase2_release_publication_qua
     assert guard["final_evidence_ready"] is False
     assert guard["phase2_matrix_final_checks_ready"] is False
     assert guard["phase2_matrix_raw_final_checks_ready"] is False
+    assert guard["final_evidence_detail_ready"] is False
+    assert guard["phase2_matrix_final_evidence_ready"] is False
+    assert guard["phase2_matrix_raw_final_evidence_ready"] is False
 
 
 def test_default_promotion_manifest_blocks_missing_phase2_release_publication_quality_final_evidence(
@@ -1815,6 +1925,48 @@ def test_default_promotion_manifest_blocks_missing_phase2_release_publication_qu
     assert guard["final_evidence_ready"] is False
     assert guard["raw_matrix_final_checks_ready"] is True
     assert guard["phase2_matrix_final_checks_ready"] is None
+    assert guard["raw_matrix_final_evidence_ready"] is True
+    assert guard["phase2_matrix_final_evidence_ready"] is None
+
+
+def test_default_promotion_manifest_blocks_phase2_release_publication_quality_final_evidence_detail_loss(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    payload = read_json(decision)
+    for prefix in (
+        "phase2_matrix",
+        "phase2_matrix_default",
+        "phase2_default_promotion",
+    ):
+        for suffix in _RELEASE_QUALITY_FINAL_EVIDENCE_DETAIL_SUFFIXES:
+            payload["stack_engine_publication_release_quality_guard"][
+                f"{prefix}_{suffix}"
+            ] = None
+    write_json(decision, payload)
+    _write_phase2_status(phase2, decision)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    assert payload["passed"] is False
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is False
+    assert guard["ready"] is False
+    assert guard["final_evidence_ready"] is True
+    assert guard["final_evidence_detail_fields_present"] is True
+    assert guard["final_evidence_detail_ready"] is False
+    assert guard["raw_matrix_final_evidence_ready"] is True
+    assert guard["phase2_matrix_final_evidence_ready"] is None
+    assert guard["phase2_matrix_final_checks_ready"] is True
 
 
 def test_default_promotion_manifest_blocks_failed_release_publication_quality_guard(
