@@ -24,6 +24,11 @@ from glass.engine.rejection import (
     resident_rejection_descriptor,
 )
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
+from glass.engine.resident_frame_mask import (
+    build_resident_frame_mask_contract,
+    summarize_resident_frame_mask_contracts,
+    validate_resident_frame_mask_contract,
+)
 from glass.engine.resident_registration_quality import (
     DEFAULT_RESIDENT_REGISTRATION_QUALITY_MIN_INLIERS,
     evaluate_resident_registration_quality,
@@ -2940,6 +2945,7 @@ def run_resident_calibration_integration(
     frame_weights: dict[str, float] = {}
     registration_results: list[RegistrationResult] = []
     registration_quality_decisions_by_frame: dict[str, dict[str, Any]] = {}
+    resident_frame_mask_contract_groups: list[dict[str, Any]] = []
     local_norm_groups: list[dict[str, Any]] = []
     tile_local_policy_any_enabled = False
     tile_local_policy_any_applied = False
@@ -6647,6 +6653,35 @@ def run_resident_calibration_integration(
                 }
             )
 
+            group_frame_ids = [str(frame["id"]) for frame in light_frames]
+            group_registration_results = [
+                registration_by_frame_id[frame_id]
+                for frame_id in group_frame_ids
+                if frame_id in registration_by_frame_id
+            ]
+            group_registration_quality_decisions_for_mask = [
+                registration_quality_decisions_by_frame[frame_id]
+                for frame_id in group_frame_ids
+                if frame_id in registration_quality_decisions_by_frame
+            ]
+            group_manual_excluded_frame_ids = [
+                str(frame["id"]) for frame in light_frames if _matches_any_token(frame, excluded_tokens)
+            ]
+            group_frame_mask_contract = build_resident_frame_mask_contract(
+                frame_ids=group_frame_ids,
+                frame_weights=[float(value) for value in frame_weight_values],
+                registration_results=group_registration_results,
+                registration_quality_decisions=group_registration_quality_decisions_for_mask,
+                manual_excluded_frame_ids=group_manual_excluded_frame_ids,
+                weighting_frame_results=weighting_frame_results,
+                local_norm_frame_results=local_norm_frame_results,
+                filter_name=filter_name,
+                registration_mode=resident_registration,
+                integration_dispatch=resident_integration_dispatch,
+            )
+            validate_resident_frame_mask_contract(group_frame_mask_contract)
+            resident_frame_mask_contract_groups.append(group_frame_mask_contract)
+
             coverage_map = None
             low_rejection_map = None
             high_rejection_map = None
@@ -7130,6 +7165,11 @@ def run_resident_calibration_integration(
                         "warp_edge": int(DQFlag.WARP_EDGE),
                         "low_rejected": int(DQFlag.LOW_REJECTED),
                         "high_rejected": int(DQFlag.HIGH_REJECTED),
+                    },
+                    "resident_frame_mask_contract": {
+                        "path": str(run / "resident_frame_masks.json"),
+                        "summary": group_frame_mask_contract["summary"],
+                        "semantics": group_frame_mask_contract["semantics"],
                     },
                     "memory_estimate": memory_estimate,
                     "resident_bytes_allocated_after_master_upload": stack.bytes_allocated,
@@ -8130,6 +8170,10 @@ def run_resident_calibration_integration(
                     "resident_integration_dispatch_requested": resident_integration_dispatch_requested,
                     "resident_integration_dispatch_reason": resident_integration_dispatch_reason,
                     "resident_winsorized_contract": resident_winsorized_contract,
+                    "resident_frame_mask_contract": {
+                        "path": str(run / "resident_frame_masks.json"),
+                        "summary": group_frame_mask_contract["summary"],
+                    },
                     "hardened_winsorized_timing_s": hardened_winsorized_timing,
                     "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
@@ -8155,6 +8199,23 @@ def run_resident_calibration_integration(
 
         resident_path = run / "resident_artifacts.json"
         registration_quality_path = run / "resident_registration_quality.json"
+        resident_frame_masks_path = run / "resident_frame_masks.json"
+        resident_frame_mask_payload = {
+            "schema_version": 1,
+            "artifact": "resident_frame_mask_contract",
+            "source_stage": "resident_calibrated_stack",
+            "backend": "cuda_resident_stack",
+            "summary": summarize_resident_frame_mask_contracts(resident_frame_mask_contract_groups),
+            "groups": resident_frame_mask_contract_groups,
+            "pixel_mask_semantics": {
+                "invalid_warp_footprint": "output DQFlag.WARP_EDGE and geometric warp coverage maps",
+                "low_rejection": "output DQFlag.LOW_REJECTED and low rejection count maps",
+                "high_rejection": "output DQFlag.HIGH_REJECTED and high rejection count maps",
+                "no_data": "output DQFlag.NO_DATA where no valid weighted sample contributes",
+            },
+        }
+        validate_resident_frame_mask_contract({"summary": resident_frame_mask_payload["summary"]})
+        write_json(resident_frame_masks_path, resident_frame_mask_payload)
         registration_quality_decisions = list(registration_quality_decisions_by_frame.values())
         registration_quality_payload = {
             "schema_version": 1,
@@ -8288,6 +8349,8 @@ def run_resident_calibration_integration(
                 "frame_weights": frame_weights,
                 "outputs": outputs,
                 "excluded_frame_tokens": sorted(excluded_tokens),
+                "resident_frame_mask_contract_path": str(resident_frame_masks_path),
+                "resident_frame_mask_contract_summary": resident_frame_mask_payload["summary"],
                 "warnings": integration_warnings,
             },
         )
@@ -8328,6 +8391,15 @@ def run_resident_calibration_integration(
             PipelineArtifact(
                 stage="resident_registration_quality",
                 path=str(registration_quality_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=list(frames.keys()),
+            )
+        )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_frame_masks",
+                path=str(resident_frame_masks_path),
                 format="json",
                 created_at=now_iso(),
                 source_frames=list(frames.keys()),

@@ -313,11 +313,11 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
     assert rows["excluded"]["resident_stack_index"] == 1
     assert rows["ref"]["warp_status"] == "resident_in_vram"
     assert rows["ref"]["local_norm_status"] == "resident_applied"
-    assert rows["excluded"]["final_status"] == "zero_weight"
+    assert rows["excluded"]["final_status"] == "registration_rejected"
     written = read_json(run / "frame_accounting.json")
     assert written["sources"]["integration"] is True
     assert written["resident_native_calibration_artifact"] is True
     assert written["summary"]["resident_native_calibration_artifact"] is True
     assert written["summary"]["resident_calibrated_light_ledger_rows"] == 2
     assert written["summary"]["calibration_master_count"] == 3
-    assert written["exception_summary"]["primary_stage_counts"] == {"integration": 1}
+    assert written["exception_summary"]["primary_stage_counts"] == {"registration": 1}

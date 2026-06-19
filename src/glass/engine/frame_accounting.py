@@ -43,6 +43,19 @@ def _registration_rows(registration: dict[str, Any] | None) -> list[dict[str, An
     return rows if isinstance(rows, list) else []
 
 
+def _resident_frame_mask_rows(resident_frame_masks: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not resident_frame_masks:
+        return []
+    rows: list[dict[str, Any]] = []
+    for group in resident_frame_masks.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        for row in group.get("rows") or []:
+            if isinstance(row, dict):
+                rows.append(row)
+    return rows
+
+
 def _add_frame(
     frames: list[dict[str, Any]],
     seen: set[str],
@@ -109,8 +122,6 @@ def _final_status(
         return "integration_conflict"
     if integration_status == "used":
         return "integrated"
-    if integration_status == "zero_weight":
-        return "zero_weight"
     if quality_gate_status == "rejected" or registration_status == "quality_rejected":
         return "quality_rejected"
     if registration_status in {"failed", "rejected", "missing", "excluded"}:
@@ -119,6 +130,8 @@ def _final_status(
         return "warp_skipped"
     if local_norm_status in {"empty", "skipped_zero_weight"}:
         return "local_norm_rejected"
+    if integration_status == "zero_weight":
+        return "zero_weight"
     if has_integration:
         return "not_integrated"
     return "pending"
@@ -221,6 +234,8 @@ def _exception_frames(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "primary_stage": primary_stage,
                 "primary_reason": primary_reason,
                 "quality_gate_status": row.get("quality_gate_status"),
+                "resident_frame_mask_status": row.get("resident_frame_mask_status"),
+                "resident_frame_mask_categories": row.get("resident_frame_mask_categories"),
                 "registration_status": row.get("registration_status"),
                 "warp_status": row.get("warp_status"),
                 "local_norm_status": row.get("local_norm_status"),
@@ -257,6 +272,7 @@ def build_frame_accounting(
     local_norm = _read_optional_json(run / "local_norm_results.json")
     integration = _read_optional_json(run / "integration_results.json")
     resident = _read_optional_json(run / "resident_artifacts.json")
+    resident_frame_masks = _read_optional_json(run / "resident_frame_masks.json")
 
     quality_by_id = {
         str(item.get("frame_id")): item for item in (quality or {}).get("frame_quality", [])
@@ -278,6 +294,11 @@ def build_frame_accounting(
         or item.get("source_stage") == "resident_calibrated_stack"
     )
     registration_by_id = {str(item.get("frame_id")): item for item in _registration_rows(registration)}
+    resident_frame_mask_by_id = {
+        str(item.get("frame_id")): item
+        for item in _resident_frame_mask_rows(resident_frame_masks)
+        if item.get("frame_id") is not None
+    }
     warp_by_id = {str(item.get("frame_id")): item for item in (warp or {}).get("warp_results", [])}
     warp_skipped_by_id = {
         str(item.get("frame_id")): item for item in (warp or {}).get("skipped_frames", [])
@@ -341,6 +362,34 @@ def build_frame_accounting(
             quality_gate_status = "not_run"
             reference_candidate = None
             quality_score = None
+
+        resident_frame_mask_row = resident_frame_mask_by_id.get(frame_id)
+        if resident_frame_mask_row:
+            frame_mask_status = str(resident_frame_mask_row.get("mask_status") or "unknown")
+            frame_mask_categories = [
+                str(item) for item in (resident_frame_mask_row.get("mask_categories") or [])
+            ]
+            frame_mask_reasons = [
+                str(item) for item in (resident_frame_mask_row.get("mask_reasons") or [])
+            ]
+            frame_mask_auditable = bool(resident_frame_mask_row.get("auditable"))
+            if "registration_quality" in frame_mask_categories and quality_gate_status in {
+                "missing",
+                "not_run",
+                "not_recorded",
+            }:
+                quality_gate_status = "rejected"
+            _extend_unique(reasons, frame_mask_reasons)
+        elif resident_frame_masks:
+            frame_mask_status = "missing"
+            frame_mask_categories = []
+            frame_mask_reasons = []
+            frame_mask_auditable = False
+        else:
+            frame_mask_status = "not_run"
+            frame_mask_categories = []
+            frame_mask_reasons = []
+            frame_mask_auditable = None
 
         registration_row = registration_by_id.get(frame_id)
         if registration_row:
@@ -428,6 +477,10 @@ def build_frame_accounting(
                 "quality_gate_status": quality_gate_status,
                 "reference_candidate": reference_candidate,
                 "quality_score": quality_score,
+                "resident_frame_mask_status": frame_mask_status,
+                "resident_frame_mask_categories": frame_mask_categories,
+                "resident_frame_mask_reasons": frame_mask_reasons,
+                "resident_frame_mask_auditable": frame_mask_auditable,
                 "registration_status": registration_status,
                 "registration_source": registration_source,
                 "warp_status": warp_status,
@@ -468,6 +521,18 @@ def build_frame_accounting(
         "warp_skipped_frames": sum(1 for row in rows if row["warp_status"] == "skipped"),
         "integrated_frames": final_counts.get("integrated", 0),
         "zero_weight_frames": final_counts.get("zero_weight", 0),
+        "resident_frame_mask_active_frames": sum(
+            1 for row in rows if row["resident_frame_mask_status"] == "active"
+        ),
+        "resident_frame_mask_masked_frames": sum(
+            1 for row in rows if row["resident_frame_mask_status"] == "masked"
+        ),
+        "resident_frame_mask_unaudited_frames": sum(
+            1
+            for row in rows
+            if row["resident_frame_mask_status"] == "masked"
+            and row["resident_frame_mask_auditable"] is False
+        ),
         "integration_conflict_frames": final_counts.get("integration_conflict", 0),
         "not_integrated_frames": final_counts.get("not_integrated", 0),
         "final_status_counts": final_counts,
@@ -485,6 +550,7 @@ def build_frame_accounting(
             "local_norm": bool(local_norm),
             "integration": bool(integration),
             "resident": bool(resident),
+            "resident_frame_masks": bool(resident_frame_masks),
         },
         "calibration_artifact_type": calibration_artifact_type,
         "resident_native_calibration_artifact": resident_native_calibration,

@@ -8114,39 +8114,72 @@ integration where applicable.
 
 ### S2-Gate 434: StackEngine Resident Default, DQ Mask Contract, And 200-Light Regression
 
-- Continue from Gate433 with a substantive execution-path gate. Do not add
-  release/default-promotion/report-contract-only work unless it directly blocks
-  this gate.
-- Make the resident CUDA StackEngine path the preferred execution path for the
-  real 200-light benchmark configuration while keeping explicit fallback flags
-  for the older resident integration path.
-- Introduce the first DQ/mask execution contract in the resident path:
-  - quality-gate rejected frames become structured frame-level mask decisions;
-  - manual excludes, registration-quality excludes, invalid warp footprint, and
-    rejection-map masks remain distinguishable;
-  - zero-weight frames must have an auditable mask reason before integration;
-  - integration outputs keep coverage/rejection maps numerically consistent with
-    the accepted-frame set.
-- Add tests that prove masked/excluded frames cannot silently enter integration
-  and that StackEngine/default-path output matches the existing Gate433 resident
-  output on a controlled fixture.
-- Re-run the real M38 H 200-light dataset with the new default path and record:
-  - total elapsed time;
-  - calibration/upload time;
-  - resident registration/warp time;
-  - integration time;
-  - output write time;
-  - accepted/rejected/reference frame counts;
-  - peak VRAM estimate;
-  - image diff against Gate433 auto-quality output.
+- Continue from Gate433 with a substantive execution-path gate. No release,
+  default-promotion, package upload, or report-contract-only work was added.
+- Added a frame-level resident DQ/mask admission contract:
+  - new helper: `src/glass/engine/resident_frame_mask.py`;
+  - resident CUDA now builds and validates the contract after registration,
+    weighting, and local normalization, but before integration;
+  - any frame with zero or non-finite integration weight must have an auditable
+    reason before StackEngine integration can start;
+  - `resident_frame_masks.json` records per-frame active/masked status,
+    categories, reasons, manual-exclude state, registration status,
+    registration-quality status, weighting status, and LN status;
+  - pixel-level invalid warp footprint and low/high rejection masks remain
+    represented by output DQ/count maps, and the contract records this
+    relationship explicitly.
+- Updated frame accounting:
+  - reads `resident_frame_masks.json`;
+  - promotes registration-quality masks to `quality_rejected`;
+  - reports resident mask active/masked/unaudited counts;
+  - prevents quality-gate exclusions from looking like anonymous zero-weight
+    integration drops.
+- Real M38 H 200-light validation:
+  - run directory:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate434_stack_dq_20260619`;
+  - no explicit `--exclude-frame-id` masks were used;
+  - dispatch mode: resident CUDA StackEngine `stack`;
+  - total elapsed time: `28.035511 s`;
+  - `light_read_upload_calibrate`: `17.176694 s`;
+  - `resident_registration_warp`: `1.632852 s`;
+  - `resident_integration`: `0.290809 s`;
+  - output write: `2.623330 s`;
+  - estimated peak VRAM: `47.311736 GiB`;
+  - registration status counts: `192 ok`, `7 excluded`, `1 reference`;
+  - frame-mask summary: `193 active`, `7 masked`, `0 unaudited zero-weight`;
+  - mask categories: `registration_quality=7`, `registration=7`;
+  - frame accounting final status: `193 integrated`, `7 quality_rejected`.
+- Compare Gate434 output against Gate433 auto-quality output:
+  shape match true, p50/p90/p99 absolute delta `0.0` / `0.0` / `0.0`,
+  RMS delta `0.0`, relative RMS `0.0`.
+- Focused tests:
+  `tests/test_resident_frame_mask_contract.py`,
+  `tests/test_resident_registration_quality.py`,
+  `tests/test_resident_cuda_run.py`, `tests/test_resident_result_contract.py`,
+  and `tests/test_cli_smoke.py` passed together.
+
+### S2-Gate 435: Resident StackEngine Performance And DQ Pixel Closure
+
+- Continue from Gate434 with a substantive runtime gate only.
+- Optimize and verify the resident StackEngine default path without changing
+  the accepted frame set:
+  - profile the remaining `light_read_upload_calibrate` and output-write
+    bottlenecks under the Gate434 configuration;
+  - tighten DQ pixel sample closure using geometric warp coverage, post-rejection
+    coverage, and low/high rejection count maps;
+  - keep `resident_frame_masks.json` as the frame-level admission source and
+    DQ maps as the pixel-level mask source;
+  - avoid fused-matrix promotion unless it preserves Lanczos/diagnostic-map
+    parity or the difference is explicitly quantified.
 - Acceptance for the next gate:
-  - fixture tests pass for DQ/mask admission and StackEngine/default parity;
+  - focused tests prove DQ pixel closure still agrees with frame-mask active
+    counts and output maps;
   - the 200-light run completes without explicit frame masks;
-  - frame counts match Gate433 unless a documented algorithmic decision changes
-    them;
-  - image delta against Gate433 is zero or explained by the StackEngine change;
+  - frame counts remain `193 active`, `7 masked`, `1 reference` unless a
+    documented algorithmic reason changes them;
+  - output delta against Gate434 is zero or scientifically explained;
   - focused tests plus `python -m pytest -q` pass;
-  - checkpoint and commit record the timing and numerical comparison.
+  - checkpoint and commit record timing, VRAM, and numerical comparison.
 
 ## Gate Rules
 

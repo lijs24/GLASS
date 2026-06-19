@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "gate": "S2-Gate 434",
+  "title": "StackEngine Resident Default, DQ Mask Contract, And 200-Light Regression",
+  "run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate434_stack_dq_20260619",
+  "baseline_run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate433_auto_quality_20260619",
+  "report_html": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate434_stack_dq_20260619\\report.html",
+  "compare_report_html": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate434_vs_gate433_compare.html",
+  "compare_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate434_vs_gate433_compare.json",
+  "resident_frame_masks": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate434_stack_dq_20260619\\resident_frame_masks.json",
+  "resident_registration_quality": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate434_stack_dq_20260619\\resident_registration_quality.json",
+  "frame_accounting": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate434_stack_dq_20260619\\frame_accounting.json",
+  "cuda_doctor": "runs\\checkpoints\\s2_gate_434_cuda_doctor.json",
+  "timing_s": {
+    "total_elapsed": 28.03551059999154,
+    "light_read_upload_calibrate": 17.17669439999736,
+    "resident_registration_warp": 1.6328521997784264,
+    "resident_integration": 0.2908093000005465,
+    "output_write": 2.62333000000217
+  },
+  "resident_integration_dispatch": {
+    "requested_mode": "stack",
+    "effective_mode": "stack",
+    "selection_reason": "explicit_stack",
+    "interpolation": "lanczos3"
+  },
+  "registration_status_counts": {
+    "ok": 192,
+    "excluded": 7,
+    "reference": 1
+  },
+  "resident_frame_mask_summary": {
+    "frame_count": 200,
+    "active_frame_count": 193,
+    "masked_frame_count": 7,
+    "unknown_zero_weight_frame_count": 0,
+    "mask_category_counts": {
+      "registration": 7,
+      "registration_quality": 7
+    },
+    "passed": true
+  },
+  "frame_accounting_summary": {
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "quality_rejected_frames": 7,
+    "resident_frame_mask_active_frames": 193,
+    "resident_frame_mask_masked_frames": 7,
+    "resident_frame_mask_unaudited_frames": 0,
+    "final_status_counts": {
+      "integrated": 193,
+      "quality_rejected": 7
+    }
+  },
+  "rejected_frame_ids": [
+    "F000160",
+    "F000213",
+    "F000214",
+    "F000215",
+    "F000216",
+    "F000217",
+    "F000218"
+  ],
+  "estimated_peak_vram_gib": 47.3117358982563,
+  "compare_against_gate433": {
+    "shape_match": true,
+    "abs_diff_p50": 0.0,
+    "abs_diff_p90": 0.0,
+    "abs_diff_p99": 0.0,
+    "rms_diff": 0.0,
+    "relative_rms_diff": 0.0
+  },
+  "tests": {
+    "focused": "108 passed in 9.59s",
+    "full": "1017 passed in 37.96s"
+  }
+}
