@@ -8161,25 +8161,72 @@ integration where applicable.
 ### S2-Gate 435: Resident StackEngine Performance And DQ Pixel Closure
 
 - Continue from Gate434 with a substantive runtime gate only.
-- Optimize and verify the resident StackEngine default path without changing
-  the accepted frame set:
-  - profile the remaining `light_read_upload_calibrate` and output-write
-    bottlenecks under the Gate434 configuration;
-  - tighten DQ pixel sample closure using geometric warp coverage, post-rejection
-    coverage, and low/high rejection count maps;
-  - keep `resident_frame_masks.json` as the frame-level admission source and
-    DQ maps as the pixel-level mask source;
-  - avoid fused-matrix promotion unless it preserves Lanczos/diagnostic-map
-    parity or the difference is explicitly quantified.
-- Acceptance for the next gate:
-  - focused tests prove DQ pixel closure still agrees with frame-mask active
-    counts and output maps;
-  - the 200-light run completes without explicit frame masks;
-  - frame counts remain `193 active`, `7 masked`, `1 reference` unless a
-    documented algorithmic reason changes them;
-  - output delta against Gate434 is zero or scientifically explained;
-  - focused tests plus `python -m pytest -q` pass;
-  - checkpoint and commit record timing, VRAM, and numerical comparison.
+- Added a resident DQ pixel closure artifact and validator:
+  - new helper: `src/glass/engine/resident_dq_pixel_closure.py`;
+  - resident CUDA writes `resident_dq_pixel_closure.json`;
+  - integration outputs and `resident_artifacts.json` link to the closure
+    summary;
+  - the validator checks frame-mask active count, DQ provenance active count,
+    geometric warp coverage frame count, post-rejection coverage source terms,
+    low/high rejected sample counts, output DQ summary consistency, and
+    valid-sample arithmetic before the run is accepted.
+- Real M38 H 200-light validation:
+  - run directory:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate435_dq_pixel_closure_20260619_203306`;
+  - no explicit `--exclude-frame-id` masks were used;
+  - total elapsed time: `28.399995 s`;
+  - `master_build_or_load`: `11.412479 s`;
+  - `light_read_upload_calibrate`: `17.545145 s`;
+  - worker FITS materialize/decode cumulative time: `33.210399 s`;
+  - light read overlap saved: `33.578325 s`;
+  - `resident_registration_warp`: `1.632386 s`;
+  - `resident_integration`: `0.291038 s`;
+  - output write wall time: `2.433101 s`;
+  - estimated peak VRAM: `47.311736 GiB`;
+  - registration status counts: `192 ok`, `7 excluded`, `1 reference`;
+  - frame-mask summary: `193 active`, `7 masked`, `0 unaudited zero-weight`.
+- DQ pixel closure result:
+  - closure summary passed with `1/1` groups green;
+  - frame-mask active count, DQ provenance active count, and geometric coverage
+    frame count all equal `193`;
+  - rejected sample count is `61,680,274`;
+  - valid-sample arithmetic closes exactly:
+    `11,801,876,614 - 11,740,196,340 - 61,680,274 = 0`;
+  - DQ summary is `valid=22,720,993`, `warp_edge=1,690,704`,
+    `low_rejected=12,560,911`, `high_rejected=32,082,764`.
+- Compare Gate435 output against Gate434 stack-DQ output:
+  shape match true, p50/p90/p99/p999 absolute delta `0.0` / `0.0` / `0.0` /
+  `0.0`, RMS delta `0.0`, relative RMS `0.0`, robust fit scale `1.0`,
+  offset `0.0`.
+- Focused tests:
+  `tests/test_resident_dq_pixel_closure.py`,
+  `tests/test_resident_frame_mask_contract.py`,
+  `tests/test_resident_cuda_run.py`, `tests/test_resident_result_contract.py`,
+  and `tests/test_cli_smoke.py` passed together.
+- Full test suite passed: `1021 passed`.
+- Interpretation: Gate435 turns the resident frame-mask contract into a
+  pixel-level DQ closure without changing output pixels. The next substantive
+  performance target is no longer registration throughput; it is cold-start
+  master construction plus the FITS decode/upload/calibration pipeline.
+
+### S2-Gate 436: Resident Cold/Warm Throughput Optimization
+
+- Continue from Gate435 with a substantive runtime gate only. No release,
+  default-promotion, package upload, or report-contract-only work.
+- Optimize the two largest remaining real-run buckets:
+  - `master_build_or_load` at about `11.4 s`;
+  - `light_read_upload_calibrate` at about `17.5 s`, with decode work already
+    heavily overlapped but still dominating wall time.
+- Required work:
+  - add or harden a persistent content-addressed resident master cache path for
+    repeated same-calibration runs without weakening run-local auditability;
+  - benchmark cold and warm 200-light runs with the Gate435 recipe;
+  - preserve `193 active`, `7 masked`, DQ pixel closure pass, and zero output
+    delta against Gate435 unless a documented algorithmic change explains it;
+  - record per-stage timing, overlap efficiency, output write timing, peak VRAM,
+    and cache-hit evidence in checkpoint artifacts.
+- Do not promote fused warp/matrix or new registration defaults in this gate
+  unless the numerical effect is quantified against Gate435 first.
 
 ## Gate Rules
 

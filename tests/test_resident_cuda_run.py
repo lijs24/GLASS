@@ -1672,6 +1672,7 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
 
     integration = read_json(run / "integration_results.json")
     resident = read_json(run / "resident_artifacts.json")
+    dq_closure = read_json(run / "resident_dq_pixel_closure.json")
     output = integration["outputs"][0]
     artifact = resident["artifacts"][0]
     assert output["output_map_policy"]["mode"] == "science"
@@ -1697,6 +1698,12 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     assert "valid" in output["dq_summary"]
     assert output["dq_coverage_provenance"] == artifact["dq_coverage_provenance"]
     assert output["dq_provenance_summary"] == artifact["dq_provenance_summary"]
+    assert output["resident_dq_pixel_closure"]["path"] == str(run / "resident_dq_pixel_closure.json")
+    assert artifact["resident_dq_pixel_closure"]["path"] == str(run / "resident_dq_pixel_closure.json")
+    assert dq_closure["summary"]["passed"] is True
+    assert dq_closure["summary"]["group_count"] == 1
+    assert dq_closure["groups"][0]["frame_mask_active_frame_count"] == 2
+    assert dq_closure["groups"][0]["geometric_warp_coverage_frame_count"] == 2
     assert output["dq_provenance_summary"]["source_schema"] == "resident_dq_coverage_provenance"
     assert output["dq_provenance_summary"]["engine"] == "cuda_resident_stack"
     assert output["dq_provenance_summary"]["active_frame_count"] == 2

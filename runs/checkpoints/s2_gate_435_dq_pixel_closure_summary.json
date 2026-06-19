@@ -1,0 +1,109 @@
+{
+  "gate": "S2-Gate 435",
+  "title": "Resident StackEngine Performance And DQ Pixel Closure",
+  "status": "passed",
+  "run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate435_dq_pixel_closure_20260619_203306",
+  "baseline_run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate434_stack_dq_20260619",
+  "compare_report": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate435_vs_gate434_compare.html",
+  "compare_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate435_vs_gate434_compare.json",
+  "report_html": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate435_dq_pixel_closure_20260619_203306\\report.html",
+  "cuda": {
+    "available": true,
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "driver": "596.21",
+    "doctor_report": "runs/checkpoints/s2_gate_435_cuda_doctor.json"
+  },
+  "real_200_light": {
+    "plan": "C:\\glass_runs\\final_m38_h_200\\glass_current_20260514_154556\\processing_plan.json",
+    "frame_count": 200,
+    "active_frame_count": 193,
+    "masked_frame_count": 7,
+    "reference_frame_count": 1,
+    "registration_status_counts": {
+      "ok": 192,
+      "excluded": 7,
+      "reference": 1
+    },
+    "masked_frame_ids": [
+      "F000160",
+      "F000213",
+      "F000214",
+      "F000215",
+      "F000216",
+      "F000217",
+      "F000218"
+    ],
+    "output_map_policy": "audit"
+  },
+  "timing_s": {
+    "total_elapsed": 28.399994500010507,
+    "master_build_or_load": 11.412479199992958,
+    "light_read_upload_calibrate": 17.545145200012485,
+    "light_fits_materialize_decode_worker_cumulative": 33.21039850002853,
+    "light_read_worker_cumulative": 37.40750829994795,
+    "light_read_overlap_saved": 33.578325399867026,
+    "resident_registration_warp": 1.6323863000434358,
+    "resident_integration": 0.29103849999955855,
+    "output_write": 2.4331005999993067
+  },
+  "memory": {
+    "estimated_peak_gib": 47.3117358982563,
+    "calibrated_stack_gib": 45.93372344970703,
+    "resident_base_gib": 46.85239791870117,
+    "frame_mib": 235.1806640625
+  },
+  "dq_pixel_closure": {
+    "passed": true,
+    "group_count": 1,
+    "passed_group_count": 1,
+    "failed_group_count": 0,
+    "frame_mask_active_frame_count": 193,
+    "provenance_active_frame_count": 193,
+    "geometric_warp_coverage_frame_count": 193,
+    "rejected_samples": 61680274,
+    "input_valid_samples_before_rejection": 11801876614,
+    "valid_samples_after_rejection": 11740196340,
+    "arithmetic_delta": 0,
+    "dq_summary": {
+      "valid": 22720993,
+      "warp_edge": 1690704,
+      "low_rejected": 12560911,
+      "high_rejected": 32082764
+    },
+    "source_terms": [
+      "geometric_warp_coverage",
+      "high_rejection",
+      "low_rejection",
+      "post_rejection_coverage"
+    ]
+  },
+  "gate435_vs_gate434_compare": {
+    "shape_match": true,
+    "compared_pixels": 61651200,
+    "abs_diff_p50": 0.0,
+    "abs_diff_p90": 0.0,
+    "abs_diff_p99": 0.0,
+    "abs_diff_p999": 0.0,
+    "rms_diff": 0.0,
+    "relative_rms_diff": 0.0,
+    "robust_fit_scale": 1.0,
+    "robust_fit_offset": 0.0
+  },
+  "tests": {
+    "focused": {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_resident_dq_pixel_closure.py tests\\test_resident_frame_mask_contract.py tests\\test_resident_cuda_run.py tests\\test_resident_result_contract.py tests\\test_cli_smoke.py",
+      "result": "102 passed in 9.52s"
+    },
+    "full": {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+      "result": "1021 passed in 38.01s"
+    }
+  },
+  "clean_room": {
+    "compliant": true,
+    "note": "Gate435 used GLASS-owned artifacts, user-provided image data, and generic DQ/count-map arithmetic only. No external proprietary implementation source was inspected."
+  },
+  "next_gate": "S2-Gate 436: resident cold/warm throughput optimization for persistent master cache and light read/upload/calibration bottlenecks."
+}

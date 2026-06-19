@@ -24,6 +24,11 @@ from glass.engine.rejection import (
     resident_rejection_descriptor,
 )
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
+from glass.engine.resident_dq_pixel_closure import (
+    build_resident_dq_pixel_closure_group,
+    summarize_resident_dq_pixel_closure_groups,
+    validate_resident_dq_pixel_closure_group,
+)
 from glass.engine.resident_frame_mask import (
     build_resident_frame_mask_contract,
     summarize_resident_frame_mask_contracts,
@@ -2946,6 +2951,7 @@ def run_resident_calibration_integration(
     registration_results: list[RegistrationResult] = []
     registration_quality_decisions_by_frame: dict[str, dict[str, Any]] = {}
     resident_frame_mask_contract_groups: list[dict[str, Any]] = []
+    resident_dq_pixel_closure_groups: list[dict[str, Any]] = []
     local_norm_groups: list[dict[str, Any]] = []
     tile_local_policy_any_enabled = False
     tile_local_policy_any_applied = False
@@ -6914,6 +6920,28 @@ def run_resident_calibration_integration(
                 dq_summary,
                 item=filt,
             )
+            group_dq_pixel_closure = build_resident_dq_pixel_closure_group(
+                output={
+                    "filter": filt,
+                    "frame_count": len(light_frames),
+                    "rejection": rejection_mode,
+                    "dq_summary": dq_summary,
+                    "dq_coverage_provenance": dq_coverage_provenance,
+                    "dq_provenance_summary": dq_provenance_summary,
+                    "geometric_warp_coverage": {
+                        "available": bool(geometric_warp_coverage_map is not None),
+                        "frame_count": geometric_warp_coverage_frame_count,
+                        "frame_count_matches_active": geometric_warp_coverage_frame_count == active_frame_count,
+                    },
+                    "resident_frame_mask_contract": {
+                        "summary": group_frame_mask_contract["summary"],
+                    },
+                },
+                frame_mask_contract=group_frame_mask_contract,
+                filter_name=filter_name,
+            )
+            validate_resident_dq_pixel_closure_group(group_dq_pixel_closure)
+            resident_dq_pixel_closure_groups.append(group_dq_pixel_closure)
             count_dtype = _count_map_dtype(len(light_frames))
             available_output_maps = ["master", "weight", "dq"]
             if coverage_map is not None:
@@ -7170,6 +7198,19 @@ def run_resident_calibration_integration(
                         "path": str(run / "resident_frame_masks.json"),
                         "summary": group_frame_mask_contract["summary"],
                         "semantics": group_frame_mask_contract["semantics"],
+                    },
+                    "resident_dq_pixel_closure": {
+                        "path": str(run / "resident_dq_pixel_closure.json"),
+                        "summary": {
+                            "passed": group_dq_pixel_closure["passed"],
+                            "status": group_dq_pixel_closure["status"],
+                            "frame_mask_active_frame_count": group_dq_pixel_closure[
+                                "frame_mask_active_frame_count"
+                            ],
+                            "geometric_warp_coverage_frame_count": group_dq_pixel_closure[
+                                "geometric_warp_coverage_frame_count"
+                            ],
+                        },
                     },
                     "memory_estimate": memory_estimate,
                     "resident_bytes_allocated_after_master_upload": stack.bytes_allocated,
@@ -8174,6 +8215,19 @@ def run_resident_calibration_integration(
                         "path": str(run / "resident_frame_masks.json"),
                         "summary": group_frame_mask_contract["summary"],
                     },
+                    "resident_dq_pixel_closure": {
+                        "path": str(run / "resident_dq_pixel_closure.json"),
+                        "summary": {
+                            "passed": group_dq_pixel_closure["passed"],
+                            "status": group_dq_pixel_closure["status"],
+                            "frame_mask_active_frame_count": group_dq_pixel_closure[
+                                "frame_mask_active_frame_count"
+                            ],
+                            "geometric_warp_coverage_frame_count": group_dq_pixel_closure[
+                                "geometric_warp_coverage_frame_count"
+                            ],
+                        },
+                    },
                     "hardened_winsorized_timing_s": hardened_winsorized_timing,
                     "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
@@ -8200,6 +8254,7 @@ def run_resident_calibration_integration(
         resident_path = run / "resident_artifacts.json"
         registration_quality_path = run / "resident_registration_quality.json"
         resident_frame_masks_path = run / "resident_frame_masks.json"
+        resident_dq_pixel_closure_path = run / "resident_dq_pixel_closure.json"
         resident_frame_mask_payload = {
             "schema_version": 1,
             "artifact": "resident_frame_mask_contract",
@@ -8216,6 +8271,18 @@ def run_resident_calibration_integration(
         }
         validate_resident_frame_mask_contract({"summary": resident_frame_mask_payload["summary"]})
         write_json(resident_frame_masks_path, resident_frame_mask_payload)
+        resident_dq_pixel_closure_payload = {
+            "schema_version": 1,
+            "artifact": "resident_dq_pixel_closure",
+            "source_stage": "resident_calibrated_stack",
+            "backend": "cuda_resident_stack",
+            "summary": summarize_resident_dq_pixel_closure_groups(resident_dq_pixel_closure_groups),
+            "groups": resident_dq_pixel_closure_groups,
+        }
+        if not resident_dq_pixel_closure_payload["summary"]["passed"]:
+            failed = ", ".join(resident_dq_pixel_closure_payload["summary"].get("failed_groups") or [])
+            raise RuntimeError(f"resident DQ pixel closure failed for group(s): {failed}")
+        write_json(resident_dq_pixel_closure_path, resident_dq_pixel_closure_payload)
         registration_quality_decisions = list(registration_quality_decisions_by_frame.values())
         registration_quality_payload = {
             "schema_version": 1,
@@ -8351,6 +8418,8 @@ def run_resident_calibration_integration(
                 "excluded_frame_tokens": sorted(excluded_tokens),
                 "resident_frame_mask_contract_path": str(resident_frame_masks_path),
                 "resident_frame_mask_contract_summary": resident_frame_mask_payload["summary"],
+                "resident_dq_pixel_closure_path": str(resident_dq_pixel_closure_path),
+                "resident_dq_pixel_closure_summary": resident_dq_pixel_closure_payload["summary"],
                 "warnings": integration_warnings,
             },
         )
@@ -8400,6 +8469,15 @@ def run_resident_calibration_integration(
             PipelineArtifact(
                 stage="resident_frame_masks",
                 path=str(resident_frame_masks_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=list(frames.keys()),
+            )
+        )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_dq_pixel_closure",
+                path=str(resident_dq_pixel_closure_path),
                 format="json",
                 created_at=now_iso(),
                 source_frames=list(frames.keys()),
