@@ -8,6 +8,7 @@ from glass.io.fits_fast import (
     FastFitsUnsupported,
     read_simple_fits_image,
     read_simple_fits_image_native_direct_timed,
+    read_simple_fits_u16be_raw_timed,
     simple_fits_image_spec,
 )
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
@@ -105,6 +106,32 @@ def test_native_direct_fits_reader_decodes_into_pinned_output(tmp_path):
     assert profile["fits_native_bytes_read"] == raw.size * raw.dtype.itemsize
     assert profile["fits_native_decode_s"] >= 0.0
     assert np.allclose(decoded, expected, equal_nan=True)
+
+
+def test_native_u16_raw_fits_reader_reads_into_pinned_output(tmp_path):
+    module = cuda_module_or_skip()
+    if not module.native_extension_loaded() or not hasattr(module, "host_pinned_empty_u8"):
+        pytest.skip("native uint8 pinned FITS reader is not available")
+    path = tmp_path / "native_u16_raw.fits"
+    physical = np.arange(20, dtype=np.uint16).reshape(4, 5) + np.uint16(1000)
+    stored = (physical.astype(np.int32) - 32768).astype(np.int16)
+    hdu = fits.PrimaryHDU(stored)
+    hdu.header["BSCALE"] = 1.0
+    hdu.header["BZERO"] = 32768.0
+    hdu.writeto(path)
+    output = module.host_pinned_empty_u8(physical.size * 2)
+
+    raw, profile = read_simple_fits_u16be_raw_timed(path, output=output)
+    decoded = raw.reshape(physical.shape + (2,))
+    bits = (decoded[..., 0].astype(np.uint16) << np.uint16(8)) | decoded[..., 1].astype(np.uint16)
+    physical_from_raw = bits ^ np.uint16(0x8000)
+
+    assert raw is output
+    assert profile["fits_reader_backend"] == "native_u16be_raw"
+    assert profile["fits_gpu_decode_staging"] == "u16be_bzero32768"
+    assert profile["fits_native_bytes_read"] == physical.size * 2
+    assert np.array_equal(physical_from_raw, physical)
+    assert np.allclose(read_fits_data(path), physical.astype(np.float32))
 
 
 def test_fits_image_reader_maps_blank_to_nan(tmp_path):

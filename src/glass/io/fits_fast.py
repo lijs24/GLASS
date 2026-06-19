@@ -273,3 +273,58 @@ def read_simple_fits_image_native_direct_timed(
         "fits_native_bytes_read": int(native.get("bytes_read", 0) or 0),
         "fits_native_backend": str(native.get("backend", "native_direct_simple")),
     }
+
+
+def read_simple_fits_u16be_raw_timed(
+    path: str | Path,
+    output: np.ndarray | None = None,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    total_start = perf_counter()
+    open_start = perf_counter()
+    spec = simple_fits_image_spec(path)
+    header_elapsed = perf_counter() - open_start
+    if spec.bitpix != 16:
+        raise FastFitsUnsupported("native_u16_gpu requires BITPIX=16 simple primary FITS")
+    if spec.bscale != 1.0 or spec.bzero != 32768.0 or spec.blank is not None:
+        raise FastFitsUnsupported("native_u16_gpu requires BSCALE=1, BZERO=32768, and no BLANK")
+    byte_count = int(spec.width * spec.height * 2)
+    if output is None:
+        data = np.empty(byte_count, dtype=np.uint8)
+    else:
+        if output.dtype != np.uint8:
+            raise ValueError("native_u16_gpu FITS raw output buffer requires uint8")
+        if output.ndim != 1 or output.shape[0] != byte_count:
+            raise ValueError("native_u16_gpu FITS raw output buffer must have height*width*2 bytes")
+        if not output.flags.c_contiguous:
+            raise ValueError("native_u16_gpu FITS raw output buffer must be C-contiguous")
+        data = output
+
+    import glass_cuda
+
+    native = glass_cuda.read_simple_fits_raw_into_u8(
+        spec.path,
+        spec.data_offset,
+        byte_count,
+        data,
+    )
+    native_read_s = float(native.get("file_read_s", 0.0) or 0.0)
+    native_decode_s = float(native.get("decode_s", 0.0) or 0.0)
+    native_open_s = float(native.get("file_open_s", 0.0) or 0.0)
+    total_elapsed = perf_counter() - total_start
+    return data, {
+        "total": total_elapsed,
+        "fits_open": header_elapsed + native_open_s,
+        "fits_materialize_decode": native_read_s + native_decode_s,
+        "fits_reader_backend": "native_u16be_raw",
+        "fits_fast_supported": True,
+        "fits_fast_bitpix": int(spec.bitpix),
+        "fits_fast_scaled": True,
+        "fits_native_file_open_s": native_open_s,
+        "fits_native_file_read_s": native_read_s,
+        "fits_native_decode_s": native_decode_s,
+        "fits_native_total_s": float(native.get("total_s", 0.0) or 0.0),
+        "fits_native_bytes_read": int(native.get("bytes_read", 0) or 0),
+        "fits_native_backend": str(native.get("backend", "native_u16be_raw")),
+        "fits_raw_byte_count": byte_count,
+        "fits_gpu_decode_staging": "u16be_bzero32768",
+    }

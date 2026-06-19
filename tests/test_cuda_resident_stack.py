@@ -95,6 +95,59 @@ def test_resident_stack_calibrates_and_integrates_like_cpu():
     assert np.allclose(weight_map, np.full((4, 5), len(lights), dtype=np.float32))
 
 
+def test_resident_stack_calibrates_u16be_raw_on_gpu_like_cpu():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+    if not hasattr(module, "host_pinned_empty_u8"):
+        raise AssertionError("uint8 pinned host staging is missing from glass_cuda")
+
+    physical = [
+        (np.arange(20, dtype=np.uint16).reshape(4, 5) + np.uint16(1000)),
+        (np.arange(20, dtype=np.uint16).reshape(4, 5) + np.uint16(1100)),
+    ]
+    raw_lights = []
+    for frame in physical:
+        stored = (frame.astype(np.int32) - 32768).astype(">i2", copy=False)
+        raw = module.host_pinned_empty_u8(frame.size * 2)
+        raw[:] = stored.view(np.uint8).reshape(-1)
+        raw_lights.append(raw)
+
+    bias = np.full((4, 5), 10, dtype=np.float32)
+    dark = np.full((4, 5), 20, dtype=np.float32)
+    flat = np.full((4, 5), 2, dtype=np.float32)
+    policy = CalibrationPolicy(master_dark_includes_bias=True, dark_scaling_enabled=False, flat_floor=0.05)
+
+    stack = module.ResidentCalibratedStack(len(raw_lights), 4, 5)
+    stack.set_calibration_masters(bias=bias, dark=dark, flat=flat)
+    released: list[int] = []
+    timing = stack.calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed(
+        [0, 1],
+        raw_lights,
+        [60.0, 60.0],
+        [60.0, 60.0],
+        2,
+        2,
+        lambda indices: released.extend(int(item) for item in indices),
+        asdict(policy),
+    )
+
+    cpu_frames = [
+        calibrate_light(frame.astype(np.float32), bias, dark, flat, 60.0, 60.0, policy)
+        for frame in physical
+    ]
+    cpu_master = np.mean(np.stack(cpu_frames, axis=0), axis=0).astype(np.float32)
+    master, weight_map = stack.integrate_mean()
+
+    assert released == [0, 1]
+    assert timing["h2d_mode"] == "fits_u16be_bzero_gpu_decode_callback_release_batch"
+    assert timing["source_sample_format"] == "fits_bitpix16_bzero32768_big_endian"
+    assert timing["raw_h2d_bytes"] == 2 * 4 * 5 * 2
+    assert timing["float32_host_bytes_avoided"] == 2 * 4 * 5 * 4
+    assert np.allclose(master, cpu_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, np.full((4, 5), len(raw_lights), dtype=np.float32))
+
+
 def test_resident_stack_tile_local_mean_matches_cpu_reference():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):

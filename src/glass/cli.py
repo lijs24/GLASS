@@ -4200,12 +4200,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-fits-read-mode",
-        choices=["auto", "fast", "astropy", "native_direct"],
+        choices=["auto", "fast", "astropy", "native_direct", "native_u16_gpu"],
         default="astropy",
         help=(
             "resident light FITS reader: astropy is the conservative default; auto tries the bounded "
             "simple-primary fast path and falls back to astropy; fast requires the bounded path; "
-            "native_direct decodes simple FITS directly into the resident host buffer"
+            "native_direct decodes simple FITS directly into the resident host buffer; "
+            "native_u16_gpu uploads compact BITPIX=16/BZERO=32768 payloads and decodes on GPU"
         ),
     )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
@@ -4605,11 +4606,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-fits-read-mode",
-        choices=["auto", "fast", "astropy", "native_direct"],
+        choices=["auto", "fast", "astropy", "native_direct", "native_u16_gpu"],
         default="astropy",
         help=(
             "resident audit light FITS reader; astropy is the conservative default, auto tries bounded "
-            "fast primary-image reading with astropy fallback, and native_direct decodes into the resident host buffer"
+            "fast primary-image reading with astropy fallback, native_direct decodes into the resident host buffer, "
+            "and native_u16_gpu uploads compact BITPIX=16/BZERO=32768 payloads for GPU decode"
         ),
     )
     audit.add_argument(

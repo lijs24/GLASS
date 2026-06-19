@@ -747,6 +747,37 @@ def _two_dark_group_dataset(tmp_path: Path) -> Path:
     return root
 
 
+def _write_u16_bzero_test_frame(path: Path, frame_type: str, data: np.ndarray, exposure: float = 60.0) -> None:
+    header = fits.Header()
+    header["IMAGETYP"] = frame_type
+    header["FILTER"] = "H"
+    header["EXPTIME"] = exposure
+    header["GAIN"] = 100.0
+    header["OFFSET"] = 20.0
+    header["CCD-TEMP"] = -10.0
+    header["XBINNING"] = 1
+    header["YBINNING"] = 1
+    physical = np.asarray(data, dtype=np.uint16)
+    stored = (physical.astype(np.int32) - 32768).astype(np.int16)
+    hdu = fits.PrimaryHDU(stored, header=header)
+    hdu.header["BSCALE"] = 1.0
+    hdu.header["BZERO"] = 32768.0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    hdu.writeto(path)
+
+
+def _u16_gpu_decode_dataset(tmp_path: Path) -> Path:
+    root = tmp_path / "u16_gpu_decode"
+    shape = (24, 24)
+    yy, xx = np.indices(shape, dtype=np.uint16)
+    _write_test_frame(root / "bias" / "bias_001.fits", "bias", np.zeros(shape, dtype=np.float32), 0.0)
+    _write_test_frame(root / "dark" / "dark_001.fits", "dark", np.full(shape, 10.0, dtype=np.float32), 60.0)
+    _write_test_frame(root / "flat" / "flat_001.fits", "flat", np.ones(shape, dtype=np.float32), 60.0)
+    _write_u16_bzero_test_frame(root / "light" / "light_001.fits", "light", 1000 + xx + yy, 60.0)
+    _write_u16_bzero_test_frame(root / "light" / "light_002.fits", "light", 1100 + xx + yy, 60.0)
+    return root
+
+
 def _two_light_weight_dataset(tmp_path: Path) -> Path:
     root = tmp_path / "weight_dataset"
     shape = (16, 16)
@@ -3436,6 +3467,59 @@ def test_cli_resident_cuda_records_native_direct_fits_backend(tmp_path: Path):
     assert io_pipeline["fits_native_decode_cumulative_s"] >= 0.0
     assert timing["light_fits_native_file_read"] >= 0.0
     assert timing["light_fits_native_decode"] >= 0.0
+
+
+def test_cli_resident_cuda_records_native_u16_gpu_decode_backend(tmp_path: Path):
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed"):
+        pytest.skip("native u16 GPU decode resident path is not available")
+    dataset = _u16_gpu_decode_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_native_u16_gpu"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-fits-read-mode",
+            "native_u16_gpu",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
+    io_pipeline = artifact["resident_io_pipeline"]
+
+    assert io_pipeline["fits_read_mode"] == "native_u16_gpu"
+    assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
+    assert io_pipeline["raw_gpu_decode_enabled"] is True
+    assert io_pipeline["raw_gpu_h2d_bytes"] == 2 * 24 * 24 * 2
+    assert io_pipeline["raw_gpu_float32_host_bytes_avoided"] == 2 * 24 * 24 * 4
+    assert io_pipeline["calibration_batch_mode"] == "fits_u16be_bzero_gpu_decode_callback_release_batch"
+    assert artifact["resident_frame_mask_contract"]["summary"]["unknown_zero_weight_frame_count"] == 0
 
 
 def test_cli_resident_cuda_shared_master_cache_reuses_across_runs(tmp_path: Path):

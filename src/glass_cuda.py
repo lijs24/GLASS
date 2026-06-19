@@ -218,6 +218,13 @@ def host_pinned_empty_f32(height: int, width: int) -> np.ndarray:
     return np.asarray(native.host_pinned_empty_f32(int(height), int(width)), dtype=np.float32)
 
 
+def host_pinned_empty_u8(byte_count: int) -> np.ndarray:
+    native = _native()
+    if native is None or not hasattr(native, "host_pinned_empty_u8"):
+        raise RuntimeError("native CUDA backend with host_pinned_empty_u8 is not available")
+    return np.asarray(native.host_pinned_empty_u8(int(byte_count)), dtype=np.uint8)
+
+
 def read_simple_fits_into_f32(
     path: Any,
     data_offset: int,
@@ -246,6 +253,31 @@ def read_simple_fits_into_f32(
         float(bscale),
         float(bzero),
         None if blank is None else int(blank),
+        output_array,
+    )
+    return dict(result)
+
+
+def read_simple_fits_raw_into_u8(
+    path: Any,
+    data_offset: int,
+    byte_count: int,
+    output: Any,
+) -> dict[str, Any]:
+    native = _native()
+    if native is None or not hasattr(native, "read_simple_fits_raw_into_u8"):
+        raise RuntimeError("native CUDA backend with read_simple_fits_raw_into_u8 is not available")
+    output_array = np.asarray(output)
+    if output_array.dtype != np.uint8:
+        raise ValueError("native FITS raw read output must be uint8")
+    if output_array.ndim != 1:
+        raise ValueError("native FITS raw read output must be a 1D byte array")
+    if not output_array.flags.c_contiguous:
+        raise ValueError("native FITS raw read output must be C-contiguous")
+    result = native.read_simple_fits_raw_into_u8(
+        str(path),
+        int(data_offset),
+        int(byte_count),
         output_array,
     )
     return dict(result)
@@ -2682,6 +2714,32 @@ class ResidentCalibratedStack:
         result = self._impl.calibrate_frames_host_async_multistream_callback_release_timed(
             np.asarray(indices, dtype=np.int64),
             list(lights),
+            np.asarray(light_exposures_s, dtype=np.float32),
+            np.asarray(dark_exposures_s, dtype=np.float32),
+            int(stream_count),
+            int(wave_frames),
+            release_callback,
+            _policy_payload(policy),
+        )
+        return dict(result)
+
+    def calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed(
+        self,
+        indices: Any,
+        raw_lights: Any,
+        light_exposures_s: Any,
+        dark_exposures_s: Any,
+        stream_count: int,
+        wave_frames: int,
+        release_callback: Any,
+        policy: Any | None = None,
+    ) -> dict[str, Any]:
+        method = "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed"
+        if not hasattr(self._impl, method):
+            raise RuntimeError(f"native ResidentCalibratedStack.{method} is not available")
+        result = getattr(self._impl, method)(
+            np.asarray(indices, dtype=np.int64),
+            list(raw_lights),
             np.asarray(light_exposures_s, dtype=np.float32),
             np.asarray(dark_exposures_s, dtype=np.float32),
             int(stream_count),

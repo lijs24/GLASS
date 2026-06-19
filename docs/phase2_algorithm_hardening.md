@@ -8474,6 +8474,68 @@ Completed in Gate439:
     and Gate439 native-direct fastpath;
   - DQ closure pass, `193 active`/`7 masked`, and zero output delta.
 
+Completed in Gate440:
+
+- Added pinned `uint8` host staging buffers and a native raw FITS payload reader
+  for simple `BITPIX=16, BSCALE=1, BZERO=32768, no BLANK` primary images.
+- Added a CUDA calibration kernel that consumes FITS big-endian raw uint16
+  bytes, applies the unsigned-FITS `BZERO=32768` transform on GPU, and then
+  applies the same bias/dark/flat/pedestal calibration math as the float32
+  resident path.
+- Added resident `--resident-fits-read-mode native_u16_gpu`, which uploads
+  compact raw bytes and decodes/calibrates on GPU under the throughput-v1
+  callback-release batch path.
+- Resident artifacts now record `raw_gpu_decode_enabled`, `raw_gpu_h2d_bytes`,
+  `raw_gpu_float32_host_bytes_avoided`, and a distinct
+  `fits_u16be_bzero_gpu_decode_callback_release_batch` calibration mode.
+- Focused validation passed:
+  `tests/test_fits_io.py`,
+  `tests/test_cuda_resident_stack.py::test_resident_stack_calibrates_u16be_raw_on_gpu_like_cpu`,
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_records_native_u16_gpu_decode_backend`,
+  `tests/test_cli_smoke.py`, and resident CUDA calibration tests.
+- Real M38 H 200-light native-u16-GPU run:
+  `C:\glass_runs\final_m38_h_200\glass_s2_gate440_native_u16_gpu_warm_20260619_223129`.
+- Same-code comparisons against Gate438 astropy control and Gate439
+  native-direct fastpath are bitwise identical:
+  `rms_diff=0`, `relative_rms_diff=0`, `max_abs_diff=0`, shape match true.
+- DQ/mask closure remains green: `193 active`, `7 masked`,
+  `unknown_zero_weight=0`, and pixel closure passed.
+- Performance result:
+  - Gate438 astropy control total: `17.288359 s`.
+  - Gate440 native-u16-GPU total: `13.938977 s`.
+  - Gate438 `light_read_upload_calibrate`: `6.624954 s`.
+  - Gate440 `light_read_upload_calibrate`: `3.501538 s`.
+  - Gate440 read wait: `2.267764 s`.
+  - Gate440 native H2D+calibrate/store: `0.731837 s`.
+  - Raw H2D bytes: `24,660,480,000`.
+  - Avoided float32 host staging bytes: `49,320,960,000`.
+- Default conclusion: the path is faster and numerically identical for this
+  compatible data shape, but it is intentionally narrow. It is not a global
+  default yet; the next gate should make it automatic only behind an explicit
+  compatibility guard with astropy fallback.
+- Checkpoint summary:
+  `runs/checkpoints/s2_gate_440_native_u16_gpu_summary.json`.
+
+### S2-Gate 441: Guarded Compatible Raw-GPU FITS Auto Path
+
+- Continue on the runtime main line only.
+- Promote the Gate440 raw-GPU path behind a compatibility guard, not as a
+  report/default-promotion handoff:
+  - inspect light FITS headers/specs before resident prefetch;
+  - use raw-GPU decode only when every light in the group is simple
+    `BITPIX=16, BSCALE=1, BZERO=32768, no BLANK`;
+  - fall back to `astropy` or the existing explicit reader mode for mixed or
+    unsupported data;
+  - record per-group eligibility, fallback reasons, and selected backend in
+    resident artifacts.
+- Required validation:
+  - synthetic mixed-format fallback tests;
+  - focused CUDA/native tests;
+  - full `python -m pytest -q`;
+  - real M38 H 200-light warm-cache benchmark where the guarded path selects
+    native-u16-GPU automatically, keeps zero output delta, and preserves DQ
+    closure at `193 active`/`7 masked`.
+
 ## Gate Rules
 
 Each gate requires:

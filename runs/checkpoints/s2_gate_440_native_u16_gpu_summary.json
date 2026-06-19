@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "gate": "S2-Gate440",
+  "runs": {
+    "gate438_astropy_control": {
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate438_astropy_control_warm_20260619_213148",
+      "run_elapsed_s": 17.28835899999831,
+      "master_build_or_load_s": 0.41212279998580925,
+      "light_read_upload_calibrate_s": 6.624953699996695,
+      "light_read_wait_wall_s": 3.9392954999930225,
+      "worker_read_cumulative_s": 37.972014999977546,
+      "fits_open_cumulative_s": 0.25657540015527047,
+      "fits_materialize_decode_cumulative_s": 33.797578599856934,
+      "fits_native_decode_cumulative_s": null,
+      "fits_native_file_read_cumulative_s": null,
+      "fits_native_total_cumulative_s": null,
+      "fits_native_bytes_read": null,
+      "native_h2d_calibrate_store_s": 1.9584481999999999,
+      "registration_accounted_s": 3.597217500693219,
+      "registration_warp_s": 1.6375085999607109,
+      "integration_s": 0.28844780000508763,
+      "output_write_s": 2.2511336999887135,
+      "fits_read_mode": "astropy",
+      "fits_backend_counts": {
+        "astropy_scaled_memmap": 200
+      },
+      "fallback_counts": {},
+      "raw_gpu_decode_enabled": null,
+      "raw_gpu_h2d_bytes": null,
+      "raw_gpu_float32_host_bytes_avoided": null,
+      "calibration_batch_mode": "host_async_multistream_callback_release_batch",
+      "overlap_efficiency": 0.8962579283718456,
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "unknown_zero_weight": 0,
+        "passed": true
+      },
+      "dq_passed": true,
+      "master_cache": {
+        "passed": true,
+        "hit": 1,
+        "miss": 0
+      }
+    },
+    "gate439_native_direct_fastpath": {
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate439_native_direct_fastpath_warm_20260619_215910",
+      "run_elapsed_s": 17.857872099993983,
+      "master_build_or_load_s": 0.3086933000013232,
+      "light_read_upload_calibrate_s": 6.818247299990617,
+      "light_read_wait_wall_s": 4.769937200209824,
+      "worker_read_cumulative_s": 41.957217300107004,
+      "fits_open_cumulative_s": 0.1553291001112152,
+      "fits_materialize_decode_cumulative_s": 41.5880915,
+      "fits_native_decode_cumulative_s": 23.034659599999998,
+      "fits_native_file_read_cumulative_s": 18.5534319,
+      "fits_native_total_cumulative_s": 41.66713489999999,
+      "fits_native_bytes_read": 24660480000,
+      "native_h2d_calibrate_store_s": 1.4008385000000003,
+      "registration_accounted_s": 3.606557599420365,
+      "registration_warp_s": 1.6409333000774495,
+      "integration_s": 0.29076740000164136,
+      "output_write_s": 2.519136199989589,
+      "fits_read_mode": "native_direct",
+      "fits_backend_counts": {
+        "native_direct_simple": 200
+      },
+      "fallback_counts": {},
+      "raw_gpu_decode_enabled": null,
+      "raw_gpu_h2d_bytes": null,
+      "raw_gpu_float32_host_bytes_avoided": null,
+      "calibration_batch_mode": "host_async_multistream_callback_release_batch",
+      "overlap_efficiency": 0.8863142623093438,
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "unknown_zero_weight": 0,
+        "passed": true
+      },
+      "dq_passed": true,
+      "master_cache": {
+        "passed": true,
+        "hit": 1,
+        "miss": 0
+      }
+    },
+    "gate440_native_u16_gpu": {
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate440_native_u16_gpu_warm_20260619_223129",
+      "run_elapsed_s": 13.938976600009482,
+      "master_build_or_load_s": 0.3275080000166781,
+      "light_read_upload_calibrate_s": 3.501538000011351,
+      "light_read_wait_wall_s": 2.26776429975871,
+      "worker_read_cumulative_s": 20.659492400154704,
+      "fits_open_cumulative_s": 0.11343480020840019,
+      "fits_materialize_decode_cumulative_s": 20.5230559,
+      "fits_native_decode_cumulative_s": 0.0,
+      "fits_native_file_read_cumulative_s": 20.5230559,
+      "fits_native_total_cumulative_s": 20.533117600000004,
+      "fits_native_bytes_read": 24660480000,
+      "native_h2d_calibrate_store_s": 0.7318365,
+      "registration_accounted_s": 3.5971651000195908,
+      "registration_warp_s": 1.6356420999509282,
+      "integration_s": 0.29196670002420433,
+      "output_write_s": 2.217506399989361,
+      "fits_read_mode": "native_u16_gpu",
+      "fits_backend_counts": {
+        "native_u16be_raw": 200
+      },
+      "fallback_counts": {},
+      "raw_gpu_decode_enabled": true,
+      "raw_gpu_h2d_bytes": 24660480000,
+      "raw_gpu_float32_host_bytes_avoided": 49320960000,
+      "calibration_batch_mode": "fits_u16be_bzero_gpu_decode_callback_release_batch",
+      "overlap_efficiency": 0.8902313640706038,
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "unknown_zero_weight": 0,
+        "passed": true
+      },
+      "dq_passed": true,
+      "master_cache": {
+        "passed": true,
+        "hit": 1,
+        "miss": 0
+      }
+    }
+  },
+  "comparisons": {
+    "gate440_native_u16_gpu_vs_gate438_astropy_control": {
+      "shape_match": true,
+      "rms_diff": 0.0,
+      "relative_rms_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "abs_diff_p999": 0.0
+    },
+    "gate440_native_u16_gpu_vs_gate439_native_direct_fastpath": {
+      "shape_match": true,
+      "rms_diff": 0.0,
+      "relative_rms_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "abs_diff_p999": 0.0
+    }
+  },
+  "interpretation": {
+    "backend_hit_count": 200,
+    "changed_pixels_vs_astropy_control": false,
+    "total_delta_s_vs_astropy_control": -3.3493823999888264,
+    "light_pipeline_delta_s_vs_astropy_control": -3.123415699985344,
+    "read_wait_delta_s_vs_astropy_control": -1.6715312002343126,
+    "native_h2d_calibrate_delta_s_vs_astropy_control": -1.2266116999999999,
+    "total_speedup_vs_astropy_control": 1.2402889750160386,
+    "light_pipeline_speedup_vs_astropy_control": 1.8920125099242728,
+    "default_promotion": "not global; eligible for a guarded compatible-data default/auto gate",
+    "reason": "The raw-GPU path is faster and bitwise identical for BITPIX=16/BZERO=32768/no-BLANK light frames, but it is intentionally narrow and needs a compatibility guard before becoming automatic.",
+    "next_gate": "guarded resident compatible-data auto path for native_u16_gpu with astropy fallback and same 200-light validation"
+  },
+  "artifacts": {
+    "report_html": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate440_native_u16_gpu_warm_20260619_223129\\report.html",
+    "compare_astropy_html": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate440_native_u16_gpu_warm_20260619_223129\\gate440_native_u16_gpu_vs_gate438_astropy.html",
+    "compare_astropy_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate440_native_u16_gpu_warm_20260619_223129\\gate440_native_u16_gpu_vs_gate438_astropy.json",
+    "compare_native_direct_html": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate440_native_u16_gpu_warm_20260619_223129\\gate440_native_u16_gpu_vs_gate439_native_direct.html",
+    "compare_native_direct_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate440_native_u16_gpu_warm_20260619_223129\\gate440_native_u16_gpu_vs_gate439_native_direct.json"
+  }
+}

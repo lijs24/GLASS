@@ -74,6 +74,21 @@ void glass_calibrate_tile_f32_launch_stream(
     float flat_floor,
     float pedestal,
     cudaStream_t stream);
+void glass_calibrate_fits_u16be_bzero_f32_launch_stream(
+    const unsigned char* raw_be,
+    const float* bias,
+    const float* dark,
+    const float* flat,
+    float* out,
+    std::size_t n,
+    bool has_bias,
+    bool has_dark,
+    bool has_flat,
+    bool master_dark_includes_bias,
+    float dark_scale,
+    float flat_floor,
+    float pedestal,
+    cudaStream_t stream);
 void glass_mean_stack_tiles_f32_launch(
     const float* stack, float* out, std::size_t frame_count, std::size_t pixels_per_frame);
 void glass_warp_translation_f32_launch(
@@ -1413,6 +1428,29 @@ py::array_t<float> host_pinned_empty_f32(std::size_t height, std::size_t width) 
       owner);
 }
 
+py::array_t<unsigned char> host_pinned_empty_u8(std::size_t byte_count) {
+  if (byte_count == 0) {
+    throw std::invalid_argument("pinned host byte array must be non-empty");
+  }
+  unsigned char* ptr = nullptr;
+  check_cuda(
+      cudaHostAlloc(
+          reinterpret_cast<void**>(&ptr),
+          byte_count,
+          cudaHostAllocPortable),
+      "cudaHostAlloc(host_pinned_empty_u8)");
+  py::capsule owner(ptr, [](void* value) {
+    if (value != nullptr) {
+      cudaFreeHost(value);
+    }
+  });
+  return py::array_t<unsigned char>(
+      {static_cast<py::ssize_t>(byte_count)},
+      {static_cast<py::ssize_t>(sizeof(unsigned char))},
+      ptr,
+      owner);
+}
+
 int bytes_per_fits_sample(int bitpix) {
   switch (bitpix) {
     case 8:
@@ -1649,6 +1687,63 @@ py::dict read_simple_fits_into_f32(
   result["total_s"] = std::chrono::duration<double>(total_stop - total_start).count();
   result["applied_scale"] = (bscale != 1.0 || bzero != 0.0);
   result["applied_blank"] = has_blank;
+  return result;
+}
+
+py::dict read_simple_fits_raw_into_u8(
+    const std::string& path,
+    unsigned long long data_offset,
+    std::size_t byte_count,
+    py::array_t<unsigned char, py::array::c_style> output) {
+  if (byte_count == 0) {
+    throw std::invalid_argument("FITS raw byte count must be non-empty");
+  }
+  const py::buffer_info info = output.request();
+  if (info.ndim != 1 || static_cast<std::size_t>(info.shape[0]) != byte_count) {
+    throw std::invalid_argument("raw output shape does not match FITS byte count");
+  }
+  auto* out = static_cast<unsigned char*>(info.ptr);
+
+  using Clock = std::chrono::steady_clock;
+  const auto total_start = Clock::now();
+  const auto open_start = Clock::now();
+  std::ifstream stream(path, std::ios::binary);
+  if (!stream) {
+    throw std::runtime_error("failed to open FITS image for raw native read: " + path);
+  }
+  stream.seekg(static_cast<std::streamoff>(data_offset), std::ios::beg);
+  if (!stream) {
+    throw std::runtime_error("failed to seek FITS raw image data offset");
+  }
+  const auto open_stop = Clock::now();
+  double read_s = 0.0;
+
+  {
+    py::gil_scoped_release release;
+    constexpr std::size_t chunk_bytes = 8u << 20;
+    std::size_t done = 0;
+    while (done < byte_count) {
+      const std::size_t count = std::min(chunk_bytes, byte_count - done);
+      const auto read_start = Clock::now();
+      stream.read(reinterpret_cast<char*>(out + done), static_cast<std::streamsize>(count));
+      const auto read_stop = Clock::now();
+      if (stream.gcount() != static_cast<std::streamsize>(count)) {
+        throw std::runtime_error("truncated FITS image data during raw native read");
+      }
+      read_s += std::chrono::duration<double>(read_stop - read_start).count();
+      done += count;
+    }
+  }
+
+  const auto total_stop = Clock::now();
+  py::dict result;
+  result["schema_version"] = 1;
+  result["backend"] = "native_u16be_raw";
+  result["bytes_read"] = static_cast<unsigned long long>(byte_count);
+  result["file_open_s"] = std::chrono::duration<double>(open_stop - open_start).count();
+  result["file_read_s"] = read_s;
+  result["decode_s"] = 0.0;
+  result["total_s"] = std::chrono::duration<double>(total_stop - total_start).count();
   return result;
 }
 
@@ -2713,6 +2808,268 @@ class ResidentCalibratedStack {
     out["wave_count"] = static_cast<unsigned long long>(wave_count);
     out["frame_count"] = static_cast<unsigned long long>(frame_count);
     out["callback_release_count"] = static_cast<unsigned long long>(callback_release_count);
+    out["h2d_release_s"] = h2d_release_s;
+    out["h2d_event_sync_s"] = h2d_event_sync_s;
+    out["h2d_event_elapsed_s"] = h2d_event_elapsed_s;
+    out["callback_s"] = callback_s;
+    out["stream_h2d_calibrate_store_s"] = stream_s;
+    out["sync_s"] = sync_s;
+    out["host_release_safe"] = true;
+    out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+    out["lane_stream_elapsed_s"] = lane_stream_elapsed_s;
+    out["wave_h2d_elapsed_s"] = wave_h2d_elapsed_s;
+    return out;
+  }
+
+  py::dict calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed(
+      py::object indices_obj,
+      py::object raw_lights_obj,
+      py::object light_exposures_obj,
+      py::object dark_exposures_obj,
+      int stream_count,
+      int wave_frames,
+      py::object release_callback,
+      py::object policy_obj) {
+    if (pending_calibration_) {
+      throw std::runtime_error("a resident calibration batch is already pending");
+    }
+    if (stream_count <= 0) {
+      throw std::invalid_argument("stream_count must be positive");
+    }
+    if (wave_frames <= 0) {
+      throw std::invalid_argument("wave_frames must be positive");
+    }
+    if (wave_frames > stream_count) {
+      throw std::invalid_argument("raw callback-release calibration requires wave_frames <= stream_count");
+    }
+    if (!PyCallable_Check(release_callback.ptr())) {
+      throw std::invalid_argument("release_callback must be callable");
+    }
+    const auto indices = parse_index_sequence(indices_obj, "indices");
+    const auto light_exposures = parse_float_sequence(light_exposures_obj, "light_exposures");
+    const auto dark_exposures = parse_float_sequence(dark_exposures_obj, "dark_exposures");
+    py::sequence raw_lights = py::cast<py::sequence>(raw_lights_obj);
+    const std::size_t frame_count = indices.size();
+    if (frame_count == 0) {
+      py::dict out;
+      out["schema_version"] = 1;
+      out["h2d_mode"] = "fits_u16be_bzero_gpu_decode_callback_release_batch";
+      out["event_mode"] = "reused_stack_lane_h2d_callback_events";
+      out["timing_model"] = "raw_u16be_h2d_gpu_decode_multi_stream_callback_release_waves_one_final_sync";
+      out["source_sample_format"] = "fits_bitpix16_bzero32768_big_endian";
+      out["requested_stream_count"] = stream_count;
+      out["stream_count"] = 0;
+      out["requested_wave_frames"] = wave_frames;
+      out["wave_frames"] = 0;
+      out["wave_count"] = 0;
+      out["frame_count"] = 0;
+      out["callback_release_count"] = 0;
+      out["raw_h2d_bytes"] = 0;
+      out["float32_host_bytes_avoided"] = 0;
+      out["h2d_release_s"] = 0.0;
+      out["h2d_event_sync_s"] = 0.0;
+      out["h2d_event_elapsed_s"] = 0.0;
+      out["callback_s"] = 0.0;
+      out["stream_h2d_calibrate_store_s"] = 0.0;
+      out["sync_s"] = 0.0;
+      out["total_s"] = 0.0;
+      out["host_release_safe"] = true;
+      out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+      out["lane_stream_elapsed_s"] = py::list();
+      out["wave_h2d_elapsed_s"] = py::list();
+      return out;
+    }
+    if (static_cast<std::size_t>(py::len(raw_lights)) != frame_count ||
+        light_exposures.size() != frame_count ||
+        dark_exposures.size() != frame_count) {
+      throw std::invalid_argument("indices, raw_lights, light_exposures, and dark_exposures must have the same length");
+    }
+    const std::size_t requested_wave_frames = static_cast<std::size_t>(wave_frames);
+    const std::size_t lane_count = std::min<std::size_t>(
+        static_cast<std::size_t>(stream_count),
+        std::min<std::size_t>(requested_wave_frames, frame_count));
+    ensure_calibration_lanes(lane_count);
+
+    const std::size_t raw_frame_bytes = pixels_per_frame_ * 2u;
+    std::vector<py::array_t<unsigned char, py::array::c_style | py::array::forcecast>> raw_arrays;
+    std::vector<void*> raw_ptrs;
+    std::vector<CalibrationParameters> params;
+    raw_arrays.reserve(frame_count);
+    raw_ptrs.reserve(frame_count);
+    params.reserve(frame_count);
+    for (std::size_t i = 0; i < frame_count; ++i) {
+      require_index(indices[i]);
+      auto raw = py::cast<py::array_t<unsigned char, py::array::c_style | py::array::forcecast>>(raw_lights[i]);
+      const py::buffer_info info = raw.request();
+      if (info.ndim != 1 || static_cast<std::size_t>(info.shape[0]) != raw_frame_bytes) {
+        throw std::invalid_argument("raw FITS light buffer must be a 1D uint8 array of height*width*2 bytes");
+      }
+      raw_ptrs.push_back(info.ptr);
+      raw_arrays.push_back(std::move(raw));
+      py::object dark_exposure_obj = py::none();
+      if (std::isfinite(dark_exposures[i]) && dark_exposures[i] > 0.0f) {
+        dark_exposure_obj = py::float_(dark_exposures[i]);
+      }
+      params.push_back(calibration_parameters(light_exposures[i], dark_exposure_obj, policy_obj));
+    }
+
+    const auto total_start = Clock::now();
+    std::vector<unsigned char> lane_started(lane_count, 0);
+    std::vector<unsigned char> lane_used_in_wave(lane_count, 0);
+    std::vector<double> lane_elapsed(lane_count, 0.0);
+    std::vector<double> wave_h2d_elapsed;
+    wave_h2d_elapsed.reserve((frame_count + requested_wave_frames - 1) / requested_wave_frames);
+    double h2d_event_sync_s = 0.0;
+    double h2d_event_elapsed_s = 0.0;
+    double callback_s = 0.0;
+    std::size_t callback_release_count = 0;
+    std::size_t wave_count = 0;
+    double h2d_release_s = 0.0;
+    try {
+      for (std::size_t wave_start = 0; wave_start < frame_count; wave_start += requested_wave_frames) {
+        const std::size_t frames_in_wave = std::min<std::size_t>(requested_wave_frames, frame_count - wave_start);
+        std::fill(lane_used_in_wave.begin(), lane_used_in_wave.end(), 0);
+        double wave_elapsed_s = 0.0;
+        {
+          py::gil_scoped_release release;
+          for (std::size_t j = 0; j < frames_in_wave; ++j) {
+            const std::size_t lane = j;
+            const std::size_t frame_offset = wave_start + j;
+            if (!lane_started[lane]) {
+              check_cuda(
+                  cudaEventRecord(calibration_lane_start_events_[lane], calibration_lane_streams_[lane]),
+                  "cudaEventRecord(resident raw callback-release lane start)");
+              lane_started[lane] = 1;
+            }
+            lane_used_in_wave[lane] = 1;
+            auto* lane_raw = reinterpret_cast<unsigned char*>(d_calibration_lane_lights_[lane]);
+            check_cuda(
+                cudaEventRecord(calibration_lane_h2d_start_events_[lane], calibration_lane_streams_[lane]),
+                "cudaEventRecord(resident raw callback-release lane h2d start)");
+            check_cuda(
+                cudaMemcpyAsync(
+                    lane_raw,
+                    raw_ptrs[frame_offset],
+                    raw_frame_bytes,
+                    cudaMemcpyHostToDevice,
+                    calibration_lane_streams_[lane]),
+                "cudaMemcpyAsync(resident raw callback-release FITS u16 light)");
+            check_cuda(
+                cudaEventRecord(calibration_lane_h2d_events_[lane], calibration_lane_streams_[lane]),
+                "cudaEventRecord(resident raw callback-release lane h2d done)");
+            glass_calibrate_fits_u16be_bzero_f32_launch_stream(
+                lane_raw,
+                d_bias_,
+                d_dark_,
+                d_flat_,
+                d_stack_ + indices[frame_offset] * pixels_per_frame_,
+                pixels_per_frame_,
+                has_bias_,
+                has_dark_,
+                has_flat_,
+                params[frame_offset].master_dark_includes_bias,
+                params[frame_offset].dark_scale,
+                params[frame_offset].flat_floor,
+                params[frame_offset].pedestal,
+                calibration_lane_streams_[lane]);
+            check_cuda(
+                cudaGetLastError(),
+                "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_callback_release kernel launch");
+            check_cuda(
+                cudaEventRecord(calibration_lane_stop_events_[lane], calibration_lane_streams_[lane]),
+                "cudaEventRecord(resident raw callback-release lane calibration stop)");
+          }
+          const auto h2d_sync_start = Clock::now();
+          for (std::size_t lane = 0; lane < frames_in_wave; ++lane) {
+            if (lane_used_in_wave[lane]) {
+              check_cuda(
+                  cudaEventSynchronize(calibration_lane_h2d_events_[lane]),
+                  "cudaEventSynchronize(resident raw callback-release lane h2d)");
+            }
+          }
+          h2d_event_sync_s += seconds_since(h2d_sync_start);
+          for (std::size_t lane = 0; lane < frames_in_wave; ++lane) {
+            if (lane_used_in_wave[lane]) {
+              const double lane_h2d_s = cuda_event_elapsed_s(
+                  calibration_lane_h2d_start_events_[lane],
+                  calibration_lane_h2d_events_[lane],
+                  "cudaEventElapsedTime(resident raw callback-release lane h2d)");
+              wave_elapsed_s = std::max(wave_elapsed_s, lane_h2d_s);
+              h2d_event_elapsed_s = std::max(h2d_event_elapsed_s, lane_h2d_s);
+            }
+          }
+        }
+        py::list released_indices;
+        for (std::size_t j = 0; j < frames_in_wave; ++j) {
+          released_indices.append(static_cast<unsigned long long>(indices[wave_start + j]));
+        }
+        const auto callback_start = Clock::now();
+        release_callback(released_indices);
+        callback_s += seconds_since(callback_start);
+        callback_release_count += frames_in_wave;
+        wave_h2d_elapsed.push_back(wave_elapsed_s);
+        ++wave_count;
+      }
+      h2d_release_s = seconds_since(total_start);
+    } catch (...) {
+      py::gil_scoped_release release;
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          cudaStreamSynchronize(calibration_lane_streams_[lane]);
+        }
+      }
+      throw;
+    }
+
+    double sync_s = 0.0;
+    double stream_s = 0.0;
+    {
+      py::gil_scoped_release release;
+      const auto sync_start = Clock::now();
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          check_cuda(
+              cudaStreamSynchronize(calibration_lane_streams_[lane]),
+              "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_callback_release synchronize");
+        }
+      }
+      sync_s = seconds_since(sync_start);
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          lane_elapsed[lane] = cuda_event_elapsed_s(
+              calibration_lane_start_events_[lane],
+              calibration_lane_stop_events_[lane],
+              "cudaEventElapsedTime(resident raw callback-release lane calibration)");
+          stream_s = std::max(stream_s, lane_elapsed[lane]);
+        }
+      }
+    }
+    for (std::size_t index : indices) {
+      mark_loaded(index);
+    }
+    py::list lane_stream_elapsed_s;
+    for (const double value : lane_elapsed) {
+      lane_stream_elapsed_s.append(value);
+    }
+    py::list wave_h2d_elapsed_s;
+    for (const double value : wave_h2d_elapsed) {
+      wave_h2d_elapsed_s.append(value);
+    }
+    py::dict out = calibration_timing_dict(
+        ResidentCalibrationTiming{0.0, 0.0, stream_s, seconds_since(total_start)},
+        "fits_u16be_bzero_gpu_decode_callback_release_batch");
+    out["event_mode"] = "reused_stack_lane_h2d_callback_events";
+    out["timing_model"] = "raw_u16be_h2d_gpu_decode_multi_stream_callback_release_waves_one_final_sync";
+    out["source_sample_format"] = "fits_bitpix16_bzero32768_big_endian";
+    out["requested_stream_count"] = stream_count;
+    out["stream_count"] = static_cast<unsigned long long>(lane_count);
+    out["requested_wave_frames"] = wave_frames;
+    out["wave_frames"] = static_cast<unsigned long long>(requested_wave_frames);
+    out["wave_count"] = static_cast<unsigned long long>(wave_count);
+    out["frame_count"] = static_cast<unsigned long long>(frame_count);
+    out["callback_release_count"] = static_cast<unsigned long long>(callback_release_count);
+    out["raw_h2d_bytes"] = static_cast<unsigned long long>(raw_frame_bytes * frame_count);
+    out["float32_host_bytes_avoided"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float) * frame_count);
     out["h2d_release_s"] = h2d_release_s;
     out["h2d_event_sync_s"] = h2d_event_sync_s;
     out["h2d_event_elapsed_s"] = h2d_event_elapsed_s;
@@ -11220,6 +11577,7 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
   m.def("list_devices", &list_devices);
   m.def("get_device_info", &get_device_info);
   m.def("host_pinned_empty_f32", &host_pinned_empty_f32, py::arg("height"), py::arg("width"));
+  m.def("host_pinned_empty_u8", &host_pinned_empty_u8, py::arg("byte_count"));
   m.def(
       "read_simple_fits_into_f32",
       &read_simple_fits_into_f32,
@@ -11231,6 +11589,13 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       py::arg("bscale"),
       py::arg("bzero"),
       py::arg("blank"),
+      py::arg("output"));
+  m.def(
+      "read_simple_fits_raw_into_u8",
+      &read_simple_fits_raw_into_u8,
+      py::arg("path"),
+      py::arg("data_offset"),
+      py::arg("byte_count"),
       py::arg("output"));
   m.def("smoke_add_f32", &smoke_add_f32);
   m.def("reduce_mean_tile_f32", &reduce_mean_tile_f32);
@@ -11506,6 +11871,17 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           &ResidentCalibratedStack::calibrate_frames_host_async_multistream_callback_release_timed,
           py::arg("indices"),
           py::arg("lights"),
+          py::arg("light_exposures"),
+          py::arg("dark_exposures"),
+          py::arg("stream_count"),
+          py::arg("wave_frames"),
+          py::arg("release_callback"),
+          py::arg("policy") = py::none())
+      .def(
+          "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed",
+          &ResidentCalibratedStack::calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed,
+          py::arg("indices"),
+          py::arg("raw_lights"),
           py::arg("light_exposures"),
           py::arg("dark_exposures"),
           py::arg("stream_count"),

@@ -50,6 +50,7 @@ from glass.io.fits_fast import (
     FastFitsUnsupported,
     read_simple_fits_image_native_direct_timed,
     read_simple_fits_image_timed,
+    read_simple_fits_u16be_raw_timed,
 )
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
@@ -154,10 +155,15 @@ def _read_light_timed(
     output: np.ndarray | None = None,
     fits_read_mode: str = "astropy",
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    if fits_read_mode not in {"auto", "fast", "astropy", "native_direct"}:
-        raise ValueError("fits_read_mode must be auto, fast, astropy, or native_direct")
+    if fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
+        raise ValueError("fits_read_mode must be auto, fast, astropy, native_direct, or native_u16_gpu")
     total_start = perf_counter()
     fallback_reason = ""
+    if fits_read_mode == "native_u16_gpu":
+        data, profile = read_simple_fits_u16be_raw_timed(path, output=output)
+        profile["fits_read_mode_requested"] = fits_read_mode
+        profile["fits_fast_fallback_reason"] = ""
+        return data, profile
     if fits_read_mode == "native_direct":
         data, profile = read_simple_fits_image_native_direct_timed(path, dtype=np.float32, output=output)
         profile["fits_read_mode_requested"] = fits_read_mode
@@ -212,8 +218,8 @@ class _LightPrefetcher:
         self.pinned_ring = bool(pinned_ring and self.depth > 0)
         if release_refill_mode not in {"immediate", "queued", "deferred"}:
             raise ValueError("release_refill_mode must be immediate, queued, or deferred")
-        if fits_read_mode not in {"auto", "fast", "astropy", "native_direct"}:
-            raise ValueError("fits_read_mode must be auto, fast, astropy, or native_direct")
+        if fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
+            raise ValueError("fits_read_mode must be auto, fast, astropy, native_direct, or native_u16_gpu")
         self.release_refill_mode = release_refill_mode
         self.fits_read_mode = fits_read_mode
         self.height = height
@@ -246,10 +252,17 @@ class _LightPrefetcher:
                 if self.height is None or self.width is None:
                     raise ValueError("pinned resident prefetch requires image height and width")
                 glass_cuda = _cuda_module_required()
-                self.pinned_slots = [
-                    glass_cuda.host_pinned_empty_f32(int(self.height), int(self.width))
-                    for _ in range(self.depth)
-                ]
+                if self.fits_read_mode == "native_u16_gpu":
+                    byte_count = int(self.height) * int(self.width) * 2
+                    self.pinned_slots = [
+                        glass_cuda.host_pinned_empty_u8(byte_count)
+                        for _ in range(self.depth)
+                    ]
+                else:
+                    self.pinned_slots = [
+                        glass_cuda.host_pinned_empty_f32(int(self.height), int(self.width))
+                        for _ in range(self.depth)
+                    ]
                 self.free_slots = list(range(len(self.pinned_slots)))
             self.executor = ThreadPoolExecutor(
                 max_workers=self.workers,
@@ -2771,8 +2784,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_output_maps must be audit, science, or minimal")
     if resident_winsorized_mode not in _RESIDENT_WINSORIZED_MODES:
         raise ValueError("resident_winsorized_mode must be fast_approx or hardened_cpu_parity")
-    if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct"}:
-        raise ValueError("resident_fits_read_mode must be auto, fast, astropy, or native_direct")
+    if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
+        raise ValueError("resident_fits_read_mode must be auto, fast, astropy, native_direct, or native_u16_gpu")
     if resident_registration not in {
         "off",
         "translation_preview",
@@ -3200,6 +3213,12 @@ def run_resident_calibration_integration(
                 calibration_h2d_release_reason = "explicit_sync_requested"
             calibration_h2d_release_enabled = calibration_release_mode_effective == "h2d_event"
             calibration_callback_release_enabled = calibration_release_mode_effective == "callback_queue"
+            raw_u16_gpu_decode_enabled = resident_fits_read_mode == "native_u16_gpu"
+            if raw_u16_gpu_decode_enabled and not (calibration_batch_enabled and calibration_callback_release_enabled):
+                raise ValueError(
+                    "resident-fits-read-mode native_u16_gpu requires resident batch calibration "
+                    "with callback_queue release, for example --resident-runtime-preset throughput-v1"
+                )
             calibration_fetch_batch_frames = (
                 int(resident_calibration_batch_frames)
                 if calibration_callback_release_enabled
@@ -3220,6 +3239,8 @@ def run_resident_calibration_integration(
             calibration_callback_release_count = 0
             calibration_callback_release_s = 0.0
             calibration_callback_wave_count = 0
+            calibration_raw_h2d_bytes = 0
+            calibration_float32_host_bytes_avoided = 0
             prefetch_fill_blocked_no_slot_count = 0
             prefetch_release_count = 0
             prefetch_max_inflight_slots = 0
@@ -3332,18 +3353,32 @@ def run_resident_calibration_integration(
                                 released_batch_indices.update(completed)
 
                             try:
-                                calibration_timing = (
-                                    stack.calibrate_frames_host_async_multistream_callback_release_timed(
-                                        batch_indices,
-                                        batch_lights,
-                                        batch_light_exposures,
-                                        batch_dark_exposures,
-                                        resident_calibration_streams,
-                                        calibration_wave_effective_frames,
-                                        _release_h2d_completed_indices,
-                                        asdict(policy),
+                                if raw_u16_gpu_decode_enabled:
+                                    calibration_timing = (
+                                        stack.calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed(
+                                            batch_indices,
+                                            batch_lights,
+                                            batch_light_exposures,
+                                            batch_dark_exposures,
+                                            resident_calibration_streams,
+                                            calibration_wave_effective_frames,
+                                            _release_h2d_completed_indices,
+                                            asdict(policy),
+                                        )
                                     )
-                                )
+                                else:
+                                    calibration_timing = (
+                                        stack.calibrate_frames_host_async_multistream_callback_release_timed(
+                                            batch_indices,
+                                            batch_lights,
+                                            batch_light_exposures,
+                                            batch_dark_exposures,
+                                            resident_calibration_streams,
+                                            calibration_wave_effective_frames,
+                                            _release_h2d_completed_indices,
+                                            asdict(policy),
+                                        )
+                                    )
                             finally:
                                 unreleased_indices = [
                                     item_index for item_index in batch_indices if item_index not in released_batch_indices
@@ -3446,6 +3481,10 @@ def run_resident_calibration_integration(
                         calibration_batch_actual_stream_count = max(
                             calibration_batch_actual_stream_count,
                             int(calibration_timing.get("stream_count", 0) or 0),
+                        )
+                        calibration_raw_h2d_bytes += int(calibration_timing.get("raw_h2d_bytes", 0) or 0)
+                        calibration_float32_host_bytes_avoided += int(
+                            calibration_timing.get("float32_host_bytes_avoided", 0) or 0
                         )
                         frame_share = 1.0 / float(len(batch_items))
                         for position, (item_index, frame, _light, _exposure) in enumerate(batch_items):
@@ -7210,6 +7249,9 @@ def run_resident_calibration_integration(
                 "fits_native_decode_cumulative_s": fits_native_decode_timing["total"],
                 "fits_native_total_cumulative_s": fits_native_total_timing["total"],
                 "fits_native_bytes_read": fits_native_bytes_read,
+                "raw_gpu_decode_enabled": raw_u16_gpu_decode_enabled,
+                "raw_gpu_h2d_bytes": int(calibration_raw_h2d_bytes),
+                "raw_gpu_float32_host_bytes_avoided": int(calibration_float32_host_bytes_avoided),
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -7243,6 +7285,9 @@ def run_resident_calibration_integration(
                 "fits_native_decode_cumulative_s": fits_native_decode_timing["total"],
                 "fits_native_total_cumulative_s": fits_native_total_timing["total"],
                 "fits_native_bytes_read": fits_native_bytes_read,
+                "raw_gpu_decode_enabled": raw_u16_gpu_decode_enabled,
+                "raw_gpu_h2d_bytes": int(calibration_raw_h2d_bytes),
+                "raw_gpu_float32_host_bytes_avoided": int(calibration_float32_host_bytes_avoided),
                 "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
                 "calibration_batch_requested_streams": int(resident_calibration_streams),
                 "calibration_wave_requested_frames": int(resident_calibration_wave_frames),
@@ -7472,6 +7517,9 @@ def run_resident_calibration_integration(
                         "fits_native_decode_cumulative_s": fits_native_decode_timing["total"],
                         "fits_native_total_cumulative_s": fits_native_total_timing["total"],
                         "fits_native_bytes_read": fits_native_bytes_read,
+                        "raw_gpu_decode_enabled": raw_u16_gpu_decode_enabled,
+                        "raw_gpu_h2d_bytes": int(calibration_raw_h2d_bytes),
+                        "raw_gpu_float32_host_bytes_avoided": int(calibration_float32_host_bytes_avoided),
                         "calibration_event_mode": calibration_event_mode,
                         "calibration_event_modes": unique_calibration_event_modes,
                         "calibration_event_reuse": bool(
@@ -7526,6 +7574,9 @@ def run_resident_calibration_integration(
                         "calibration_batch_actual_stream_count": int(calibration_batch_actual_stream_count),
                         "calibration_batch_lane_buffer_bytes": int(calibration_batch_lane_buffer_bytes),
                         "calibration_batch_mode": (
+                            "fits_u16be_bzero_gpu_decode_callback_release_batch"
+                            if raw_u16_gpu_decode_enabled
+                            else
                             "host_async_multistream_callback_release_batch"
                             if calibration_callback_release_enabled
                             else
