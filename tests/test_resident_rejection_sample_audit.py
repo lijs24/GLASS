@@ -70,6 +70,24 @@ def _write_compare_json(path: Path, *, border: int = 1) -> None:
     )
 
 
+def _write_rejection_input_audit(path: Path) -> None:
+    write_json(
+        path,
+        {
+            "artifact_type": "resident_rejection_input_audit",
+            "status": "passed",
+            "passed": True,
+            "recommendation": "target_resident_registration_warp_input_parity",
+            "cpu_replay": {"delta_vs_cpu_output": {"passed": True}},
+            "cuda_exact_input": {"status": "completed", "passed": True},
+            "resident_output_parity": {
+                "passed": False,
+                "attribution_status": "resident_registration_warp_input_delta",
+            },
+        },
+    )
+
+
 def test_audit_identifies_pre_rejection_coverage_drift(tmp_path: Path) -> None:
     cpu = tmp_path / "cpu"
     resident = tmp_path / "resident"
@@ -190,10 +208,89 @@ def test_audit_identifies_same_pre_rejection_semantic_delta(tmp_path: Path) -> N
     ]
 
 
+def test_audit_ready_recommendation_requires_same_pre_threshold(tmp_path: Path) -> None:
+    cpu = tmp_path / "cpu"
+    resident = tmp_path / "resident"
+    base = np.full((4, 4), 3.0, dtype=np.float32)
+    zeros = np.zeros((4, 4), dtype=np.float32)
+    resident_coverage = base.copy()
+    resident_coverage[2, 2] = 2.0
+    resident_low = zeros.copy()
+    resident_low[2, 2] = 1.0
+
+    _write_map_set(cpu, prefix="cpu", coverage=base, low=zeros, high=zeros, backend="cpu")
+    _write_map_set(
+        resident,
+        prefix="resident",
+        coverage=resident_coverage,
+        low=resident_low,
+        high=zeros,
+        backend="cuda_resident_stack",
+    )
+
+    payload = build_resident_rejection_sample_audit(
+        cpu_run=cpu,
+        resident_run=resident,
+        tile_size=2,
+        max_rejected_sample_delta=64,
+        max_same_pre_rejection_abs_delta=0,
+    )
+
+    assert payload["recommendation"] == "fix_resident_winsorized_rejection_semantics"
+    assert payload["deltas"]["rejected_sample_delta"] == 1
+    assert payload["deltas"]["same_pre_rejection_abs_rejected_sample_delta"] == 1
+    assert "rejected_sample_delta_within_limit" not in payload["failed_checks"]
+    assert payload["failed_checks"] == ["same_pre_rejection_semantic_delta_within_limit"]
+
+
+def test_audit_uses_exact_input_attribution_to_redirect_recommendation(tmp_path: Path) -> None:
+    cpu = tmp_path / "cpu"
+    resident = tmp_path / "resident"
+    input_audit = tmp_path / "input_audit.json"
+    base = np.full((4, 4), 3.0, dtype=np.float32)
+    zeros = np.zeros((4, 4), dtype=np.float32)
+    resident_coverage = base.copy()
+    resident_coverage[2, 2] = 2.0
+    resident_low = zeros.copy()
+    resident_low[2, 2] = 1.0
+
+    _write_map_set(cpu, prefix="cpu", coverage=base, low=zeros, high=zeros, backend="cpu")
+    _write_map_set(
+        resident,
+        prefix="resident",
+        coverage=resident_coverage,
+        low=resident_low,
+        high=zeros,
+        backend="cuda_resident_stack",
+    )
+    _write_rejection_input_audit(input_audit)
+
+    payload = build_resident_rejection_sample_audit(
+        cpu_run=cpu,
+        resident_run=resident,
+        tile_size=2,
+        max_rejected_sample_delta=0,
+        max_same_pre_rejection_abs_delta=0,
+        rejection_input_audit=input_audit,
+    )
+
+    assert payload["status"] == "attention_required"
+    assert payload["recommendation"] == "target_resident_registration_warp_input_parity"
+    assert payload["attribution_evidence"]["exact_input_parity_proven"] is True
+    assert payload["attribution_evidence"]["resident_input_delta_attributed"] is True
+    assert payload["deltas"]["pre_rejection_sample_delta"] == 0
+    assert payload["deltas"]["same_pre_rejection_abs_rejected_sample_delta"] == 1
+    assert payload["failed_checks"] == [
+        "rejected_sample_delta_within_limit",
+        "same_pre_rejection_semantic_delta_within_limit",
+    ]
+
+
 def test_resident_rejection_sample_audit_cli_writes_outputs(tmp_path: Path) -> None:
     cpu = tmp_path / "cpu"
     resident = tmp_path / "resident"
     compare = tmp_path / "compare.json"
+    input_audit = tmp_path / "input_audit.json"
     out = tmp_path / "audit.json"
     markdown = tmp_path / "audit.md"
     base = np.full((4, 4), 3.0, dtype=np.float32)
@@ -211,6 +308,7 @@ def test_resident_rejection_sample_audit_cli_writes_outputs(tmp_path: Path) -> N
         backend="cuda_resident_stack",
     )
     _write_compare_json(compare)
+    _write_rejection_input_audit(input_audit)
 
     result = main(
         [
@@ -229,6 +327,8 @@ def test_resident_rejection_sample_audit_cli_writes_outputs(tmp_path: Path) -> N
             "2",
             "--evaluation-region",
             "compare_region",
+            "--rejection-input-audit",
+            str(input_audit),
         ]
     )
 
@@ -236,5 +336,8 @@ def test_resident_rejection_sample_audit_cli_writes_outputs(tmp_path: Path) -> N
     payload = read_json(out)
     assert payload["artifact_type"] == "resident_rejection_sample_audit"
     assert payload["evaluation_region"] == "compare_region"
+    assert payload["attribution_evidence"]["exact_input_parity_proven"] is True
     assert payload["deltas"]["high_rejected_sample_delta"] == 1
-    assert "Resident Rejection Sample Audit" in markdown.read_text(encoding="utf-8")
+    text = markdown.read_text(encoding="utf-8")
+    assert "Resident Rejection Sample Audit" in text
+    assert "Exact-input parity proven" in text

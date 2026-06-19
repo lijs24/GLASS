@@ -7761,6 +7761,40 @@ integration where applicable.
   promotion, no package upload, no GitHub release creation, and no user input
   directory modification.
 
+### S2-Gate 427: Resident Rejection Attribution Contract Correction
+
+- Continue the Phase 2 mainline by fixing the diagnostic contract that chooses
+  the next optimization target.
+- Gate424 proved that CPU replay and CUDA hardened winsorized integration match
+  exactly when both receive the same registered input samples. Gate426 still
+  showed same-pre rejection-map deltas because resident registration/warp
+  values differ before rejection.
+- Extend `resident-rejection-sample-audit` so it can consume an optional
+  `resident-rejection-input-audit` artifact:
+  - raw sample deltas and failed checks remain visible;
+  - exact-input CPU/CUDA parity is recorded as attribution evidence;
+  - when exact-input parity is proven and the input audit attributes resident
+    output drift upstream, recommendation changes from
+    `fix_resident_winsorized_rejection_semantics` to
+    `target_resident_registration_warp_input_parity`.
+- Fix the sample-audit ready condition so `rejection_sample_accounting_ready`
+  requires rejected-sample, pre-rejection, and same-pre-rejection thresholds to
+  pass together.
+- Re-run the Gate426 median-centroid resident run through both audits:
+  - `resident-rejection-input-audit` passes;
+  - CPU replay and CUDA exact-input hardened winsorized parity pass;
+  - resident output parity remains false with same-pre abs rejected delta
+    `798`;
+  - attributed sample audit remains `attention_required` but now recommends
+    `target_resident_registration_warp_input_parity`.
+- Interpretation: do not spend the next substantive gate changing the hardened
+  winsorized kernel. The remaining blocker is resident registration/warp input
+  parity: subpixel matrix/value differences still flip rejection decisions even
+  when sample counts match.
+- Keep this gate runtime-attribution scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
 ## Gate Rules
 
 Each gate requires:

@@ -409,6 +409,10 @@ def build_resident_rejection_input_audit(
         if attribution_passed
         else "unattributed"
     )
+    sample_raw_recommendation = sample_audit.get("recommendation")
+    sample_attributed_recommendation = (
+        recommendation if attribution_status != "unattributed" else sample_raw_recommendation
+    )
     checks = [
         {
             "name": "cpu_registered_replay_matches_cpu_outputs",
@@ -485,7 +489,8 @@ def build_resident_rejection_input_audit(
         "resident_rejection_sample_audit": {
             "status": sample_audit.get("status"),
             "passed": sample_audit.get("passed"),
-            "recommendation": sample_audit.get("recommendation"),
+            "recommendation": sample_attributed_recommendation,
+            "raw_recommendation": sample_raw_recommendation,
             "evaluation_region": sample_audit.get("evaluation_region"),
             "evaluation_deltas": evaluation_deltas,
             "failed_checks": sample_audit.get("failed_checks"),
@@ -527,6 +532,7 @@ def _markdown(payload: dict[str, Any]) -> str:
         "",
         f"- Status: `{sample.get('status')}`",
         f"- Recommendation: `{sample.get('recommendation')}`",
+        f"- Raw sample recommendation: `{sample.get('raw_recommendation')}`",
         f"- Evaluation deltas: `{sample.get('evaluation_deltas')}`",
         "",
         "## Checks",

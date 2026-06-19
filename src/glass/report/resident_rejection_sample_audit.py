@@ -34,6 +34,59 @@ def _optional_json_object(path: str | Path | None) -> dict[str, Any]:
     return _read_json_object(target) if target.exists() else {}
 
 
+def _exact_input_attribution(path: str | Path | None) -> dict[str, Any]:
+    payload = _optional_json_object(path)
+    if not payload:
+        return {
+            "available": False,
+            "path": None if path is None else str(path),
+            "status": "not_provided",
+            "exact_input_parity_proven": False,
+        }
+    if payload.get("artifact_type") != "resident_rejection_input_audit":
+        return {
+            "available": True,
+            "path": str(path),
+            "status": "unsupported_artifact_type",
+            "artifact_type": payload.get("artifact_type"),
+            "exact_input_parity_proven": False,
+        }
+    cpu_replay = payload.get("cpu_replay") if isinstance(payload.get("cpu_replay"), dict) else {}
+    cpu_delta = (
+        cpu_replay.get("delta_vs_cpu_output")
+        if isinstance(cpu_replay.get("delta_vs_cpu_output"), dict)
+        else {}
+    )
+    cuda_exact = payload.get("cuda_exact_input") if isinstance(payload.get("cuda_exact_input"), dict) else {}
+    resident_parity = (
+        payload.get("resident_output_parity")
+        if isinstance(payload.get("resident_output_parity"), dict)
+        else {}
+    )
+    exact_input_parity = bool(cpu_delta.get("passed") is True and cuda_exact.get("passed") is True)
+    attribution_status = str(resident_parity.get("attribution_status") or "")
+    return {
+        "available": True,
+        "path": str(path),
+        "status": "usable" if exact_input_parity else "exact_input_not_proven",
+        "artifact_type": payload.get("artifact_type"),
+        "audit_status": payload.get("status"),
+        "audit_passed": payload.get("passed"),
+        "recommendation": payload.get("recommendation"),
+        "cpu_replay_passed": cpu_delta.get("passed"),
+        "cuda_exact_input_status": cuda_exact.get("status"),
+        "cuda_exact_input_passed": cuda_exact.get("passed"),
+        "resident_output_attribution_status": attribution_status,
+        "resident_output_parity_passed": resident_parity.get("passed"),
+        "exact_input_parity_proven": exact_input_parity,
+        "resident_input_delta_attributed": attribution_status
+        in {
+            "resident_registration_warp_input_delta",
+            "resident_geometric_coverage_or_transform_delta",
+        },
+    }
+
+
 def _first_output(run_root: Path) -> dict[str, Any]:
     path = run_root / "integration_results.json"
     if not path.exists():
@@ -313,6 +366,7 @@ def _recommendation(
     shape_match: bool,
     deltas: dict[str, Any],
     thresholds: dict[str, Any],
+    attribution_evidence: dict[str, Any] | None = None,
 ) -> str:
     if not maps_present:
         return "fix_missing_cpu_or_resident_maps"
@@ -321,13 +375,21 @@ def _recommendation(
     rejected_delta = abs(int(deltas.get("rejected_sample_delta") or 0))
     pre_delta = abs(int(deltas.get("pre_rejection_sample_delta") or 0))
     same_pre_abs = int(deltas.get("same_pre_rejection_abs_rejected_sample_delta") or 0)
-    if rejected_delta <= int(thresholds["max_rejected_sample_delta"]) and pre_delta <= int(
-        thresholds["max_pre_rejection_sample_delta"]
+    if (
+        rejected_delta <= int(thresholds["max_rejected_sample_delta"])
+        and pre_delta <= int(thresholds["max_pre_rejection_sample_delta"])
+        and same_pre_abs <= int(thresholds["max_same_pre_rejection_abs_delta"])
     ):
         return "rejection_sample_accounting_ready"
     if pre_delta > int(thresholds["max_pre_rejection_sample_delta"]):
         return "fix_resident_geometric_coverage_or_transform"
     if same_pre_abs > int(thresholds["max_same_pre_rejection_abs_delta"]):
+        evidence = attribution_evidence or {}
+        if (
+            evidence.get("exact_input_parity_proven") is True
+            and evidence.get("resident_input_delta_attributed") is True
+        ):
+            return "target_resident_registration_warp_input_parity"
         return "fix_resident_winsorized_rejection_semantics"
     return "inspect_rejection_hotspot_tiles"
 
@@ -368,6 +430,7 @@ def build_resident_rejection_sample_audit(
     max_pre_rejection_sample_delta: int = 0,
     max_same_pre_rejection_abs_delta: int = 16,
     evaluation_region: str = "full_frame",
+    rejection_input_audit: str | Path | None = None,
 ) -> dict[str, Any]:
     if evaluation_region not in {"full_frame", "compare_region"}:
         raise ValueError("evaluation_region must be full_frame or compare_region")
@@ -384,6 +447,7 @@ def build_resident_rejection_sample_audit(
         "max_pre_rejection_sample_delta": int(max_pre_rejection_sample_delta),
         "max_same_pre_rejection_abs_delta": int(max_same_pre_rejection_abs_delta),
     }
+    attribution_evidence = _exact_input_attribution(rejection_input_audit)
 
     maps_present = _map_paths_present(cpu) and _map_paths_present(resident)
     checks: list[dict[str, Any]] = [
@@ -396,6 +460,7 @@ def build_resident_rejection_sample_audit(
             shape_match=False,
             deltas={},
             thresholds=thresholds,
+            attribution_evidence=attribution_evidence,
         )
         checks.append(_check("map_shapes_match", False, {}, "Skipped because maps are missing."))
         return {
@@ -408,6 +473,8 @@ def build_resident_rejection_sample_audit(
             "cpu": cpu,
             "resident": resident,
             "compare_json": str(compare_json) if compare_json else None,
+            "rejection_input_audit": None if rejection_input_audit is None else str(rejection_input_audit),
+            "attribution_evidence": attribution_evidence,
             "thresholds": thresholds,
             "evaluation_region": evaluation_region,
             "checks": checks,
@@ -427,6 +494,7 @@ def build_resident_rejection_sample_audit(
             shape_match=False,
             deltas={},
             thresholds=thresholds,
+            attribution_evidence=attribution_evidence,
         )
         return {
             "schema_version": 1,
@@ -438,6 +506,8 @@ def build_resident_rejection_sample_audit(
             "cpu": cpu,
             "resident": resident,
             "compare_json": str(compare_json) if compare_json else None,
+            "rejection_input_audit": None if rejection_input_audit is None else str(rejection_input_audit),
+            "attribution_evidence": attribution_evidence,
             "shape_summary": shapes,
             "thresholds": thresholds,
             "evaluation_region": evaluation_region,
@@ -615,6 +685,7 @@ def build_resident_rejection_sample_audit(
         shape_match=True,
         deltas=eval_deltas,
         thresholds=thresholds,
+        attribution_evidence=attribution_evidence,
     )
     passed = all(item["passed"] for item in checks)
     return {
@@ -627,6 +698,8 @@ def build_resident_rejection_sample_audit(
         "cpu": {**cpu, "pixel_summary": cpu_summary},
         "resident": {**resident, "pixel_summary": resident_summary},
         "compare_json": str(compare_json) if compare_json else None,
+        "rejection_input_audit": None if rejection_input_audit is None else str(rejection_input_audit),
+        "attribution_evidence": attribution_evidence,
         "comparison_region": compare_region,
         "shape_summary": shapes,
         "tile_size": step,
@@ -645,6 +718,7 @@ def _markdown(payload: dict[str, Any]) -> str:
     deltas = payload.get("deltas") or {}
     evaluation_deltas = payload.get("evaluation_deltas") or deltas
     region_deltas = payload.get("region_deltas") or {}
+    attribution = payload.get("attribution_evidence") or {}
     lines = [
         "# Resident Rejection Sample Audit",
         "",
@@ -661,6 +735,16 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Pre-rejection sample delta: `{evaluation_deltas.get('pre_rejection_sample_delta')}`",
         f"- Same-pre-rejection abs rejected delta: "
         f"`{evaluation_deltas.get('same_pre_rejection_abs_rejected_sample_delta')}`",
+        "",
+        "## Attribution Evidence",
+        "",
+        f"- Rejection input audit: `{payload.get('rejection_input_audit')}`",
+        f"- Exact-input parity proven: `{attribution.get('exact_input_parity_proven')}`",
+        f"- CUDA exact-input status: `{attribution.get('cuda_exact_input_status')}`",
+        f"- CUDA exact-input passed: `{attribution.get('cuda_exact_input_passed')}`",
+        f"- Resident input delta attributed: `{attribution.get('resident_input_delta_attributed')}`",
+        f"- Resident output attribution status: "
+        f"`{attribution.get('resident_output_attribution_status')}`",
         "",
         "## Global Deltas",
         "",

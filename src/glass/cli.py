@@ -2588,6 +2588,7 @@ def cmd_resident_rejection_sample_audit(args: argparse.Namespace) -> int:
         max_pre_rejection_sample_delta=args.max_pre_rejection_sample_delta,
         max_same_pre_rejection_abs_delta=args.max_same_pre_rejection_abs_delta,
         evaluation_region=args.evaluation_region,
+        rejection_input_audit=args.rejection_input_audit,
     )
     write_resident_rejection_sample_audit(args.out, payload, markdown=args.markdown)
     console.print(
@@ -6425,6 +6426,13 @@ def build_parser() -> argparse.ArgumentParser:
     rejection_audit.add_argument(
         "--compare-json",
         help="optional GLASS compare JSON; its comparison_region is reused for region splits",
+    )
+    rejection_audit.add_argument(
+        "--rejection-input-audit",
+        help=(
+            "optional resident-rejection-input-audit JSON; when exact-input CPU/CUDA parity is proven, "
+            "sample deltas are attributed to resident registration/warp input instead of the rejection kernel"
+        ),
     )
     rejection_audit.add_argument("--out", required=True, help="output rejection sample audit JSON")
     rejection_audit.add_argument("--markdown", help="optional output Markdown summary")
