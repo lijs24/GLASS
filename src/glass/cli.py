@@ -67,6 +67,10 @@ from glass.report.resident_registration_matrix_compare import (
     build_resident_registration_matrix_compare,
     write_resident_registration_matrix_compare,
 )
+from glass.report.resident_registration_matrix_sweep import (
+    build_resident_registration_matrix_sweep,
+    write_resident_registration_matrix_sweep,
+)
 from glass.report.resident_runtime_compare import (
     build_resident_runtime_compare,
     write_resident_runtime_compare,
@@ -2475,6 +2479,27 @@ def cmd_resident_registration_matrix_compare(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_failure and not payload["passed"] else 0
+
+
+def cmd_resident_registration_matrix_sweep(args: argparse.Namespace) -> int:
+    payload = build_resident_registration_matrix_sweep(
+        args.matrix_compare,
+        parity_entries=args.parity_summary,
+    )
+    write_resident_registration_matrix_sweep(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload["artifact_type"],
+            "variant_count": payload["variant_count"],
+            "matrix_passed_count": payload["matrix_passed_count"],
+            "parity_passed_count": payload["parity_passed_count"],
+            "best_variant": payload["best_variant"],
+            "recommendation": payload["recommendation"]["status"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
 
 
 def _label_path_pairs(values: list[str]) -> list[tuple[str, str]]:
@@ -6218,6 +6243,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 if any matrix-compare check fails",
     )
     resident_reg_matrix.set_defaults(func=cmd_resident_registration_matrix_compare)
+
+    resident_reg_matrix_sweep = sub.add_parser(
+        "resident-registration-matrix-sweep",
+        help="rank resident registration matrix-compare variants and optional parity summaries",
+    )
+    resident_reg_matrix_sweep.add_argument(
+        "--matrix-compare",
+        action="append",
+        required=True,
+        help="matrix compare entry in label=path form; repeat for multiple variants",
+    )
+    resident_reg_matrix_sweep.add_argument(
+        "--parity-summary",
+        action="append",
+        default=[],
+        help="optional parity summary entry in label=path form; labels should match matrix entries",
+    )
+    resident_reg_matrix_sweep.add_argument("--out", required=True, help="output matrix sweep JSON")
+    resident_reg_matrix_sweep.add_argument("--markdown", help="optional output Markdown summary")
+    resident_reg_matrix_sweep.set_defaults(func=cmd_resident_registration_matrix_sweep)
 
     resident_runtime_compare = sub.add_parser(
         "resident-runtime-compare",

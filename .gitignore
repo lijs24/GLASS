@@ -22,3 +22,5 @@ runs/*
 runs/checkpoints/s2_gate_*_runtime_validation_*/
 runs/checkpoints/s2_gate_*_compare_diagnostics/
 runs/checkpoints/s2_gate_*_quality_reference_*/
+runs/checkpoints/s2_gate_*_fine_step_*_cuda_hardened/
+runs/checkpoints/s2_gate_*_translation_ncc*_cuda_hardened/

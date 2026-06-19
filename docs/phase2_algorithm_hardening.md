@@ -7558,6 +7558,25 @@ integration where applicable.
   change, no CUDA kernel change, no integration math change, no package upload,
   no GitHub release creation, and no modification of user input directories.
 
+### S2-Gate 419: Resident Subpixel Refinement Sweep Audit
+
+- Add a reusable resident registration matrix-sweep artifact that ranks matrix
+  compare variants and optional parity summaries.
+- Use the S2-Gate 418 strict matrix contract to test bounded subpixel
+  refinement candidates on the synthetic 16-frame harness:
+  - current quality-reference resident triangle;
+  - resident triangle with `cuda_triangle_pixel_refine_fine_step=0.03125`;
+  - resident `translation_ncc_subpixel` default;
+  - resident `translation_ncc_subpixel` with `--resident-subpixel-step 0.0625`.
+- Record the negative result as a hard optimization finding: none of these
+  variants passes the strict `0.1 px` matrix delta gate or improves parity.
+- Keep the result actionable: the next gate should change the resident
+  transform refinement metric/model or add a stronger CUDA/CPU parity
+  refinement path, not merely tune fine-step density.
+- Keep this gate runtime-experiment scoped: no default change, no CUDA kernel
+  change, no registration formula promotion, no package upload, no GitHub
+  release creation, and no modification of user input directories.
+
 ## Gate Rules
 
 Each gate requires:

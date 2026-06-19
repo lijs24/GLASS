@@ -1,0 +1,48 @@
+# Resident Registration Matrix Compare
+
+- Status: `attention_required`
+- Passed: `False`
+- Recommendation: `fix_resident_transform_estimation`
+- Next target: `compare triangle descriptor fit and pixel-refine outputs against CPU/external matrices`
+- Baseline: `cpu_tile` `runs\checkpoints\s2_gate_414_runtime_validation_cpu\registration_results.json`
+- Candidate: `cuda_resident_translation_ncc_step00625` `runs\checkpoints\s2_gate_419_translation_ncc_step00625_cuda_hardened\registration_results.json`
+
+## Summary
+
+| Metric | Value |
+| --- | ---: |
+| `baseline_row_count` | 16 |
+| `candidate_row_count` | 16 |
+| `common_row_count` | 16 |
+| `missing_frame_count` | 0 |
+| `status_mismatch_count` | 0 |
+| `reference_mismatch_count` | 0 |
+| `translation_delta_px.max` | 0.18305392208191398 |
+| `translation_delta_px.mean` | 0.16734804795648386 |
+| `matrix_delta_frobenius.max` | 0.18305392208191398 |
+| `matrix_delta_frobenius.mean` | 0.16734804795648386 |
+
+## Checks
+
+- PASS: `reference_frame_match` - {'baseline_reference_frame_id': 'F000016', 'candidate_reference_frame_id': 'F000016'}
+- PASS: `row_count_match` - {'baseline_row_count': 16, 'candidate_row_count': 16}
+- PASS: `missing_frame_rows` - {'missing_frame_count': 0}
+- PASS: `status_rows_match` - {'status_mismatch_count': 0}
+- PASS: `reference_rows_match` - {'reference_mismatch_count': 0}
+- FAIL: `translation_delta_within_limit` - {'max_translation_delta_px': 0.18305392208191398, 'threshold': 0.1}
+- FAIL: `matrix_delta_within_limit` - {'max_matrix_delta_frobenius': 0.18305392208191398, 'threshold': 0.1}
+
+## Worst Translation Rows
+
+| Frame | Baseline status | Candidate status | Baseline tx | Baseline ty | Candidate tx | Candidate ty | Delta px | Matrix delta |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `F000013` | ok | ok | 2.9999893529665655 | -0.00874004648784421 | 2.875 | 0.125 | 0.18305392208191398 | 0.18305392208191398 |
+| `F000024` | ok | ok | 2.00135529484578 | -2.00867664335766 | 2.125 | -1.875 | 0.18209189463577177 | 0.18209189463577177 |
+| `F000018` | ok | ok | 2.9992375289487185 | -1.0058746536013246 | 3.125 | -0.875 | 0.18150585136626066 | 0.18150585136626066 |
+| `F000026` | ok | ok | 0.0013415540097980738 | -2.0042446745784233 | -0.125 | -1.875 | 0.18073841367150828 | 0.18073841367150828 |
+| `F000019` | ok | ok | 1.9937828574277567 | -1.0008331969108326 | 2.125 | -1.125 | 0.18065252141669233 | 0.18065252141669233 |
+| `F000027` | ok | ok | -0.99870567562564 | -2.002513467237115 | -1.125 | -1.875 | 0.17947128097834178 | 0.17947128097834178 |
+| `F000028` | ok | ok | 2.997876111271836 | -3.000762274540527 | 3.125 | -2.875 | 0.1788201129151236 | 0.1788201129151236 |
+| `F000017` | ok | ok | -0.9975822748075416 | -0.005071361523704354 | -0.875 | 0.125 | 0.17873156740101015 | 0.17873156740101015 |
+| `F000021` | ok | ok | 0.0005259830282682287 | -1.0014606036755467 | -0.125 | -0.875 | 0.17818264982089801 | 0.17818264982089801 |
+| `F000020` | ok | ok | 1.001482614433698 | -1.0021881404596655 | 1.125 | -0.875 | 0.1772945786275546 | 0.1772945786275546 |

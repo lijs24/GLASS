@@ -1,0 +1,121 @@
+{
+  "abs_diff_p50": 0.3892974853515625,
+  "abs_diff_p90": 0.9952468872070312,
+  "abs_diff_p99": 2.059838104248047,
+  "abs_diff_p999": 40.82080535888875,
+  "candidate_transform": {
+    "applied": false,
+    "clip_high": null,
+    "clip_low": null,
+    "offset": 0.0,
+    "scale": 1.0
+  },
+  "comparison_region": {
+    "compared_pixels": 246016,
+    "compared_shape": [
+      496,
+      496
+    ],
+    "coverage_fraction": 1.0,
+    "coverage_max": 16.0,
+    "coverage_median": 16.0,
+    "coverage_min": 12.0,
+    "coverage_p1": 15.0,
+    "coverage_valid_pixels": 246016,
+    "full_shape": [
+      512,
+      512
+    ],
+    "glass_coverage_map": "runs\\checkpoints\\s2_gate_419_fine_step_03125_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+    "ignore_border_px": 8,
+    "min_coverage": 1.0
+  },
+  "diagnostics": {
+    "abs_diff_preview_png": "runs\\checkpoints\\s2_gate_419_fine_step_03125_compare_diagnostics\\abs_diff_preview.png",
+    "directory": "runs\\checkpoints\\s2_gate_419_fine_step_03125_compare_diagnostics",
+    "glass_preview_png": "runs\\checkpoints\\s2_gate_419_fine_step_03125_compare_diagnostics\\glass_preview.png",
+    "hotspot_tile_size": 512,
+    "hotspots": [
+      {
+        "max_abs_diff": 151.3243408203125,
+        "mean_diff": -0.00955452979542315,
+        "p99_abs_diff": 2.3168496704101624,
+        "pixels": 262144,
+        "rms_diff": 2.503020601652359,
+        "x0": 0,
+        "x1": 512,
+        "y0": 0,
+        "y1": 512
+      }
+    ],
+    "hotspots_json": "runs\\checkpoints\\s2_gate_419_fine_step_03125_compare_diagnostics\\hotspots.json",
+    "preview_max_size": 1024,
+    "reference_preview_png": "runs\\checkpoints\\s2_gate_419_fine_step_03125_compare_diagnostics\\reference_preview.png",
+    "signed_diff_preview_png": "runs\\checkpoints\\s2_gate_419_fine_step_03125_compare_diagnostics\\signed_diff_preview.png"
+  },
+  "full_frame_stats": {
+    "abs_diff_p50": 0.39414215087890625,
+    "abs_diff_p90": 1.018707275390625,
+    "abs_diff_p99": 2.3168496704101624,
+    "abs_diff_p999": 39.0981451416037,
+    "max_abs_diff": 151.3243408203125,
+    "mean_diff": -0.00955452979542315,
+    "relative_rms_diff": 0.011395423668563349,
+    "rms_diff": 2.503020601652359
+  },
+  "glass_format": "fits",
+  "linear_fit_to_reference": {
+    "available": true,
+    "offset": -5.143814565737813,
+    "scale": 1.0237781979510594,
+    "stats": {
+      "abs_diff_p50": 0.3990528108565883,
+      "abs_diff_p90": 1.0192427982878058,
+      "abs_diff_p99": 2.085486609283078,
+      "abs_diff_p999": 40.22277935465861,
+      "max_abs_diff": 117.58399511080029,
+      "mean_diff": -2.3142546960760808e-14,
+      "relative_rms_diff": 0.010992608982207545,
+      "rms_diff": 2.4175709493863544
+    }
+  },
+  "max_abs_diff": 151.3243408203125,
+  "mean_diff": -0.009170709551931297,
+  "reference_format": "fits",
+  "relative_rms_diff": 0.011678744811104374,
+  "rms_diff": 2.568470708484397,
+  "robust_linear_fit_to_reference": {
+    "available": true,
+    "fit_fraction": 0.9888299947970863,
+    "fit_pixels": 243268,
+    "offset": -1.283087895355294,
+    "scale": 1.0059979994646662,
+    "stats_all_pixels": {
+      "abs_diff_p50": 0.38638310174737,
+      "abs_diff_p90": 0.9884424700552472,
+      "abs_diff_p99": 2.0606020347268825,
+      "abs_diff_p999": 39.76495866133042,
+      "max_abs_diff": 142.79898263430482,
+      "mean_diff": 0.0075708853777342235,
+      "relative_rms_diff": 0.01138135906901178,
+      "rms_diff": 2.503067569701926
+    },
+    "stats_fit_pixels": {
+      "abs_diff_p50": 0.38279938631103505,
+      "abs_diff_p90": 0.9696955534917465,
+      "abs_diff_p99": 1.788105723129203,
+      "abs_diff_p999": 2.9127401867074627,
+      "max_abs_diff": 12.16052825686242,
+      "mean_diff": 7.858649157006656e-15,
+      "relative_rms_diff": 0.002895292895362589,
+      "rms_diff": 0.6234546829680854
+    }
+  },
+  "shape_match": true,
+  "timing": {
+    "glass_label": "cuda_resident_triangle_fine_step_03125",
+    "glass_time_seconds": null,
+    "reference_label": "cpu_tile",
+    "reference_time_seconds": null
+  }
+}
