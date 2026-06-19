@@ -4579,11 +4579,55 @@ def run_resident_calibration_integration(
                     native_stack,
                     "star_grid_top_nms_candidates_deterministic_centroid",
                 )
-                use_grid_catalog = (
-                    resident_star_grid_cols > 0
-                    and resident_star_grid_rows > 0
+                triangle_star_grid_cols = int(resident_star_grid_cols)
+                triangle_star_grid_rows = int(resident_star_grid_rows)
+                triangle_star_catalog_deterministic = bool(resident_star_catalog_deterministic)
+                triangle_catalog_grid_auto = False
+                if (
+                    triangle_star_grid_cols <= 0
+                    and triangle_star_grid_rows <= 0
                     and has_grid_nms_catalog
-                    and (not resident_star_catalog_deterministic or has_grid_nms_catalog_deterministic)
+                    and (
+                        has_grid_nms_catalog_centroid
+                        or has_grid_nms_catalog_deterministic_centroid
+                        or not triangle_centroid_refine_enabled
+                    )
+                ):
+                    triangle_star_grid_cols = _policy_int(
+                        registration_policy,
+                        "cuda_triangle_auto_grid_cols",
+                        _policy_int(registration_policy, "cuda_catalog_auto_grid_cols", 8),
+                    )
+                    triangle_star_grid_rows = _policy_int(
+                        registration_policy,
+                        "cuda_triangle_auto_grid_rows",
+                        _policy_int(registration_policy, "cuda_catalog_auto_grid_rows", 8),
+                    )
+                    if triangle_star_grid_cols <= 0 or triangle_star_grid_rows <= 0:
+                        raise ValueError("cuda_triangle_auto_grid_cols/rows must be positive")
+                    triangle_star_catalog_deterministic = _policy_bool(
+                        registration_policy,
+                        "cuda_triangle_auto_grid_deterministic",
+                        _policy_bool(registration_policy, "cuda_catalog_auto_grid_deterministic", True),
+                    )
+                    triangle_catalog_grid_auto = True
+                    if (
+                        resident_triangle_grid_top_per_cell is None
+                        and "cuda_triangle_grid_top_per_cell" not in registration_policy
+                        and "cuda_catalog_grid_top_per_cell" not in registration_policy
+                    ):
+                        grid_top_candidates_per_cell = _policy_int(
+                            registration_policy,
+                            "cuda_triangle_auto_grid_top_per_cell",
+                            _policy_int(registration_policy, "cuda_catalog_auto_grid_top_per_cell", 8),
+                        )
+                        if grid_top_candidates_per_cell <= 0:
+                            raise ValueError("cuda_triangle_auto_grid_top_per_cell must be positive")
+                use_grid_catalog = (
+                    triangle_star_grid_cols > 0
+                    and triangle_star_grid_rows > 0
+                    and has_grid_nms_catalog
+                    and (not triangle_star_catalog_deterministic or has_grid_nms_catalog_deterministic)
                 )
                 triangle_catalog_batch_enabled = bool(
                     use_grid_catalog
@@ -4599,7 +4643,7 @@ def run_resident_calibration_integration(
                         )
                     )
                     and (
-                        not resident_star_catalog_deterministic
+                        not triangle_star_catalog_deterministic
                         or (
                             triangle_centroid_refine_enabled
                             and hasattr(native_stack, "star_grid_top_nms_candidates_batch_deterministic_centroid")
@@ -4746,24 +4790,24 @@ def run_resident_calibration_integration(
                 ) -> dict[str, Any]:
                     if use_grid_catalog:
                         if triangle_centroid_refine_enabled:
-                            if resident_star_catalog_deterministic and has_grid_nms_catalog_deterministic_centroid:
+                            if triangle_star_catalog_deterministic and has_grid_nms_catalog_deterministic_centroid:
                                 return _stack.star_grid_top_nms_candidates_deterministic_centroid(
                                     frame_index,
                                     threshold,
-                                    resident_star_grid_cols,
-                                    resident_star_grid_rows,
+                                    triangle_star_grid_cols,
+                                    triangle_star_grid_rows,
                                     grid_top_candidates_per_cell,
                                     resident_star_max_candidates,
                                     nms_min_separation_px,
                                     triangle_centroid_refine_radius,
                                     triangle_centroid_background_mode,
                                 )
-                            if (not resident_star_catalog_deterministic) and has_grid_nms_catalog_centroid:
+                            if (not triangle_star_catalog_deterministic) and has_grid_nms_catalog_centroid:
                                 return _stack.star_grid_top_nms_candidates_centroid(
                                     frame_index,
                                     threshold,
-                                    resident_star_grid_cols,
-                                    resident_star_grid_rows,
+                                    triangle_star_grid_cols,
+                                    triangle_star_grid_rows,
                                     grid_top_candidates_per_cell,
                                     resident_star_max_candidates,
                                     nms_min_separation_px,
@@ -4773,12 +4817,12 @@ def run_resident_calibration_integration(
                         return _stack.star_grid_top_nms_candidates(
                             frame_index,
                             threshold,
-                            resident_star_grid_cols,
-                            resident_star_grid_rows,
+                            triangle_star_grid_cols,
+                            triangle_star_grid_rows,
                             grid_top_candidates_per_cell,
                             resident_star_max_candidates,
                             nms_min_separation_px,
-                            deterministic=resident_star_catalog_deterministic,
+                            deterministic=triangle_star_catalog_deterministic,
                         )
                     if has_top_nms_catalog:
                         if triangle_centroid_refine_enabled and has_top_nms_catalog_centroid:
@@ -4847,12 +4891,12 @@ def run_resident_calibration_integration(
                         cached_by_index = moving_catalog_batch_cache.get(threshold_key)
                         if cached_by_index is None:
                             batch_start = perf_counter()
-                            if triangle_centroid_refine_enabled and resident_star_catalog_deterministic:
+                            if triangle_centroid_refine_enabled and triangle_star_catalog_deterministic:
                                 batch_results = _stack.star_grid_top_nms_candidates_batch_deterministic_centroid(
                                     moving_catalog_batch_indices,
                                     threshold,
-                                    resident_star_grid_cols,
-                                    resident_star_grid_rows,
+                                    triangle_star_grid_cols,
+                                    triangle_star_grid_rows,
                                     grid_top_candidates_per_cell,
                                     resident_star_max_candidates,
                                     nms_min_separation_px,
@@ -4863,8 +4907,8 @@ def run_resident_calibration_integration(
                                 batch_results = _stack.star_grid_top_nms_candidates_batch_centroid(
                                     moving_catalog_batch_indices,
                                     threshold,
-                                    resident_star_grid_cols,
-                                    resident_star_grid_rows,
+                                    triangle_star_grid_cols,
+                                    triangle_star_grid_rows,
                                     grid_top_candidates_per_cell,
                                     resident_star_max_candidates,
                                     nms_min_separation_px,
@@ -4875,12 +4919,12 @@ def run_resident_calibration_integration(
                                 batch_results = _stack.star_grid_top_nms_candidates_batch(
                                     moving_catalog_batch_indices,
                                     threshold,
-                                    resident_star_grid_cols,
-                                    resident_star_grid_rows,
+                                    triangle_star_grid_cols,
+                                    triangle_star_grid_rows,
                                     grid_top_candidates_per_cell,
                                     resident_star_max_candidates,
                                     nms_min_separation_px,
-                                    deterministic=resident_star_catalog_deterministic,
+                                    deterministic=triangle_star_catalog_deterministic,
                                 )
                             _add_elapsed(
                                 registration_component_s,
@@ -5737,10 +5781,14 @@ def run_resident_calibration_integration(
                                         + ("failed" if quality_failures else "ok"),
                                         f"triangle_min_pixel_ncc={min_pixel_ncc}",
                                         f"triangle_catalog_selector={catalog_selector}",
+                                        "triangle_catalog_grid_auto="
+                                        + str(bool(triangle_catalog_grid_auto)).lower(),
                                         f"triangle_catalog_batch={triangle_catalog_batch_mode}",
                                         f"triangle_catalog_timing_model={triangle_catalog_timing_model}",
                                         f"triangle_catalog_sort_mode={triangle_catalog_sort_mode}",
                                         f"triangle_catalog_topk_mode={triangle_catalog_topk_mode}",
+                                        f"triangle_star_grid_cols={triangle_star_grid_cols}",
+                                        f"triangle_star_grid_rows={triangle_star_grid_rows}",
                                         f"triangle_grid_top_per_cell={grid_top_candidates_per_cell}",
                                         f"triangle_nms_scan_candidates={nms_scan_candidates}",
                                         f"triangle_nms_min_separation_px={nms_min_separation_px:.6g}",
@@ -7170,9 +7218,17 @@ def run_resident_calibration_integration(
                         "star_threshold_auto_sigmas": list(_AUTO_STAR_THRESHOLD_SIGMAS),
                         "star_max_candidates": resident_star_max_candidates,
                         "star_tolerance_px": resident_star_tolerance_px,
-                        "star_grid_cols": resident_star_grid_cols,
-                        "star_grid_rows": resident_star_grid_rows,
-                        "star_catalog_deterministic": bool(resident_star_catalog_deterministic),
+                        "star_grid_cols": triangle_star_grid_cols
+                        if resident_registration == "similarity_cuda_triangle"
+                        else resident_star_grid_cols,
+                        "star_grid_rows": triangle_star_grid_rows
+                        if resident_registration == "similarity_cuda_triangle"
+                        else resident_star_grid_rows,
+                        "star_catalog_deterministic": (
+                            bool(triangle_star_catalog_deterministic)
+                            if resident_registration == "similarity_cuda_triangle"
+                            else bool(resident_star_catalog_deterministic)
+                        ),
                         "star_prior": resident_star_prior,
                         "star_prior_radius_px": resident_star_prior_radius_px,
                         "pierside_same_similarity_top_k": _policy_int(
@@ -7367,6 +7423,13 @@ def run_resident_calibration_integration(
                             resident_registration == "similarity_cuda_triangle"
                             and triangle_catalog_batch_enabled
                         ),
+                        "triangle_catalog_grid_auto": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_catalog_grid_auto
+                        ),
+                        "triangle_catalog_selector": catalog_selector
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
                         "triangle_catalog_batch_mode": triangle_catalog_batch_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",

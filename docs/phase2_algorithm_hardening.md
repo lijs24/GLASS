@@ -7879,28 +7879,69 @@ integration where applicable.
 ### S2-Gate 430: Resident Catalog Batch Performance and Warp-Value Parity
 
 - Continue from Gate429 with a substantive runtime gate only.
-- Target the resident registration/catalog hot path and the remaining
-  rejection-map delta caused by resident warp input values.
-- Required work:
-  - batch or cache resident star catalog/background/descriptor work so the
-    16-frame checkpoint no longer spends most of wall time in per-frame catalog
-    orchestration;
-  - keep `global_mean` centroid background as the default unless an audit shows
-    a regression;
-  - preserve or improve Gate429 matrix translation, warp RMS, coverage, and
-    rejection-map deltas;
-  - keep DQ/pre-rejection sample accounting explicit, including compare-region
-    evidence;
-  - run the Gate414/Gate423 16-frame CUDA validation first; only if it improves
-    should a real 200-light regression be started.
+- Identify that the Gate429 16-frame command did not enable the existing grid
+  catalog batch path. It therefore used resident top-NMS catalogs with no batch
+  support:
+  - `triangle_catalog_batch=False`;
+  - `triangle_moving_catalog` about `75.212 s`;
+  - `resident_registration_warp` about `80.232 s`;
+  - total resident run about `80.420 s`.
+- Change the resident `similarity_cuda_triangle` default so, when no star grid
+  is explicitly supplied, it auto-enables deterministic grid catalogs:
+  - `star_grid_cols=8`;
+  - `star_grid_rows=8`;
+  - `triangle_grid_top_per_cell=8`;
+  - `star_catalog_deterministic=True`;
+  - `triangle_catalog_grid_auto=True`;
+  - `triangle_catalog_batch=True`.
+- Keep user overrides intact. Explicit `--resident-star-grid-*`,
+  `--resident-star-catalog-deterministic`, and
+  `--resident-triangle-grid-top-per-cell` continue to control the grid path.
+- Record the auto-grid/default path in artifacts and per-frame warnings through
+  `triangle_catalog_grid_auto`, `triangle_catalog_selector`,
+  `triangle_star_grid_cols`, and `triangle_star_grid_rows`.
+- Validate on the Gate414/Gate423 16-frame checkpoint harness with reference
+  frame `F000016`, resident CUDA triangle registration, hardened winsorized
+  integration, and audit output maps:
+  - total resident run improved from Gate429 `80.420 s` to `0.227 s`;
+  - `resident_registration_warp` improved from `80.232 s` to `0.047995 s`;
+  - `triangle_moving_catalog` improved from `75.212 s` to `0.010105 s`;
+  - matrix translation delta max stayed `0.0077076656 px`;
+  - resident-matrix warp RMS max stayed `0.1586616188`;
+  - master absolute delta sum improved from `6638.656708` to `6610.556580`;
+  - coverage absolute delta improved from `706` to `700`;
+  - low/high rejection absolute deltas changed from `356`/`350` to
+    `357`/`343`;
+  - compare-region pre-rejection sample delta stayed `0`;
+  - same-pre-rejection rejected-sample absolute delta improved from `706` to
+    `700`.
+- Interpretation: the prior bottleneck was a default-route miss, not a lack of
+  batch primitives. The resident CUDA triangle default now uses the fast grid
+  batch path while preserving Gate429 matrix precision and slightly improving
+  output-map deltas. The remaining strict sample-audit failure is still about
+  resident warp/rejection value parity at zero-delta thresholds, not catalog
+  throughput.
+- Keep this gate runtime-algorithm scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
+### S2-Gate 431: Resident Warp/Rejection Value Parity or Real 200-Light Regression
+
+- Continue from Gate430 with a substantive runtime gate only.
+- Choose the next action based on GPU availability and run time:
+  - either reduce the remaining strict same-pre-rejection delta by targeting
+    resident warp/rejection value parity;
+  - or run the real 200-light regression using the now-fast resident default
+    path to verify that the Gate430 speedup transfers beyond the 16-frame
+    harness.
 - Acceptance for the next gate:
   - focused resident CUDA tests pass;
   - `python -m pytest -q` passes;
-  - `resident-warp-input-audit`, `resident-rejection-input-audit`, and
-    `resident-rejection-sample-audit` artifacts are generated;
-  - registration/catalog timing improves versus Gate429 or a specific failed
-    experiment explains why not;
-  - numerical deltas are no worse than Gate429;
+  - 16-frame warp/rejection audits remain no worse than Gate430 if code changes
+    affect registration, warp, or rejection;
+  - if the real 200-light regression is run, record timing, GPU/device info,
+    frame counts, calibration-frame counts, output artifacts, and numerical
+    compare summary;
   - no release/default-promotion/report-only code is added unless it directly
     blocks this runtime validation.
 

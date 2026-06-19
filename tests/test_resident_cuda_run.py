@@ -2480,13 +2480,6 @@ def test_cli_resident_cuda_triangle_default_uses_gpu_centroid_without_pixel_refi
             "16",
             "--resident-star-tolerance-px",
             "1.5",
-            "--resident-star-grid-cols",
-            "4",
-            "--resident-star-grid-rows",
-            "4",
-            "--resident-star-catalog-deterministic",
-            "--resident-triangle-grid-top-per-cell",
-            "2",
             "--resident-triangle-nms-scan-candidates",
             "96",
             "--resident-triangle-nms-min-separation-px",
@@ -2512,11 +2505,23 @@ def test_cli_resident_cuda_triangle_default_uses_gpu_centroid_without_pixel_refi
     assert resident_registration["triangle_centroid_refine_background"] == "global_mean"
     assert resident_registration["triangle_centroid_refine_catalog_count"] >= 2
     assert resident_registration["triangle_centroid_refine_star_count"] > 0
+    assert resident_registration["triangle_catalog_grid_auto"] is True
+    assert resident_registration["triangle_catalog_selector"] == "resident_grid_top_nms"
+    assert resident_registration["triangle_catalog_batch"] is True
+    assert resident_registration["triangle_catalog_batch_mode"] == "grid_top_nms_fixed_threshold"
+    assert resident_registration["star_grid_cols"] == 8
+    assert resident_registration["star_grid_rows"] == 8
+    assert resident_registration["star_catalog_deterministic"] is True
+    assert resident_registration["triangle_grid_top_per_cell"] == 8
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity_cuda_triangle"
     assert "triangle_centroid_refine_enabled=true" in moving["warnings"]
     assert "triangle_centroid_refine_mode=resident_gpu_global_mean_centroid" in moving["warnings"]
     assert "triangle_centroid_refine_background=global_mean" in moving["warnings"]
+    assert "triangle_catalog_grid_auto=true" in moving["warnings"]
+    assert "triangle_star_grid_cols=8" in moving["warnings"]
+    assert "triangle_star_grid_rows=8" in moving["warnings"]
+    assert "triangle_grid_top_per_cell=8" in moving["warnings"]
     assert abs(moving["matrix"][0][2] + 3.0) < 0.5
     assert abs(moving["matrix"][1][2] - 2.0) < 0.5
     assert all("triangle_pixel_refine_mode=" not in warning for warning in moving["warnings"])
