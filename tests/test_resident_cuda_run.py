@@ -2308,6 +2308,113 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
 
 
+def test_cli_resident_cuda_run_similarity_triangle_uses_quality_reference(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "rq"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_triangle_tolerance_px": 1.5,
+            "cuda_triangle_descriptor_radius": 0.08,
+            "cuda_triangle_neighbors": 5,
+            "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine_coarse_stride": 1,
+            "cuda_triangle_pixel_refine_final_stride": 1,
+            "cuda_triangle_min_pixel_ncc": 0.1,
+        }
+    )
+    light_by_stem = {
+        Path(frame["path"]).stem: frame for frame in plan_payload["frames"] if frame["frame_type"] == "light"
+    }
+    quality_reference_id = str(light_by_stem["light_002"]["id"])
+    moving_id = str(light_by_stem["light_001"]["id"])
+    write_json(plan, plan_payload)
+    run.mkdir(parents=True)
+    (run / "calib_cache" / "resident_masters").mkdir(parents=True)
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "reference_frame_id": quality_reference_id,
+            "frame_quality": [
+                {"frame_id": moving_id, "reference_candidate": True, "star_count": 8},
+                {"frame_id": quality_reference_id, "reference_candidate": True, "star_count": 10},
+            ],
+        },
+    )
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_triangle",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
+            "--resident-star-catalog-deterministic",
+            "--resident-triangle-grid-top-per-cell",
+            "2",
+            "--resident-triangle-nms-scan-candidates",
+            "96",
+            "--resident-triangle-nms-min-separation-px",
+            "2.0",
+            "--resident-triangle-pixel-refine-final-stride",
+            "2",
+            "--resident-triangle-pixel-refine-fast-coarse",
+            "--resident-triangle-min-agreement-score",
+            "0.01",
+            "--resident-triangle-agreement-rms-scale",
+            "200",
+        ]
+    ) == 0
+
+    registration = read_json(run / "registration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    resident_registration = resident["artifacts"][0]["resident_registration"]
+    reference_rows = [item for item in registration["results"] if item["status"] == "reference"]
+    moving = [item for item in registration["results"] if item["frame_id"] == moving_id][0]
+
+    assert [item["frame_id"] for item in reference_rows] == [quality_reference_id]
+    assert resident_registration["reference_frame_id"] == quality_reference_id
+    assert resident_registration["selected_reference_frame_id"] == quality_reference_id
+    assert resident_registration["reference_selection_source"] == "frame_quality"
+    assert resident_registration["quality_reference_frame_id"] == quality_reference_id
+    assert resident_registration["quality_reference_status"] == "frame_quality"
+    assert resident_registration["quality_reference_path"] == str(run / "frame_quality.json")
+    assert moving["status"] == "ok"
+    assert abs(moving["matrix"][0][2] - 3.0) < 0.5
+    assert abs(moving["matrix"][1][2] + 2.0) < 0.5
+
+
 def test_cli_resident_cuda_triangle_fused_matrix_matches_stack_dispatch(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_star_dataset(tmp_path)

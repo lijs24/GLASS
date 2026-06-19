@@ -473,6 +473,24 @@ def _find_reference_frame(light_frames: list[dict[str, Any]], reference_frame_id
     return light_frames[0]
 
 
+def _quality_reference_frame_id(run: Path, light_frames: list[dict[str, Any]]) -> tuple[str | None, str, str | None]:
+    quality_path = run / "frame_quality.json"
+    if not quality_path.exists():
+        return None, "absent", None
+    try:
+        quality = read_json(quality_path)
+    except Exception as exc:
+        return None, f"unreadable:{exc}", str(quality_path)
+    reference = quality.get("reference_frame_id") if isinstance(quality, dict) else None
+    if not reference:
+        return None, "missing_reference_frame_id", str(quality_path)
+    reference_text = str(reference)
+    for frame in light_frames:
+        if reference_text in _frame_reference_tokens(frame):
+            return reference_text, "frame_quality", str(quality_path)
+    return None, f"unmatched:{reference_text}", str(quality_path)
+
+
 def _matches_any_token(frame: dict[str, Any], tokens: set[str]) -> bool:
     return bool(_frame_reference_tokens(frame) & tokens)
 
@@ -2646,7 +2664,23 @@ def run_resident_calibration_integration(
                 stack.reset_warp_coverage()
 
             registration_start = perf_counter()
-            selected_reference_frame_id = reference_frame_id or external_reference_frame_id
+            quality_reference_frame_id, quality_reference_status, quality_reference_path = _quality_reference_frame_id(
+                run,
+                light_frames,
+            )
+            use_quality_reference = resident_registration != "off" or local_norm_enabled
+            if reference_frame_id:
+                selected_reference_frame_id = reference_frame_id
+                reference_selection_source = "explicit"
+            elif external_reference_frame_id:
+                selected_reference_frame_id = external_reference_frame_id
+                reference_selection_source = "external_matrix"
+            elif quality_reference_frame_id is not None and use_quality_reference:
+                selected_reference_frame_id = quality_reference_frame_id
+                reference_selection_source = "frame_quality"
+            else:
+                selected_reference_frame_id = None
+                reference_selection_source = "first_light_fallback"
             reference_frame = _find_reference_frame(light_frames, selected_reference_frame_id)
             reference_index = next(
                 index for index, frame in enumerate(light_frames) if frame["id"] == reference_frame["id"]
@@ -6476,6 +6510,11 @@ def run_resident_calibration_integration(
                     "resident_registration": {
                         "mode": resident_registration,
                         "reference_frame_id": str(reference_frame["id"]),
+                        "selected_reference_frame_id": str(reference_frame["id"]),
+                        "reference_selection_source": reference_selection_source,
+                        "quality_reference_frame_id": quality_reference_frame_id,
+                        "quality_reference_status": quality_reference_status,
+                        "quality_reference_path": quality_reference_path,
                         "preview_scale": preview_scale,
                         "warp_interpolation": resident_warp_interpolation,
                         "warp_clamping_threshold": resident_warp_clamping_threshold,

@@ -7515,6 +7515,28 @@ integration where applicable.
   change, no registration math change, no integration math change, and no
   modification of user input directories.
 
+### S2-Gate 417: Resident Quality Reference Handoff
+
+- Make resident CUDA registration adopt the quality-stage reference frame when
+  `frame_quality.json` is already present in the run directory and no explicit
+  resident reference or external-matrix reference overrides it.
+- Preserve priority order: explicit `--reference-frame-id`, external-matrix
+  reference, quality reference, then first-light fallback.
+- Record `reference_selection_source`, `selected_reference_frame_id`,
+  `quality_reference_frame_id`, `quality_reference_status`, and
+  `quality_reference_path` in resident registration artifacts so the handoff is
+  auditable in synthetic and real 200-light runs.
+- Validate on CUDA synthetic shifted data that resident triangle registration
+  uses the quality-selected reference without an explicit reference argument.
+- Re-run the S2-Gate 414 synthetic 16-frame hardened resident validation with
+  the CPU quality reference handed to the resident run. Acceptance for this gate
+  is reference/contract readiness, not full image parity: the next gate must
+  address the remaining triangle transform, warp, DQ, or rejection delta.
+- Keep this gate runtime-validation scoped: no default-promotion/report-only
+  handoff work, no package upload, no GitHub release creation, no CUDA kernel
+  change, no new public release artifact, and no modification of user input
+  directories.
+
 ## Gate Rules
 
 Each gate requires:
