@@ -8,7 +8,7 @@ import numpy as np
 from glass.cli import main
 from glass.engine.contracts import DQFlag
 from glass.io.fits_io import write_fits_data
-from glass.io.json_io import write_json
+from glass.io.json_io import read_json, write_json
 from glass.report.acceptance_audit import build_acceptance_audit
 from glass.report.benchmark_contract import load_benchmark_contract
 from glass.report.benchmark_contract_profile import (
@@ -294,3 +294,74 @@ def test_acceptance_audit_consumes_generated_resident_dq_contract(tmp_path: Path
         checks["contract_required_command_token_group:resident_throughput_pipeline"]["passed"]
         is True
     )
+
+
+def test_acceptance_audit_consumes_builtin_resident_dq_contract_profile(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    run = tmp_path / "run"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    _write_manifest(manifest)
+    _write_resident_dq_run(run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract_profile=RESIDENT_CUDA_DQ_PROFILE_NAME,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert audit["benchmark_contract"]["source"] == "profile"
+    assert audit["benchmark_contract"]["path"] is None
+    assert audit["benchmark_contract"]["profile"] == RESIDENT_CUDA_DQ_PROFILE_NAME
+    assert checks["contract_dq_provenance_records"]["passed"] is True
+    assert checks["contract_required_command_token:--memory-mode resident"]["passed"] is True
+
+
+def test_acceptance_audit_cli_accepts_builtin_benchmark_contract_profile(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    run = tmp_path / "run"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    out = tmp_path / "acceptance.json"
+    _write_manifest(manifest)
+    _write_resident_dq_run(run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+
+    assert (
+        main(
+            [
+                "acceptance-audit",
+                "--manifest",
+                str(manifest),
+                "--glass-run",
+                str(run),
+                "--wbpp-result",
+                str(wbpp),
+                "--compare-json",
+                str(compare),
+                "--benchmark-contract-profile",
+                RESIDENT_CUDA_DQ_PROFILE_NAME,
+                "--min-active-frames",
+                "190",
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
+
+    payload = read_json(out)
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["benchmark_contract"]["source"] == "profile"
+    assert payload["benchmark_contract"]["profile"] == RESIDENT_CUDA_DQ_PROFILE_NAME
+    assert checks["contract_dq_map_exists"]["passed"] is True
+    assert checks["contract_coverage_map_pixel_verification"]["passed"] is True

@@ -2041,6 +2041,8 @@ def cmd_benchmark_contract_profile(args: argparse.Namespace) -> int:
 
 
 def cmd_acceptance_audit(args: argparse.Namespace) -> int:
+    if args.benchmark_contract and args.benchmark_contract_profile:
+        raise SystemExit("--benchmark-contract and --benchmark-contract-profile are mutually exclusive")
     audit = build_acceptance_audit(
         manifest_path=args.manifest,
         glass_run=args.glass_run,
@@ -2056,6 +2058,7 @@ def cmd_acceptance_audit(args: argparse.Namespace) -> int:
         max_rms_diff=args.max_rms_diff,
         max_abs_diff_p99=args.max_abs_diff_p99,
         benchmark_contract=args.benchmark_contract,
+        benchmark_contract_profile=args.benchmark_contract_profile,
         resident_determinism_json=args.resident_determinism_json,
         resident_registration_fastpath_json=args.resident_registration_fastpath_json,
         contract_bundle_json=args.contract_bundle,
@@ -5491,6 +5494,11 @@ def build_parser() -> argparse.ArgumentParser:
     acceptance.add_argument(
         "--benchmark-contract",
         help="optional JSON contract that pins real-data benchmark parameters and regression limits",
+    )
+    acceptance.add_argument(
+        "--benchmark-contract-profile",
+        choices=[RESIDENT_CUDA_DQ_PROFILE_NAME],
+        help="generate and apply a built-in benchmark contract profile in memory",
     )
     acceptance.add_argument(
         "--resident-determinism-json",

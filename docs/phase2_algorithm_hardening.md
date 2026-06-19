@@ -7241,6 +7241,22 @@ integration where applicable.
   change, no CUDA kernel change, no runtime default change, no package upload,
   no GitHub release creation, and no real-data benchmark rerun.
 
+### S2-Gate 403: Acceptance-Audit Benchmark Profile Shortcut
+
+- Add `glass acceptance-audit --benchmark-contract-profile resident_cuda_dq_v1`
+  so acceptance checks can consume the resident CUDA DQ benchmark profile
+  directly when a separate JSON contract artifact is not needed.
+- Preserve existing `--benchmark-contract` file-path behavior and make profile
+  use explicit in the acceptance-audit JSON summary.
+- Validate Python API and CLI profile consumption against resident DQ fixture
+  artifacts.
+- Keep this gate acceptance-workflow scoped: no benchmark contract check
+  semantic change, no quality metric math change, no default quality threshold,
+  no star detector algorithm change, no registration transform math change, no
+  integration math change, no DQ pixel semantics change, no CUDA kernel change,
+  no runtime default change, no package upload, no GitHub release creation, and
+  no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -13,6 +13,10 @@ from glass.report.benchmark_contract import (
     load_benchmark_contract,
     resident_registration_fastpath_record_from_payload,
 )
+from glass.report.benchmark_contract_profile import (
+    RESIDENT_CUDA_DQ_PROFILE_NAME,
+    build_resident_cuda_dq_benchmark_contract,
+)
 from glass.report.optimization_guide import build_optimization_guidance
 from glass.report.speedup_report import _read_json_lenient, summarize_wbpp_speedup
 
@@ -935,6 +939,7 @@ def build_acceptance_audit(
     max_rms_diff: float | None = 0.01,
     max_abs_diff_p99: float | None = 0.01,
     benchmark_contract: str | Path | None = None,
+    benchmark_contract_profile: str | None = None,
     resident_determinism_json: str | Path | None = None,
     resident_registration_fastpath_json: str | Path | None = None,
     contract_bundle_json: str | Path | None = None,
@@ -1310,8 +1315,17 @@ def build_acceptance_audit(
         )
 
     contract_payload: dict[str, Any] | None = None
+    benchmark_contract_source: str | None = None
+    benchmark_contract_path: str | None = None
     if benchmark_contract is not None:
         contract_payload = load_benchmark_contract(benchmark_contract)
+        benchmark_contract_source = "path"
+        benchmark_contract_path = str(benchmark_contract)
+    elif benchmark_contract_profile is not None:
+        if benchmark_contract_profile != RESIDENT_CUDA_DQ_PROFILE_NAME:
+            raise ValueError(f"unsupported benchmark contract profile: {benchmark_contract_profile}")
+        contract_payload = build_resident_cuda_dq_benchmark_contract()
+        benchmark_contract_source = "profile"
     resident_determinism_payload = (
         _read_json_lenient(resident_determinism_json) if resident_determinism_json is not None else {}
     )
@@ -1352,7 +1366,7 @@ def build_acceptance_audit(
         if explicit_fastpath is not None
         else collect_resident_registration_fastpath_record(glass_run)
     )
-    if benchmark_contract is not None:
+    if contract_payload is not None:
         checks.extend(
             build_benchmark_contract_checks(
                 contract_payload,
@@ -1406,11 +1420,15 @@ def build_acceptance_audit(
         "wbpp_result": str(wbpp_result),
         "compare_json": str(compare_json),
         "benchmark_contract": None
-        if benchmark_contract is None
+        if contract_payload is None
         else {
-            "path": str(benchmark_contract),
-            "name": contract_payload.get("name") if contract_payload else None,
-            "schema_version": contract_payload.get("schema_version") if contract_payload else None,
+            "source": benchmark_contract_source,
+            "path": benchmark_contract_path,
+            "profile": (contract_payload.get("profile") or {}).get("name")
+            if isinstance(contract_payload.get("profile"), dict)
+            else None,
+            "name": contract_payload.get("name"),
+            "schema_version": contract_payload.get("schema_version"),
         },
         "frame_type_counts": counts,
         "checks": checks,
