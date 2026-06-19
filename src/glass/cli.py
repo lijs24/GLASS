@@ -43,6 +43,11 @@ from glass.report.frame_weight_proposal_audit import (
     build_frame_weight_proposal_audit,
     write_frame_weight_proposal_audit,
 )
+from glass.report.benchmark_contract_profile import (
+    RESIDENT_CUDA_DQ_PROFILE_NAME,
+    build_resident_cuda_dq_benchmark_contract,
+    write_resident_cuda_dq_benchmark_contract,
+)
 from glass.report.html_report import write_html_report
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
 from glass.report.residual_tile_candidates import build_residual_tile_candidates, write_residual_tile_candidates
@@ -1999,6 +2004,37 @@ def cmd_speedup_summary(args: argparse.Namespace) -> int:
             "meets_min_speedup": summary["meets_min_speedup"],
             "out": args.out,
             "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_benchmark_contract_profile(args: argparse.Namespace) -> int:
+    contract = build_resident_cuda_dq_benchmark_contract(
+        name=args.name,
+        min_lights=args.min_lights,
+        min_bias=args.min_bias,
+        min_dark=args.min_dark,
+        min_flat=args.min_flat,
+        min_active_frames=args.min_active_frames,
+        min_speedup_vs_reference=args.min_speedup_vs_reference,
+        release_baseline_elapsed_s=args.release_baseline_elapsed_s,
+        max_runtime_regression_factor=args.max_runtime_regression_factor,
+        min_coverage_fraction=args.min_coverage_fraction,
+        max_rms_diff=args.max_rms_diff,
+        max_abs_diff_p99=args.max_abs_diff_p99,
+        require_resident_route=not args.no_resident_route,
+        require_throughput_route=not args.no_throughput_route,
+        dq_map_verify_tile_size=args.dq_map_verify_tile_size,
+        count_map_verify_tile_size=args.count_map_verify_tile_size,
+    )
+    write_resident_cuda_dq_benchmark_contract(args.out, contract)
+    console.print(
+        {
+            "profile": contract["profile"]["name"],
+            "name": contract["name"],
+            "out": args.out,
+            "dq_provenance": "dq_provenance" in contract,
         }
     )
     return 0
@@ -5395,6 +5431,43 @@ def build_parser() -> argparse.ArgumentParser:
     speedup.add_argument("--markdown", help="optional output Markdown summary")
     speedup.add_argument("--min-speedup", type=float, default=1.25)
     speedup.set_defaults(func=cmd_speedup_summary)
+
+    benchmark_contract_profile = sub.add_parser(
+        "benchmark-contract-profile",
+        help="write a reusable benchmark contract profile for acceptance-audit",
+    )
+    benchmark_contract_profile.add_argument("--out", required=True, help="output benchmark contract JSON")
+    benchmark_contract_profile.add_argument(
+        "--profile",
+        choices=[RESIDENT_CUDA_DQ_PROFILE_NAME],
+        default=RESIDENT_CUDA_DQ_PROFILE_NAME,
+        help="benchmark contract profile to write",
+    )
+    benchmark_contract_profile.add_argument("--name", default="glass_resident_cuda_dq_contract_v1")
+    benchmark_contract_profile.add_argument("--min-lights", type=int, default=200)
+    benchmark_contract_profile.add_argument("--min-bias", type=int, default=20)
+    benchmark_contract_profile.add_argument("--min-dark", type=int, default=20)
+    benchmark_contract_profile.add_argument("--min-flat", type=int, default=20)
+    benchmark_contract_profile.add_argument("--min-active-frames", type=int, default=190)
+    benchmark_contract_profile.add_argument("--min-speedup-vs-reference", type=float, default=2.0)
+    benchmark_contract_profile.add_argument("--release-baseline-elapsed-s", type=float)
+    benchmark_contract_profile.add_argument("--max-runtime-regression-factor", type=float)
+    benchmark_contract_profile.add_argument("--min-coverage-fraction", type=float, default=0.95)
+    benchmark_contract_profile.add_argument("--max-rms-diff", type=float, default=0.01)
+    benchmark_contract_profile.add_argument("--max-abs-diff-p99", type=float, default=0.01)
+    benchmark_contract_profile.add_argument("--dq-map-verify-tile-size", type=int, default=2048)
+    benchmark_contract_profile.add_argument("--count-map-verify-tile-size", type=int, default=2048)
+    benchmark_contract_profile.add_argument(
+        "--no-resident-route",
+        action="store_true",
+        help="omit the resident memory-mode command-token requirement",
+    )
+    benchmark_contract_profile.add_argument(
+        "--no-throughput-route",
+        action="store_true",
+        help="omit the throughput resident pipeline command-token group",
+    )
+    benchmark_contract_profile.set_defaults(func=cmd_benchmark_contract_profile)
 
     acceptance = sub.add_parser(
         "acceptance-audit",

@@ -7226,6 +7226,21 @@ integration where applicable.
   change, no CUDA kernel change, no runtime default change, no package upload,
   no GitHub release creation, and no real-data benchmark rerun.
 
+### S2-Gate 402: Resident Benchmark Contract Profile Generator
+
+- Add a reusable resident CUDA benchmark-contract profile generator that embeds
+  the shared DQ provenance contract, 200-light dataset minima, resident route
+  requirements, speedup threshold, and compare tolerances.
+- Add `glass benchmark-contract-profile` so CI and local release checks can
+  write the contract artifact instead of hand-authoring `dq_provenance` JSON.
+- Validate the generated contract defaults, override parameters, CLI output,
+  independent mutable DQ lists, and acceptance-audit consumption.
+- Keep this gate contract-artifact scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no runtime default change, no package upload,
+  no GitHub release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

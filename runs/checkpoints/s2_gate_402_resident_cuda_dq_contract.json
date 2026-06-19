@@ -1,0 +1,90 @@
+{
+  "comparison": {
+    "max_abs_diff_p99": 0.01,
+    "max_rms_diff": 0.01,
+    "min_coverage_fraction": 0.95
+  },
+  "dataset_requirements": {
+    "active_light_frames": 190,
+    "bias": 20,
+    "dark": 20,
+    "flat": 20,
+    "light": 200
+  },
+  "dq_provenance": {
+    "allow_missing_rejection_maps_if_skipped": true,
+    "count_map_verify_tile_size": 2048,
+    "coverage_map_finite_pixels_match_provenance": true,
+    "coverage_zero_pixels_match_no_data": true,
+    "dq_map_summary_match_flags": [
+      "valid",
+      "warp_edge",
+      "low_rejected",
+      "high_rejected"
+    ],
+    "dq_map_summary_tolerance_pixels": 0,
+    "dq_map_verify_tile_size": 2048,
+    "min_active_frame_count": 190,
+    "min_records": 1,
+    "positive_output_dq_flags": [
+      "valid",
+      "warp_edge"
+    ],
+    "rejection_map_sum_matches_provenance": true,
+    "require_coverage_map_path": true,
+    "require_dq_map_path": true,
+    "require_existing_dq_map": true,
+    "required": true,
+    "required_engines": [
+      "cuda_resident_stack"
+    ],
+    "required_output_dq_flags": [
+      "valid",
+      "warp_edge",
+      "low_rejected",
+      "high_rejected"
+    ],
+    "required_resident_artifact_map_paths": [
+      "master",
+      "weight",
+      "coverage",
+      "dq",
+      "low_rejection",
+      "high_rejection"
+    ],
+    "required_source_schemas": [
+      "resident_dq_coverage_provenance"
+    ],
+    "required_source_terms": [
+      "geometric_warp_coverage"
+    ],
+    "required_summary_fields": [
+      "zero_coverage_pixels",
+      "partial_coverage_pixels"
+    ],
+    "verify_dq_map_pixels": true,
+    "verify_output_count_maps": true
+  },
+  "name": "glass_resident_cuda_dq_contract_v1",
+  "profile": {
+    "name": "resident_cuda_dq_v1",
+    "purpose": "phase2_resident_cuda_acceptance",
+    "version": 1
+  },
+  "required_command_token_groups": [
+    {
+      "any_of": [
+        "--resident-runtime-preset throughput-v1",
+        "--resident-h2d-mode pinned_ring"
+      ],
+      "name": "resident_throughput_pipeline"
+    }
+  ],
+  "required_command_tokens": [
+    "--memory-mode resident"
+  ],
+  "runtime": {
+    "min_speedup_vs_reference": 2.0
+  },
+  "schema_version": 1
+}
