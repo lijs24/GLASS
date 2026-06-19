@@ -8112,28 +8112,41 @@ integration where applicable.
   promotion, no package upload, no GitHub release creation, and no user input
   directory modification.
 
-### S2-Gate 434: Resident Quality Contract Reporting and Frame Accounting
+### S2-Gate 434: StackEngine Resident Default, DQ Mask Contract, And 200-Light Regression
 
-- Continue from Gate433 with a substantive pipeline-contract gate only if it
-  directly improves runtime auditability.
-- Promote `resident_registration_quality.json` into the same operational
-  surfaces that users inspect after a run:
-  - frame accounting should expose resident registration quality decision
-    status/reasons distinctly from manual excludes and generic registration
-    failures;
-  - HTML report should include a compact registration-quality/admission table;
-  - resident result/benchmark contracts should preserve the rejected-frame list
-    and decision summary when present.
+- Continue from Gate433 with a substantive execution-path gate. Do not add
+  release/default-promotion/report-contract-only work unless it directly blocks
+  this gate.
+- Make the resident CUDA StackEngine path the preferred execution path for the
+  real 200-light benchmark configuration while keeping explicit fallback flags
+  for the older resident integration path.
+- Introduce the first DQ/mask execution contract in the resident path:
+  - quality-gate rejected frames become structured frame-level mask decisions;
+  - manual excludes, registration-quality excludes, invalid warp footprint, and
+    rejection-map masks remain distinguishable;
+  - zero-weight frames must have an auditable mask reason before integration;
+  - integration outputs keep coverage/rejection maps numerically consistent with
+    the accepted-frame set.
+- Add tests that prove masked/excluded frames cannot silently enter integration
+  and that StackEngine/default-path output matches the existing Gate433 resident
+  output on a controlled fixture.
+- Re-run the real M38 H 200-light dataset with the new default path and record:
+  - total elapsed time;
+  - calibration/upload time;
+  - resident registration/warp time;
+  - integration time;
+  - output write time;
+  - accepted/rejected/reference frame counts;
+  - peak VRAM estimate;
+  - image diff against Gate433 auto-quality output.
 - Acceptance for the next gate:
-  - synthetic or fixture tests prove quality-gate rejected frames are reported
-    as registration-quality exclusions, not as anonymous zero-weight frames;
-  - a report generated from the Gate433 real run includes the
-    quality-gate summary and rejected frame IDs;
-  - no extra 200-light compute rerun is required unless report/contract work
-    touches resident execution behavior;
+  - fixture tests pass for DQ/mask admission and StackEngine/default parity;
+  - the 200-light run completes without explicit frame masks;
+  - frame counts match Gate433 unless a documented algorithmic decision changes
+    them;
+  - image delta against Gate433 is zero or explained by the StackEngine change;
   - focused tests plus `python -m pytest -q` pass;
-  - no release/default-promotion/report-only evidence handoff is added unless it
-    directly blocks this runtime auditability target.
+  - checkpoint and commit record the timing and numerical comparison.
 
 ## Gate Rules
 
