@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 
+from glass.cpu.cosmetic import correct_cosmetic_defects
 from glass.engine.contracts import DQFlag, DQMask
 from glass.io.fits_io import read_fits_data
 
@@ -70,6 +71,64 @@ def source_invalid_mask_from_array(
         "flag_counts": {},
         "source_model": "nonfinite_source_samples",
     }
+
+
+def source_invalid_mask_from_inline_cosmetic(
+    data: Any,
+    *,
+    height: int,
+    width: int,
+    hot_sigma: float = 8.0,
+    cold_sigma: float = 8.0,
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    """Build an in-memory source-DQ mask with the CPU cosmetic detector.
+
+    This helper intentionally returns only the invalid-sample mask. Resident
+    CUDA applies the mask to the calibrated stack as NaN samples; it does not
+    replace cosmetic defects with synthetic values.
+    """
+
+    shape = (int(height), int(width))
+    array = np.asarray(data)
+    if array.shape != shape:
+        return None, {
+            "supported": False,
+            "reason": "inline_cosmetic_source_shape_not_image",
+            "shape": list(array.shape),
+            "expected_shape": list(shape),
+            "invalid_samples": 0,
+            "flag_counts": {},
+            "source_model": "inline_cosmetic_source_dq",
+        }
+    if not np.issubdtype(array.dtype, np.number):
+        return None, {
+            "supported": False,
+            "reason": "inline_cosmetic_source_not_numeric",
+            "shape": list(array.shape),
+            "dtype": str(array.dtype),
+            "invalid_samples": 0,
+            "flag_counts": {},
+            "source_model": "inline_cosmetic_source_dq",
+        }
+
+    result = correct_cosmetic_defects(
+        np.asarray(array, dtype=np.float32),
+        hot_sigma=float(hot_sigma),
+        cold_sigma=float(cold_sigma),
+    )
+    invalid_mask, info = source_invalid_mask_from_dq_mask(result.dq_mask, height=height, width=width)
+    info.update(
+        {
+            "source_model": "inline_cosmetic_source_dq",
+            "inline_source_dq": True,
+            "inline_source_dq_detector": "glass.cpu.cosmetic.correct_cosmetic_defects",
+            "inline_source_dq_applies_replacement": False,
+            "hot_sigma": float(hot_sigma),
+            "cold_sigma": float(cold_sigma),
+            "cosmetic_metrics": dict(result.metrics),
+        }
+    )
+    return invalid_mask, info
 
 
 def source_invalid_mask_from_dq_mask(
@@ -186,6 +245,12 @@ def combine_source_invalid_masks(
                 "sidecar_plan_key": info.get("sidecar_plan_key"),
                 "sidecar_artifact_path": info.get("sidecar_artifact_path"),
                 "sidecar_artifact_frame_id": info.get("sidecar_artifact_frame_id"),
+                "inline_source_dq": info.get("inline_source_dq"),
+                "inline_source_dq_detector": info.get("inline_source_dq_detector"),
+                "inline_source_dq_applies_replacement": info.get("inline_source_dq_applies_replacement"),
+                "hot_sigma": info.get("hot_sigma"),
+                "cold_sigma": info.get("cold_sigma"),
+                "cosmetic_metrics": info.get("cosmetic_metrics"),
             }
         )
         if not bool(info.get("supported")):
@@ -231,6 +296,9 @@ def combine_source_invalid_masks(
         "sidecar_plan_keys": sidecar_plan_keys,
         "sidecar_artifact_paths": sidecar_artifact_paths,
         "sidecar_artifact_frame_ids": sidecar_artifact_frame_ids,
+        "inline_source_dq": any(
+            bool(item.get("inline_source_dq")) for item in component_summaries
+        ),
     }
 
 
@@ -269,6 +337,7 @@ def apply_resident_source_invalid_mask(
         "sidecar_artifact_frame_ids",
         "sidecar_path",
         "sidecar_format",
+        "inline_source_dq",
     ):
         if key in mask_info:
             row[key] = mask_info[key]

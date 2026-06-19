@@ -46,6 +46,7 @@ from glass.engine.resident_source_dq import (
     build_resident_source_dq_summary,
     combine_source_invalid_masks,
     source_invalid_mask_from_array,
+    source_invalid_mask_from_inline_cosmetic,
     source_invalid_mask_from_sidecar_path,
     summarize_resident_source_dq_execution_groups,
     validate_resident_source_dq_execution_group,
@@ -1603,10 +1604,23 @@ def _resident_source_invalid_mask_from_frame(
     width: int,
     plan_root: Path,
     calibration_dq_sidecars: dict[str, dict[str, Any]] | None = None,
+    resident_inline_source_dq: str = "off",
+    resident_inline_source_dq_hot_sigma: float = 8.0,
+    resident_inline_source_dq_cold_sigma: float = 8.0,
 ) -> tuple[np.ndarray | None, dict[str, Any]]:
     components: list[tuple[np.ndarray | None, dict[str, Any]]] = [
         source_invalid_mask_from_array(data, height=height, width=width)
     ]
+    if resident_inline_source_dq == "cosmetic":
+        components.append(
+            source_invalid_mask_from_inline_cosmetic(
+                data,
+                height=height,
+                width=width,
+                hot_sigma=resident_inline_source_dq_hot_sigma,
+                cold_sigma=resident_inline_source_dq_cold_sigma,
+            )
+        )
     sidecar_record = _resident_source_dq_sidecar_record(frame, plan_root, calibration_dq_sidecars)
     if sidecar_record is not None:
         sidecar_path = Path(sidecar_record["path"])
@@ -3078,6 +3092,9 @@ def run_resident_calibration_integration(
     resident_calibration_release_mode: str = "sync",
     resident_master_cache_dir: str | Path | None = None,
     resident_output_maps: str = "audit",
+    resident_inline_source_dq: str = "off",
+    resident_inline_source_dq_hot_sigma: float = 8.0,
+    resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     resident_fits_read_mode: str = "astropy",
     resident_fits_read_mode_resolution: dict[str, Any] | None = None,
@@ -3088,6 +3105,12 @@ def run_resident_calibration_integration(
         raise ValueError("resident CUDA mode supports integration weighting=none or simple_snr")
     if resident_output_maps not in _RESIDENT_OUTPUT_MAP_POLICIES:
         raise ValueError("resident_output_maps must be audit, science, or minimal")
+    if resident_inline_source_dq not in {"off", "cosmetic"}:
+        raise ValueError("resident_inline_source_dq must be off or cosmetic")
+    if resident_inline_source_dq_hot_sigma <= 0.0:
+        raise ValueError("resident_inline_source_dq_hot_sigma must be positive")
+    if resident_inline_source_dq_cold_sigma <= 0.0:
+        raise ValueError("resident_inline_source_dq_cold_sigma must be positive")
     if resident_winsorized_mode not in _RESIDENT_WINSORIZED_MODES:
         raise ValueError("resident_winsorized_mode must be fast_approx or hardened_cpu_parity")
     if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
@@ -3697,6 +3720,9 @@ def run_resident_calibration_integration(
                                 width=width,
                                 plan_root=plan_root,
                                 calibration_dq_sidecars=calibration_dq_sidecars,
+                                resident_inline_source_dq=resident_inline_source_dq,
+                                resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
+                                resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                             )
                             source_dq_pending_by_index[int(item_index)] = (
                                 str(frame["id"]),
@@ -3956,6 +3982,9 @@ def run_resident_calibration_integration(
                             width=width,
                             plan_root=plan_root,
                             calibration_dq_sidecars=calibration_dq_sidecars,
+                            resident_inline_source_dq=resident_inline_source_dq,
+                            resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
+                            resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                         )
                         calibrate_start = perf_counter()
                         try:
@@ -7981,6 +8010,10 @@ def run_resident_calibration_integration(
                         "fits_read_mode_effective": resident_fits_read_mode_effective,
                         "fits_read_mode_resolution": resident_fits_read_mode_resolution_payload,
                         "resident_fits_auto_selection": resident_fits_auto_selection,
+                        "resident_inline_source_dq": resident_inline_source_dq,
+                        "resident_inline_source_dq_hot_sigma": float(resident_inline_source_dq_hot_sigma),
+                        "resident_inline_source_dq_cold_sigma": float(resident_inline_source_dq_cold_sigma),
+                        "resident_inline_source_dq_materializes_cache": False,
                         "fits_backend_counts": fits_backend_counts,
                         "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
                         "fits_native_file_read_cumulative_s": fits_native_file_read_timing["total"],

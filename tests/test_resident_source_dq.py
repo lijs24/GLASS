@@ -9,6 +9,7 @@ from glass.engine.resident_source_dq import (
     combine_source_invalid_masks,
     source_invalid_mask_from_array,
     source_invalid_mask_from_dq_mask,
+    source_invalid_mask_from_inline_cosmetic,
     source_invalid_mask_from_sidecar_path,
     summarize_resident_source_dq_execution_groups,
 )
@@ -43,6 +44,34 @@ def test_source_invalid_mask_from_dq_mask_preserves_flag_counts():
     assert info["flag_counts"]["hot_pixel"] == 1
     assert info["flag_counts"]["no_data"] == 1
     assert info["flag_counts"]["saturated"] == 1
+
+
+def test_source_invalid_mask_from_inline_cosmetic_flags_hot_and_cold_samples_without_replacement():
+    data = np.full((5, 5), 100.0, dtype=np.float32)
+    data[1, 2] = 1000.0
+    data[3, 4] = -1000.0
+
+    mask, info = source_invalid_mask_from_inline_cosmetic(
+        data,
+        height=5,
+        width=5,
+        hot_sigma=2.0,
+        cold_sigma=2.0,
+    )
+
+    assert mask is not None
+    assert int(mask[1, 2]) == 1
+    assert int(mask[3, 4]) == 1
+    assert info["source_model"] == "inline_cosmetic_source_dq"
+    assert info["inline_source_dq"] is True
+    assert info["inline_source_dq_applies_replacement"] is False
+    assert info["invalid_samples"] == 2
+    assert info["flagged_samples"] == 2
+    assert info["flag_counts"]["hot_pixel"] == 1
+    assert info["flag_counts"]["cold_pixel"] == 1
+    assert info["flag_counts"]["cosmetic_corrected"] == 2
+    assert info["cosmetic_metrics"]["hot_pixels"] == 1
+    assert info["cosmetic_metrics"]["cold_pixels"] == 1
 
 
 def test_source_invalid_mask_from_sidecar_path_reads_fits_dq_bits(tmp_path):

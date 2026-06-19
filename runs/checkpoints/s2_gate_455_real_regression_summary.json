@@ -1,0 +1,89 @@
+﻿{
+    "schema_version":  1,
+    "gate":  "S2-Gate455",
+    "objective":  "Resident inline source-DQ mask generation plus real 200-light default-path regression.",
+    "run":  "C:\\glass_runs\\phase2_s2_gate_455_200\\contract_parity_20260620",
+    "timing":  {
+                   "total_elapsed_s":  20.611955699976537,
+                   "wbpp_blackbox_elapsed_s":  1092.541,
+                   "speedup_vs_wbpp":  53.005208040556958,
+                   "gate454_contract_parity_baseline_s":  20.921003800001927,
+                   "resident_inline_source_dq":  "off"
+               },
+    "compare":  {
+                    "shape_match":  true,
+                    "coverage_fraction":  0.96080485051385878,
+                    "coverage_median":  192,
+                    "coverage_max":  193,
+                    "rms_diff":  0.0016850645395085147,
+                    "abs_diff_p99":  0.00045610359637066576
+                },
+    "frame_accounting_summary":  {
+                                     "calibrated_frames":  0,
+                                     "calibration_artifact_type":  "resident_cuda_calibration_artifacts",
+                                     "calibration_master_count":  3,
+                                     "exception_frames":  7,
+                                     "final_status_counts":  {
+                                                                 "integrated":  193,
+                                                                 "quality_rejected":  7
+                                                             },
+                                     "input_light_frames":  200,
+                                     "integrated_frames":  193,
+                                     "integration_conflict_frames":  0,
+                                     "integration_status_counts":  {
+                                                                       "used":  193,
+                                                                       "zero_weight":  7
+                                                                   },
+                                     "not_integrated_frames":  0,
+                                     "quality_accepted_frames":  0,
+                                     "quality_rejected_frames":  7,
+                                     "registration_accepted_frames":  193,
+                                     "resident_calibrated_frames":  200,
+                                     "resident_calibrated_light_ledger_rows":  200,
+                                     "resident_frame_mask_active_frames":  193,
+                                     "resident_frame_mask_masked_frames":  7,
+                                     "resident_frame_mask_unaudited_frames":  0,
+                                     "resident_native_calibration_artifact":  true,
+                                     "warp_accepted_frames":  0,
+                                     "warp_skipped_frames":  0,
+                                     "zero_weight_frames":  7
+                                 },
+    "resident_source_dq_execution_summary":  {
+                                                 "applied_frame_count":  0,
+                                                 "applied_invalid_samples":  0,
+                                                 "estimated_all_frame_mask_bytes":  12330240000,
+                                                 "estimated_peak_batch_mask_bytes":  493209600,
+                                                 "execution_routes":  [
+                                                                          "resident_in_memory_mask_streaming"
+                                                                      ],
+                                                 "failed_groups":  [
+
+                                                                   ],
+                                                 "frame_count":  200,
+                                                 "frame_with_invalid_count":  0,
+                                                 "group_count":  1,
+                                                 "input_invalid_samples_before_rejection":  0,
+                                                 "materializes_calibrated_dq_cache":  false,
+                                                 "passed":  true,
+                                                 "schema_version":  1,
+                                                 "status":  "passed"
+                                             },
+    "acceptance":  {
+                       "path":  "C:\\glass_runs\\phase2_s2_gate_455_200\\contract_parity_20260620\\phase2_contract_acceptance_audit_s2_gate_455.json",
+                       "passed":  true,
+                       "status":  "passed",
+                       "failed_check_count":  0
+                   },
+    "contracts":  {
+                      "resident_calibration_contract":  "C:\\glass_runs\\phase2_s2_gate_455_200\\contract_parity_20260620\\resident_calibration_contract_s2_gate_455.json",
+                      "resident_result_contract":  "C:\\glass_runs\\phase2_s2_gate_455_200\\contract_parity_20260620\\resident_result_contract_s2_gate_455.json",
+                      "pipeline_contract":  "C:\\glass_runs\\phase2_s2_gate_455_200\\contract_parity_20260620\\pipeline_contract_s2_gate_455.json",
+                      "stack_engine_contract":  "C:\\glass_runs\\phase2_s2_gate_455_200\\contract_parity_20260620\\stack_engine_contract_s2_gate_455.json"
+                  },
+    "conclusions":  [
+                        "Inline source-DQ is implemented as an opt-in resident in-memory mask generator and synthetic resident CUDA tests prove flagged finite samples are excluded.",
+                        "Default resident contract-parity path keeps inline source-DQ off and remains green on the real 200-light benchmark.",
+                        "Resident source-DQ execution route remains resident_in_memory_mask_streaming and does not materialize calibrated+DQ cache.",
+                        "No speed regression was observed against Gate454 contract-parity baseline."
+                    ]
+}

@@ -9100,6 +9100,46 @@ Completed in Gate446:
   - `runs/checkpoints/s2_gate_454_real_regression_summary.json`;
   - `runs/checkpoints/s2_gate_454_status.md`.
 
+### S2-Gate 455: Resident Inline Source-DQ Masks
+
+- Move source-DQ generation closer to resident execution without using a large
+  calibrated+DQ disk cache.
+- Required work:
+  - add an opt-in resident inline source-DQ mode that generates hot/cold and
+    nonfinite invalid masks while light frames are being loaded;
+  - keep the default resident contract-parity path unchanged;
+  - apply inline invalid masks through
+    `ResidentCalibratedStack.apply_invalid_mask_frame` so integration skips
+    flagged samples before rejection;
+  - record inline mode, thresholds, and no-cache semantics in resident timing,
+    resident artifacts, and the resident source-DQ strategy;
+  - prove with synthetic resident CUDA tests that finite hot-pixel samples are
+    excluded from the master and weight map without `resident_source_dq_cache`;
+  - rerun the real 200-light contract-parity benchmark and verify acceptance
+    remains green.
+- Completed in S2-Gate455:
+  - added `--resident-inline-source-dq off|cosmetic` plus hot/cold sigma
+    thresholds to `glass run` and `glass audit`;
+  - added `source_invalid_mask_from_inline_cosmetic`, which reuses the CPU
+    cosmetic baseline to produce a resident invalid-sample mask without pixel
+    replacement;
+  - resident artifacts now record inline source-DQ mode, thresholds, and
+    `resident_inline_source_dq_materializes_cache=false`;
+  - focused tests prove inline cosmetic source-DQ flags hot/cold samples and
+    that resident CUDA excludes a finite hot pixel from integration without
+    creating `resident_source_dq_cache_route.json`;
+  - full pytest passed with `1081 passed`;
+  - the real 200-light contract-parity path completed in `20.611956 s` with
+    inline source-DQ off, integrated `193/200` frames, and passed acceptance
+    at `53.005208x` versus the WBPP black-box timing `1092.541 s`;
+  - comparison remained inside the 200-light contract: shape matched, coverage
+    fraction `0.960805`, RMS diff `0.00168506`, and P99 abs diff
+    `0.000456104`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_455_200\contract_parity_20260620`;
+  - `runs/checkpoints/s2_gate_455_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_455_status.md`.
+
 ## Gate Rules
 
 Each gate requires:

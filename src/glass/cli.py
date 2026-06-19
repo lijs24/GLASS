@@ -540,6 +540,7 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     timing["memory_mode"] = getattr(args, "memory_mode", timing.get("memory_mode"))
     timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
     timing["resident_source_dq_cache"] = getattr(args, "resident_source_dq_cache", "off")
+    timing["resident_inline_source_dq"] = getattr(args, "resident_inline_source_dq", "off")
     preset = getattr(args, "_resident_runtime_preset_effective", None)
     if isinstance(preset, dict):
         timing["resident_runtime_preset_effective"] = preset
@@ -623,6 +624,9 @@ def _write_resident_source_dq_strategy(
         max_disk_fraction=getattr(args, "resident_source_dq_cache_max_disk_fraction", 0.75),
         resident_mask_batch_frames=max(1, int(getattr(args, "resident_calibration_batch_frames", 1) or 1)),
         resident_memory_budget_bytes=memory_budget_bytes,
+        resident_inline_source_dq=getattr(args, "resident_inline_source_dq", "off"),
+        resident_inline_source_dq_hot_sigma=getattr(args, "resident_inline_source_dq_hot_sigma", 8.0),
+        resident_inline_source_dq_cold_sigma=getattr(args, "resident_inline_source_dq_cold_sigma", 8.0),
     )
     strategy_path = _resident_source_dq_strategy_path(run)
     write_json(strategy_path, strategy)
@@ -1227,6 +1231,9 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
+                resident_inline_source_dq=args.resident_inline_source_dq,
+                resident_inline_source_dq_hot_sigma=args.resident_inline_source_dq_hot_sigma,
+                resident_inline_source_dq_cold_sigma=args.resident_inline_source_dq_cold_sigma,
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
@@ -1383,6 +1390,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
+                resident_inline_source_dq=args.resident_inline_source_dq,
+                resident_inline_source_dq_hot_sigma=args.resident_inline_source_dq_hot_sigma,
+                resident_inline_source_dq_cold_sigma=args.resident_inline_source_dq_cold_sigma,
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
@@ -4477,6 +4487,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="override resident source-DQ cache disk preflight failures",
     )
     run.add_argument(
+        "--resident-inline-source-dq",
+        choices=["off", "cosmetic"],
+        default="off",
+        help=(
+            "resident source-DQ in-memory mask generator; cosmetic detects hot/cold/nonfinite samples "
+            "during resident light loading and applies them to the resident stack without a calibrated cache"
+        ),
+    )
+    run.add_argument(
+        "--resident-inline-source-dq-hot-sigma",
+        type=float,
+        default=8.0,
+        help="hot-pixel sigma threshold for --resident-inline-source-dq cosmetic",
+    )
+    run.add_argument(
+        "--resident-inline-source-dq-cold-sigma",
+        type=float,
+        default=8.0,
+        help="cold-pixel sigma threshold for --resident-inline-source-dq cosmetic",
+    )
+    run.add_argument(
         "--resident-output-maps",
         choices=["audit", "science", "minimal"],
         default="audit",
@@ -4892,6 +4923,27 @@ def build_parser() -> argparse.ArgumentParser:
             "resident output map set for audit: audit writes all diagnostic maps, science keeps coverage "
             "and DQ, minimal writes only the master"
         ),
+    )
+    audit.add_argument(
+        "--resident-inline-source-dq",
+        choices=["off", "cosmetic"],
+        default="off",
+        help=(
+            "resident source-DQ in-memory mask generator for audit; cosmetic detects hot/cold/nonfinite samples "
+            "during resident light loading without materializing a calibrated cache"
+        ),
+    )
+    audit.add_argument(
+        "--resident-inline-source-dq-hot-sigma",
+        type=float,
+        default=8.0,
+        help="hot-pixel sigma threshold for resident audit inline source-DQ cosmetic mode",
+    )
+    audit.add_argument(
+        "--resident-inline-source-dq-cold-sigma",
+        type=float,
+        default=8.0,
+        help="cold-pixel sigma threshold for resident audit inline source-DQ cosmetic mode",
     )
     audit.add_argument(
         "--resident-winsorized-mode",

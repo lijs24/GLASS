@@ -57,6 +57,9 @@ def build_resident_source_dq_strategy(
     free_bytes: int | None = None,
     resident_mask_batch_frames: int = 1,
     resident_memory_budget_bytes: int | None = None,
+    resident_inline_source_dq: str = "off",
+    resident_inline_source_dq_hot_sigma: float = 8.0,
+    resident_inline_source_dq_cold_sigma: float = 8.0,
     artifact_type: str = "resident_source_dq_strategy",
 ) -> dict[str, Any]:
     plan_payload, plan_path = _load_plan(plan)
@@ -144,6 +147,17 @@ def build_resident_source_dq_strategy(
             "a full calibrated+DQ cache on disk."
         ),
     }
+    inline_source_dq = {
+        "mode": str(resident_inline_source_dq),
+        "enabled": str(resident_inline_source_dq) != "off",
+        "hot_sigma": float(resident_inline_source_dq_hot_sigma),
+        "cold_sigma": float(resident_inline_source_dq_cold_sigma),
+        "materializes_calibrated_dq_cache": False,
+        "semantics": (
+            "Inline source-DQ mode creates resident invalid masks while loading frames; "
+            "it excludes flagged samples from integration instead of replacing pixels."
+        ),
+    }
     payload = {
         "schema_version": 1,
         "artifact_type": artifact_type,
@@ -167,5 +181,6 @@ def build_resident_source_dq_strategy(
         "max_allowed_bytes": max_allowed_bytes,
         "disk_cache": disk_cache,
         "resident_mask_streaming": resident_mask_streaming,
+        "inline_source_dq": inline_source_dq,
     }
     return payload
