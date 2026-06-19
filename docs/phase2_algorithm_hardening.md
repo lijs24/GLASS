@@ -7396,6 +7396,27 @@ integration where applicable.
   change, no CUDA kernel change, no package upload, no GitHub release creation,
   and no real-data benchmark rerun.
 
+### S2-Gate 411: Publication Audit Benchmark Profile Handoff
+
+- Carry the S2-Gate410 Phase2 publish-preflight benchmark profile handoff into
+  `glass stack-engine-publication-audit`.
+- Add raw publish-preflight and Phase2 status layers for the benchmark profile
+  handoff, both requiring `resident_cuda_dq_v1` when the fields are present.
+- Add publication-audit checks for raw readiness, Phase2 readiness, and
+  Phase2/raw agreement so final publication readiness cannot hide benchmark
+  profile drift.
+- Preserve backward compatibility for older publish-preflight/Phase2 artifacts
+  that both omit the benchmark profile handoff fields; block cases where raw
+  publish-preflight has the fields but Phase2 status loses them.
+- Validate ready, compatible-missing, failed raw profile, failed Phase2 profile,
+  and missing-Phase2 handoff paths with focused publication-audit tests.
+- Keep this gate publication-audit scoped: no runtime execution change, no
+  benchmark contract check semantic change, no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no package upload, no GitHub release creation,
+  and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

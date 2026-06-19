@@ -5,6 +5,7 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 from glass.report.release_quality_evidence import (
     PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS as _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS,
     PUBLICATION_FINAL_EVIDENCE_DETAIL_PREFIXES as _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES,
@@ -1318,6 +1319,130 @@ def _quality_compare_summaries_match(
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
 
 
+_BENCHMARK_PROFILE_STATUS_FIELDS = (
+    "matrix_release_benchmark_profile",
+    "matrix_release_benchmark_profile_ready",
+    "matrix_release_benchmark_profile_check_passed",
+    "matrix_benchmark_profile_handoff_ready",
+    "matrix_benchmark_profile_handoff_required_profile",
+    "matrix_benchmark_profile_handoff_profiles_agree",
+    "matrix_benchmark_profile_handoff_decision_profile",
+    "matrix_benchmark_profile_handoff_phase2_profile",
+    "matrix_benchmark_profile_handoff_default_route_profile",
+    "default_promotion_benchmark_profile_handoff_ready",
+    "default_promotion_benchmark_profile_handoff_required_profile",
+    "default_promotion_benchmark_profile_handoff_profiles_agree",
+    "default_promotion_benchmark_profile_handoff_decision_profile",
+    "default_promotion_benchmark_profile_handoff_phase2_profile",
+    "default_promotion_benchmark_profile_handoff_default_route_profile",
+)
+
+_BENCHMARK_PROFILE_CHECK_FIELDS = (
+    "matrix_release_decision_benchmark_contract_profile_passed",
+    "matrix_benchmark_contract_profile_handoff_passed",
+    "default_promotion_benchmark_contract_profile_handoff_passed",
+    "matrix_release_decision_benchmark_profile_matches_handoff",
+    "matrix_benchmark_contract_profile_handoff_matches_default_promotion",
+)
+
+
+def _benchmark_profile_summary_present(summary: dict[str, Any]) -> bool:
+    return any(
+        summary.get(field) is not None
+        for field in (*_BENCHMARK_PROFILE_STATUS_FIELDS, *_BENCHMARK_PROFILE_CHECK_FIELDS)
+    )
+
+
+def _benchmark_profile_summary_ready(summary: dict[str, Any]) -> bool:
+    if not _benchmark_profile_summary_present(summary):
+        return True
+    required = RESIDENT_CUDA_DQ_PROFILE_NAME
+    return (
+        summary.get("matrix_release_benchmark_profile") == required
+        and summary.get("matrix_release_benchmark_profile_ready") is True
+        and summary.get("matrix_release_benchmark_profile_check_passed") is True
+        and summary.get("matrix_benchmark_profile_handoff_ready") is True
+        and summary.get("matrix_benchmark_profile_handoff_required_profile")
+        == required
+        and summary.get("matrix_benchmark_profile_handoff_profiles_agree") is True
+        and summary.get("matrix_benchmark_profile_handoff_decision_profile")
+        == required
+        and summary.get("matrix_benchmark_profile_handoff_phase2_profile") == required
+        and summary.get("matrix_benchmark_profile_handoff_default_route_profile")
+        == required
+        and summary.get("default_promotion_benchmark_profile_handoff_ready") is True
+        and summary.get("default_promotion_benchmark_profile_handoff_required_profile")
+        == required
+        and summary.get("default_promotion_benchmark_profile_handoff_profiles_agree")
+        is True
+        and summary.get("default_promotion_benchmark_profile_handoff_decision_profile")
+        == required
+        and summary.get("default_promotion_benchmark_profile_handoff_phase2_profile")
+        == required
+        and summary.get(
+            "default_promotion_benchmark_profile_handoff_default_route_profile"
+        )
+        == required
+        and all(summary.get(field) is True for field in _BENCHMARK_PROFILE_CHECK_FIELDS)
+    )
+
+
+def _publish_preflight_benchmark_profile_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+        **{field: summary.get(field) for field in _BENCHMARK_PROFILE_STATUS_FIELDS},
+        **{field: _check_passed(payload, field) for field in _BENCHMARK_PROFILE_CHECK_FIELDS},
+    }
+    result["present"] = _benchmark_profile_summary_present(result)
+    result["ready"] = _benchmark_profile_summary_ready(result)
+    return result
+
+
+def _phase2_publish_preflight_benchmark_profile_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    preflight = (
+        payload.get("publish_preflight")
+        if isinstance(payload.get("publish_preflight"), dict)
+        else {}
+    )
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": preflight.get("status"),
+        "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+        **{field: preflight.get(field) for field in _BENCHMARK_PROFILE_STATUS_FIELDS},
+        **{field: preflight.get(field) for field in _BENCHMARK_PROFILE_CHECK_FIELDS},
+        "phase2_check_passed": _check_passed(
+            payload,
+            "windows_publish_preflight_benchmark_profile_handoff_passed",
+        ),
+    }
+    result["present"] = _benchmark_profile_summary_present(result)
+    result["ready"] = _benchmark_profile_summary_ready(result) and (
+        not result["present"] or result.get("phase2_check_passed") is True
+    )
+    return result
+
+
+def _benchmark_profile_summaries_match(
+    phase2_summary: dict[str, Any],
+    preflight_summary: dict[str, Any],
+) -> bool:
+    fields = (
+        "present",
+        *_BENCHMARK_PROFILE_STATUS_FIELDS,
+        *_BENCHMARK_PROFILE_CHECK_FIELDS,
+        "ready",
+    )
+    return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
+
+
 _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS = (
     "release_matrix_check",
     "release_matrix_default_check",
@@ -2206,6 +2331,12 @@ def build_stack_engine_publication_audit(
     phase2_preflight_quality_compare = (
         _phase2_publish_preflight_quality_compare_summary(phase2_payload)
     )
+    preflight_benchmark_profile = _publish_preflight_benchmark_profile_summary(
+        preflight_payload
+    )
+    phase2_preflight_benchmark_profile = (
+        _phase2_publish_preflight_benchmark_profile_summary(phase2_payload)
+    )
     preflight_release_quality_guard = (
         _publish_preflight_release_quality_publication_guard_summary(
             preflight_payload
@@ -2254,6 +2385,10 @@ def build_stack_engine_publication_audit(
         "publish_preflight_quality_metrics_compare": preflight_quality_compare,
         "phase2_publish_preflight_quality_metrics_compare": (
             phase2_preflight_quality_compare
+        ),
+        "publish_preflight_benchmark_profile_handoff": preflight_benchmark_profile,
+        "phase2_publish_preflight_benchmark_profile_handoff": (
+            phase2_preflight_benchmark_profile
         ),
         "publish_preflight_release_quality_publication_guard": (
             preflight_release_quality_guard
@@ -2486,6 +2621,27 @@ def build_stack_engine_publication_audit(
             {
                 "phase2_publish_preflight": phase2_preflight_quality_compare,
                 "publish_preflight": preflight_quality_compare,
+            },
+        ),
+        _check(
+            "publish_preflight_benchmark_profile_handoff_ready",
+            preflight_benchmark_profile.get("ready") is True,
+            preflight_benchmark_profile,
+        ),
+        _check(
+            "phase2_publish_preflight_benchmark_profile_handoff_ready",
+            phase2_preflight_benchmark_profile.get("ready") is True,
+            phase2_preflight_benchmark_profile,
+        ),
+        _check(
+            "phase2_publish_preflight_benchmark_profile_handoff_matches_publish_preflight",
+            _benchmark_profile_summaries_match(
+                phase2_preflight_benchmark_profile,
+                preflight_benchmark_profile,
+            ),
+            {
+                "phase2_publish_preflight": phase2_preflight_benchmark_profile,
+                "publish_preflight": preflight_benchmark_profile,
             },
         ),
         _check(
