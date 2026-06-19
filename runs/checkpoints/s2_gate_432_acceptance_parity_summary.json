@@ -1,0 +1,443 @@
+{
+  "schema_version": 1,
+  "artifact_type": "s2_gate_432_acceptance_parity_summary",
+  "runs": {
+    "gate432_masked": {
+      "run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate432_auto_grid_masked_20260619",
+      "total_elapsed_s": 27.910495800024364,
+      "status_counts": {
+        "ok": 192,
+        "excluded": 7,
+        "reference": 1
+      },
+      "excluded_frame_ids": [
+        "F000160",
+        "F000213",
+        "F000214",
+        "F000215",
+        "F000216",
+        "F000217",
+        "F000218"
+      ],
+      "excluded_frame_tokens": [
+        "LIGHT_H_0100",
+        "LIGHT_H_0153",
+        "LIGHT_H_0154",
+        "LIGHT_H_0155",
+        "LIGHT_H_0156",
+        "LIGHT_H_0157",
+        "LIGHT_H_0158"
+      ],
+      "frame_count": 200,
+      "resident_registration": "similarity_cuda_triangle",
+      "rejection": "winsorized_sigma",
+      "weighting": "none",
+      "star_grid_cols": 8,
+      "star_grid_rows": 8,
+      "triangle_catalog_grid_auto": true,
+      "triangle_grid_top_per_cell": 8,
+      "triangle_catalog_batch": true,
+      "resident_registration_warp_s": 1.5942490998713765,
+      "triangle_moving_catalog_s": 0.9512093999946956,
+      "resident_integration_s": 0.29721749998861924,
+      "light_read_upload_calibrate_s": 17.339915100019425,
+      "output_write_s": 2.3432068999973126,
+      "estimated_peak_gib": 47.3117358982563,
+      "master_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate432_auto_grid_masked_20260619\\integration\\resident_master_H.fits",
+      "coverage_map_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate432_auto_grid_masked_20260619\\integration\\resident_coverage_map_H.fits",
+      "low_rejection_map_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate432_auto_grid_masked_20260619\\integration\\resident_low_rejection_map_H.fits",
+      "high_rejection_map_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate432_auto_grid_masked_20260619\\integration\\resident_high_rejection_map_H.fits"
+    },
+    "gate431_unmasked": {
+      "run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate431_auto_grid_top8_repeat_20260619",
+      "total_elapsed_s": 28.351825499994447,
+      "status_counts": {
+        "ok": 199,
+        "reference": 1
+      },
+      "excluded_frame_ids": [],
+      "excluded_frame_tokens": [],
+      "frame_count": 200,
+      "resident_registration": "similarity_cuda_triangle",
+      "rejection": "winsorized_sigma",
+      "weighting": "none",
+      "star_grid_cols": 8,
+      "star_grid_rows": 8,
+      "triangle_catalog_grid_auto": true,
+      "triangle_grid_top_per_cell": 8,
+      "triangle_catalog_batch": true,
+      "resident_registration_warp_s": 1.6409940001321957,
+      "triangle_moving_catalog_s": 0.9830941001710016,
+      "resident_integration_s": 0.3105900999798905,
+      "light_read_upload_calibrate_s": 17.2486302999896,
+      "output_write_s": 2.4421024000039324,
+      "estimated_peak_gib": 47.3117358982563,
+      "master_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate431_auto_grid_top8_repeat_20260619\\integration\\resident_master_H.fits",
+      "coverage_map_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate431_auto_grid_top8_repeat_20260619\\integration\\resident_coverage_map_H.fits",
+      "low_rejection_map_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate431_auto_grid_top8_repeat_20260619\\integration\\resident_low_rejection_map_H.fits",
+      "high_rejection_map_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate431_auto_grid_top8_repeat_20260619\\integration\\resident_high_rejection_map_H.fits"
+    },
+    "historical_current": {
+      "run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_current_20260514_154556",
+      "total_elapsed_s": 31.516450299997814,
+      "status_counts": {
+        "ok": 192,
+        "excluded": 7,
+        "reference": 1
+      },
+      "excluded_frame_ids": [
+        "F000160",
+        "F000213",
+        "F000214",
+        "F000215",
+        "F000216",
+        "F000217",
+        "F000218"
+      ],
+      "excluded_frame_tokens": [
+        "LIGHT_H_0100",
+        "LIGHT_H_0153",
+        "LIGHT_H_0154",
+        "LIGHT_H_0155",
+        "LIGHT_H_0156",
+        "LIGHT_H_0157",
+        "LIGHT_H_0158"
+      ],
+      "frame_count": 200,
+      "resident_registration": "similarity_cuda_triangle",
+      "rejection": "winsorized_sigma",
+      "weighting": "none",
+      "star_grid_cols": 24,
+      "star_grid_rows": 16,
+      "triangle_catalog_grid_auto": null,
+      "triangle_grid_top_per_cell": null,
+      "triangle_catalog_batch": true,
+      "resident_registration_warp_s": 11.223864800762385,
+      "triangle_moving_catalog_s": 5.370839000330307,
+      "resident_integration_s": 0.29515989997889847,
+      "light_read_upload_calibrate_s": 16.504703799961135,
+      "output_write_s": 0.8479796999599785,
+      "estimated_peak_gib": 47.3117358982563,
+      "master_path": "C:\\glass_runs\\final_m38_h_200\\glass_current_20260514_154556\\integration\\resident_master_H.fits",
+      "coverage_map_path": "C:\\glass_runs\\final_m38_h_200\\glass_current_20260514_154556\\integration\\resident_coverage_map_H.fits",
+      "low_rejection_map_path": "C:\\glass_runs\\final_m38_h_200\\glass_current_20260514_154556\\integration\\resident_low_rejection_map_H.fits",
+      "high_rejection_map_path": "C:\\glass_runs\\final_m38_h_200\\glass_current_20260514_154556\\integration\\resident_high_rejection_map_H.fits"
+    }
+  },
+  "historical_excluded_frame_ids": [
+    "F000160",
+    "F000213",
+    "F000214",
+    "F000215",
+    "F000216",
+    "F000217",
+    "F000218"
+  ],
+  "historical_excluded_tokens": [
+    "LIGHT_H_0100",
+    "LIGHT_H_0153",
+    "LIGHT_H_0154",
+    "LIGHT_H_0155",
+    "LIGHT_H_0156",
+    "LIGHT_H_0157",
+    "LIGHT_H_0158"
+  ],
+  "acceptance_parity": {
+    "masked_matches_historical_excluded_ids": true,
+    "masked_matches_historical_status_counts": true,
+    "unmasked_extra_accepted_ids": [
+      "F000160",
+      "F000213",
+      "F000214",
+      "F000215",
+      "F000216",
+      "F000217",
+      "F000218"
+    ]
+  },
+  "historical_excluded_frame_details": [
+    {
+      "frame_id": "F000160",
+      "gate432_masked": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      },
+      "gate431_unmasked": {
+        "status": "ok",
+        "inliers": 2,
+        "matched_stars": 2,
+        "rms_px": 2.3910679817199707,
+        "triangle_scale": "0.818838537",
+        "triangle_rotation_rad": "-2.38603759",
+        "translation_refine_status": "insufficient_inliers",
+        "quality_gate_status": "ok",
+        "agreement_status": "unavailable"
+      },
+      "historical_current": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      }
+    },
+    {
+      "frame_id": "F000213",
+      "gate432_masked": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      },
+      "gate431_unmasked": {
+        "status": "ok",
+        "inliers": 3,
+        "matched_stars": 3,
+        "rms_px": 1.4262175559997559,
+        "triangle_scale": "1.05810785",
+        "triangle_rotation_rad": "-1.58538175",
+        "translation_refine_status": "insufficient_inliers",
+        "quality_gate_status": "ok",
+        "agreement_status": "unavailable"
+      },
+      "historical_current": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      }
+    },
+    {
+      "frame_id": "F000214",
+      "gate432_masked": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      },
+      "gate431_unmasked": {
+        "status": "ok",
+        "inliers": 3,
+        "matched_stars": 3,
+        "rms_px": 1.1768157482147217,
+        "triangle_scale": "0.881023705",
+        "triangle_rotation_rad": "-0.849511385",
+        "translation_refine_status": "insufficient_inliers",
+        "quality_gate_status": "ok",
+        "agreement_status": "unavailable"
+      },
+      "historical_current": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      }
+    },
+    {
+      "frame_id": "F000215",
+      "gate432_masked": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      },
+      "gate431_unmasked": {
+        "status": "ok",
+        "inliers": 3,
+        "matched_stars": 3,
+        "rms_px": 0.9095922112464905,
+        "triangle_scale": "0.479989916",
+        "triangle_rotation_rad": "0.779985785",
+        "translation_refine_status": "insufficient_inliers",
+        "quality_gate_status": "ok",
+        "agreement_status": "unavailable"
+      },
+      "historical_current": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      }
+    },
+    {
+      "frame_id": "F000216",
+      "gate432_masked": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      },
+      "gate431_unmasked": {
+        "status": "ok",
+        "inliers": 3,
+        "matched_stars": 3,
+        "rms_px": 0.3238076865673065,
+        "triangle_scale": "1.09944427",
+        "triangle_rotation_rad": "-3.00030351",
+        "translation_refine_status": "insufficient_inliers",
+        "quality_gate_status": "ok",
+        "agreement_status": "unavailable"
+      },
+      "historical_current": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      }
+    },
+    {
+      "frame_id": "F000217",
+      "gate432_masked": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      },
+      "gate431_unmasked": {
+        "status": "ok",
+        "inliers": 3,
+        "matched_stars": 3,
+        "rms_px": 1.0599052906036377,
+        "triangle_scale": "1.34099054",
+        "triangle_rotation_rad": "1.94111371",
+        "translation_refine_status": "insufficient_inliers",
+        "quality_gate_status": "ok",
+        "agreement_status": "unavailable"
+      },
+      "historical_current": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      }
+    },
+    {
+      "frame_id": "F000218",
+      "gate432_masked": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      },
+      "gate431_unmasked": {
+        "status": "ok",
+        "inliers": 3,
+        "matched_stars": 3,
+        "rms_px": 1.3140949010849,
+        "triangle_scale": "1.28711021",
+        "triangle_rotation_rad": "-1.43759179",
+        "translation_refine_status": "insufficient_inliers",
+        "quality_gate_status": "ok",
+        "agreement_status": "unavailable"
+      },
+      "historical_current": {
+        "status": "excluded",
+        "inliers": 0,
+        "matched_stars": 0,
+        "rms_px": null,
+        "triangle_scale": null,
+        "triangle_rotation_rad": null,
+        "translation_refine_status": null,
+        "quality_gate_status": null,
+        "agreement_status": null
+      }
+    }
+  ],
+  "comparisons": {
+    "masked_vs_historical_current": {
+      "path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate432_masked_vs_old_current_compare.json",
+      "shape_match": true,
+      "abs_diff_p50": 2.1048126220703125,
+      "abs_diff_p90": 5.377532958984375,
+      "abs_diff_p99": 19.219909973144468,
+      "rms_diff": 23.11060957745662,
+      "relative_rms_diff": 0.06962421005607965,
+      "speedup_vs_reference": 1.129197077895345,
+      "robust_fit_pixels_rms": 3.620002796301666,
+      "robust_fit_pixels_relative_rms": 0.035815449361324074
+    },
+    "masked_vs_unmasked_auto": {
+      "path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate432_masked_vs_unmasked_auto_compare.json",
+      "shape_match": true,
+      "abs_diff_p50": 1.4538955688476562,
+      "abs_diff_p90": 2.3806228637695312,
+      "abs_diff_p99": 4.122085723876921,
+      "rms_diff": 4.507631288274078,
+      "relative_rms_diff": 0.013692534658044006,
+      "speedup_vs_reference": 1.0158123203232277,
+      "robust_fit_pixels_rms": 0.8009782472082982,
+      "robust_fit_pixels_relative_rms": 0.008043076204165606
+    }
+  },
+  "wbpp_reference": {
+    "blackbox_time_s": 1092.541,
+    "gate432_masked_speedup_vs_wbpp": 39.14444973775945,
+    "reference_xisf_available_now": false
+  }
+}

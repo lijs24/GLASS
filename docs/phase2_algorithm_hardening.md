@@ -7993,21 +7993,93 @@ integration where applicable.
 
 ### S2-Gate 432: Resident Frame-Acceptance and Warp/Rejection Parity
 
-- Continue from Gate431 with a substantive runtime gate only.
-- Target the remaining scientific parity issues revealed by the real
-  regression:
-  - accepted-frame policy differs from historical current/WBPP-like behavior
-    (`199 ok` vs historical `192 ok` + `7 excluded`);
-  - direct WBPP output comparison cannot be refreshed until the black-box XISF
-    reference is restored;
-  - strict synthetic same-pre-rejection parity remains attention-required.
+- Pause release/default-promotion/report-contract-only gate growth. Gate400
+  through Gate413 are useful as guardrails, but their direct Phase 2 value is
+  limited to evidence plumbing:
+  - Gate400 established the release evidence-chain fixture.
+  - Gate401 through Gate403 moved resident CUDA DQ provenance into acceptance
+    and benchmark-contract profiles.
+  - Gate404 and Gate405 exposed runtime-sweep/Phase2 status surfaces.
+  - Gate406 through Gate413 handed the benchmark/publication-audit profiles
+    through release-promotion, default-promotion, Windows matrix, preflight, and
+    publication-audit checks.
+  - None of Gate400 through Gate413 changed image math, CUDA kernels,
+    StackEngine execution defaults, DQ pixel semantics, real 200-light output,
+    or runtime performance. Treat them as banked safety rails, not as the next
+    work pattern.
+- Run the real M38 H 200-light resident CUDA regression from the preserved
+  `C:\glass_runs\final_m38_h_200\glass_current_20260514_154556\processing_plan.json`
+  plan, with:
+  - 200 light frames;
+  - 20 bias frames;
+  - 20 dark frames;
+  - 20 flat frames;
+  - image shape `9600x6422`;
+  - resident CUDA `similarity_cuda_triangle`;
+  - auto-grid resident catalog default (`8x8`, top 8 per cell);
+  - `winsorized_sigma`;
+  - `weighting=none`;
+  - `local_normalization=off`;
+  - `reference_frame_id=LIGHT_H_0136`;
+  - `resident_warp_interpolation=lanczos3`.
+- Discovery: the historical current `192 ok` + `7 excluded` accepted-frame set
+  was driven by an explicit resident frame mask, not by automatic registration
+  quality rejection. The excluded frame tokens were:
+  `LIGHT_H_0100`, `LIGHT_H_0153`, `LIGHT_H_0154`, `LIGHT_H_0155`,
+  `LIGHT_H_0156`, `LIGHT_H_0157`, and `LIGHT_H_0158`.
+- Re-run Gate432 with the same explicit mask to separate accepted-frame policy
+  parity from the Gate430/Gate431 runtime optimization:
+  - status counts exactly matched historical current:
+    `192 ok`, `7 excluded`, `1 reference`;
+  - total elapsed time: `27.910496 s`;
+  - `light_read_upload_calibrate`: `17.339915 s`;
+  - `resident_registration_warp`: `1.594249 s`;
+  - `triangle_moving_catalog`: `0.951209 s`;
+  - `resident_integration`: `0.297217 s`;
+  - output write: `2.343207 s`;
+  - estimated peak VRAM: `47.311736 GiB`.
+- Comparisons:
+  - Gate432 masked vs historical current: shape match true, p50/p90/p99
+    absolute delta `2.1048` / `5.3775` / `19.2199` ADU, relative RMS
+    `0.069624`, robust fit-pixel RMS `3.620003`, speedup `1.129197x`;
+  - Gate432 masked vs Gate431 unmasked auto-grid: shape match true,
+    p50/p90/p99 absolute delta `1.4539` / `2.3806` / `4.1221` ADU,
+    relative RMS `0.013693`, robust fit-pixel RMS `0.800978`, speedup
+    `1.015812x`;
+  - historical WBPP black-box time remains `1092.541 s`, giving Gate432 a
+    `39.14445x` timing ratio against that user-generated timing record.
+- Interpretation: Gate432 restores real-data accepted-frame parity when given
+  the same explicit frame policy, proves the auto-grid resident path remains
+  faster under the masked frame set, and quantifies the numerical impact of the
+  seven low-quality frames. The remaining mainline issue is now to turn this
+  into an automatic, auditable registration-quality decision rather than a
+  manually supplied exclusion list.
+- Keep this gate runtime-validation scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
+### S2-Gate 433: Automatic Resident Frame-Quality Gate and DQ Decision Contract
+
+- Continue from Gate432 with a substantive runtime gate only.
+- Implement or validate an automatic resident registration-quality decision
+  path that can reject low-confidence frames without explicit
+  `--exclude-frame-id` masks.
+- The decision contract must record per-frame reasons and thresholds, including
+  at least matched stars, inliers, RMS when finite, transform/refine status,
+  and whether the frame is accepted, warning-only, or excluded.
 - Acceptance for the next gate:
-  - either reproduce/justify the accepted-frame set on the real M38 200-light
-    data, or reduce strict synthetic warp/rejection deltas below Gate430;
-  - focused resident CUDA tests pass;
-  - `python -m pytest -q` passes;
-  - if real-data outputs are touched, record frame counts, accepted/excluded
-    frame IDs, timing, maps, and compare artifacts;
+  - the real M38 H 200-light run without explicit frame excludes either
+    reproduces the Gate432 accepted-frame set (`192 ok`, `7 excluded`,
+    `1 reference`) or produces a documented, data-backed reason for any
+    difference;
+  - rejected/excluded frames are not silently sent into integration;
+  - DQ/coverage/rejection map accounting remains present in the resident
+    artifacts;
+  - total runtime remains explainably close to Gate432, with
+    `resident_registration_warp` still near the auto-grid path instead of the
+    old 24x16 default-route cost;
+  - numerical comparison against Gate432 masked output is generated;
+  - focused tests plus `python -m pytest -q` pass;
   - no release/default-promotion/report-only code is added unless it directly
     blocks this runtime validation.
 
