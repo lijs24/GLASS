@@ -3157,6 +3157,65 @@ def test_acceptance_audit_applies_frame_accounting_contract(tmp_path: Path):
     assert checks["contract_frame_accounting_matches_registration"] is True
 
 
+def test_acceptance_audit_accepts_zero_weight_as_orthogonal_integration_status(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        active=193,
+        zero=7,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+        resident_dq=True,
+        frame_accounting=True,
+    )
+    accounting = read_json(gp_run / "frame_accounting.json")
+    accounting["summary"]["final_status_counts"] = {
+        "integrated": 193,
+        "quality_rejected": 7,
+    }
+    accounting["summary"]["integration_status_counts"] = {"used": 193, "zero_weight": 7}
+    accounting["exception_summary"]["final_status_counts"] = {"quality_rejected": 7}
+    accounting["exception_summary"]["primary_stage_counts"] = {"quality": 7}
+    for frame in accounting["frames"]:
+        if frame["integration_status"] == "zero_weight":
+            frame["final_status"] = "quality_rejected"
+    for frame in accounting["exception_frames"]:
+        frame["final_status"] = "quality_rejected"
+        frame["primary_stage"] = "quality"
+        frame["primary_reason"] = "registration quality gate rejected frame"
+    write_json(gp_run / "frame_accounting.json", accounting)
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_dq_contract(contract)
+    _add_frame_accounting_contract(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is True
+    zero_weight_check = checks["contract_frame_accounting_final_status:zero_weight"]
+    assert zero_weight_check["passed"] is True
+    assert zero_weight_check["evidence"]["source"] == "integration_status"
+    assert checks["contract_frame_accounting_matches_integration_weights"]["passed"] is True
+
+
 def test_acceptance_audit_frame_accounting_contract_catches_integration_conflict(
     tmp_path: Path,
 ):

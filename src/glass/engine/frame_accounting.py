@@ -497,6 +497,7 @@ def build_frame_accounting(
         )
 
     final_counts = _status_counts(rows, "final_status")
+    integration_counts = _status_counts(rows, "integration_status")
     exceptions = _exception_frames(rows)
     summary = {
         "input_light_frames": len(rows),
@@ -520,7 +521,7 @@ def build_frame_accounting(
         "warp_accepted_frames": sum(1 for row in rows if row["warp_status"] == "accepted"),
         "warp_skipped_frames": sum(1 for row in rows if row["warp_status"] == "skipped"),
         "integrated_frames": final_counts.get("integrated", 0),
-        "zero_weight_frames": final_counts.get("zero_weight", 0),
+        "zero_weight_frames": integration_counts.get("zero_weight", 0),
         "resident_frame_mask_active_frames": sum(
             1 for row in rows if row["resident_frame_mask_status"] == "active"
         ),
@@ -536,6 +537,7 @@ def build_frame_accounting(
         "integration_conflict_frames": final_counts.get("integration_conflict", 0),
         "not_integrated_frames": final_counts.get("not_integrated", 0),
         "final_status_counts": final_counts,
+        "integration_status_counts": integration_counts,
         "exception_frames": len(exceptions),
     }
     payload = {

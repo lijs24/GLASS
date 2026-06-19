@@ -1,0 +1,21 @@
+{
+  "artifact_type": "resident_source_dq_cache_preflight",
+  "calibrated_bytes_per_pixel": 4,
+  "created_at": "2026-06-19T18:02:52+00:00",
+  "disk_usage_path": "C:\\glass_runs\\phase2_s2_gate_452_200",
+  "dq_bytes_per_pixel": 2,
+  "estimated_output_bytes": 77680512000,
+  "estimated_payload_bytes": 73981440000,
+  "free_bytes": 39561777152,
+  "max_allowed_bytes": 29671332864,
+  "max_disk_fraction": 0.75,
+  "passed": false,
+  "plan_path": "C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json",
+  "ready_light_frame_count": 200,
+  "reason": "estimated_cache_exceeds_disk_budget",
+  "run_dir": "C:\\glass_runs\\phase2_s2_gate_452_200\\source_dq_cache_preflight_only",
+  "safety_multiplier": 1.05,
+  "schema_version": 1,
+  "unknown_shape_frame_count": 0,
+  "unknown_shape_frame_ids": []
+}

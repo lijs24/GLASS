@@ -155,3 +155,5 @@ def test_frame_accounting_promotes_resident_quality_mask_to_quality_rejected(tmp
     assert rows["F002"]["quality_gate_status"] == "rejected"
     assert rows["F002"]["final_status"] == "quality_rejected"
     assert payload["summary"]["resident_frame_mask_masked_frames"] == 1
+    assert payload["summary"]["zero_weight_frames"] == 1
+    assert payload["summary"]["integration_status_counts"]["zero_weight"] == 1

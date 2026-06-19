@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from astropy.io import fits
 
-from glass.cli import main
+from glass.cli import _resident_source_dq_cache_preflight, main
 from glass.cpu.integration import weighted_integrate_stack
 from glass.engine.contracts import DQFlag
 from glass.io.fits_io import read_fits_data, write_fits_data
@@ -1720,6 +1720,9 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     source_dq = artifact["source_dq_summary"]
 
     assert route["mode"] == "generate-calibration"
+    assert route["preflight"]["passed"] is True
+    assert route["preflight"]["ready_light_frame_count"] == 2
+    assert route["preflight"]["estimated_output_bytes"] > 0
     assert route["status"] == "ready"
     assert route["calibrated_light_count"] == 2
     assert route["dq_sidecar_count"] == 2
@@ -1745,6 +1748,47 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     assert source_dq["sidecar_source_counts"] == {"calibration_artifacts": 2}
     assert artifact["source_dq_calibration_artifact_index"]["available"] is True
     assert artifact["source_dq_calibration_artifact_index"]["sidecar_frame_count"] == 2
+
+
+def test_resident_source_dq_cache_preflight_blocks_oversized_cache(tmp_path: Path):
+    dataset = _two_light_cosmetic_cache_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "preflight_run"
+    run.mkdir()
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    preflight = _resident_source_dq_cache_preflight(
+        plan,
+        run,
+        max_disk_fraction=0.5,
+        free_bytes=128,
+    )
+
+    assert preflight["passed"] is False
+    assert preflight["reason"] == "estimated_cache_exceeds_disk_budget"
+    assert preflight["ready_light_frame_count"] == 2
+    assert preflight["estimated_output_bytes"] > preflight["max_allowed_bytes"]
+    assert preflight["calibrated_bytes_per_pixel"] == 4
+    assert preflight["dq_bytes_per_pixel"] == 2
+
+
+def test_resident_source_dq_cache_preflight_uses_parent_for_missing_run_dir(tmp_path: Path):
+    dataset = _two_light_cosmetic_cache_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    missing_run = tmp_path / "missing" / "preflight_run"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    preflight = _resident_source_dq_cache_preflight(plan, missing_run, max_disk_fraction=1.0)
+
+    assert preflight["ready_light_frame_count"] == 2
+    assert preflight["disk_usage_path"] == str(tmp_path)
+    assert preflight["free_bytes"] > 0
 
 
 def test_cli_resident_cuda_batch_wave_releases_prefetch_slots(tmp_path: Path):

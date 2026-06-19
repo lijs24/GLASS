@@ -509,12 +509,17 @@ def collect_frame_accounting_record(glass_run: str | Path) -> dict[str, Any]:
     registration = _load_json_object_if_present(run_root / "registration_results.json")
     frames = accounting.get("frames") if isinstance(accounting.get("frames"), list) else []
     calculated_final_counts: dict[str, int] = {}
+    calculated_integration_counts: dict[str, int] = {}
     integration_conflicts: list[dict[str, Any]] = []
     for row in frames:
         if not isinstance(row, dict):
             continue
         status = str(row.get("final_status") or "unknown")
         calculated_final_counts[status] = calculated_final_counts.get(status, 0) + 1
+        integration_status = str(row.get("integration_status") or "unknown")
+        calculated_integration_counts[integration_status] = (
+            calculated_integration_counts.get(integration_status, 0) + 1
+        )
         if status == "integration_conflict" or row.get("integration_conflict_count"):
             integration_conflicts.append(
                 {
@@ -540,6 +545,7 @@ def collect_frame_accounting_record(glass_run: str | Path) -> dict[str, Any]:
         else [],
         "frame_count": len(frames),
         "calculated_final_status_counts": calculated_final_counts,
+        "calculated_integration_status_counts": calculated_integration_counts,
         "integration_conflict_count": len(integration_conflicts),
         "integration_conflicts": integration_conflicts,
         "integration_source_stage": accounting.get("integration_source_stage"),
@@ -1244,12 +1250,25 @@ def _build_frame_accounting_contract_checks(
     required_final_counts = frame_contract.get("required_final_status_counts") or {}
     if isinstance(required_final_counts, dict):
         final_counts = summary.get("final_status_counts") if isinstance(summary.get("final_status_counts"), dict) else {}
+        integration_counts = (
+            summary.get("integration_status_counts")
+            if isinstance(summary.get("integration_status_counts"), dict)
+            else {}
+        )
         calculated_counts = record.get("calculated_final_status_counts") or {}
+        calculated_integration_counts = record.get("calculated_integration_status_counts") or {}
         for status, required in required_final_counts.items():
             status_text = str(status)
             actual = final_counts.get(status_text)
             calculated = calculated_counts.get(status_text)
             required_int = int(required)
+            compatibility_source = "final_status"
+            if status_text == "zero_weight" and (
+                actual != required_int or calculated != required_int
+            ):
+                actual = integration_counts.get(status_text, actual)
+                calculated = calculated_integration_counts.get(status_text, calculated)
+                compatibility_source = "integration_status"
             checks.append(
                 _check(
                     f"contract_frame_accounting_final_status:{status_text}",
@@ -1258,6 +1277,7 @@ def _build_frame_accounting_contract_checks(
                         "actual": actual,
                         "calculated_from_rows": calculated,
                         "required": required_int,
+                        "source": compatibility_source,
                     },
                 )
             )

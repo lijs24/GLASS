@@ -1,0 +1,293 @@
+{
+  "baseline": {
+    "benchmark_contract": "benchmarks/phase2_m38_h_200_audit_maps_contract.json",
+    "dataset": "M38_H_200light_20bias_20dark_20flat",
+    "phase1_release_baseline_elapsed_s": 30.361440100008622,
+    "wbpp_blackbox_elapsed_s": 1092.541
+  },
+  "conclusions": [
+    "Contract-parity resident CUDA still passes the 200-light acceptance contract with 193 integrated frames and 35.3568x speedup versus WBPP black-box timing.",
+    "Default auto quality gate is scientifically stricter but not contract-parity; a later gate must decide whether to update the 200-light contract or default policy.",
+    "On-disk source-DQ cache generation for this 200-light dataset is correctly blocked under current disk budget; next DQ work should prioritize resident DQ/mask propagation.",
+    "Frame accounting now separates final rejection reason from zero-weight integration status, closing acceptance without hiding quality rejection causes."
+  ],
+  "contract_parity_run": {
+    "acceptance": {
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "passed": true,
+      "path": "C:\\glass_runs\\phase2_s2_gate_452_200\\contract_parity_20260620_015444\\phase2_contract_acceptance_audit_s2_gate_452.json",
+      "speedup_vs_wbpp": 35.35681571655992,
+      "top_level_keys": [
+        "benchmark_contract",
+        "checks",
+        "clean_room",
+        "compare_json",
+        "contract_bundle",
+        "contract_bundle_schema",
+        "dq_provenance",
+        "frame_accounting",
+        "frame_type_counts",
+        "glass_run",
+        "manifest_path",
+        "native_guardrails_bundle",
+        "optimization_guidance",
+        "output_numerical_drifts",
+        "passed",
+        "performance_regression",
+        "pipeline_contract",
+        "release_contract_evidence",
+        "resident_contracts",
+        "resident_determinism",
+        "resident_registration_fastpath",
+        "schema_version",
+        "speedup_summary",
+        "stack_engine_contract",
+        "status",
+        "warp_quality_contract",
+        "wbpp_result"
+      ]
+    },
+    "compare": {
+      "abs_diff_p99": 0.0004580477904528382,
+      "coverage_fraction": 0.9608178429616941,
+      "coverage_max": 193.0,
+      "coverage_median": 192.0,
+      "coverage_min": 1.0,
+      "glass_time_seconds": 30.900435400020797,
+      "reference_time_seconds": 1092.541,
+      "rms_diff": 0.0017018337131114768,
+      "shape_match": true,
+      "speedup_vs_reference": 35.35681571655992
+    },
+    "contracts": {
+      "pipeline_contract": "C:\\glass_runs\\phase2_s2_gate_452_200\\contract_parity_20260620_015444\\pipeline_contract_s2_gate_452.json",
+      "resident_calibration_contract": "C:\\glass_runs\\phase2_s2_gate_452_200\\contract_parity_20260620_015444\\resident_calibration_contract_s2_gate_452.json",
+      "resident_result_contract": "C:\\glass_runs\\phase2_s2_gate_452_200\\contract_parity_20260620_015444\\resident_result_contract_s2_gate_452.json",
+      "stack_engine_contract": "C:\\glass_runs\\phase2_s2_gate_452_200\\contract_parity_20260620_015444\\stack_engine_contract_s2_gate_452.json"
+    },
+    "frame_accounting": {
+      "exception_frame_ids": [
+        "F000160",
+        "F000213",
+        "F000214",
+        "F000215",
+        "F000216",
+        "F000217",
+        "F000218"
+      ],
+      "exception_primary_reasons": {
+        "F000160": "manual_exclude",
+        "F000213": "manual_exclude",
+        "F000214": "manual_exclude",
+        "F000215": "manual_exclude",
+        "F000216": "manual_exclude",
+        "F000217": "manual_exclude",
+        "F000218": "manual_exclude"
+      },
+      "summary": {
+        "calibrated_frames": 0,
+        "calibration_artifact_type": "resident_cuda_calibration_artifacts",
+        "calibration_master_count": 3,
+        "exception_frames": 7,
+        "final_status_counts": {
+          "integrated": 193,
+          "quality_rejected": 7
+        },
+        "input_light_frames": 200,
+        "integrated_frames": 193,
+        "integration_conflict_frames": 0,
+        "integration_status_counts": {
+          "used": 193,
+          "zero_weight": 7
+        },
+        "not_integrated_frames": 0,
+        "quality_accepted_frames": 0,
+        "quality_rejected_frames": 7,
+        "registration_accepted_frames": 193,
+        "resident_calibrated_frames": 200,
+        "resident_calibrated_light_ledger_rows": 200,
+        "resident_frame_mask_active_frames": 193,
+        "resident_frame_mask_masked_frames": 7,
+        "resident_frame_mask_unaudited_frames": 0,
+        "resident_native_calibration_artifact": true,
+        "warp_accepted_frames": 0,
+        "warp_skipped_frames": 0,
+        "zero_weight_frames": 7
+      }
+    },
+    "path": "C:\\glass_runs\\phase2_s2_gate_452_200\\contract_parity_20260620_015444",
+    "timing": {
+      "backend": "cuda",
+      "memory_mode": "resident",
+      "resident_fits_read_mode_resolution": {
+        "command": "run",
+        "default": "auto",
+        "effective": "auto",
+        "escape_hatch": "--resident-fits-read-mode astropy",
+        "explicit": false,
+        "fallback": "astropy",
+        "reason": "resident_cuda_default_uses_guarded_auto_reader",
+        "requested": null,
+        "schema_version": 1,
+        "source": "resident_cuda_guarded_auto_default"
+      },
+      "resident_runtime_preset": "throughput-v1",
+      "resident_runtime_preset_effective": {
+        "applied": {
+          "resident_calibration_batch_frames": 8,
+          "resident_calibration_release_mode": "callback_queue",
+          "resident_calibration_streams": 4,
+          "resident_calibration_wave_frames": 2,
+          "resident_h2d_mode": "pinned_ring",
+          "resident_prefetch_frames": 12,
+          "resident_prefetch_refill_mode": "queued",
+          "resident_prefetch_workers": 7
+        },
+        "explicit_overrides": {},
+        "preset": "throughput-v1"
+      },
+      "resident_source_dq_cache": "off",
+      "stages": [
+        {
+          "elapsed_s": 30.900435400020797,
+          "stage": "resident_calibration_integration",
+          "started_at": "2026-06-19T17:54:56+00:00",
+          "status": "ok"
+        }
+      ],
+      "total_elapsed_s": 30.900435400020797
+    }
+  },
+  "default_resident_run": {
+    "compare": {
+      "abs_diff_p99": 0.00044256253633648095,
+      "coverage_fraction": 0.7490054208190595,
+      "coverage_max": 191.0,
+      "coverage_median": 190.0,
+      "coverage_min": 1.0,
+      "glass_time_seconds": 40.69737629999872,
+      "reference_time_seconds": 1092.541,
+      "rms_diff": 0.001730791158185665,
+      "shape_match": true,
+      "speedup_vs_reference": 26.845489791439803
+    },
+    "finding": "Current default auto registration-quality gate is stricter than the Phase 1 contract-parity path and excludes F000080/F000194 in addition to the seven manual/known masked frames.",
+    "frame_accounting": {
+      "exception_frame_ids": [
+        "F000080",
+        "F000160",
+        "F000194",
+        "F000213",
+        "F000214",
+        "F000215",
+        "F000216",
+        "F000217",
+        "F000218"
+      ],
+      "exception_primary_reasons": {
+        "F000080": "registration_quality:registration_inliers_below_min:3<4",
+        "F000160": "manual_exclude",
+        "F000194": "registration_quality:registration_inliers_below_min:3<4",
+        "F000213": "manual_exclude",
+        "F000214": "manual_exclude",
+        "F000215": "manual_exclude",
+        "F000216": "manual_exclude",
+        "F000217": "manual_exclude",
+        "F000218": "manual_exclude"
+      },
+      "summary": {
+        "calibrated_frames": 0,
+        "calibration_artifact_type": "resident_cuda_calibration_artifacts",
+        "calibration_master_count": 3,
+        "exception_frames": 9,
+        "final_status_counts": {
+          "integrated": 191,
+          "quality_rejected": 9
+        },
+        "input_light_frames": 200,
+        "integrated_frames": 191,
+        "integration_conflict_frames": 0,
+        "not_integrated_frames": 0,
+        "quality_accepted_frames": 0,
+        "quality_rejected_frames": 9,
+        "registration_accepted_frames": 191,
+        "resident_calibrated_frames": 200,
+        "resident_calibrated_light_ledger_rows": 200,
+        "resident_frame_mask_active_frames": 191,
+        "resident_frame_mask_masked_frames": 9,
+        "resident_frame_mask_unaudited_frames": 0,
+        "resident_native_calibration_artifact": true,
+        "warp_accepted_frames": 0,
+        "warp_skipped_frames": 0,
+        "zero_weight_frames": 0
+      }
+    },
+    "path": "C:\\glass_runs\\phase2_s2_gate_452_200\\default_resident_20260620_015127",
+    "timing": {
+      "backend": "cuda",
+      "memory_mode": "resident",
+      "resident_fits_read_mode_resolution": {
+        "command": "run",
+        "default": "auto",
+        "effective": "auto",
+        "escape_hatch": "--resident-fits-read-mode astropy",
+        "explicit": false,
+        "fallback": "astropy",
+        "reason": "resident_cuda_default_uses_guarded_auto_reader",
+        "requested": null,
+        "schema_version": 1,
+        "source": "resident_cuda_guarded_auto_default"
+      },
+      "resident_runtime_preset": "throughput-v1",
+      "resident_runtime_preset_effective": {
+        "applied": {
+          "resident_calibration_batch_frames": 8,
+          "resident_calibration_release_mode": "callback_queue",
+          "resident_calibration_streams": 4,
+          "resident_calibration_wave_frames": 2,
+          "resident_h2d_mode": "pinned_ring",
+          "resident_prefetch_frames": 12,
+          "resident_prefetch_refill_mode": "queued",
+          "resident_prefetch_workers": 7
+        },
+        "explicit_overrides": {},
+        "preset": "throughput-v1"
+      },
+      "resident_source_dq_cache": "off",
+      "stages": [
+        {
+          "elapsed_s": 40.69737629999872,
+          "stage": "resident_calibration_integration",
+          "started_at": "2026-06-19T17:51:38+00:00",
+          "status": "ok"
+        }
+      ],
+      "total_elapsed_s": 40.69737629999872
+    }
+  },
+  "gate": "S2-Gate452",
+  "objective": "Real 200-light resident CUDA regression, default-path drift analysis, DQ cache preflight, and frame-accounting closure.",
+  "schema_version": 1,
+  "source_dq_cache_preflight": {
+    "artifact_type": "resident_source_dq_cache_preflight",
+    "calibrated_bytes_per_pixel": 4,
+    "created_at": "2026-06-19T18:02:52+00:00",
+    "disk_usage_path": "C:\\glass_runs\\phase2_s2_gate_452_200",
+    "dq_bytes_per_pixel": 2,
+    "estimated_output_bytes": 77680512000,
+    "estimated_payload_bytes": 73981440000,
+    "free_bytes": 39561777152,
+    "max_allowed_bytes": 29671332864,
+    "max_disk_fraction": 0.75,
+    "passed": false,
+    "plan_path": "C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json",
+    "ready_light_frame_count": 200,
+    "reason": "estimated_cache_exceeds_disk_budget",
+    "run_dir": "C:\\glass_runs\\phase2_s2_gate_452_200\\source_dq_cache_preflight_only",
+    "safety_multiplier": 1.05,
+    "schema_version": 1,
+    "unknown_shape_frame_count": 0,
+    "unknown_shape_frame_ids": []
+  }
+}

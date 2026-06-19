@@ -8974,6 +8974,56 @@ Completed in Gate446:
   resident CUDA runtime path. It is not a release, publication, or report-only
   gate.
 
+### S2-Gate 452: Real 200-Light Resident Regression And Frame-Accounting Closure
+
+- Return from release/default-promotion/report-contract-only work to the Phase
+  2 core path: resident CUDA StackEngine execution, DQ/mask contract closure,
+  real 200-light regression, performance, and numerical agreement.
+- Required work:
+  - run the M38 H-alpha 200-light benchmark on the current resident CUDA path;
+  - compare the current default registration-quality gate against the Phase 1
+    contract-parity settings;
+  - keep any stricter default behavior explicit instead of hiding frame-count
+    drift;
+  - ensure `frame_accounting.json` closes both final frame status and
+    integration-weight status when a quality-rejected frame has zero
+    integration weight;
+  - rerun pipeline, StackEngine, and acceptance contracts against the real
+    200-light output;
+  - add a guarded source-DQ cache preflight so large on-disk calibrated+DQ
+    caches cannot be generated accidentally when the target disk budget is
+    insufficient.
+- Completed in S2-Gate452:
+  - the current default resident run completed in `40.697376 s`, integrated
+    `191/200` frames, and showed the default `auto` quality gate is stricter
+    than the Phase 1 contract by excluding `F000080` and `F000194` for
+    low-inlier registration-quality decisions;
+  - the contract-parity resident run with shared resident master cache and
+    `--resident-registration-quality-gate warn` completed in `30.900435 s`,
+    integrated `193/200` frames, and passed acceptance against the WBPP
+    black-box timing `1092.541 s` for a measured `35.356816x` speedup;
+  - PixInsight/WBPP comparison for the contract-parity run remained inside the
+    existing contract: shape matched, coverage fraction `0.960818`,
+    RMS difference `0.00170183`, and P99 absolute difference `0.000458048`;
+  - `frame_accounting.json` now records `zero_weight_frames` from
+    `integration_status_counts` while preserving `final_status_counts` such as
+    `quality_rejected`, so quality diagnosis and integration weight closure do
+    not fight each other;
+  - acceptance contract compatibility now treats legacy
+    `required_final_status_counts.zero_weight` as zero-weight integration
+    status when final status is a more specific rejection reason;
+  - real source-DQ cache preflight estimated `77.680512 GB` for 200 calibrated
+    light frames plus DQ masks and correctly blocked generation under the
+    current `75%` disk budget (`29.671333 GB` allowed), confirming that the
+    next DQ/mask step should prioritize resident/in-VRAM propagation before
+    large cache materialization.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_452_200\default_resident_20260620_015127`;
+  - `C:\glass_runs\phase2_s2_gate_452_200\contract_parity_20260620_015444`;
+  - `runs/checkpoints/s2_gate_452_real_source_dq_cache_preflight.json`;
+  - `runs/checkpoints/s2_gate_452_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_452_status.md`.
+
 ## Gate Rules
 
 Each gate requires:

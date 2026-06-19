@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import platform
+import shutil
 import subprocess
 import sys
 from time import perf_counter
@@ -587,8 +588,82 @@ def _resolve_route_sidecar_path(path: str | Path, *, artifact_root: Path) -> Pat
     return candidate if candidate.exists() else artifact_root / candidate
 
 
+def _existing_disk_usage_path(path: Path) -> Path:
+    candidate = path
+    while not candidate.exists() and candidate != candidate.parent:
+        candidate = candidate.parent
+    return candidate if candidate.exists() else Path.cwd()
+
+
+def _resident_source_dq_cache_preflight(
+    plan_path: str | Path,
+    run: Path,
+    *,
+    max_disk_fraction: float = 0.75,
+    free_bytes: int | None = None,
+) -> dict[str, Any]:
+    plan = read_json(plan_path)
+    frames = {
+        str(frame.get("id")): frame
+        for frame in plan.get("frames", [])
+        if isinstance(frame, dict) and frame.get("id") is not None
+    }
+    ready_frame_ids: list[str] = []
+    for light_plan in plan.get("light_plans", []):
+        if not isinstance(light_plan, dict) or light_plan.get("calibration_status") != "ready":
+            continue
+        ready_frame_ids.extend(str(frame_id) for frame_id in light_plan.get("frames", []))
+    calibrated_bytes_per_pixel = 4
+    dq_bytes_per_pixel = 2
+    bytes_per_pixel = calibrated_bytes_per_pixel + dq_bytes_per_pixel
+    estimated_payload_bytes = 0
+    unknown_shape_frame_ids: list[str] = []
+    for frame_id in ready_frame_ids:
+        frame = frames.get(frame_id)
+        width = None if frame is None else frame.get("width")
+        height = None if frame is None else frame.get("height")
+        if not isinstance(width, int) or not isinstance(height, int) or width <= 0 or height <= 0:
+            unknown_shape_frame_ids.append(frame_id)
+            continue
+        estimated_payload_bytes += int(width) * int(height) * bytes_per_pixel
+    estimated_output_bytes = int(estimated_payload_bytes * 1.05)
+    disk_usage_path = _existing_disk_usage_path(run)
+    if free_bytes is None:
+        free_bytes = int(shutil.disk_usage(disk_usage_path).free)
+    max_allowed_bytes = int(max(0.0, min(1.0, max_disk_fraction)) * free_bytes)
+    passed = not unknown_shape_frame_ids and estimated_output_bytes <= max_allowed_bytes
+    reason = "ok"
+    if unknown_shape_frame_ids:
+        reason = "unknown_light_shapes"
+    elif estimated_output_bytes > max_allowed_bytes:
+        reason = "estimated_cache_exceeds_disk_budget"
+    return {
+        "schema_version": 1,
+        "artifact_type": "resident_source_dq_cache_preflight",
+        "created_at": now_iso(),
+        "passed": passed,
+        "reason": reason,
+        "run_dir": str(run),
+        "disk_usage_path": str(disk_usage_path),
+        "plan_path": str(plan_path),
+        "ready_light_frame_count": len(ready_frame_ids),
+        "unknown_shape_frame_count": len(unknown_shape_frame_ids),
+        "unknown_shape_frame_ids": unknown_shape_frame_ids[:20],
+        "estimated_payload_bytes": estimated_payload_bytes,
+        "estimated_output_bytes": estimated_output_bytes,
+        "calibrated_bytes_per_pixel": calibrated_bytes_per_pixel,
+        "dq_bytes_per_pixel": dq_bytes_per_pixel,
+        "safety_multiplier": 1.05,
+        "free_bytes": free_bytes,
+        "max_disk_fraction": max_disk_fraction,
+        "max_allowed_bytes": max_allowed_bytes,
+    }
+
+
 def _write_resident_source_dq_cache_route(run: Path, args: argparse.Namespace) -> Path:
     artifact_path = run / "calibration_artifacts.json"
+    preflight_path = run / "resident_source_dq_cache_preflight.json"
+    preflight = read_json(preflight_path) if preflight_path.exists() else None
     payload: dict[str, Any] = {}
     if artifact_path.exists():
         payload = read_json(artifact_path)
@@ -638,6 +713,7 @@ def _write_resident_source_dq_cache_route(run: Path, args: argparse.Namespace) -
         "cosmetic_correction_enabled_frame_count": cosmetic_enabled_count,
         "dq_summary_totals": dq_summary_totals,
         "dq_sidecars": dq_sidecar_rows,
+        "preflight": preflight,
         "resident_consumption": {
             "source": "calibration_artifacts.calibrated_lights.dq_mask_path",
             "consumer": "resident CUDA source-DQ sidecar index",
@@ -1243,6 +1319,19 @@ def cmd_run(args: argparse.Namespace) -> int:
         _annotate_timing_execution_defaults(timing, args)
         source_dq_cache_route_path: Path | None = None
         if args.resident_source_dq_cache == "generate-calibration":
+            preflight = _resident_source_dq_cache_preflight(
+                args.plan,
+                out,
+                max_disk_fraction=args.resident_source_dq_cache_max_disk_fraction,
+            )
+            write_json(out / "resident_source_dq_cache_preflight.json", preflight)
+            if not preflight["passed"] and not args.allow_large_resident_source_dq_cache:
+                raise SystemExit(
+                    "resident source-DQ cache preflight failed: "
+                    f"{preflight['reason']}; estimated_output_bytes={preflight['estimated_output_bytes']}, "
+                    f"max_allowed_bytes={preflight['max_allowed_bytes']}. "
+                    "Use --allow-large-resident-source-dq-cache to override."
+                )
             _timed_stage(
                 out,
                 timing,
@@ -4393,6 +4482,20 @@ def build_parser() -> argparse.ArgumentParser:
             "resident source-DQ cache route; generate-calibration runs CPU/tile calibration first so "
             "resident CUDA can consume GLASS-generated DQ sidecars from calibration_artifacts.json"
         ),
+    )
+    run.add_argument(
+        "--resident-source-dq-cache-max-disk-fraction",
+        type=float,
+        default=0.75,
+        help=(
+            "maximum fraction of current free disk space that the generated resident source-DQ cache "
+            "may consume before the route is blocked"
+        ),
+    )
+    run.add_argument(
+        "--allow-large-resident-source-dq-cache",
+        action="store_true",
+        help="override resident source-DQ cache disk preflight failures",
     )
     run.add_argument(
         "--resident-output-maps",
