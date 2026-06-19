@@ -6791,6 +6791,24 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 379: Default Promotion Release Quality Final Guard
+
+- Carry Gate378 release-decision final release quality publication evidence into
+  `glass default-promotion-manifest`.
+- Keep legacy release-decision artifacts compatible when final-check evidence is
+  explicitly compatible-missing or absent while the older guard chain is passing.
+- Require final raw and Phase2 release quality checks to be ready, matching, and
+  carried in the default-promotion evidence when supplied by release decision.
+- Surface final-check readiness, match status, compatible-missing state, and raw
+  / Phase2 final check values in default-promotion JSON and Markdown.
+- Add focused tests for ready evidence, legacy-compatible final-check omission,
+  failed final checks, and missing Phase2 final-check evidence.
+- Keep this gate default-promotion scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

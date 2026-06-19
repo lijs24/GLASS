@@ -1365,6 +1365,46 @@ def _release_decision_release_quality_publication_guard(
     guard_present = guard.get("release_quality_guard_present") is True
     raw_ready = guard.get("raw_ready") is True
     phase2_ready = guard.get("phase2_ready") is True
+    final_field_names = (
+        "final_checks_compatible_missing",
+        "final_checks_ready",
+        "final_checks_match",
+        "raw_final_checks_present",
+        "raw_final_checks_ready",
+        "phase2_final_checks_present",
+        "phase2_final_checks_ready",
+        "raw_release_matrix_check",
+        "raw_release_matrix_default_check",
+        "raw_release_default_promotion_check",
+        "raw_release_matrix_default_match_check",
+        "raw_release_matrix_manifest_match_check",
+        "phase2_release_matrix_check",
+        "phase2_release_matrix_default_check",
+        "phase2_release_default_promotion_check",
+        "phase2_release_matrix_default_match_check",
+        "phase2_release_matrix_manifest_match_check",
+    )
+    final_fields_present = any(guard.get(field) is not None for field in final_field_names)
+    final_checks_compatible_missing = (
+        guard.get("final_checks_compatible_missing") is True
+        or not final_fields_present
+    )
+    final_checks_ready = (
+        guard.get("final_checks_ready") is True
+        or final_checks_compatible_missing
+    )
+    final_checks_match = (
+        guard.get("final_checks_match") is True
+        or final_checks_compatible_missing
+    )
+    raw_final_checks_ready = (
+        guard.get("raw_final_checks_ready") is True
+        or final_checks_compatible_missing
+    )
+    phase2_final_checks_ready = (
+        guard.get("phase2_final_checks_ready") is True
+        or final_checks_compatible_missing
+    )
     decision_check_ready = check_passed is True or (
         check_passed is None and compatible_missing and not guard_present
     )
@@ -1376,6 +1416,10 @@ def _release_decision_release_quality_publication_guard(
             and guard.get("phase2_present") is True
             and raw_ready
             and phase2_ready
+            and final_checks_ready
+            and final_checks_match
+            and raw_final_checks_ready
+            and phase2_final_checks_ready
         )
     )
     ready = not present or (
@@ -1393,6 +1437,14 @@ def _release_decision_release_quality_publication_guard(
         "checks_passed": guard.get("checks_passed"),
         "compatible_missing": compatible_missing,
         "release_quality_guard_present": guard_present,
+        "final_fields_present": final_fields_present,
+        "final_checks_compatible_missing": final_checks_compatible_missing,
+        "final_checks_ready": final_checks_ready,
+        "final_checks_match": final_checks_match,
+        "raw_final_checks_present": guard.get("raw_final_checks_present"),
+        "raw_final_checks_ready": guard.get("raw_final_checks_ready"),
+        "phase2_final_checks_present": guard.get("phase2_final_checks_present"),
+        "phase2_final_checks_ready": guard.get("phase2_final_checks_ready"),
         "decision_check_ready": decision_check_ready,
         "checks_ready": checks_ready,
         "layers_ready": layers_ready,
@@ -1423,6 +1475,19 @@ def _release_decision_release_quality_publication_guard(
         "raw_matrix_manifest_match_check": guard.get(
             "raw_matrix_manifest_match_check"
         ),
+        "raw_release_matrix_check": guard.get("raw_release_matrix_check"),
+        "raw_release_matrix_default_check": guard.get(
+            "raw_release_matrix_default_check"
+        ),
+        "raw_release_default_promotion_check": guard.get(
+            "raw_release_default_promotion_check"
+        ),
+        "raw_release_matrix_default_match_check": guard.get(
+            "raw_release_matrix_default_match_check"
+        ),
+        "raw_release_matrix_manifest_match_check": guard.get(
+            "raw_release_matrix_manifest_match_check"
+        ),
         "phase2_present": guard.get("phase2_present"),
         "phase2_ready": guard.get("phase2_ready"),
         "phase2_check_passed": guard.get("phase2_check_passed"),
@@ -1450,6 +1515,19 @@ def _release_decision_release_quality_publication_guard(
         ),
         "phase2_matrix_manifest_match_check": guard.get(
             "phase2_matrix_manifest_match_check"
+        ),
+        "phase2_release_matrix_check": guard.get("phase2_release_matrix_check"),
+        "phase2_release_matrix_default_check": guard.get(
+            "phase2_release_matrix_default_check"
+        ),
+        "phase2_release_default_promotion_check": guard.get(
+            "phase2_release_default_promotion_check"
+        ),
+        "phase2_release_matrix_default_match_check": guard.get(
+            "phase2_release_matrix_default_match_check"
+        ),
+        "phase2_release_matrix_manifest_match_check": guard.get(
+            "phase2_release_matrix_manifest_match_check"
         ),
         "failed_checks": guard.get("failed_checks") or [],
     }
@@ -2345,6 +2423,28 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{release_decision_release_quality_guard.get('raw_matrix_phase2_status')}` "
             "phase2-phase2="
             f"`{release_decision_release_quality_guard.get('phase2_matrix_phase2_status')}`"
+        ),
+        (
+            "- Release quality publication final checks: "
+            f"ready=`{release_decision_release_quality_guard.get('final_checks_ready')}` "
+            f"match=`{release_decision_release_quality_guard.get('final_checks_match')}` "
+            "compatible-missing="
+            f"`{release_decision_release_quality_guard.get('final_checks_compatible_missing')}` "
+            "raw-present="
+            f"`{release_decision_release_quality_guard.get('raw_final_checks_present')}` "
+            "phase2-present="
+            f"`{release_decision_release_quality_guard.get('phase2_final_checks_present')}`"
+        ),
+        (
+            "- Release quality publication final values: "
+            "raw-matrix="
+            f"`{release_decision_release_quality_guard.get('raw_release_matrix_check')}` "
+            "raw-manifest="
+            f"`{release_decision_release_quality_guard.get('raw_release_matrix_manifest_match_check')}` "
+            "phase2-matrix="
+            f"`{release_decision_release_quality_guard.get('phase2_release_matrix_check')}` "
+            "phase2-manifest="
+            f"`{release_decision_release_quality_guard.get('phase2_release_matrix_manifest_match_check')}`"
         ),
         (
             "- Resident fastpath release handoff: "
