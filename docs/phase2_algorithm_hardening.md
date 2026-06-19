@@ -7374,6 +7374,28 @@ integration where applicable.
   change, no CUDA kernel change, no package upload, no GitHub release creation,
   and no real-data benchmark rerun.
 
+### S2-Gate 410: Phase2 Publish-Preflight Benchmark Profile Handoff
+
+- Carry the S2-Gate409 Windows publish-preflight benchmark profile handoff into
+  `glass phase2-status --publish-preflight`.
+- Surface the matrix release profile, matrix/default-promotion handoff
+  readiness, profile agreement, decision/default-route profiles, and the five
+  Gate409 benchmark profile checks in Phase2 status JSON and Markdown.
+- Add a Phase2 status check so green status cannot hide present-but-failed
+  publish-preflight benchmark profile handoff evidence; keep older
+  publish-preflight artifacts that omit these fields backward-compatible.
+- Extend `glass phase2-status-compare` with benchmark profile handoff
+  preserved/status-preserved checks and candidate/baseline summary payloads.
+- Validate the ready path, missing-field compatibility, wrong-profile blocker,
+  compare happy path, and compare regression path with focused Phase2 status
+  tests.
+- Keep this gate status/compare scoped: no runtime execution change, no
+  benchmark contract check semantic change, no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no package upload, no GitHub release creation,
+  and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

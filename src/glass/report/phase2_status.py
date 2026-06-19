@@ -7,6 +7,7 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 
 
 _CHECKPOINT_RE = re.compile(r"s2_gate_(\d+)_status\.md$")
@@ -1098,6 +1099,53 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "default_promotion_quality_metrics_compare_failed_check_count": summary.get(
             "default_promotion_quality_metrics_compare_failed_check_count"
         ),
+        "matrix_release_benchmark_profile": summary.get(
+            "matrix_release_benchmark_profile"
+        ),
+        "matrix_release_benchmark_profile_ready": summary.get(
+            "matrix_release_benchmark_profile_ready"
+        ),
+        "matrix_release_benchmark_profile_check_passed": summary.get(
+            "matrix_release_benchmark_profile_check_passed"
+        ),
+        "matrix_benchmark_profile_handoff_ready": summary.get(
+            "matrix_benchmark_profile_handoff_ready"
+        ),
+        "matrix_benchmark_profile_handoff_required_profile": summary.get(
+            "matrix_benchmark_profile_handoff_required_profile"
+        ),
+        "matrix_benchmark_profile_handoff_profiles_agree": summary.get(
+            "matrix_benchmark_profile_handoff_profiles_agree"
+        ),
+        "matrix_benchmark_profile_handoff_decision_profile": summary.get(
+            "matrix_benchmark_profile_handoff_decision_profile"
+        ),
+        "matrix_benchmark_profile_handoff_phase2_profile": summary.get(
+            "matrix_benchmark_profile_handoff_phase2_profile"
+        ),
+        "matrix_benchmark_profile_handoff_default_route_profile": summary.get(
+            "matrix_benchmark_profile_handoff_default_route_profile"
+        ),
+        "default_promotion_benchmark_profile_handoff_ready": summary.get(
+            "default_promotion_benchmark_profile_handoff_ready"
+        ),
+        "default_promotion_benchmark_profile_handoff_required_profile": summary.get(
+            "default_promotion_benchmark_profile_handoff_required_profile"
+        ),
+        "default_promotion_benchmark_profile_handoff_profiles_agree": summary.get(
+            "default_promotion_benchmark_profile_handoff_profiles_agree"
+        ),
+        "default_promotion_benchmark_profile_handoff_decision_profile": summary.get(
+            "default_promotion_benchmark_profile_handoff_decision_profile"
+        ),
+        "default_promotion_benchmark_profile_handoff_phase2_profile": summary.get(
+            "default_promotion_benchmark_profile_handoff_phase2_profile"
+        ),
+        "default_promotion_benchmark_profile_handoff_default_route_profile": (
+            summary.get(
+                "default_promotion_benchmark_profile_handoff_default_route_profile"
+            )
+        ),
         "github_plan_matrix_resident_result_contract_ready": summary.get(
             "github_plan_matrix_resident_result_contract_ready"
         ),
@@ -1319,6 +1367,34 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
             _check_passed(
                 payload,
                 "matrix_quality_metrics_compare_matches_default_promotion",
+            )
+        ),
+        "matrix_release_decision_benchmark_contract_profile_passed": (
+            _check_passed(
+                payload,
+                "matrix_release_decision_benchmark_contract_profile_passed",
+            )
+        ),
+        "matrix_benchmark_contract_profile_handoff_passed": _check_passed(
+            payload,
+            "matrix_benchmark_contract_profile_handoff_passed",
+        ),
+        "default_promotion_benchmark_contract_profile_handoff_passed": (
+            _check_passed(
+                payload,
+                "default_promotion_benchmark_contract_profile_handoff_passed",
+            )
+        ),
+        "matrix_release_decision_benchmark_profile_matches_handoff": (
+            _check_passed(
+                payload,
+                "matrix_release_decision_benchmark_profile_matches_handoff",
+            )
+        ),
+        "matrix_benchmark_contract_profile_handoff_matches_default_promotion": (
+            _check_passed(
+                payload,
+                "matrix_benchmark_contract_profile_handoff_matches_default_promotion",
             )
         ),
         "github_plan_matrix_resident_result_contract_handoff_passed": _check_passed(
@@ -4858,6 +4934,17 @@ def build_phase2_status(
         )
         checks.append(
             {
+                "name": "windows_publish_preflight_benchmark_profile_handoff_passed",
+                "passed": _publish_preflight_benchmark_profile_section_passed(
+                    preflight
+                ),
+                "evidence": (
+                    _publish_preflight_benchmark_profile_section_evidence(preflight)
+                ),
+            }
+        )
+        checks.append(
+            {
                 "name": "windows_publish_preflight_resident_result_contract_handoff_passed",
                 "passed": (
                     preflight.get(
@@ -6253,6 +6340,34 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     "agreement="
                     f"{preflight.get('matrix_quality_metrics_compare_matches_default_promotion')}"
                 ),
+                (
+                    "- Benchmark profile handoff: "
+                    "matrix-release="
+                    f"{preflight.get('matrix_release_benchmark_profile')}/"
+                    f"{preflight.get('matrix_release_benchmark_profile_ready')}/"
+                    f"{preflight.get('matrix_release_benchmark_profile_check_passed')}, "
+                    "matrix-default="
+                    f"{preflight.get('matrix_benchmark_profile_handoff_ready')}/"
+                    f"{preflight.get('matrix_benchmark_profile_handoff_required_profile')}/"
+                    f"{preflight.get('matrix_benchmark_profile_handoff_profiles_agree')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_benchmark_profile_handoff_ready')}/"
+                    f"{preflight.get('default_promotion_benchmark_profile_handoff_required_profile')}/"
+                    f"{preflight.get('default_promotion_benchmark_profile_handoff_profiles_agree')}"
+                ),
+                (
+                    "- Benchmark profile checks: "
+                    "release="
+                    f"{preflight.get('matrix_release_decision_benchmark_contract_profile_passed')}, "
+                    "matrix-handoff="
+                    f"{preflight.get('matrix_benchmark_contract_profile_handoff_passed')}, "
+                    "default-handoff="
+                    f"{preflight.get('default_promotion_benchmark_contract_profile_handoff_passed')}, "
+                    "release-match="
+                    f"{preflight.get('matrix_release_decision_benchmark_profile_matches_handoff')}, "
+                    "handoff-match="
+                    f"{preflight.get('matrix_benchmark_contract_profile_handoff_matches_default_promotion')}"
+                ),
             ]
         )
     if publication_audit:
@@ -7013,6 +7128,131 @@ _PUBLISH_PREFLIGHT_QUALITY_COMPARE_STATUS_FIELDS = (
     "default_promotion_quality_metrics_compare_status",
     "default_promotion_quality_metrics_compare_failed_check_count",
 )
+
+
+_PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_CHECK_FIELDS = (
+    "matrix_release_decision_benchmark_contract_profile_passed",
+    "matrix_benchmark_contract_profile_handoff_passed",
+    "default_promotion_benchmark_contract_profile_handoff_passed",
+    "matrix_release_decision_benchmark_profile_matches_handoff",
+    "matrix_benchmark_contract_profile_handoff_matches_default_promotion",
+)
+
+_PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_STATUS_FIELDS = (
+    "matrix_release_benchmark_profile",
+    "matrix_release_benchmark_profile_ready",
+    "matrix_release_benchmark_profile_check_passed",
+    "matrix_benchmark_profile_handoff_ready",
+    "matrix_benchmark_profile_handoff_required_profile",
+    "matrix_benchmark_profile_handoff_profiles_agree",
+    "matrix_benchmark_profile_handoff_decision_profile",
+    "matrix_benchmark_profile_handoff_phase2_profile",
+    "matrix_benchmark_profile_handoff_default_route_profile",
+    "default_promotion_benchmark_profile_handoff_ready",
+    "default_promotion_benchmark_profile_handoff_required_profile",
+    "default_promotion_benchmark_profile_handoff_profiles_agree",
+    "default_promotion_benchmark_profile_handoff_decision_profile",
+    "default_promotion_benchmark_profile_handoff_phase2_profile",
+    "default_promotion_benchmark_profile_handoff_default_route_profile",
+)
+
+
+def _benchmark_profile_fields_from_section(
+    section: dict[str, Any],
+    fields: tuple[str, ...],
+) -> dict[str, Any]:
+    return {field: section.get(field) for field in fields}
+
+
+def _publish_preflight_benchmark_profile_section_present(
+    section: dict[str, Any],
+) -> bool:
+    return any(
+        section.get(field) is not None
+        for field in (
+            *_PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_CHECK_FIELDS,
+            *_PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_STATUS_FIELDS,
+        )
+    )
+
+
+def _publish_preflight_benchmark_profile_section_checks_passed(
+    section: dict[str, Any],
+) -> bool:
+    return all(
+        section.get(field) is True
+        for field in _PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_benchmark_profile_section_statuses_passed(
+    section: dict[str, Any],
+) -> bool:
+    return (
+        section.get("matrix_release_benchmark_profile")
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and section.get("matrix_release_benchmark_profile_ready") is True
+        and section.get("matrix_release_benchmark_profile_check_passed") is True
+        and section.get("matrix_benchmark_profile_handoff_ready") is True
+        and section.get("matrix_benchmark_profile_handoff_required_profile")
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and section.get("matrix_benchmark_profile_handoff_profiles_agree") is True
+        and section.get("matrix_benchmark_profile_handoff_decision_profile")
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and section.get("matrix_benchmark_profile_handoff_phase2_profile")
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and section.get("matrix_benchmark_profile_handoff_default_route_profile")
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and section.get("default_promotion_benchmark_profile_handoff_ready") is True
+        and section.get("default_promotion_benchmark_profile_handoff_required_profile")
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and section.get("default_promotion_benchmark_profile_handoff_profiles_agree")
+        is True
+        and section.get("default_promotion_benchmark_profile_handoff_decision_profile")
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and section.get("default_promotion_benchmark_profile_handoff_phase2_profile")
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and section.get(
+            "default_promotion_benchmark_profile_handoff_default_route_profile"
+        )
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+
+
+def _publish_preflight_benchmark_profile_section_passed(
+    section: dict[str, Any],
+) -> bool:
+    return (
+        not _publish_preflight_benchmark_profile_section_present(section)
+        or (
+            _publish_preflight_benchmark_profile_section_checks_passed(section)
+            and _publish_preflight_benchmark_profile_section_statuses_passed(section)
+        )
+    )
+
+
+def _publish_preflight_benchmark_profile_section_evidence(
+    section: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "present": _publish_preflight_benchmark_profile_section_present(section),
+        "checks_passed": (
+            _publish_preflight_benchmark_profile_section_checks_passed(section)
+        ),
+        "statuses_passed": (
+            _publish_preflight_benchmark_profile_section_statuses_passed(section)
+        ),
+        "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+        "failed_checks": section.get("failed_checks"),
+        **_benchmark_profile_fields_from_section(
+            section,
+            _PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_STATUS_FIELDS,
+        ),
+        **_benchmark_profile_fields_from_section(
+            section,
+            _PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_CHECK_FIELDS,
+        ),
+    }
 
 
 def _publish_preflight_rejection_checks_passed(payload: dict[str, Any]) -> bool:
@@ -7860,6 +8100,46 @@ def _publish_preflight_quality_compare_statuses_passed(
         )
         == 0
     )
+
+
+def _publish_preflight_benchmark_profile_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_benchmark_profile_checks(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_BENCHMARK_PROFILE_CHECK_FIELDS
+    }
+
+
+def _publish_preflight_benchmark_profile_present(payload: dict[str, Any]) -> bool:
+    section = {
+        **_publish_preflight_benchmark_profile_statuses(payload),
+        **_publish_preflight_benchmark_profile_checks(payload),
+    }
+    return _publish_preflight_benchmark_profile_section_present(section)
+
+
+def _publish_preflight_benchmark_profile_checks_passed(
+    payload: dict[str, Any],
+) -> bool:
+    section = _publish_preflight_benchmark_profile_checks(payload)
+    return _publish_preflight_benchmark_profile_section_checks_passed(section)
+
+
+def _publish_preflight_benchmark_profile_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    section = _publish_preflight_benchmark_profile_statuses(payload)
+    return _publish_preflight_benchmark_profile_section_statuses_passed(section)
 
 
 _STACK_PUBLICATION_POLICY_FIELDS = (
@@ -9058,6 +9338,53 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_quality_compare_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_benchmark_profile_handoff_preserved",
+            (
+                not _publish_preflight_benchmark_profile_present(baseline)
+                or (
+                    _publish_preflight_benchmark_profile_checks_passed(candidate)
+                    and _publish_preflight_benchmark_profile_statuses_passed(
+                        candidate
+                    )
+                )
+            ),
+            baseline={
+                "present": _publish_preflight_benchmark_profile_present(baseline),
+                "checks_passed": (
+                    _publish_preflight_benchmark_profile_checks_passed(baseline)
+                ),
+                "statuses_passed": (
+                    _publish_preflight_benchmark_profile_statuses_passed(baseline)
+                ),
+                "checks": _publish_preflight_benchmark_profile_checks(baseline),
+                "statuses": _publish_preflight_benchmark_profile_statuses(
+                    baseline
+                ),
+            },
+            candidate={
+                "present": _publish_preflight_benchmark_profile_present(candidate),
+                "checks_passed": (
+                    _publish_preflight_benchmark_profile_checks_passed(candidate)
+                ),
+                "statuses_passed": (
+                    _publish_preflight_benchmark_profile_statuses_passed(candidate)
+                ),
+                "checks": _publish_preflight_benchmark_profile_checks(candidate),
+                "statuses": _publish_preflight_benchmark_profile_statuses(
+                    candidate
+                ),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_benchmark_profile_handoff_status_preserved",
+            (
+                not _publish_preflight_benchmark_profile_statuses_passed(baseline)
+                or _publish_preflight_benchmark_profile_statuses_passed(candidate)
+            ),
+            baseline=_publish_preflight_benchmark_profile_statuses(baseline),
+            candidate=_publish_preflight_benchmark_profile_statuses(candidate),
+        ),
+        _compare_check(
             "stack_engine_publication_audit_passed_preserved",
             baseline_publication.get("passed") is not True
             or candidate_publication.get("passed") is True,
@@ -9564,6 +9891,10 @@ def build_phase2_status_compare(
                     baseline
                 )
             ),
+            "publish_preflight_benchmark_profile_handoff": {
+                **_publish_preflight_benchmark_profile_statuses(baseline),
+                **_publish_preflight_benchmark_profile_checks(baseline),
+            },
             "stack_engine_publication_audit": baseline_publication,
             "registration_admission": _status_value(baseline, "registration_admission"),
             "quality_saturation": _status_value(baseline, "quality_saturation"),
@@ -9656,6 +9987,10 @@ def build_phase2_status_compare(
                     candidate
                 )
             ),
+            "publish_preflight_benchmark_profile_handoff": {
+                **_publish_preflight_benchmark_profile_statuses(candidate),
+                **_publish_preflight_benchmark_profile_checks(candidate),
+            },
             "stack_engine_publication_audit": candidate_publication,
             "registration_admission": _status_value(candidate, "registration_admission"),
             "quality_saturation": _status_value(candidate, "quality_saturation"),

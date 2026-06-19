@@ -968,6 +968,9 @@ def _write_publish_preflight(
     include_stack_publication_audit: bool = True,
     quality_metrics_compare_ready: bool = True,
     include_quality_metrics_compare: bool = True,
+    benchmark_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_ready: bool = True,
+    include_benchmark_profile_handoff: bool = True,
 ) -> None:
     matrix_runtime_ready = (
         stack_runtime_default_ready
@@ -1019,6 +1022,10 @@ def _write_publish_preflight(
         )
         and release_quality_publication_guard_final_evidence_passed
     )
+    benchmark_profile_passed = (
+        benchmark_profile == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and benchmark_profile_ready
+    )
     artifact_ready = ready and (
         rejection_sample_accounting_ready or not include_rejection_sample_accounting
     ) and (
@@ -1051,6 +1058,8 @@ def _write_publish_preflight(
         or not include_stack_publication_audit
     ) and (
         quality_metrics_compare_ready or not include_quality_metrics_compare
+    ) and (
+        benchmark_profile_passed or not include_benchmark_profile_handoff
     )
     summary = {
         "release_tag": "v0.1.0-test",
@@ -1999,6 +2008,83 @@ def _write_publish_preflight(
                 "default_promotion_quality_metrics_compare_handoff_passed",
                 "matrix_quality_metrics_compare_matches_default_promotion",
             ]
+    if include_benchmark_profile_handoff:
+        summary.update(
+            {
+                "matrix_release_benchmark_profile": benchmark_profile,
+                "matrix_release_benchmark_profile_ready": benchmark_profile_passed,
+                "matrix_release_benchmark_profile_check_passed": (
+                    benchmark_profile_passed
+                ),
+                "matrix_benchmark_profile_handoff_ready": benchmark_profile_passed,
+                "matrix_benchmark_profile_handoff_required_profile": (
+                    RESIDENT_CUDA_DQ_PROFILE_NAME
+                ),
+                "matrix_benchmark_profile_handoff_profiles_agree": (
+                    benchmark_profile_passed
+                ),
+                "matrix_benchmark_profile_handoff_decision_profile": (
+                    benchmark_profile
+                ),
+                "matrix_benchmark_profile_handoff_phase2_profile": (
+                    benchmark_profile
+                ),
+                "matrix_benchmark_profile_handoff_default_route_profile": (
+                    benchmark_profile
+                ),
+                "default_promotion_benchmark_profile_handoff_ready": (
+                    benchmark_profile_passed
+                ),
+                "default_promotion_benchmark_profile_handoff_required_profile": (
+                    RESIDENT_CUDA_DQ_PROFILE_NAME
+                ),
+                "default_promotion_benchmark_profile_handoff_profiles_agree": (
+                    benchmark_profile_passed
+                ),
+                "default_promotion_benchmark_profile_handoff_decision_profile": (
+                    benchmark_profile
+                ),
+                "default_promotion_benchmark_profile_handoff_phase2_profile": (
+                    benchmark_profile
+                ),
+                "default_promotion_benchmark_profile_handoff_default_route_profile": (
+                    benchmark_profile
+                ),
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "matrix_release_decision_benchmark_contract_profile_passed",
+                    "passed": benchmark_profile_passed,
+                },
+                {
+                    "name": "matrix_benchmark_contract_profile_handoff_passed",
+                    "passed": benchmark_profile_passed,
+                },
+                {
+                    "name": "default_promotion_benchmark_contract_profile_handoff_passed",
+                    "passed": benchmark_profile_passed,
+                },
+                {
+                    "name": "matrix_release_decision_benchmark_profile_matches_handoff",
+                    "passed": benchmark_profile_passed,
+                },
+                {
+                    "name": "matrix_benchmark_contract_profile_handoff_matches_default_promotion",
+                    "passed": benchmark_profile_passed,
+                },
+            ]
+        )
+        if not benchmark_profile_passed:
+            failed_checks = [
+                *failed_checks,
+                "matrix_release_decision_benchmark_contract_profile_passed",
+                "matrix_benchmark_contract_profile_handoff_passed",
+                "default_promotion_benchmark_contract_profile_handoff_passed",
+                "matrix_release_decision_benchmark_profile_matches_handoff",
+                "matrix_benchmark_contract_profile_handoff_matches_default_promotion",
+            ]
     write_json(
         path,
         {
@@ -2291,6 +2377,11 @@ def _status_payload(
     publish_preflight_quality_metrics_compare_ready: bool = True,
     publish_preflight_quality_metrics_compare_status: str = "passed",
     publish_preflight_quality_metrics_compare_failed_check_count: int = 0,
+    publish_preflight_benchmark_profile_present: bool = True,
+    publish_preflight_benchmark_profile: str | None = (
+        RESIDENT_CUDA_DQ_PROFILE_NAME
+    ),
+    publish_preflight_benchmark_profile_ready: bool = True,
     stack_publication_passed: bool = True,
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
@@ -2394,6 +2485,21 @@ def _status_payload(
         and publish_preflight_quality_metrics_compare_status == "passed"
         and publish_preflight_quality_metrics_compare_failed_check_count == 0
     )
+    publish_preflight_benchmark_profile_passed = (
+        publish_preflight_benchmark_profile_present
+        and publish_preflight_benchmark_profile_ready
+        and publish_preflight_benchmark_profile == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    if publish_preflight_benchmark_profile_present:
+        benchmark_profile = publish_preflight_benchmark_profile
+        benchmark_profile_ready = publish_preflight_benchmark_profile_passed
+        benchmark_profile_required = RESIDENT_CUDA_DQ_PROFILE_NAME
+        benchmark_profiles_agree = publish_preflight_benchmark_profile_passed
+    else:
+        benchmark_profile = None
+        benchmark_profile_ready = None
+        benchmark_profile_required = None
+        benchmark_profiles_agree = None
     return {
         "schema_version": 1,
         "artifact_type": "glass_phase2_status",
@@ -3005,6 +3111,64 @@ def _status_payload(
             ),
             "matrix_quality_metrics_compare_matches_default_promotion": (
                 publish_preflight_quality_metrics_compare_passed
+            ),
+            "matrix_release_benchmark_profile": benchmark_profile,
+            "matrix_release_benchmark_profile_ready": benchmark_profile_ready,
+            "matrix_release_benchmark_profile_check_passed": benchmark_profile_ready,
+            "matrix_benchmark_profile_handoff_ready": benchmark_profile_ready,
+            "matrix_benchmark_profile_handoff_required_profile": (
+                benchmark_profile_required
+            ),
+            "matrix_benchmark_profile_handoff_profiles_agree": (
+                benchmark_profiles_agree
+            ),
+            "matrix_benchmark_profile_handoff_decision_profile": benchmark_profile,
+            "matrix_benchmark_profile_handoff_phase2_profile": benchmark_profile,
+            "matrix_benchmark_profile_handoff_default_route_profile": (
+                benchmark_profile
+            ),
+            "default_promotion_benchmark_profile_handoff_ready": (
+                benchmark_profile_ready
+            ),
+            "default_promotion_benchmark_profile_handoff_required_profile": (
+                benchmark_profile_required
+            ),
+            "default_promotion_benchmark_profile_handoff_profiles_agree": (
+                benchmark_profiles_agree
+            ),
+            "default_promotion_benchmark_profile_handoff_decision_profile": (
+                benchmark_profile
+            ),
+            "default_promotion_benchmark_profile_handoff_phase2_profile": (
+                benchmark_profile
+            ),
+            "default_promotion_benchmark_profile_handoff_default_route_profile": (
+                benchmark_profile
+            ),
+            "matrix_release_decision_benchmark_contract_profile_passed": (
+                publish_preflight_benchmark_profile_passed
+                if publish_preflight_benchmark_profile_present
+                else None
+            ),
+            "matrix_benchmark_contract_profile_handoff_passed": (
+                publish_preflight_benchmark_profile_passed
+                if publish_preflight_benchmark_profile_present
+                else None
+            ),
+            "default_promotion_benchmark_contract_profile_handoff_passed": (
+                publish_preflight_benchmark_profile_passed
+                if publish_preflight_benchmark_profile_present
+                else None
+            ),
+            "matrix_release_decision_benchmark_profile_matches_handoff": (
+                publish_preflight_benchmark_profile_passed
+                if publish_preflight_benchmark_profile_present
+                else None
+            ),
+            "matrix_benchmark_contract_profile_handoff_matches_default_promotion": (
+                publish_preflight_benchmark_profile_passed
+                if publish_preflight_benchmark_profile_present
+                else None
             ),
             "github_plan_matrix_resident_result_contract_ready": (
                 publish_preflight_resident_result_contract_ready
@@ -4664,6 +4828,109 @@ def test_phase2_status_blocks_failed_publish_preflight_quality_compare_handoff(
     assert quality_check["evidence"]["agreement_check"] is False
 
 
+def test_phase2_status_surfaces_publish_preflight_benchmark_profile_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=410)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(publish_preflight)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+    markdown = tmp_path / "phase2_status.md"
+    write_phase2_status_markdown(markdown, status)
+
+    checks = {item["name"]: item for item in status["checks"]}
+    benchmark_check = checks[
+        "windows_publish_preflight_benchmark_profile_handoff_passed"
+    ]
+    text = markdown.read_text(encoding="utf-8")
+
+    assert status["status"] == "green"
+    assert benchmark_check["passed"] is True
+    assert benchmark_check["evidence"]["present"] is True
+    assert benchmark_check["evidence"]["matrix_release_benchmark_profile"] == (
+        RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    assert benchmark_check["evidence"]["checks_passed"] is True
+    assert benchmark_check["evidence"]["statuses_passed"] is True
+    assert "Benchmark profile handoff" in text
+    assert "Benchmark profile checks" in text
+
+
+def test_phase2_status_allows_missing_publish_preflight_benchmark_profile_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=410)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(
+        publish_preflight,
+        include_benchmark_profile_handoff=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    benchmark_check = checks[
+        "windows_publish_preflight_benchmark_profile_handoff_passed"
+    ]
+
+    assert status["status"] == "green"
+    assert benchmark_check["passed"] is True
+    assert benchmark_check["evidence"]["present"] is False
+    assert benchmark_check["evidence"]["matrix_release_benchmark_profile"] is None
+
+
+def test_phase2_status_blocks_failed_publish_preflight_benchmark_profile_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=410)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(
+        publish_preflight,
+        benchmark_profile="legacy_profile",
+        benchmark_profile_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    benchmark_check = checks[
+        "windows_publish_preflight_benchmark_profile_handoff_passed"
+    ]
+
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert benchmark_check["passed"] is False
+    assert benchmark_check["evidence"]["present"] is True
+    assert benchmark_check["evidence"]["matrix_release_benchmark_profile"] == (
+        "legacy_profile"
+    )
+    assert benchmark_check["evidence"]["checks_passed"] is False
+    assert benchmark_check["evidence"]["statuses_passed"] is False
+    assert (
+        "matrix_release_decision_benchmark_contract_profile_passed"
+        in benchmark_check["evidence"]["failed_checks"]
+    )
+
+
 def test_phase2_status_surfaces_publish_preflight_release_quality_publication_guard(
     tmp_path: Path,
 ):
@@ -6164,6 +6431,13 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     )
     assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"] is True
     assert checks["windows_publish_preflight_resident_winsorized_status_preserved"] is True
+    assert checks["windows_publish_preflight_benchmark_profile_handoff_preserved"] is True
+    assert (
+        checks[
+            "windows_publish_preflight_benchmark_profile_handoff_status_preserved"
+        ]
+        is True
+    )
     assert checks["windows_publish_preflight_resident_fastpath_handoff_preserved"] is True
     assert (
         checks[
@@ -7143,6 +7417,52 @@ def test_phase2_status_compare_flags_publish_preflight_quality_compare_regressio
             "default_promotion_quality_metrics_compare_status"
         ]
         == "failed"
+    )
+
+
+def test_phase2_status_compare_flags_publish_preflight_benchmark_profile_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=409))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=410,
+            status="attention_required",
+            publish_preflight_benchmark_profile="legacy_profile",
+            publish_preflight_benchmark_profile_ready=False,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    handoff_check = checks[
+        "windows_publish_preflight_benchmark_profile_handoff_preserved"
+    ]
+    status_check = checks[
+        "windows_publish_preflight_benchmark_profile_handoff_status_preserved"
+    ]
+
+    assert payload["status"] == "regressed"
+    assert handoff_check["passed"] is False
+    assert handoff_check["evidence"]["baseline"]["checks_passed"] is True
+    assert handoff_check["evidence"]["candidate"]["checks_passed"] is False
+    assert status_check["passed"] is False
+    assert (
+        status_check["evidence"]["candidate"]["matrix_release_benchmark_profile"]
+        == "legacy_profile"
+    )
+    assert (
+        payload["candidate"]["publish_preflight_benchmark_profile_handoff"][
+            "matrix_release_benchmark_profile"
+        ]
+        == "legacy_profile"
     )
 
 
