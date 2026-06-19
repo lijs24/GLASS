@@ -690,6 +690,41 @@ def _release_quality_publication_guard_matches(
     )
 
 
+_RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_FIELDS = (
+    "final_evidence_compatible_missing",
+    "final_evidence_ready",
+    "final_evidence_match",
+    "raw_final_evidence_present",
+    "raw_final_evidence_ready",
+    "phase2_final_evidence_present",
+    "phase2_final_evidence_ready",
+    "raw_matrix_final_checks_ready",
+    "raw_matrix_final_checks_match",
+    "raw_matrix_raw_final_checks_ready",
+    "raw_matrix_phase2_final_checks_ready",
+    "raw_matrix_default_final_checks_ready",
+    "raw_matrix_default_final_checks_match",
+    "raw_matrix_default_raw_final_checks_ready",
+    "raw_matrix_default_phase2_final_checks_ready",
+    "raw_default_promotion_final_checks_ready",
+    "raw_default_promotion_final_checks_match",
+    "raw_default_promotion_raw_final_checks_ready",
+    "raw_default_promotion_phase2_final_checks_ready",
+    "phase2_matrix_final_checks_ready",
+    "phase2_matrix_final_checks_match",
+    "phase2_matrix_raw_final_checks_ready",
+    "phase2_matrix_phase2_final_checks_ready",
+    "phase2_matrix_default_final_checks_ready",
+    "phase2_matrix_default_final_checks_match",
+    "phase2_matrix_default_raw_final_checks_ready",
+    "phase2_matrix_default_phase2_final_checks_ready",
+    "phase2_default_promotion_final_checks_ready",
+    "phase2_default_promotion_final_checks_match",
+    "phase2_default_promotion_raw_final_checks_ready",
+    "phase2_default_promotion_phase2_final_checks_ready",
+)
+
+
 def _release_quality_guard_publication_fields(
     source: dict[str, Any],
     *,
@@ -767,6 +802,14 @@ def _release_quality_guard_publication_fields(
             "phase2_final_checks_ready",
             "phase2_final_checks_ready",
         ),
+        f"{output_prefix}_final_evidence_fields_present": field(
+            "final_evidence_fields_present",
+            "final_evidence_fields_present",
+        ),
+        **{
+            f"{output_prefix}_{name}": field(name, name)
+            for name in _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_FIELDS
+        },
         f"{output_prefix}_decision_check_ready": field(
             "decision_check_ready",
             "decision_check_ready",
@@ -871,7 +914,7 @@ def _release_quality_guard_publication_evidence(
     *,
     prefix: str,
 ) -> dict[str, Any]:
-    return {
+    evidence = {
         "present": summary.get(f"{prefix}_present"),
         "ready": summary.get(f"{prefix}_ready"),
         "decision_check_passed": summary.get(f"{prefix}_check_passed"),
@@ -898,6 +941,13 @@ def _release_quality_guard_publication_evidence(
         "phase2_final_checks_ready": summary.get(
             f"{prefix}_phase2_final_checks_ready"
         ),
+        "final_evidence_fields_present": summary.get(
+            f"{prefix}_final_evidence_fields_present"
+        ),
+        **{
+            name: summary.get(f"{prefix}_{name}")
+            for name in _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_FIELDS
+        },
         "decision_check_ready": summary.get(f"{prefix}_decision_check_ready"),
         "checks_ready": summary.get(f"{prefix}_checks_ready"),
         "layers_ready": summary.get(f"{prefix}_layers_ready"),
@@ -965,6 +1015,40 @@ def _release_quality_guard_publication_evidence(
         ),
         "failed_checks": summary.get(f"{prefix}_failed_checks") or [],
     }
+    final_evidence_fields_present = any(
+        evidence.get(name) is not None
+        for name in (
+            "final_evidence_fields_present",
+            *_RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_FIELDS,
+        )
+    )
+    if not final_evidence_fields_present:
+        evidence.update(
+            {
+                "final_evidence_fields_present": False,
+                "final_evidence_compatible_missing": True,
+                "final_evidence_ready": True,
+                "final_evidence_match": True,
+                "raw_final_evidence_present": False,
+                "raw_final_evidence_ready": None,
+                "phase2_final_evidence_present": False,
+                "phase2_final_evidence_ready": None,
+            }
+        )
+    elif evidence.get("final_evidence_compatible_missing") is True:
+        evidence["final_evidence_ready"] = (
+            evidence.get("final_evidence_ready") is True
+        )
+        evidence["final_evidence_match"] = (
+            evidence.get("final_evidence_match") is True
+        )
+        evidence["raw_final_evidence_present"] = (
+            evidence.get("raw_final_evidence_present") is True
+        )
+        evidence["phase2_final_evidence_present"] = (
+            evidence.get("phase2_final_evidence_present") is True
+        )
+    return evidence
 
 
 def _release_quality_guard_publication_optional_ready(
@@ -992,20 +1076,41 @@ def _release_quality_guard_publication_optional_ready(
         and evidence.get("raw_final_checks_present") is not True
         and evidence.get("phase2_final_checks_present") is not True
     )
-    if (
+    final_checks_ok = (
         compatible_missing_final_checks
         or (
             evidence.get("final_fields_present") is not True
             and evidence.get("raw_final_checks_present") is not True
             and evidence.get("phase2_final_checks_present") is not True
         )
+        or (
+            evidence.get("final_checks_ready") is True
+            and evidence.get("final_checks_match") is True
+            and evidence.get("raw_final_checks_ready") is True
+            and evidence.get("phase2_final_checks_ready") is True
+        )
+    )
+    if not final_checks_ok:
+        return False
+    compatible_missing_final_evidence = (
+        evidence.get("final_evidence_compatible_missing") is True
+        and evidence.get("raw_final_evidence_present") is not True
+        and evidence.get("phase2_final_evidence_present") is not True
+    )
+    if (
+        compatible_missing_final_evidence
+        or (
+            evidence.get("final_evidence_fields_present") is not True
+            and evidence.get("raw_final_evidence_present") is not True
+            and evidence.get("phase2_final_evidence_present") is not True
+        )
     ):
         return True
     return (
-        evidence.get("final_checks_ready") is True
-        and evidence.get("final_checks_match") is True
-        and evidence.get("raw_final_checks_ready") is True
-        and evidence.get("phase2_final_checks_ready") is True
+        evidence.get("final_evidence_ready") is True
+        and evidence.get("final_evidence_match") is True
+        and evidence.get("raw_final_evidence_ready") is True
+        and evidence.get("phase2_final_evidence_ready") is True
     )
 
 
@@ -1025,6 +1130,8 @@ _RELEASE_QUALITY_GUARD_PUBLICATION_MATCH_FIELDS = (
     "raw_final_checks_ready",
     "phase2_final_checks_present",
     "phase2_final_checks_ready",
+    "final_evidence_fields_present",
+    *_RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_FIELDS,
     "decision_check_ready",
     "checks_ready",
     "layers_ready",
@@ -4653,6 +4760,26 @@ def build_windows_publish_preflight(
                     "release_decision_release_quality_publication_guard_phase2_final_checks_ready"
                 )
             ),
+            "matrix_release_decision_release_quality_publication_guard_final_evidence_ready": (
+                matrix_info.get(
+                    "release_decision_release_quality_publication_guard_final_evidence_ready"
+                )
+            ),
+            "matrix_release_decision_release_quality_publication_guard_final_evidence_match": (
+                matrix_info.get(
+                    "release_decision_release_quality_publication_guard_final_evidence_match"
+                )
+            ),
+            "matrix_release_decision_release_quality_publication_guard_raw_final_evidence_ready": (
+                matrix_info.get(
+                    "release_decision_release_quality_publication_guard_raw_final_evidence_ready"
+                )
+            ),
+            "matrix_release_decision_release_quality_publication_guard_phase2_final_evidence_ready": (
+                matrix_info.get(
+                    "release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
+                )
+            ),
             "matrix_default_promotion_release_decision_release_quality_publication_guard_ready": (
                 matrix_info.get(
                     "default_promotion_release_decision_release_quality_publication_guard_ready"
@@ -4686,6 +4813,26 @@ def build_windows_publish_preflight(
             "matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready": (
                 matrix_info.get(
                     "default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+                )
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready": (
+                matrix_info.get(
+                    "default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready"
+                )
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_match": (
+                matrix_info.get(
+                    "default_promotion_release_decision_release_quality_publication_guard_final_evidence_match"
+                )
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready": (
+                matrix_info.get(
+                    "default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready"
+                )
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready": (
+                matrix_info.get(
+                    "default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
                 )
             ),
             "default_promotion_release_decision_release_quality_publication_guard_present": (
@@ -4736,6 +4883,26 @@ def build_windows_publish_preflight(
             "default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready": (
                 promotion_info.get(
                     "release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+                )
+            ),
+            "default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready": (
+                promotion_info.get(
+                    "release_decision_release_quality_publication_guard_final_evidence_ready"
+                )
+            ),
+            "default_promotion_release_decision_release_quality_publication_guard_final_evidence_match": (
+                promotion_info.get(
+                    "release_decision_release_quality_publication_guard_final_evidence_match"
+                )
+            ),
+            "default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready": (
+                promotion_info.get(
+                    "release_decision_release_quality_publication_guard_raw_final_evidence_ready"
+                )
+            ),
+            "default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready": (
+                promotion_info.get(
+                    "release_decision_release_quality_publication_guard_phase2_final_evidence_ready"
                 )
             ),
             "github_plan_matrix_resident_fastpath_handoff_ready": (
@@ -5109,6 +5276,24 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_final_checks_match')}`/"
             f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready')}`/"
             f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready')}`"
+        ),
+        (
+            "- Release-quality publication final evidence: "
+            "matrix "
+            f"`{summary.get('matrix_release_decision_release_quality_publication_guard_final_evidence_ready')}`/"
+            f"`{summary.get('matrix_release_decision_release_quality_publication_guard_final_evidence_match')}`/"
+            f"`{summary.get('matrix_release_decision_release_quality_publication_guard_raw_final_evidence_ready')}`/"
+            f"`{summary.get('matrix_release_decision_release_quality_publication_guard_phase2_final_evidence_ready')}`, "
+            "matrix-default "
+            f"`{summary.get('matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready')}`/"
+            f"`{summary.get('matrix_default_promotion_release_decision_release_quality_publication_guard_final_evidence_match')}`/"
+            f"`{summary.get('matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready')}`/"
+            f"`{summary.get('matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_final_evidence_ready')}`/"
+            f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_final_evidence_match')}`/"
+            f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_raw_final_evidence_ready')}`/"
+            f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_phase2_final_evidence_ready')}`"
         ),
         (
             "- Resident fastpath release handoff: "

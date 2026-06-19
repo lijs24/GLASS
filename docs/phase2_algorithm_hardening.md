@@ -6958,6 +6958,29 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 387: Windows Publish Preflight Final Evidence Guard
+
+- Carry Gate386 Windows release-matrix final release quality evidence into
+  `glass windows-publish-preflight`.
+- Preserve legacy compatibility when release-matrix and default-promotion
+  artifacts omit final-evidence fields on both raw and Phase2 sides, while
+  requiring ready/match/raw/Phase2 final evidence to pass once present.
+- Block local Windows publication readiness when direct matrix final evidence
+  fails, matrix default-promotion final evidence fails, standalone
+  default-promotion final evidence fails, or the standalone default-promotion
+  manifest drops final-evidence fields carried by the matrix.
+- Surface final evidence readiness, match status, raw fields, and Phase2 fields
+  in publish-preflight JSON summary, check evidence, and Markdown.
+- Add focused tests for green evidence surfacing, compatible-missing final
+  evidence, legacy absent final evidence, failed direct matrix evidence, lost
+  matrix Phase2 evidence, failed default-promotion evidence, and lost
+  standalone default-promotion evidence.
+- Keep this gate Windows publish-preflight scoped: no quality metric math
+  change, no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
