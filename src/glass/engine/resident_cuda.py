@@ -1538,7 +1538,7 @@ def _resident_source_dq_sidecars_from_calibration_artifacts(
                     continue
                 sidecar = Path(str(dq_mask_path))
                 if not sidecar.is_absolute():
-                    sidecar = artifact_path.parent / sidecar
+                    sidecar = sidecar if sidecar.exists() else artifact_path.parent / sidecar
                 frame_key = str(frame_id)
                 if frame_key not in sidecars:
                     sidecars[frame_key] = {

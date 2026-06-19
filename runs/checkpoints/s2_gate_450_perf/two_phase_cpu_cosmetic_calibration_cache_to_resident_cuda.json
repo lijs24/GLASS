@@ -1,0 +1,132 @@
+{
+  "calibration_hot_cosmetic_correction": {
+    "cold_pixels": 0,
+    "cold_sigma": 8.0,
+    "enabled": true,
+    "hot_pixels": 1,
+    "hot_sigma": 2.0
+  },
+  "calibration_hot_dq_summary": {
+    "cosmetic_corrected": 1,
+    "hot_pixel": 1,
+    "valid": 1023
+  },
+  "calibration_hot_rows": 1,
+  "clean_room": "GLASS-generated FITS fixtures and GLASS two-phase CPU calibration/resident CUDA artifacts only; no external implementation source inspected.",
+  "cpu_calibration_elapsed_s": 0.2379052999895066,
+  "device": {
+    "available_to_glass": true,
+    "compute_capability": "12.0",
+    "device_id": 0,
+    "memory_total_mib": 97886,
+    "multi_processor_count": 188,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "native_backend": true
+  },
+  "frame_count": 2,
+  "gate": "S2-Gate450",
+  "hot_pixel_coord": [
+    9,
+    11
+  ],
+  "hot_pixel_master": 100.0,
+  "hot_pixel_weight": 1.0,
+  "master_max_abs": 0.0,
+  "master_mean_abs": 0.0,
+  "resident_run_elapsed_s": 0.13067470001988113,
+  "resident_timing_s": {
+    "gc": 0.005277599993860349,
+    "light_calibrate_store": 0.00016697600483894348,
+    "light_calibration_batch_native_total": 0.0003392,
+    "light_calibration_batch_stream_h2d_calibrate_store": 0.00016697600483894348,
+    "light_calibration_batch_sync": 5.92e-05,
+    "light_fits_materialize_decode": 0.0014466999855358154,
+    "light_fits_materialize_decode_worker_cumulative": 0.0014466999855358154,
+    "light_fits_native_decode": 0.0,
+    "light_fits_native_file_read": 0.0,
+    "light_fits_native_total": 0.0,
+    "light_fits_open": 0.000668799999402836,
+    "light_fits_open_worker_cumulative": 0.000668799999402836,
+    "light_h2d": 0.0,
+    "light_h2d_calibrate_store": 0.009842700004810467,
+    "light_host_copy_to_pinned": 0.0,
+    "light_loop_unaccounted": 0.006679700018139556,
+    "light_read_decode": 6.299989763647318e-06,
+    "light_read_decode_worker": 0.0021167999948374927,
+    "light_read_overlap_saved": 0.0021105000050738454,
+    "light_read_upload_calibrate": 0.02180630000657402,
+    "light_read_wait_wall": 6.299989763647318e-06,
+    "light_read_worker_cumulative": 0.0021167999948374927,
+    "master_build_or_load": 0.004574799997499213,
+    "output_write": 0.0034786000032909214,
+    "per_frame_calibrate_store_mean": 8.348800241947174e-05,
+    "per_frame_fits_materialize_decode_mean": 0.0007233499927679077,
+    "per_frame_fits_open_mean": 0.000334399999701418,
+    "per_frame_h2d_calibrate_store_mean": 0.004921350002405234,
+    "per_frame_h2d_mean": 0.0,
+    "per_frame_host_copy_to_pinned_mean": 0.0,
+    "per_frame_max": 0.020544200000585988,
+    "per_frame_mean": 0.015610250004101545,
+    "per_frame_min": 0.010676300007617101,
+    "per_frame_read_decode_mean": 3.149994881823659e-06,
+    "per_frame_read_decode_worker_mean": 0.0010583999974187464,
+    "per_frame_registration_mean": 0.0,
+    "registration_preview_setup": 8.709999383427203e-05,
+    "resident_allocate_and_master_upload": 0.042311099998187274,
+    "resident_fused_matrix_integration_native": 0.0,
+    "resident_hardened_winsorized_native": 0.0,
+    "resident_integration": 0.00013169998419471085,
+    "resident_local_normalization": 5.00003807246685e-07,
+    "resident_registration_component_accounted": 0.0,
+    "resident_registration_orchestration": 0.0,
+    "resident_registration_warp": 0.0,
+    "resident_registration_warp_deferred": 0.0,
+    "resident_registration_warp_during_load": 0.0,
+    "resident_weighting": 6.86999992467463e-05
+  },
+  "shape": {
+    "height": 32,
+    "width": 32
+  },
+  "source_dq_calibration_artifact_index": {
+    "available": true,
+    "candidate_count": 2,
+    "checked": [
+      {
+        "calibrated_light_count": 2,
+        "exists": true,
+        "path": "runs\\checkpoints\\s2_gate_450_perf\\work\\r\\calibration_artifacts.json",
+        "sidecar_count": 2
+      },
+      {
+        "exists": false,
+        "path": "runs\\checkpoints\\s2_gate_450_perf\\work\\calibration_artifacts.json"
+      }
+    ],
+    "schema_version": 1,
+    "sidecar_frame_count": 2,
+    "source_model": "calibration_artifacts_dq_sidecar_index"
+  },
+  "source_dq_summary": {
+    "applied_frame_count": 1,
+    "input_flagged_samples": 1,
+    "input_invalid_samples_before_rejection": 1,
+    "passed": true,
+    "sidecar_artifact_path_count": 1,
+    "sidecar_source_counts": {
+      "calibration_artifacts": 2
+    },
+    "source_dq_flag_counts": {
+      "cosmetic_corrected": 1,
+      "hot_pixel": 1
+    },
+    "status_counts": {
+      "applied": 1,
+      "no_invalid_samples": 1
+    }
+  },
+  "total_elapsed_s": 0.4499072000035085,
+  "validation": "two_phase_cpu_cosmetic_calibration_cache_to_resident_cuda",
+  "weight_max_abs": 0.0,
+  "weight_mean_abs": 0.0
+}
