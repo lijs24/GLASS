@@ -1,0 +1,31 @@
+{
+  "artifact_type": "s2_gate_375_fixture_index",
+  "cases": [
+    {
+      "expected_passed": true,
+      "name": "ready",
+      "preflight": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_375_fixtures\\ready\\windows_publish_preflight.json"
+    },
+    {
+      "expected_passed": true,
+      "name": "compatible_missing_release_quality_policy_guard",
+      "preflight": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_375_fixtures\\compatible_missing_release_quality_policy_guard\\windows_publish_preflight.json"
+    },
+    {
+      "expected_passed": false,
+      "name": "failed_matrix_release_quality_policy_guard",
+      "preflight": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_375_fixtures\\failed_matrix_release_quality_policy_guard\\windows_publish_preflight.json"
+    },
+    {
+      "expected_passed": false,
+      "name": "failed_default_release_quality_policy_guard",
+      "preflight": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_375_fixtures\\failed_default_release_quality_policy_guard\\windows_publish_preflight.json"
+    },
+    {
+      "expected_passed": false,
+      "name": "matrix_default_release_quality_policy_mismatch",
+      "preflight": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_375_fixtures\\matrix_default_release_quality_policy_mismatch\\windows_publish_preflight.json"
+    }
+  ],
+  "schema_version": 1
+}

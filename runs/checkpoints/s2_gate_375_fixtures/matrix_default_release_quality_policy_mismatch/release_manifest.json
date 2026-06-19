@@ -1,0 +1,30 @@
+{
+  "artifact_type": "windows_release_manifest",
+  "packages": [
+    {
+      "label": "cuda13",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+      "size_bytes": 101,
+      "source_stamp": "abc1234",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_375_fixtures\\matrix_default_release_quality_policy_mismatch\\cuda13.zip"
+    },
+    {
+      "label": "cpu",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+      "size_bytes": 102,
+      "source_stamp": "abc1234",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_375_fixtures\\matrix_default_release_quality_policy_mismatch\\cpu.zip"
+    }
+  ],
+  "passed": true,
+  "schema_version": 1,
+  "source_stamps": [
+    "abc1234"
+  ],
+  "status": "release_manifest_ready",
+  "windows_release_matrix": {
+    "passed": true,
+    "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_375_fixtures\\matrix_default_release_quality_policy_mismatch\\windows_release_matrix.json",
+    "status": "release_matrix_ready"
+  }
+}
