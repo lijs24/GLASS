@@ -1709,6 +1709,7 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     ) == 0
 
     route = read_json(run / "resident_source_dq_cache_route.json")
+    strategy = read_json(run / "resident_source_dq_strategy.json")
     timing = read_json(run / "run_timing.json")
     state = read_json(run / "run_state.json")
     integration = read_json(run / "integration_results.json")
@@ -1723,6 +1724,9 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     assert route["preflight"]["passed"] is True
     assert route["preflight"]["ready_light_frame_count"] == 2
     assert route["preflight"]["estimated_output_bytes"] > 0
+    assert strategy["recommended_route"] == "generate_calibration_cache_allowed"
+    assert strategy["resident_mask_streaming"]["strategy"] == "stream_invalid_mask_to_resident_stack"
+    assert strategy["resident_mask_streaming"]["estimated_batch_bytes"] > 0
     assert route["status"] == "ready"
     assert route["calibrated_light_count"] == 2
     assert route["dq_sidecar_count"] == 2
@@ -1738,6 +1742,7 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
         "resident_calibration_integration",
     ]
     assert "resident_source_dq_cache_calibration" in state["completed_stages"]
+    assert any(item["stage"] == "resident_source_dq_strategy" for item in state["artifacts"])
     assert any(item["stage"] == "resident_source_dq_cache" for item in state["artifacts"])
     assert master[4, 5] == pytest.approx(100.0)
     assert weight[4, 5] == pytest.approx(1.0)
@@ -1769,10 +1774,12 @@ def test_resident_source_dq_cache_preflight_blocks_oversized_cache(tmp_path: Pat
 
     assert preflight["passed"] is False
     assert preflight["reason"] == "estimated_cache_exceeds_disk_budget"
+    assert preflight["recommended_route"] == "resident_in_vram_mask_streaming"
     assert preflight["ready_light_frame_count"] == 2
     assert preflight["estimated_output_bytes"] > preflight["max_allowed_bytes"]
     assert preflight["calibrated_bytes_per_pixel"] == 4
     assert preflight["dq_bytes_per_pixel"] == 2
+    assert preflight["resident_mask_streaming"]["estimated_batch_bytes"] > 0
 
 
 def test_resident_source_dq_cache_preflight_uses_parent_for_missing_run_dir(tmp_path: Path):

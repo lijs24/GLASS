@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import platform
-import shutil
 import subprocess
 import sys
 from time import perf_counter
@@ -21,6 +20,7 @@ from glass.engine.quality import measure_calibrated_quality
 from glass.engine.registration import register_calibrated_frames
 from glass.engine.resident_calibration_artifacts import build_resident_calibration_artifacts
 from glass.engine.resident_cuda import run_resident_calibration_integration
+from glass.engine.resident_source_dq_strategy import build_resident_source_dq_strategy
 from glass.engine.warp import warp_registered_frames
 from glass.engine.resume import resume_summary
 from glass.engine.state import write_run_state
@@ -588,13 +588,6 @@ def _resolve_route_sidecar_path(path: str | Path, *, artifact_root: Path) -> Pat
     return candidate if candidate.exists() else artifact_root / candidate
 
 
-def _existing_disk_usage_path(path: Path) -> Path:
-    candidate = path
-    while not candidate.exists() and candidate != candidate.parent:
-        candidate = candidate.parent
-    return candidate if candidate.exists() else Path.cwd()
-
-
 def _resident_source_dq_cache_preflight(
     plan_path: str | Path,
     run: Path,
@@ -602,62 +595,38 @@ def _resident_source_dq_cache_preflight(
     max_disk_fraction: float = 0.75,
     free_bytes: int | None = None,
 ) -> dict[str, Any]:
-    plan = read_json(plan_path)
-    frames = {
-        str(frame.get("id")): frame
-        for frame in plan.get("frames", [])
-        if isinstance(frame, dict) and frame.get("id") is not None
-    }
-    ready_frame_ids: list[str] = []
-    for light_plan in plan.get("light_plans", []):
-        if not isinstance(light_plan, dict) or light_plan.get("calibration_status") != "ready":
-            continue
-        ready_frame_ids.extend(str(frame_id) for frame_id in light_plan.get("frames", []))
-    calibrated_bytes_per_pixel = 4
-    dq_bytes_per_pixel = 2
-    bytes_per_pixel = calibrated_bytes_per_pixel + dq_bytes_per_pixel
-    estimated_payload_bytes = 0
-    unknown_shape_frame_ids: list[str] = []
-    for frame_id in ready_frame_ids:
-        frame = frames.get(frame_id)
-        width = None if frame is None else frame.get("width")
-        height = None if frame is None else frame.get("height")
-        if not isinstance(width, int) or not isinstance(height, int) or width <= 0 or height <= 0:
-            unknown_shape_frame_ids.append(frame_id)
-            continue
-        estimated_payload_bytes += int(width) * int(height) * bytes_per_pixel
-    estimated_output_bytes = int(estimated_payload_bytes * 1.05)
-    disk_usage_path = _existing_disk_usage_path(run)
-    if free_bytes is None:
-        free_bytes = int(shutil.disk_usage(disk_usage_path).free)
-    max_allowed_bytes = int(max(0.0, min(1.0, max_disk_fraction)) * free_bytes)
-    passed = not unknown_shape_frame_ids and estimated_output_bytes <= max_allowed_bytes
-    reason = "ok"
-    if unknown_shape_frame_ids:
-        reason = "unknown_light_shapes"
-    elif estimated_output_bytes > max_allowed_bytes:
-        reason = "estimated_cache_exceeds_disk_budget"
-    return {
-        "schema_version": 1,
-        "artifact_type": "resident_source_dq_cache_preflight",
-        "created_at": now_iso(),
-        "passed": passed,
-        "reason": reason,
-        "run_dir": str(run),
-        "disk_usage_path": str(disk_usage_path),
-        "plan_path": str(plan_path),
-        "ready_light_frame_count": len(ready_frame_ids),
-        "unknown_shape_frame_count": len(unknown_shape_frame_ids),
-        "unknown_shape_frame_ids": unknown_shape_frame_ids[:20],
-        "estimated_payload_bytes": estimated_payload_bytes,
-        "estimated_output_bytes": estimated_output_bytes,
-        "calibrated_bytes_per_pixel": calibrated_bytes_per_pixel,
-        "dq_bytes_per_pixel": dq_bytes_per_pixel,
-        "safety_multiplier": 1.05,
-        "free_bytes": free_bytes,
-        "max_disk_fraction": max_disk_fraction,
-        "max_allowed_bytes": max_allowed_bytes,
-    }
+    return build_resident_source_dq_strategy(
+        plan_path,
+        run,
+        max_disk_fraction=max_disk_fraction,
+        free_bytes=free_bytes,
+        artifact_type="resident_source_dq_cache_preflight",
+    )
+
+
+def _resident_source_dq_strategy_path(run: Path) -> Path:
+    return run / "resident_source_dq_strategy.json"
+
+
+def _write_resident_source_dq_strategy(
+    run: Path,
+    args: argparse.Namespace,
+    *,
+    plan_path: str | Path | None = None,
+) -> Path:
+    memory_budget_bytes = None
+    if getattr(args, "vram_budget_gb", None) is not None:
+        memory_budget_bytes = int(float(args.vram_budget_gb) * (1024**3))
+    strategy = build_resident_source_dq_strategy(
+        plan_path or args.plan,
+        run,
+        max_disk_fraction=getattr(args, "resident_source_dq_cache_max_disk_fraction", 0.75),
+        resident_mask_batch_frames=max(1, int(getattr(args, "resident_calibration_batch_frames", 1) or 1)),
+        resident_memory_budget_bytes=memory_budget_bytes,
+    )
+    strategy_path = _resident_source_dq_strategy_path(run)
+    write_json(strategy_path, strategy)
+    return strategy_path
 
 
 def _write_resident_source_dq_cache_route(run: Path, args: argparse.Namespace) -> Path:
@@ -1317,6 +1286,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         out = Path(args.out)
         timing = _new_timing("run", args.backend, None)
         _annotate_timing_execution_defaults(timing, args)
+        source_dq_strategy_path = _write_resident_source_dq_strategy(out, args)
         source_dq_cache_route_path: Path | None = None
         if args.resident_source_dq_cache == "generate-calibration":
             preflight = _resident_source_dq_cache_preflight(
@@ -1430,6 +1400,15 @@ def cmd_run(args: argparse.Namespace) -> int:
                     source_frames=[],
                 )
             )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_source_dq_strategy",
+                path=str(source_dq_strategy_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=[],
+            )
+        )
         write_run_state(args.out, state)
         console.print(f"Resident CUDA run complete through {state.current_stage}: {args.out}")
         return 0

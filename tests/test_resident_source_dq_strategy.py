@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from glass.engine.resident_source_dq_strategy import build_resident_source_dq_strategy
+
+
+def _plan(width: int | None = 10, height: int | None = 5) -> dict[str, object]:
+    frame: dict[str, object] = {
+        "id": "L001",
+        "frame_type": "light",
+        "filter": "H",
+    }
+    if width is not None:
+        frame["width"] = width
+    if height is not None:
+        frame["height"] = height
+    return {
+        "frames": [frame],
+        "light_plans": [
+            {
+                "filter": "H",
+                "frames": ["L001"],
+                "calibration_status": "ready",
+            }
+        ],
+    }
+
+
+def test_resident_source_dq_strategy_allows_small_disk_cache(tmp_path: Path) -> None:
+    strategy = build_resident_source_dq_strategy(
+        _plan(),
+        tmp_path / "run",
+        free_bytes=10_000,
+        max_disk_fraction=0.75,
+        resident_mask_batch_frames=3,
+        resident_memory_budget_bytes=1_000,
+    )
+
+    assert strategy["passed"] is True
+    assert strategy["recommended_route"] == "generate_calibration_cache_allowed"
+    assert strategy["estimated_output_bytes"] == 315
+    assert strategy["disk_cache"]["max_allowed_bytes"] == 7_500
+    assert strategy["resident_mask_streaming"]["estimated_batch_bytes"] == 150
+    assert strategy["resident_mask_streaming"]["fits_memory_budget"] is True
+
+
+def test_resident_source_dq_strategy_recommends_resident_streaming_when_cache_is_too_large(
+    tmp_path: Path,
+) -> None:
+    strategy = build_resident_source_dq_strategy(
+        _plan(width=100, height=100),
+        tmp_path / "missing" / "run",
+        free_bytes=1_000,
+        max_disk_fraction=0.5,
+        resident_mask_batch_frames=2,
+        resident_memory_budget_bytes=50_000,
+    )
+
+    assert strategy["passed"] is False
+    assert strategy["reason"] == "estimated_cache_exceeds_disk_budget"
+    assert strategy["recommended_route"] == "resident_in_vram_mask_streaming"
+    assert strategy["disk_usage_path"] == str(tmp_path)
+    assert strategy["resident_mask_streaming"]["estimated_batch_bytes"] == 20_000
+    assert strategy["resident_mask_streaming"]["fits_memory_budget"] is True
+
+
+def test_resident_source_dq_strategy_blocks_unknown_shapes(tmp_path: Path) -> None:
+    strategy = build_resident_source_dq_strategy(
+        _plan(width=None, height=5),
+        tmp_path / "run",
+        free_bytes=1_000_000,
+    )
+
+    assert strategy["passed"] is False
+    assert strategy["reason"] == "unknown_light_shapes"
+    assert strategy["recommended_route"] == "blocked_unknown_shape"
+    assert strategy["unknown_shape_frame_ids"] == ["L001"]

@@ -9024,6 +9024,43 @@ Completed in Gate446:
   - `runs/checkpoints/s2_gate_452_real_regression_summary.json`;
   - `runs/checkpoints/s2_gate_452_status.md`.
 
+### S2-Gate 453: Resident Source-DQ Strategy Artifact
+
+- Turn the Gate452 source-DQ cache preflight into a resident runtime strategy
+  artifact instead of a one-off cache guard.
+- Required work:
+  - estimate both the on-disk calibrated+DQ cache size and the resident
+    in-memory invalid-mask streaming size from plan metadata only;
+  - write `resident_source_dq_strategy.json` for resident CUDA runs, even when
+    the explicit cache-generation route is off;
+  - keep `resident_source_dq_cache_preflight.json` compatible with Gate452 but
+    include the resident in-memory recommendation;
+  - register the strategy artifact in `run_state.json`;
+  - prove with synthetic tests that small cache routes remain allowed, oversized
+    cache routes recommend resident in-memory mask streaming, and unknown shapes
+    block cache planning;
+  - generate a real 200-light metadata-only strategy artifact to confirm the
+    next DQ/mask direction remains resident/in-VRAM rather than large
+    calibrated+DQ cache materialization.
+- Completed in S2-Gate453:
+  - added `glass.engine.resident_source_dq_strategy` as the shared estimator
+    for resident source-DQ cache and in-memory mask streaming decisions;
+  - resident CUDA `glass run` now writes
+    `resident_source_dq_strategy.json` and records it as a
+    `resident_source_dq_strategy` pipeline artifact;
+  - the existing `--resident-source-dq-cache generate-calibration` preflight now
+    uses the same strategy model and reports `recommended_route`;
+  - focused synthetic tests prove that an oversized cache recommends
+    `resident_in_vram_mask_streaming`, while a small cache still recommends
+    `generate_calibration_cache_allowed`;
+  - real 200-light metadata-only strategy estimated calibrated+DQ cache output
+    at `77.680512 GB`, blocked it under the current disk budget, and estimated
+    an 8-frame resident invalid-mask streaming batch at `493.2096 MB`, fitting
+    inside a `96 GB` VRAM budget.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_453_real_source_dq_strategy.json`;
+  - `runs/checkpoints/s2_gate_453_status.md`.
+
 ## Gate Rules
 
 Each gate requires:
