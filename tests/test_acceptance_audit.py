@@ -9,6 +9,7 @@ from glass.cli import main
 from glass.engine.contracts import DQFlag
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
+from glass.report.dq_contract_profile import resident_dq_provenance_contract
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit_markdown
 
 
@@ -400,38 +401,11 @@ def _write_resident_registration_fastpath_artifact(
 
 def _add_dq_contract(path: Path) -> None:
     payload = read_json(path)
-    payload["dq_provenance"] = {
-        "required": True,
-        "min_records": 1,
-        "required_source_schemas": ["resident_dq_coverage_provenance"],
-        "required_engines": ["cuda_resident_stack"],
-        "min_active_frame_count": 190,
-        "require_dq_map_path": True,
-        "require_existing_dq_map": True,
-        "require_coverage_map_path": True,
-        "required_summary_fields": ["zero_coverage_pixels", "partial_coverage_pixels"],
-        "required_output_dq_flags": ["valid", "warp_edge", "low_rejected", "high_rejected"],
-        "verify_dq_map_pixels": True,
-        "dq_map_verify_tile_size": 2,
-        "dq_map_summary_tolerance_pixels": 0,
-        "dq_map_summary_match_flags": ["valid", "warp_edge", "low_rejected", "high_rejected"],
-        "verify_output_count_maps": True,
-        "count_map_verify_tile_size": 2,
-        "coverage_map_finite_pixels_match_provenance": True,
-        "coverage_zero_pixels_match_no_data": True,
-        "allow_missing_rejection_maps_if_skipped": True,
-        "rejection_map_sum_matches_provenance": True,
-        "required_resident_artifact_map_paths": [
-            "master",
-            "weight",
-            "coverage",
-            "dq",
-            "low_rejection",
-            "high_rejection",
-        ],
-        "positive_output_dq_flags": ["valid", "warp_edge"],
-        "required_source_terms": ["geometric_warp_coverage"],
-    }
+    payload["dq_provenance"] = resident_dq_provenance_contract(
+        min_active_frame_count=190,
+        dq_map_verify_tile_size=2,
+        count_map_verify_tile_size=2,
+    )
     write_json(path, payload)
 
 

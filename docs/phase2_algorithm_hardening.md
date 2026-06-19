@@ -7212,6 +7212,20 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 401: Resident DQ Provenance Contract Profile
+
+- Add a shared resident CUDA DQ provenance benchmark-contract profile for
+  coverage, DQ, low-rejection, high-rejection, and resident artifact map paths.
+- Move acceptance-audit DQ contract setup onto the shared profile while
+  preserving existing field names, thresholds, and pass/fail semantics.
+- Validate profile defaults, override parameters, independent mutable lists, and
+  acceptance-audit DQ provenance checks with focused tests.
+- Keep this gate report-contract scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no runtime default change, no package upload,
+  no GitHub release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
