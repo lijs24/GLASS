@@ -83,6 +83,27 @@ def test_release_quality_final_evidence_detail_blocks_explicit_false():
     assert evidence["final_evidence_detail_ready"] is False
 
 
+def test_release_quality_final_evidence_detail_strict_mode_blocks_partial_layers():
+    evidence = _ready_detail_evidence()
+    evidence["raw_matrix_raw_final_evidence_ready"] = None
+
+    assert ensure_final_evidence_detail_ready(
+        evidence,
+        allow_partial_layer_ready=False,
+    ) is False
+
+    assert final_evidence_detail_prefix_ready(
+        evidence,
+        prefix="raw_matrix",
+        allow_partial_layer_ready=True,
+    ) is True
+    assert final_evidence_detail_prefix_ready(
+        evidence,
+        prefix="raw_matrix",
+        allow_partial_layer_ready=False,
+    ) is False
+
+
 def test_release_quality_final_evidence_detail_honors_existing_false_summary():
     evidence = _ready_detail_evidence()
     evidence["final_evidence_detail_ready"] = False

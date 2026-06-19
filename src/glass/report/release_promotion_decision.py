@@ -5,6 +5,9 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.release_quality_evidence import (
+    ensure_final_evidence_detail_ready as _release_quality_final_evidence_detail_ready,
+)
 
 
 def _read_json_object(path: str | Path | None) -> dict[str, Any]:
@@ -947,21 +950,6 @@ def _publication_release_quality_legacy_final_evidence_prefix_ready(
     )
 
 
-def _publication_release_quality_final_evidence_detail_prefix_ready(
-    layer: dict[str, Any],
-    *,
-    prefix: str,
-) -> bool:
-    return _publication_release_quality_final_evidence_prefix_ready(
-        layer,
-        prefix=prefix,
-        ready_suffix="final_evidence_ready",
-        match_suffix="final_evidence_match",
-        raw_ready_suffix="raw_final_evidence_ready",
-        phase2_ready_suffix="phase2_final_evidence_ready",
-    )
-
-
 def _publication_release_quality_legacy_final_evidence_ready(
     layer: dict[str, Any],
 ) -> bool:
@@ -977,12 +965,17 @@ def _publication_release_quality_legacy_final_evidence_ready(
 def _publication_release_quality_final_evidence_detail_ready(
     layer: dict[str, Any],
 ) -> bool:
-    return _publication_release_quality_final_evidence_detail_present(layer) and all(
-        _publication_release_quality_final_evidence_detail_prefix_ready(
-            layer,
-            prefix=prefix,
-        )
-        for prefix in _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_PREFIXES
+    if not _publication_release_quality_final_evidence_detail_present(layer):
+        return False
+    detail_evidence = {
+        field: layer.get(field)
+        for field in _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS
+    }
+    return _release_quality_final_evidence_detail_ready(
+        detail_evidence,
+        detail_fields=_PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS,
+        prefixes=_PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_PREFIXES,
+        allow_partial_layer_ready=False,
     )
 
 

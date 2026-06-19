@@ -7152,6 +7152,22 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 397: Release Promotion Shared Evidence Readiness
+
+- Add strict paired-layer readiness support to the shared release-quality
+  final-evidence helper so release-promotion can preserve its existing
+  raw/Phase2 detail semantics.
+- Move release-promotion final-evidence detail readiness onto the shared helper
+  while leaving legacy `final_checks_*` compatibility logic local and
+  unchanged.
+- Validate with focused release-promotion and shared-helper tests, including
+  strict-mode partial raw/Phase2 blocking.
+- Keep this gate release-promotion report-contract scoped: no quality metric
+  math change, no default quality threshold, no star detector algorithm change,
+  no registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

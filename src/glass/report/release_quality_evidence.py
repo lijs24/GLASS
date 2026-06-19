@@ -89,6 +89,7 @@ def final_evidence_detail_prefix_ready(
     evidence: dict[str, Any],
     *,
     prefix: str,
+    allow_partial_layer_ready: bool = True,
 ) -> bool:
     final_ready = evidence.get(f"{prefix}_final_evidence_ready")
     final_match = evidence.get(f"{prefix}_final_evidence_match")
@@ -101,6 +102,15 @@ def final_evidence_detail_prefix_ready(
         and phase2_ready is None
     ):
         return False
+    if not allow_partial_layer_ready:
+        return (
+            final_ready is True
+            and final_match is True
+            and (
+                (raw_ready is None and phase2_ready is None)
+                or (raw_ready is True and phase2_ready is True)
+            )
+        )
     return (
         final_ready is True
         and final_match is True
@@ -114,6 +124,7 @@ def ensure_final_evidence_detail_ready(
     *,
     detail_fields: tuple[str, ...] = FINAL_EVIDENCE_DETAIL_FIELDS,
     prefixes: tuple[str, ...] = FINAL_EVIDENCE_DETAIL_PREFIXES,
+    allow_partial_layer_ready: bool = True,
 ) -> bool:
     detail_fields_present = any(evidence.get(field) is not None for field in detail_fields)
     if evidence.get("final_evidence_detail_fields_present") is None:
@@ -123,7 +134,12 @@ def ensure_final_evidence_detail_ready(
         evidence["final_evidence_detail_ready"] = True
         return True
     ready = all(
-        final_evidence_detail_prefix_ready(evidence, prefix=prefix) for prefix in prefixes
+        final_evidence_detail_prefix_ready(
+            evidence,
+            prefix=prefix,
+            allow_partial_layer_ready=allow_partial_layer_ready,
+        )
+        for prefix in prefixes
     )
     if evidence.get("final_evidence_detail_ready") is not None:
         ready = ready and evidence.get("final_evidence_detail_ready") is True
