@@ -10248,6 +10248,62 @@ Completed in Gate446:
     must remain an explicit candidate until interpolation policy and
     candidate-vs-baseline tolerances are settled.
 
+### S2-Gate 477: Resident I/O Preset Probe
+
+- Follow up the Gate476 bottleneck analysis with a real-data I/O/calibration
+  scheduling probe, without changing the default resident path.
+- Required work:
+  - keep `throughput-v1` as the default parity preset;
+  - try deeper prefetch and wider calibration wave settings on the same
+    200-light M38 H-alpha dataset;
+  - add only an opt-in preset if the probe shows a plausible scheduling
+    direction;
+  - verify the new preset does not change the integrated master.
+- Completed in S2-Gate477:
+  - added opt-in `--resident-runtime-preset throughput-v3-io`;
+  - v3 knobs:
+    - `resident_prefetch_frames=32`;
+    - `resident_prefetch_workers=12`;
+    - `resident_prefetch_refill_mode=queued`;
+    - `resident_h2d_mode=pinned_ring`;
+    - `resident_calibration_batch_frames=16`;
+    - `resident_calibration_streams=4`;
+    - `resident_calibration_wave_frames=4`;
+    - `resident_calibration_release_mode=callback_queue`;
+  - ran two explicit real-data probes plus one preset validation run;
+  - compared the v3 preset master against the Gate476 Lanczos3 baseline.
+- Real probe summary:
+  - Gate476 `throughput-v1`: total `30.953057600010652 s`,
+    light read/upload/calibrate `14.113322600023821 s`;
+  - explicit `prefetch24_workers10`: total `30.18374159996165 s`,
+    light read/upload/calibrate `13.259199200023431 s`;
+  - explicit `prefetch32_workers12_wave4`: total `30.14285220002057 s`,
+    light read/upload/calibrate `13.133229200029746 s`;
+  - `throughput-v3-io` preset repeat: total `30.96547570003895 s`,
+    light read/upload/calibrate `13.745235500042327 s`.
+- Numerical result:
+  - v3 preset vs Gate476 baseline shape match: `true`;
+  - coverage fraction: `0.960532609259836`;
+  - RMS difference: `0.0`;
+  - p99 absolute difference: `0.0`;
+  - max absolute difference: `0.0`.
+- Performance interpretation:
+  - deeper prefetch reduced light-pipeline wall time in one probe, but the v3
+    preset repeat was neutral versus Gate476 total elapsed time;
+  - v3 therefore remains experimental/opt-in and is not promoted to default;
+  - the evidence suggests future work should reduce native FITS read cost or
+    Python orchestration around the resident light loop, not merely increase
+    prefetch depth indefinitely.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_477_io_probe_summary.json`;
+  - `runs/checkpoints/s2_gate_477_status.md`;
+  - real run outputs under
+    `C:\glass_runs\phase2_s2_gate477_io_probe`.
+- Known limitation:
+  - this is a small probe, not a statistically repeated benchmark suite. The
+    new preset is deliberately opt-in and should only be considered for default
+    promotion after repeat runs show a stable gain.
+
 ## Gate Rules
 
 Each gate requires:

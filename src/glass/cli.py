@@ -315,6 +315,16 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_release_mode": "callback_queue",
         "resident_integration_dispatch": "auto",
     },
+    "throughput-v3-io": {
+        "resident_prefetch_frames": 32,
+        "resident_prefetch_workers": 12,
+        "resident_prefetch_refill_mode": "queued",
+        "resident_h2d_mode": "pinned_ring",
+        "resident_calibration_batch_frames": 16,
+        "resident_calibration_streams": 4,
+        "resident_calibration_wave_frames": 4,
+        "resident_calibration_release_mode": "callback_queue",
+    },
 }
 DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v1"
 DEFAULT_MEMORY_MODE = "resident"

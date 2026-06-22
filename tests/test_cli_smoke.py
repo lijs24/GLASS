@@ -99,6 +99,33 @@ def test_resident_runtime_preset_throughput_v2_fused_applies_auto_dispatch() -> 
     assert args._resident_runtime_preset_effective["applied"]["resident_integration_dispatch"] == "auto"
 
 
+def test_resident_runtime_preset_throughput_v3_io_applies_probe_values() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "throughput-v3-io",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_prefetch_frames == 32
+    assert args.resident_prefetch_workers == 12
+    assert args.resident_prefetch_refill_mode == "queued"
+    assert args.resident_h2d_mode == "pinned_ring"
+    assert args.resident_calibration_batch_frames == 16
+    assert args.resident_calibration_streams == 4
+    assert args.resident_calibration_wave_frames == 4
+    assert args.resident_calibration_release_mode == "callback_queue"
+    assert args.resident_integration_dispatch == "stack"
+    assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
+
+
 def test_resident_runtime_preset_defaults_to_throughput_v1() -> None:
     args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
 
