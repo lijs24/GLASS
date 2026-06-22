@@ -1,0 +1,46 @@
+{
+    "gate":  "S2-Gate514",
+    "objective":  "Current default real 200-light GLASS vs WBPP A/B cold-start audit-map validation",
+    "run_root":  "C:\\glass_runs\\phase2_s2_gate514_real_200_ab\\runs_20260623_071127",
+    "glass_run":  "C:\\glass_runs\\phase2_s2_gate514_real_200_ab\\runs_20260623_071127\\glass_current_cold_audit",
+    "plan_path":  "C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json",
+    "wbpp_result":  "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json",
+    "wbpp_reference_master":  "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf",
+    "glass_internal_elapsed_s":  20.824213800020516,
+    "glass_outer_elapsed_s":  21.205785,
+    "wbpp_elapsed_s":  1092.541,
+    "speedup_vs_wbpp_internal":  52.464933874186578,
+    "speedup_vs_wbpp_outer":  51.520893944741971,
+    "frame_accounting":  {
+                             "light":  200,
+                             "bias":  20,
+                             "dark":  20,
+                             "flat":  20,
+                             "integrated":  193,
+                             "zero_weight":  7
+                         },
+    "compare":  {
+                    "shape_match":  true,
+                    "rms_diff":  0.0017794216505176163,
+                    "abs_diff_p99":  0.00042621337808668863,
+                    "coverage_fraction":  0.960532609259836,
+                    "coverage_max":  193,
+                    "coverage_median":  192
+                },
+    "contracts":  {
+                      "acceptance_status":  "passed",
+                      "resident_calibration_contract":  "passed",
+                      "resident_result_contract":  "passed",
+                      "pipeline_contract":  "passed",
+                      "stack_engine_contract":  "passed"
+                  },
+    "outputs":  {
+                    "master":  "C:\\glass_runs\\phase2_s2_gate514_real_200_ab\\runs_20260623_071127\\glass_current_cold_audit\\integration\\resident_master_H.fits",
+                    "coverage":  "C:\\glass_runs\\phase2_s2_gate514_real_200_ab\\runs_20260623_071127\\glass_current_cold_audit\\integration\\resident_coverage_map_H.fits",
+                    "dq":  "C:\\glass_runs\\phase2_s2_gate514_real_200_ab\\runs_20260623_071127\\glass_current_cold_audit\\integration\\resident_dq_map_H.fits",
+                    "low_rejection":  "C:\\glass_runs\\phase2_s2_gate514_real_200_ab\\runs_20260623_071127\\glass_current_cold_audit\\integration\\resident_low_rejection_map_H.fits",
+                    "high_rejection":  "C:\\glass_runs\\phase2_s2_gate514_real_200_ab\\runs_20260623_071127\\glass_current_cold_audit\\integration\\resident_high_rejection_map_H.fits",
+                    "compare_html":  "C:\\glass_runs\\phase2_s2_gate514_real_200_ab\\runs_20260623_071127\\glass_current_cold_audit\\s2_gate_514_compare_vs_wbpp.html",
+                    "acceptance_md":  "C:\\glass_runs\\phase2_s2_gate514_real_200_ab\\runs_20260623_071127\\glass_current_cold_audit\\phase2_contract_acceptance_audit_s2_gate_514.md"
+                }
+}

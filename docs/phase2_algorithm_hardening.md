@@ -679,6 +679,86 @@ Validation commands:
   master cache, reference frame, Lanczos3 warp, winsorized sigma, and minimal
   output-map policy.
 
+### S2-Gate 514: Current Default 200-Light A/B Audit
+
+Gate 514 returns the work to the real 200-light A/B target after the Gate513
+Lanczos3 semantic fix. It validates the current default CUDA resident stack path
+against the user-generated WBPP black-box reference on the M38 H-alpha benchmark
+with 200 lights, 20 bias, 20 dark, and 20 flats.
+
+Scope:
+
+- ran a cold-start GLASS resident CUDA audit-map stack without a shared
+  `--resident-master-cache-dir`;
+- compared the resulting master against the existing WBPP black-box
+  FastIntegration master with the established scale/offset and coverage>=190
+  region;
+- ran resident calibration, resident result, pipeline, StackEngine, and
+  acceptance contracts on the new output;
+- refreshed `benchmarks/phase2_m38_h_200_audit_maps_contract.json` so its
+  required command tokens match the current default A/B route instead of the
+  older Gate460 hand-tuned parity route.
+
+Real 200-light result:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate514_real_200_ab\runs_20260623_071127`
+- GLASS internal elapsed: `20.824213800020516 s`.
+- Conservative shell elapsed: `21.205785 s`.
+- WBPP black-box elapsed: `1092.541 s`.
+- Speedup vs WBPP:
+  - internal timing: `52.46493387418658x`;
+  - conservative shell timing: `51.52089394474197x`.
+- Frame accounting: `193 / 200` integrated, `7` quality-rejected/zero-weight.
+- Compare against WBPP coverage>=190:
+  - shape match: `true`;
+  - RMS diff: `0.0017794216505176163`;
+  - p99 absolute diff: `0.00042621337808668863`;
+  - coverage fraction: `0.960532609259836`;
+  - coverage max/median: `193` / `192`.
+
+Contract status:
+
+- resident calibration contract: passed;
+- resident result contract with pixel verification: passed;
+- pipeline contract with pixel verification: passed;
+- StackEngine contract: passed and default-promotion ready;
+- acceptance audit: passed after updating the audit-map benchmark contract to
+  the current default route.
+
+Validation commands:
+
+- `glass run --plan C:\gpwbpp_runs\final_m38_h_200\processing_plan.json
+  --backend cuda --memory-mode resident --until-stage integration
+  --local-normalization off --integration-rejection winsorized_sigma
+  --integration-weighting none --flat-floor 0.05 --resident-registration
+  similarity_cuda_triangle --resident-star-threshold 350
+  --resident-star-max-candidates 48 --resident-star-tolerance-px 3
+  --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3
+  --reference-frame-id LIGHT_H_0136 --resident-output-maps audit`
+- `glass compare ... --glass-time-seconds 21.205785
+  --reference-time-seconds 1092.541 --glass-scale
+  8.764434957115609e-06 --glass-offset 0.0006274500691899127
+  --min-coverage 190`
+- `glass resident-calibration-contract ... --fail-on-failed`
+- `glass resident-result-contract ... --pixel-verify --fail-on-failed`
+- `glass pipeline-contract ... --pixel-verify`
+- `glass stack-engine-contract ... --expected-integration-engine
+  cuda_resident_stack`
+- `glass acceptance-audit ... --benchmark-contract
+  benchmarks/phase2_m38_h_200_audit_maps_contract.json`
+- `python -m pytest -q tests/test_acceptance_audit.py tests/test_benchmarks.py`
+- `python -m pytest -q`
+- `glass doctor`
+
+Decision:
+
+- The current default resident CUDA audit route is green on the real 200-light
+  A/B benchmark and remains much faster than WBPP while preserving the
+  established comparison envelope.
+- The next substantive optimization should return to resident registration/warp
+  and I/O/upload/calibration overlap, not additional report-only gates.
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:
