@@ -18,12 +18,15 @@ from glass.cpu.registration import estimate_translation_phase_correlation, trans
 from glass.cpu.master_frames import image_stats
 from glass.engine.contracts import CombinePolicy, DQFlag, DQMask, OutputMapPolicy, RejectionPolicy, StackRequest
 from glass.engine.dq import dq_provenance_summary_from_resident, dq_provenance_summary_from_stack_engine
-from glass.engine.stack_engine import CPUStackEngine
+from glass.engine.stack_contract import build_stack_engine_result_contract
+from glass.engine.stack_engine import CPUStackEngine, StackEngineResult
 from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
     resident_rejection_descriptor,
+    rejection_policy_provenance,
+    rejection_scale_estimator,
 )
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
 from glass.engine.resident_dq_pixel_closure import (
@@ -70,6 +73,7 @@ from glass.io.fits_fast import (
     read_simple_fits_image_native_direct_timed,
     read_simple_fits_image_timed,
     read_simple_fits_u16be_raw_timed,
+    simple_fits_image_spec,
 )
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.image_source import FitsImageSource
@@ -89,7 +93,7 @@ _RESIDENT_WINSORIZED_MODES = {
 }
 _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE = False
 _RESIDENT_MASTER_STACK_TILE_SIZE = 512
-_RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_full_frame_mean_master_cache_v1"
+_RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_resident_cuda_mean_master_cache_v1"
 
 
 def _cuda_module_required():
@@ -3531,12 +3535,232 @@ def _resident_master_rejection_policy(policy: CalibrationPolicy) -> RejectionPol
     )
 
 
-def _stack_resident_master_array_with_engine(
+def _resident_master_stack_request(
+    frame_ids: tuple[str, ...],
+    policy: CalibrationPolicy,
+    *,
+    source_kind: str,
+    metadata: dict[str, Any] | None = None,
+) -> StackRequest:
+    request_metadata = {
+        "stage": "resident_master_cache",
+        "source_kind": source_kind,
+    }
+    if metadata:
+        request_metadata.update(metadata)
+    return StackRequest(
+        frame_ids=frame_ids,
+        source_kind=source_kind,
+        combine=CombinePolicy(method="mean", accumulator_dtype="float64"),
+        rejection=_resident_master_rejection_policy(policy),
+        output_maps=OutputMapPolicy(
+            coverage=False,
+            weight=False,
+            variance=False,
+            low_rejection=False,
+            high_rejection=False,
+            dq=False,
+        ),
+        metadata=request_metadata,
+    )
+
+
+def _resident_master_cuda_mean_available() -> tuple[bool, str]:
+    try:
+        import glass_cuda
+    except Exception as exc:
+        return False, f"glass_cuda_import_failed:{type(exc).__name__}:{exc}"
+    try:
+        if not bool(glass_cuda.cuda_available()):
+            return False, "glass_cuda_unavailable"
+        glass_cuda.get_device_info(0)
+    except Exception as exc:
+        return False, f"glass_cuda_device_unavailable:{type(exc).__name__}:{exc}"
+    if not hasattr(glass_cuda, "ResidentCalibratedStack"):
+        return False, "resident_calibrated_stack_wrapper_unavailable"
+    return True, ""
+
+
+def _stack_engine_mean_no_rejection_provenance(
+    *,
+    input_sample_total: int,
+    input_valid_sample_total: int,
+    input_invalid_sample_total: int,
+    input_nonfinite_sample_total: int,
+    valid_total: int,
+    coverage_zero_pixel_total: int,
+    execution_path: str,
+    rejection: RejectionPolicy,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "input_samples": int(input_sample_total),
+        "input_valid_samples_before_rejection": int(input_valid_sample_total),
+        "input_invalid_samples_before_rejection": int(input_invalid_sample_total),
+        "input_flagged_samples": 0,
+        "input_nonfinite_samples": int(input_nonfinite_sample_total),
+        "input_dq_flag_counts": {flag.name.lower(): 0 for flag in DQFlag if flag != DQFlag.VALID},
+        "valid_samples_after_rejection": int(valid_total),
+        "low_rejected_samples": 0,
+        "high_rejected_samples": 0,
+        "rejected_samples": 0,
+        "rejection_policy": rejection_policy_provenance(rejection),
+        "output_coverage_zero_pixels": int(coverage_zero_pixel_total),
+        "output_low_rejected_pixels": 0,
+        "output_high_rejected_pixels": 0,
+        "output_dq_summary": None,
+        "semantics": (
+            "Resident master-cache mean construction treats non-finite source "
+            "samples as invalid input samples before rejection. The resident CUDA "
+            "mean kernel skips non-finite values and records sample-accounting "
+            "closure through StackEngine-compatible provenance."
+        ),
+        "execution_path": execution_path,
+    }
+
+
+def _stack_resident_master_array_with_resident_cuda_mean(
+    paths: list[Path],
+    policy: CalibrationPolicy,
+    *,
+    source_kind: str,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    if not paths:
+        raise ValueError("cannot stack an empty resident master frame list")
+    import glass_cuda
+
+    specs = [simple_fits_image_spec(path) for path in paths]
+    height, width = specs[0].shape
+    for spec in specs[1:]:
+        if spec.shape != (height, width):
+            raise ValueError(f"resident master {source_kind} shape mismatch: {spec.shape} != {(height, width)}")
+
+    request = _resident_master_stack_request(
+        tuple(f"{source_kind}-{index}" for index in range(len(paths))),
+        policy,
+        source_kind=source_kind,
+        metadata={"resident_cuda_mean_fast_path": True},
+    )
+    total_start = perf_counter()
+    allocate_start = perf_counter()
+    stack = glass_cuda.ResidentCalibratedStack(len(paths), height, width)
+    allocate_s = perf_counter() - allocate_start
+    host_buffer = np.empty((height, width), dtype=np.float32)
+
+    per_frame_read_s: list[float] = []
+    per_frame_upload_s: list[float] = []
+    per_frame_nonfinite: list[int] = []
+    fits_backends: list[str] = []
+    fits_native_file_read_s: list[float] = []
+    fits_native_decode_s: list[float] = []
+    fits_native_total_s: list[float] = []
+    fits_native_bytes_read = 0
+    input_nonfinite_sample_total = 0
+    pixel_count = int(height) * int(width)
+
+    for index, (path, spec) in enumerate(zip(paths, specs, strict=True)):
+        read_start = perf_counter()
+        frame, profile = read_simple_fits_image_native_direct_timed(path, dtype=np.float32, output=host_buffer)
+        per_frame_read_s.append(perf_counter() - read_start)
+        fits_backends.append(str(profile.get("fits_reader_backend") or "native_direct_simple"))
+        if "fits_native_file_read_s" in profile:
+            fits_native_file_read_s.append(float(profile.get("fits_native_file_read_s", 0.0) or 0.0))
+        if "fits_native_decode_s" in profile:
+            fits_native_decode_s.append(float(profile.get("fits_native_decode_s", 0.0) or 0.0))
+        if "fits_native_total_s" in profile:
+            fits_native_total_s.append(float(profile.get("fits_native_total_s", 0.0) or 0.0))
+        fits_native_bytes_read += int(profile.get("fits_native_bytes_read", 0) or 0)
+        if spec.bitpix > 0 and spec.blank is None:
+            nonfinite_count = 0
+        else:
+            nonfinite_count = int(np.count_nonzero(~np.isfinite(frame)))
+        per_frame_nonfinite.append(nonfinite_count)
+        input_nonfinite_sample_total += nonfinite_count
+
+        upload_start = perf_counter()
+        stack.upload_calibrated_frame(index, frame)
+        per_frame_upload_s.append(perf_counter() - upload_start)
+
+    integrate_start = perf_counter()
+    master, weight_map = stack.integrate_mean()
+    integrate_s = perf_counter() - integrate_start
+    total_s = perf_counter() - total_start
+
+    valid_total = int(round(float(np.sum(weight_map, dtype=np.float64))))
+    input_sample_total = int(len(paths) * pixel_count)
+    input_valid_sample_total = input_sample_total - int(input_nonfinite_sample_total)
+    coverage_zero_pixel_total = int(np.count_nonzero(np.asarray(weight_map, dtype=np.float32) <= 0.0))
+    rejection = _resident_master_rejection_policy(policy)
+    execution_path = "resident_cuda_mean_no_rejection"
+    metrics: dict[str, Any] = {
+        "frame_count": len(paths),
+        "width": width,
+        "height": height,
+        "combine": "mean",
+        "rejection": rejection.method,
+        "rejection_scale_estimator": rejection_scale_estimator(rejection),
+        "valid_samples": valid_total,
+        "input_valid_samples": input_valid_sample_total,
+        "input_invalid_samples": input_sample_total - input_valid_sample_total,
+        "low_rejected": 0,
+        "high_rejected": 0,
+        "rejected_samples": 0,
+        "execution_path": execution_path,
+        "tile_size": 0,
+        "tile_stack_mode": "stack_engine_cuda_mean",
+        "resident_master_cache_builder": "ResidentCalibratedStack.integrate_mean",
+        "resident_master_cache_builder_dispatch": "resident_cuda_mean",
+        "native_method": "ResidentCalibratedStack.integrate_mean",
+        "master_rejection_requested": policy.master_rejection,
+        "master_rejection_applied": "none",
+        "master_rejection_dispatch_reason": (
+            "resident_cuda_mean_builder_preserves_phase1_mean_builder_until_robust_master_stack_is_gpu_or_optimized"
+        ),
+        "timing_s": {
+            "total": float(total_s),
+            "resident_stack_allocate": float(allocate_s),
+            "fits_read": float(sum(per_frame_read_s)),
+            "resident_upload": float(sum(per_frame_upload_s)),
+            "resident_integrate_mean": float(integrate_s),
+        },
+        "fits_backend_counts": _value_counts(fits_backends),
+        "fits_native_file_read_cumulative_s": _timing_summary(fits_native_file_read_s)["total"],
+        "fits_native_decode_cumulative_s": _timing_summary(fits_native_decode_s)["total"],
+        "fits_native_total_cumulative_s": _timing_summary(fits_native_total_s)["total"],
+        "fits_native_bytes_read": int(fits_native_bytes_read),
+        "per_frame_nonfinite_sample_counts": per_frame_nonfinite,
+        "host_buffer_bytes": int(host_buffer.nbytes),
+        "resident_stack_required_bytes": int(len(paths) * pixel_count * 4),
+    }
+    provenance = _stack_engine_mean_no_rejection_provenance(
+        input_sample_total=input_sample_total,
+        input_valid_sample_total=input_valid_sample_total,
+        input_invalid_sample_total=input_sample_total - input_valid_sample_total,
+        input_nonfinite_sample_total=input_nonfinite_sample_total,
+        valid_total=valid_total,
+        coverage_zero_pixel_total=coverage_zero_pixel_total,
+        execution_path=execution_path,
+        rejection=rejection,
+    )
+    result = StackEngineResult(
+        master=np.asarray(master, dtype=np.float32),
+        dq_provenance=provenance,
+        metrics=metrics,
+    )
+    result_contract = build_stack_engine_result_contract(result, request=request)
+    result.dq_provenance["result_contract"] = result_contract
+    result.metrics["result_contract_passed"] = bool(result_contract["passed"])
+    result.metrics["dq_provenance"] = result.dq_provenance
+    return result.master.astype(np.float32, copy=True), dict(result.metrics)
+
+
+def _stack_resident_master_array_with_cpu_stack_engine(
     paths: list[Path],
     policy: CalibrationPolicy,
     *,
     source_kind: str,
     tile_size: int = _RESIDENT_MASTER_STACK_TILE_SIZE,
+    fallback_reason: str | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     if not paths:
         raise ValueError("cannot stack an empty resident master frame list")
@@ -3545,24 +3769,11 @@ def _stack_resident_master_array_with_engine(
             f"{source_kind}-{index}": stack.enter_context(_ResidentMasterFitsImageSource(path))
             for index, path in enumerate(paths)
         }
-        request = StackRequest(
-            frame_ids=tuple(sources.keys()),
+        request = _resident_master_stack_request(
+            tuple(sources.keys()),
+            policy,
             source_kind=source_kind,
-            combine=CombinePolicy(method="mean", accumulator_dtype="float64"),
-            rejection=_resident_master_rejection_policy(policy),
-            output_maps=OutputMapPolicy(
-                coverage=False,
-                weight=False,
-                variance=False,
-                low_rejection=False,
-                high_rejection=False,
-                dq=False,
-            ),
-            metadata={
-                "stage": "resident_master_cache",
-                "source_kind": source_kind,
-                "full_frame_fast_path": True,
-            },
+            metadata={"full_frame_fast_path": True},
         )
         result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
     metrics: dict[str, Any] = dict(result.metrics)
@@ -3575,7 +3786,38 @@ def _stack_resident_master_array_with_engine(
     metrics["master_rejection_dispatch_reason"] = (
         "resident_master_cache_preserves_phase1_mean_builder_until_robust_master_stack_is_gpu_or_optimized"
     )
+    metrics["resident_master_cache_builder_dispatch"] = "cpu_stack_engine_full_frame"
+    metrics["stack_engine_fallback_reason"] = fallback_reason
     return result.master.astype(np.float32, copy=True), metrics
+
+
+def _stack_resident_master_array_with_engine(
+    paths: list[Path],
+    policy: CalibrationPolicy,
+    *,
+    source_kind: str,
+    tile_size: int = _RESIDENT_MASTER_STACK_TILE_SIZE,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    cuda_available, unavailable_reason = _resident_master_cuda_mean_available()
+    fallback_reason: str | None = None
+    if cuda_available:
+        try:
+            return _stack_resident_master_array_with_resident_cuda_mean(
+                paths,
+                policy,
+                source_kind=source_kind,
+            )
+        except (FastFitsUnsupported, RuntimeError, ValueError) as exc:
+            fallback_reason = f"resident_cuda_mean_unavailable:{type(exc).__name__}:{exc}"
+    else:
+        fallback_reason = unavailable_reason
+    return _stack_resident_master_array_with_cpu_stack_engine(
+        paths,
+        policy,
+        source_kind=source_kind,
+        tile_size=tile_size,
+        fallback_reason=fallback_reason,
+    )
 
 
 def _subtract_resident_master(
@@ -3627,14 +3869,37 @@ def _resident_stack_engine_audit_fields(
             value if isinstance(value, dict) else None,
             stage="master_calibration",
             item=f"resident_{key}",
+            engine=str(metrics.get(key, {}).get("tile_stack_mode") or "stack_engine_cpu"),
         )
         for key, value in provenance.items()
     }
+    tile_stack_modes = sorted(
+        {
+            str(value.get("tile_stack_mode") or "stack_engine_cpu")
+            for value in metrics.values()
+            if isinstance(value, dict)
+        }
+    )
+    tile_sizes = sorted(
+        {
+            int(value.get("tile_size"))
+            for value in metrics.values()
+            if isinstance(value, dict) and value.get("tile_size") is not None
+        }
+    )
+    fallback_reasons = sorted(
+        {
+            str(value.get("stack_engine_fallback_reason"))
+            for value in metrics.values()
+            if isinstance(value, dict) and value.get("stack_engine_fallback_reason")
+        }
+    )
     fields: dict[str, Any] = {
-        "tile_stack_mode": "stack_engine_cpu",
+        "tile_stack_mode": tile_stack_modes[0] if len(tile_stack_modes) == 1 else "mixed_stack_engine",
+        "tile_stack_modes": tile_stack_modes,
         "stack_engine_enabled": True,
-        "stack_engine_fallback_reason": None,
-        "stack_engine_tile_size": _RESIDENT_MASTER_STACK_TILE_SIZE,
+        "stack_engine_fallback_reason": "; ".join(fallback_reasons) if fallback_reasons else None,
+        "stack_engine_tile_size": tile_sizes[0] if len(tile_sizes) == 1 else _RESIDENT_MASTER_STACK_TILE_SIZE,
         "stack_engine_metrics": metrics,
         "stack_engine_dq_provenance": provenance,
         "dq_provenance_summary": summaries,

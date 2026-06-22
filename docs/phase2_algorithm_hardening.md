@@ -10500,6 +10500,78 @@ Completed in Gate446:
   - report:
     `C:\glass_runs\phase2_s2_gate484_finite_full_frame_mean_ab_real\reports\warm_report.html`.
 
+### S2-Gate 485: Resident CUDA Master Mean Builder
+
+- Continue the Gate484 finding that cold-cache master construction is the next
+  resident performance target and that 96GB-class GPUs can keep the relevant
+  calibration stacks resident for this benchmark.
+- Required work:
+  - keep resident master-cache output under StackEngine-compatible metrics,
+    result-contract, and DQ provenance;
+  - use existing GLASS native CUDA primitives instead of introducing a new
+    untested master-frame kernel;
+  - preserve CPU-only fallback and fast-FITS unsupported fallback;
+  - rerun the real 200-light cold/warm A/B and compare against Gate484,
+    Gate481, and the WBPP black-box reference.
+- Completed:
+  - added a resident CUDA mean builder for master-cache bias/dark/flat groups;
+  - when CUDA is available, calibration frames are read through the
+    fast/native FITS path, uploaded one at a time into a short-lived
+    `ResidentCalibratedStack`, and reduced with
+    `ResidentCalibratedStack.integrate_mean`;
+  - the path records `tile_stack_mode=stack_engine_cuda_mean`,
+    `execution_path=resident_cuda_mean_no_rejection`, per-group read/upload/
+    integrate timing, native FITS backend counts, resident stack bytes, and a
+    StackEngine-compatible result contract;
+  - if CUDA is unavailable or the fast FITS path is unsupported, resident
+    master construction falls back to the Gate484 CPUStackEngine full-frame
+    path and records the fallback reason;
+  - focused tests cover both the CPU fallback and the resident CUDA dispatch
+    contract without requiring real CUDA in CI.
+- Real 200-light A/B:
+  - output root:
+    `C:\glass_runs\phase2_s2_gate485_resident_cuda_master_mean_ab_real`;
+  - cold CUDA-master total: `27.771337599959224 s`;
+  - cold `master_build_or_load`: `7.568977500020992 s`;
+  - cold `light_read_upload_calibrate`: `10.79850139998598 s`;
+  - warm CUDA-master total: `20.304512000002433 s`;
+  - warm `master_build_or_load`: `0.30791140004293993 s`;
+  - warm `light_read_upload_calibrate`: `3.497221499972511 s`;
+  - Gate484 cold total comparison: `35.3481062000501 s` ->
+    `27.771337599959224 s` (`1.2728269235437186x`);
+  - Gate484 cold master-build comparison: `15.344373799976893 s` ->
+    `7.568977500020992 s` (`2.0272716889347784x`);
+  - Gate481 helper cold master-build comparison: `10.911685600003693 s` ->
+    `7.568977500020992 s` (`1.4416327172294316x`);
+  - warm-vs-cold master difference: RMS/p99/max all `0.0`;
+  - warm-vs-Gate484 warm master difference: RMS/p99/max all `0.0`;
+  - warm-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`;
+  - warm GLASS vs WBPP speedup: `53.80779405089219x`;
+  - threshold acceptance audit passed with the same 200-light, calibration,
+    frame-count, speedup, coverage, RMS, and p99 thresholds as Gate484.
+- Interpretation:
+  - this is the first resident master-cache path that is both
+    StackEngine/DQ-contract compatible and faster than the older Gate481
+    helper on cold cache;
+  - the micro-timing shows the remaining master-cache cold cost is dominated by
+    FITS read/decode, not GPU mean integration: for the real active groups,
+    CUDA `integrate_mean` is about `0.07 s` per bias/dark/flat group;
+  - the next cold-cache optimization should target calibration-frame FITS
+    read/H2D overlap or raw-u16 GPU decode for master frames, not another mean
+    reduction rewrite;
+  - robust resident master rejection remains deferred until it can be expressed
+    as a native/CUDA or optimized batch path.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate485_resident_cuda_master_mean_ab_real\gate485_real_ab_summary.json`;
+  - threshold acceptance:
+    `C:\glass_runs\phase2_s2_gate485_resident_cuda_master_mean_ab_real\acceptance\warm_threshold_acceptance_audit.json`;
+  - speedup summary:
+    `C:\glass_runs\phase2_s2_gate485_resident_cuda_master_mean_ab_real\speedup\warm_vs_wbpp_speedup_with_compare.json`;
+  - report:
+    `C:\glass_runs\phase2_s2_gate485_resident_cuda_master_mean_ab_real\reports\warm_report.html`.
+
 ## Gate Rules
 
 Each gate requires:
