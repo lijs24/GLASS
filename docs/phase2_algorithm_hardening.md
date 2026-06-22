@@ -9371,6 +9371,55 @@ Completed in Gate446:
     substantive optimization should reduce Python orchestration in resident
     registration/warp and/or move remaining quantile work device-side.
 
+### S2-Gate 461: Resident Triangle Translation Warp Batch Closure
+
+- Close the real-data gap where the resident triangle registration path
+  advertised native matrix batch warp support but translation-like matrices
+  were short-circuited into per-frame warp calls.
+- Required work:
+  - keep translation matrices in `_apply_resident_registration_matrix_batch`
+    when the resident native matrix batch API is available;
+  - defer the non-pixel-refine `similarity_cuda_triangle` warp application
+    until after the registration loop, then apply all accepted matrices through
+    the existing batch warp helper;
+  - write batch warp provenance back into each `RegistrationResult` warning
+    list and resident registration timing fields;
+  - preserve the 200-light contract-parity command, frame admission, output
+    dimensions, and compare/audit contracts.
+- Completed in S2-Gate461:
+  - added a helper-level regression test proving translation-like matrices no
+    longer bypass native matrix batch warp when batch support is present;
+  - changed the triangle registration main loop from immediate per-frame warp
+    to pending batch warp for accepted non-pixel-refine frames;
+  - resident CUDA run tests passed with `66 passed`;
+  - GPU warp/resident stack tests passed with `51 passed`;
+  - full pytest passed with `1092 passed`;
+  - real 200-light contract-token audit-map run completed in `36.563496 s`
+    internal run timing (`36.964415 s` outer PowerShell timing), integrated
+    `193/200` frames, and passed acceptance at `29.880649x` versus the WBPP
+    black-box timing `1092.541 s`;
+  - real resident triangle warp now reports
+    `triangle_warp_batch_frame_count=192`,
+    `triangle_warp_batch_timing_model=native_loop_batched_inverse_one_sync`,
+    and 192 per-frame `resident_registration_application=matrix_lanczos3_batch`
+    warnings;
+  - the measured warp segment improved from the Gate460 default-path
+    `4.386194 s` to `3.566975 s`, while total runtime remained in the same
+    36-second band due to I/O, master build/load, and orchestration variation;
+  - comparison remained inside the 200-light contract: shape matched,
+    coverage fraction `0.961089`, RMS diff `0.00171029`, and P99 absolute
+    diff `0.000456902`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_461_200\batched_triangle_warp_contract_parity_20260622`;
+  - `runs/checkpoints/s2_gate_461_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_461_status.md`.
+- Known limitation:
+  - the default dispatch is still `loop`, so this gate batches the Python/native
+    call, inverse upload, warning provenance, and final synchronization, but it
+    does not yet use the chunked scatter batch warp path by default. The next
+    performance gate should evaluate and harden `--resident-warp-batch-dispatch
+    chunked` on the same 200-light contract before promoting it.
+
 ## Gate Rules
 
 Each gate requires:

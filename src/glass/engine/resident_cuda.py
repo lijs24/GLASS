@@ -1235,8 +1235,18 @@ def _apply_resident_registration_matrix_batch(
     matrix_positions: list[int] = []
     matrix_indices: list[int] = []
     matrix_values: list[list[list[float]]] = []
+    matrix_batch_available = bool(
+        (
+            interpolation == "lanczos3"
+            and hasattr(stack, "apply_matrix_lanczos3_frames")
+        )
+        or (
+            interpolation == "bilinear"
+            and hasattr(stack, "apply_matrix_bilinear_frames")
+        )
+    )
     for position, (index, matrix) in enumerate(items):
-        if _matrix_is_translation(matrix):
+        if _matrix_is_translation(matrix) and not matrix_batch_available:
             if interpolation == "lanczos3" and hasattr(stack, "apply_matrix_lanczos3_frame"):
                 stack.apply_matrix_lanczos3_frame(index, matrix, np.nan, float(clamping_threshold))
                 models[position] = "matrix_lanczos3"
@@ -1254,7 +1264,7 @@ def _apply_resident_registration_matrix_batch(
         "fallback_frame_count": len(items) - len(matrix_positions),
     }
     if matrix_positions:
-        if interpolation == "lanczos3" and hasattr(stack, "apply_matrix_lanczos3_frames"):
+        if interpolation == "lanczos3" and matrix_batch_available:
             timing = dict(
                 stack.apply_matrix_lanczos3_frames(
                     matrix_indices,
@@ -1266,7 +1276,7 @@ def _apply_resident_registration_matrix_batch(
             )
             for position in matrix_positions:
                 models[position] = "matrix_lanczos3_batch"
-        elif interpolation == "bilinear" and hasattr(stack, "apply_matrix_bilinear_frames"):
+        elif interpolation == "bilinear" and matrix_batch_available:
             timing = dict(
                 stack.apply_matrix_bilinear_frames(
                     matrix_indices,
@@ -6014,6 +6024,150 @@ def run_resident_calibration_integration(
                     )
                     return fit
 
+                pending_triangle_warps: list[dict[str, Any]] = []
+
+                def apply_pending_triangle_warps(
+                    items: list[dict[str, Any]],
+                    _stack: Any = stack,
+                ) -> None:
+                    nonlocal triangle_warp_batch_fallback_frame_count
+                    nonlocal triangle_warp_batch_frame_count
+                    nonlocal triangle_warp_batch_native_chunk_count
+                    nonlocal triangle_warp_batch_native_chunk_frames
+                    nonlocal triangle_warp_batch_native_coverage_bytes
+                    nonlocal triangle_warp_batch_native_coverage_reduce_enqueue_s
+                    nonlocal triangle_warp_batch_native_coverage_reduce_kernel_launches
+                    nonlocal triangle_warp_batch_native_device_copy_enqueue_s
+                    nonlocal triangle_warp_batch_native_index_upload_s
+                    nonlocal triangle_warp_batch_native_inverse_batch_alloc_s
+                    nonlocal triangle_warp_batch_native_inverse_batch_bytes
+                    nonlocal triangle_warp_batch_native_inverse_prepare_s
+                    nonlocal triangle_warp_batch_native_inverse_upload_mode
+                    nonlocal triangle_warp_batch_native_inverse_upload_s
+                    nonlocal triangle_warp_batch_native_kernel_enqueue_s
+                    nonlocal triangle_warp_batch_native_output_bytes
+                    nonlocal triangle_warp_batch_native_scatter_enqueue_s
+                    nonlocal triangle_warp_batch_native_scatter_kernel_launches
+                    nonlocal triangle_warp_batch_native_sync_s
+                    nonlocal triangle_warp_batch_native_total_s
+                    nonlocal triangle_warp_batch_native_warp_kernel_launches
+                    nonlocal triangle_warp_batch_native_workspace_bytes
+                    nonlocal triangle_warp_batch_timing_model
+                    if not items:
+                        return
+                    warp_start = perf_counter()
+                    warp_models, warp_timing = _apply_resident_registration_matrix_batch(
+                        _stack,
+                        [
+                            (int(item["index"]), item["matrix"])
+                            for item in items
+                        ],
+                        resident_warp_interpolation,
+                        resident_warp_clamping_threshold,
+                        resident_warp_batch_dispatch,
+                    )
+                    warp_elapsed = perf_counter() - warp_start
+                    _add_elapsed(registration_component_s, "triangle_warp", warp_elapsed)
+                    if bool(warp_timing.get("batched", False)):
+                        triangle_warp_batch_timing_model = str(
+                            warp_timing.get("timing_model", "unavailable")
+                        )
+                        triangle_warp_batch_frame_count += int(warp_timing.get("frame_count", 0) or 0)
+                        triangle_warp_batch_fallback_frame_count += int(
+                            warp_timing.get("fallback_frame_count", 0) or 0
+                        )
+                        triangle_warp_batch_native_inverse_upload_mode = str(
+                            warp_timing.get("inverse_upload_mode", "unavailable")
+                        )
+                        triangle_warp_batch_native_inverse_prepare_s += float(
+                            warp_timing.get("inverse_prepare_s", 0.0) or 0.0
+                        )
+                        triangle_warp_batch_native_inverse_batch_alloc_s += float(
+                            warp_timing.get("inverse_batch_alloc_s", 0.0) or 0.0
+                        )
+                        triangle_warp_batch_native_inverse_batch_bytes += int(
+                            warp_timing.get("inverse_batch_bytes", 0) or 0
+                        )
+                        triangle_warp_batch_native_index_upload_s += float(
+                            warp_timing.get("index_upload_s", 0.0) or 0.0
+                        )
+                        triangle_warp_batch_native_inverse_upload_s += float(
+                            warp_timing.get("inverse_upload_s", 0.0) or 0.0
+                        )
+                        triangle_warp_batch_native_kernel_enqueue_s += float(
+                            warp_timing.get("kernel_enqueue_s", 0.0) or 0.0
+                        )
+                        triangle_warp_batch_native_coverage_reduce_enqueue_s += float(
+                            warp_timing.get("coverage_reduce_enqueue_s", 0.0) or 0.0
+                        )
+                        triangle_warp_batch_native_scatter_enqueue_s += float(
+                            warp_timing.get("scatter_enqueue_s", 0.0) or 0.0
+                        )
+                        triangle_warp_batch_native_device_copy_enqueue_s += float(
+                            warp_timing.get("device_copy_enqueue_s", 0.0) or 0.0
+                        )
+                        triangle_warp_batch_native_sync_s += float(warp_timing.get("sync_s", 0.0) or 0.0)
+                        triangle_warp_batch_native_total_s += float(warp_timing.get("total_s", 0.0) or 0.0)
+                        triangle_warp_batch_native_chunk_frames = max(
+                            triangle_warp_batch_native_chunk_frames,
+                            int(warp_timing.get("batch_chunk_frames", 0) or 0),
+                        )
+                        triangle_warp_batch_native_chunk_count += int(
+                            warp_timing.get("batch_chunk_count", 0) or 0
+                        )
+                        triangle_warp_batch_native_workspace_bytes = max(
+                            triangle_warp_batch_native_workspace_bytes,
+                            int(warp_timing.get("batch_workspace_bytes", 0) or 0),
+                        )
+                        triangle_warp_batch_native_output_bytes = max(
+                            triangle_warp_batch_native_output_bytes,
+                            int(warp_timing.get("batch_output_bytes", 0) or 0),
+                        )
+                        triangle_warp_batch_native_coverage_bytes = max(
+                            triangle_warp_batch_native_coverage_bytes,
+                            int(warp_timing.get("batch_coverage_bytes", 0) or 0),
+                        )
+                        triangle_warp_batch_native_warp_kernel_launches += int(
+                            warp_timing.get("warp_kernel_launches", 0) or 0
+                        )
+                        triangle_warp_batch_native_coverage_reduce_kernel_launches += int(
+                            warp_timing.get("coverage_reduce_kernel_launches", 0) or 0
+                        )
+                        triangle_warp_batch_native_scatter_kernel_launches += int(
+                            warp_timing.get("scatter_kernel_launches", 0) or 0
+                        )
+                        _add_elapsed(
+                            registration_component_s,
+                            "triangle_warp_native_batch",
+                            float(warp_timing.get("total_s", warp_elapsed) or 0.0),
+                        )
+                        _add_elapsed(
+                            registration_component_s,
+                            "triangle_warp_native_sync",
+                            float(warp_timing.get("sync_s", 0.0) or 0.0),
+                        )
+                    else:
+                        triangle_warp_batch_fallback_frame_count += int(
+                            warp_timing.get("fallback_frame_count", len(items)) or 0
+                        )
+                    for item, warp_model in zip(items, warp_models, strict=True):
+                        frame_index = int(item["index"])
+                        warped_frame_indices.add(frame_index)
+                        registration_results[int(item["result_index"])].warnings.extend(
+                            [
+                                f"resident_registration_application={warp_model}",
+                                "triangle_warp_batch=" + str(bool(warp_timing.get("batched", False))).lower(),
+                                f"triangle_warp_batch_mode={triangle_warp_batch_mode}",
+                                f"triangle_warp_batch_dispatch={resident_warp_batch_dispatch}",
+                                "triangle_warp_batch_timing_model="
+                                + str(warp_timing.get("timing_model", "per_frame")),
+                                "triangle_warp_batch_inverse_upload_mode="
+                                + str(warp_timing.get("inverse_upload_mode", "per_frame")),
+                                "triangle_warp_batch_chunk_frames="
+                                + str(int(warp_timing.get("batch_chunk_frames", 0) or 0)),
+                            ]
+                        )
+
                 for index, frame in enumerate(light_frames):
                     registration_frame_start = perf_counter()
                     warnings = []
@@ -6023,6 +6177,7 @@ def run_resident_calibration_integration(
                     inliers = 0
                     rms_px = float("nan")
                     deferred_triangle_refine: dict[str, Any] | None = None
+                    pending_triangle_warp_matrix: list[list[float]] | None = None
                     quality_decision: dict[str, Any] | None = None
                     triangle_quality_diagnostics: dict[str, Any] = {}
                     try:
@@ -6427,21 +6582,8 @@ def run_resident_calibration_integration(
                                         ]
                                     )
                                 else:
-                                    warp_start = perf_counter()
-                                    warp_model = _apply_resident_registration_matrix(
-                                        stack,
-                                        index,
-                                        matrix,
-                                        resident_warp_interpolation,
-                                        resident_warp_clamping_threshold,
-                                    )
-                                    warped_frame_indices.add(index)
-                                    _add_elapsed(
-                                        registration_component_s,
-                                        "triangle_warp",
-                                        perf_counter() - warp_start,
-                                    )
-                                    warnings.append(f"resident_registration_application={warp_model}")
+                                    integration_matrices[index] = matrix
+                                    pending_triangle_warp_matrix = matrix
                                 warnings.extend(
                                     [
                                         f"triangle_threshold_mode={threshold_mode}",
@@ -6648,7 +6790,16 @@ def run_resident_calibration_integration(
                     if deferred_triangle_refine is not None and status == "ok":
                         deferred_triangle_refine["result_index"] = result_index
                         pending_triangle_pixel_refines.append(deferred_triangle_refine)
+                    if pending_triangle_warp_matrix is not None and status == "ok":
+                        pending_triangle_warps.append(
+                            {
+                                "index": index,
+                                "matrix": pending_triangle_warp_matrix,
+                                "result_index": result_index,
+                            }
+                        )
 
+                apply_pending_triangle_warps(pending_triangle_warps)
                 if pending_triangle_pixel_refines:
                     batch_post_start = perf_counter()
                     try:

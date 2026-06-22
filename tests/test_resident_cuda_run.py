@@ -12,6 +12,7 @@ from glass.engine.contracts import DQFlag
 from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.engine.resident_cuda import (
+    _apply_resident_registration_matrix_batch,
     _load_frame_weight_proposal,
     _load_tile_local_policy_replay,
     _matches_any_token,
@@ -35,6 +36,7 @@ from glass.engine.resident_cuda import (
     _tile_local_policy_application_arrays,
     _validate_resident_winsorized_runtime_contract,
 )
+from glass.cpu.registration import translation_matrix
 from tests.conftest import cuda_module_or_skip
 
 
@@ -66,6 +68,58 @@ def _shift_image(data: np.ndarray, dx: int, dy: int) -> np.ndarray:
     if src_x0 < src_x1 and src_y0 < src_y1:
         output[dst_y0:dst_y1, dst_x0:dst_x1] = data[src_y0:src_y1, src_x0:src_x1]
     return output
+
+
+def test_resident_registration_matrix_batch_keeps_translation_matrices_batched() -> None:
+    class FakeStack:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, object]] = []
+
+        def apply_matrix_lanczos3_frames(
+            self,
+            indices: list[int],
+            matrices: np.ndarray,
+            fill: float,
+            clamping_threshold: float,
+            dispatch: str = "loop",
+        ) -> dict[str, object]:
+            self.calls.append(("batch", (indices, matrices.copy(), fill, clamping_threshold, dispatch)))
+            return {
+                "frame_count": len(indices),
+                "fallback_frame_count": 0,
+                "timing_model": "fake_batch_one_sync",
+                "inverse_upload_mode": "fake_device_batch",
+                "total_s": 0.01,
+            }
+
+        def apply_matrix_lanczos3_frame(self, *_args: object, **_kwargs: object) -> None:
+            raise AssertionError("translation-like matrices should not bypass native batch warp")
+
+        def apply_translation_bilinear_frame(self, *_args: object, **_kwargs: object) -> None:
+            raise AssertionError("translation-like matrices should not use per-frame translation when batch is available")
+
+    stack = FakeStack()
+    models, timing = _apply_resident_registration_matrix_batch(
+        stack,
+        [
+            (1, translation_matrix(2.5, -1.25)),
+            (2, translation_matrix(-0.5, 3.0)),
+        ],
+        interpolation="lanczos3",
+        clamping_threshold=0.3,
+    )
+
+    assert models == ["matrix_lanczos3_batch", "matrix_lanczos3_batch"]
+    assert timing["batched"] is True
+    assert timing["frame_count"] == 2
+    assert timing["fallback_frame_count"] == 0
+    assert len(stack.calls) == 1
+    indices, matrices, fill, clamping_threshold, dispatch = stack.calls[0][1]
+    assert indices == [1, 2]
+    assert matrices.shape == (2, 3, 3)
+    assert np.isnan(fill)
+    assert clamping_threshold == pytest.approx(0.3)
+    assert dispatch == "loop"
 
 
 def _two_light_star_dataset(tmp_path: Path) -> Path:
