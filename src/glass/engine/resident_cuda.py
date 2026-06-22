@@ -1626,6 +1626,7 @@ def _combine_resident_matrix_batch_timings(
         "kernel_enqueue_s",
         "coverage_reduce_enqueue_s",
         "scatter_enqueue_s",
+        "postprocess_enqueue_s",
         "device_copy_enqueue_s",
         "sync_s",
         "total_s",
@@ -1633,6 +1634,7 @@ def _combine_resident_matrix_batch_timings(
         "warp_kernel_launches",
         "coverage_reduce_kernel_launches",
         "scatter_kernel_launches",
+        "postprocess_kernel_launches",
     }
     max_keys = {
         "batch_chunk_frames",
@@ -1672,6 +1674,12 @@ def _combine_resident_matrix_batch_timings(
     }
     combined["chunk_metadata_upload_mode"] = (
         next(iter(metadata_modes)) if len(metadata_modes) == 1 else "mixed"
+    )
+    postprocess_modes = {
+        str(timing.get("postprocess_mode", "unavailable")) for timing in timings
+    }
+    combined["postprocess_mode"] = (
+        next(iter(postprocess_modes)) if len(postprocess_modes) == 1 else "mixed"
     )
     timing_models = [str(timing.get("timing_model", "unavailable")) for timing in timings]
     first_model = timing_models[0] if timing_models else "unavailable"
@@ -5997,6 +6005,8 @@ def run_resident_calibration_integration(
                 triangle_warp_batch_native_kernel_enqueue_s = 0.0
                 triangle_warp_batch_native_coverage_reduce_enqueue_s = 0.0
                 triangle_warp_batch_native_scatter_enqueue_s = 0.0
+                triangle_warp_batch_native_postprocess_enqueue_s = 0.0
+                triangle_warp_batch_native_postprocess_mode = "off"
                 triangle_warp_batch_native_device_copy_enqueue_s = 0.0
                 triangle_warp_batch_native_sync_s = 0.0
                 triangle_warp_batch_native_total_s = 0.0
@@ -6010,6 +6020,7 @@ def run_resident_calibration_integration(
                 triangle_warp_batch_native_warp_kernel_launches = 0
                 triangle_warp_batch_native_coverage_reduce_kernel_launches = 0
                 triangle_warp_batch_native_scatter_kernel_launches = 0
+                triangle_warp_batch_native_postprocess_kernel_launches = 0
                 triangle_warp_batch_capacity_source = (
                     "resident_memory_admission"
                     if resident_warp_chunk_capacity_effective is not None
@@ -6531,6 +6542,9 @@ def run_resident_calibration_integration(
                     nonlocal triangle_warp_batch_native_inverse_upload_count
                     nonlocal triangle_warp_batch_native_chunk_metadata_upload_mode
                     nonlocal triangle_warp_batch_native_kernel_enqueue_s
+                    nonlocal triangle_warp_batch_native_postprocess_enqueue_s
+                    nonlocal triangle_warp_batch_native_postprocess_kernel_launches
+                    nonlocal triangle_warp_batch_native_postprocess_mode
                     nonlocal triangle_warp_batch_native_output_bytes
                     nonlocal triangle_warp_batch_native_capacity_source
                     nonlocal triangle_warp_batch_native_scatter_enqueue_s
@@ -6602,6 +6616,13 @@ def run_resident_calibration_integration(
                         triangle_warp_batch_native_scatter_enqueue_s += float(
                             warp_timing.get("scatter_enqueue_s", 0.0) or 0.0
                         )
+                        triangle_warp_batch_native_postprocess_enqueue_s += float(
+                            warp_timing.get("postprocess_enqueue_s", 0.0) or 0.0
+                        )
+                        if warp_timing.get("postprocess_mode") is not None:
+                            triangle_warp_batch_native_postprocess_mode = str(
+                                warp_timing.get("postprocess_mode")
+                            )
                         triangle_warp_batch_native_device_copy_enqueue_s += float(
                             warp_timing.get("device_copy_enqueue_s", 0.0) or 0.0
                         )
@@ -6642,6 +6663,9 @@ def run_resident_calibration_integration(
                         )
                         triangle_warp_batch_native_scatter_kernel_launches += int(
                             warp_timing.get("scatter_kernel_launches", 0) or 0
+                        )
+                        triangle_warp_batch_native_postprocess_kernel_launches += int(
+                            warp_timing.get("postprocess_kernel_launches", 0) or 0
                         )
                         _add_elapsed(
                             registration_component_s,
@@ -7576,6 +7600,13 @@ def run_resident_calibration_integration(
                             triangle_warp_batch_native_scatter_enqueue_s += float(
                                 warp_timing.get("scatter_enqueue_s", 0.0) or 0.0
                             )
+                            triangle_warp_batch_native_postprocess_enqueue_s += float(
+                                warp_timing.get("postprocess_enqueue_s", 0.0) or 0.0
+                            )
+                            if warp_timing.get("postprocess_mode") is not None:
+                                triangle_warp_batch_native_postprocess_mode = str(
+                                    warp_timing.get("postprocess_mode")
+                                )
                             triangle_warp_batch_native_device_copy_enqueue_s += float(
                                 warp_timing.get("device_copy_enqueue_s", 0.0) or 0.0
                             )
@@ -7616,6 +7647,9 @@ def run_resident_calibration_integration(
                             )
                             triangle_warp_batch_native_scatter_kernel_launches += int(
                                 warp_timing.get("scatter_kernel_launches", 0) or 0
+                            )
+                            triangle_warp_batch_native_postprocess_kernel_launches += int(
+                                warp_timing.get("postprocess_kernel_launches", 0) or 0
                             )
                             _add_elapsed(
                                 registration_component_s,
@@ -9457,6 +9491,16 @@ def run_resident_calibration_integration(
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,
+                        "triangle_warp_batch_native_postprocess_enqueue_s": float(
+                            triangle_warp_batch_native_postprocess_enqueue_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch_native_postprocess_mode": (
+                            triangle_warp_batch_native_postprocess_mode
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
                         "triangle_warp_batch_native_device_copy_enqueue_s": float(
                             triangle_warp_batch_native_device_copy_enqueue_s
                         )
@@ -9505,6 +9549,11 @@ def run_resident_calibration_integration(
                         else 0,
                         "triangle_warp_batch_native_scatter_kernel_launches": int(
                             triangle_warp_batch_native_scatter_kernel_launches
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_postprocess_kernel_launches": int(
+                            triangle_warp_batch_native_postprocess_kernel_launches
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,

@@ -298,9 +298,12 @@ def test_resident_stack_matrix_bilinear_batch_warp_matches_cpu_reference():
     assert timing["kernel_enqueue_s"] >= 0.0
     assert timing["coverage_reduce_enqueue_s"] >= 0.0
     assert timing["scatter_enqueue_s"] >= 0.0
+    assert timing["postprocess_enqueue_s"] >= 0.0
+    assert timing["postprocess_mode"] == "fused_scatter_reduce"
     assert timing["warp_kernel_launches"] == 1
-    assert timing["coverage_reduce_kernel_launches"] == 1
-    assert timing["scatter_kernel_launches"] == 1
+    assert timing["coverage_reduce_kernel_launches"] == 0
+    assert timing["scatter_kernel_launches"] == 0
+    assert timing["postprocess_kernel_launches"] == 1
     assert timing["device_copy_enqueue_s"] >= 0.0
     assert timing["sync_s"] >= 0.0
     assert timing["total_s"] >= timing["kernel_enqueue_s"]
@@ -378,8 +381,10 @@ def test_resident_stack_matrix_bilinear_batch_respects_max_chunk_capacity():
     assert timing["inverse_upload_count"] == 1
     assert timing["inverse_batch_bytes"] == len(frames) * 9 * 4
     assert timing["warp_kernel_launches"] == 3
-    assert timing["coverage_reduce_kernel_launches"] == 3
-    assert timing["scatter_kernel_launches"] == 3
+    assert timing["coverage_reduce_kernel_launches"] == 0
+    assert timing["scatter_kernel_launches"] == 0
+    assert timing["postprocess_kernel_launches"] == 3
+    assert timing["postprocess_mode"] == "fused_scatter_reduce"
     assert timing["batch_output_bytes"] == 2 * frames[0].size * 4
     assert timing["batch_coverage_bytes"] == 2 * frames[0].size
     assert timing["batch_workspace_bytes"] == (
@@ -455,9 +460,12 @@ def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
     assert timing["kernel_enqueue_s"] >= 0.0
     assert timing["coverage_reduce_enqueue_s"] >= 0.0
     assert timing["scatter_enqueue_s"] >= 0.0
+    assert timing["postprocess_enqueue_s"] >= 0.0
+    assert timing["postprocess_mode"] == "fused_scatter_reduce"
     assert timing["warp_kernel_launches"] == 1
-    assert timing["coverage_reduce_kernel_launches"] == 1
-    assert timing["scatter_kernel_launches"] == 1
+    assert timing["coverage_reduce_kernel_launches"] == 0
+    assert timing["scatter_kernel_launches"] == 0
+    assert timing["postprocess_kernel_launches"] == 1
     assert timing["device_copy_enqueue_s"] >= 0.0
     assert timing["sync_s"] >= 0.0
     assert timing["total_s"] >= timing["kernel_enqueue_s"]
@@ -520,8 +528,10 @@ def test_resident_stack_matrix_lanczos3_batch_respects_max_chunk_capacity():
     assert timing["inverse_upload_count"] == 1
     assert timing["inverse_batch_bytes"] == len(frames) * 9 * 4
     assert timing["warp_kernel_launches"] == 3
-    assert timing["coverage_reduce_kernel_launches"] == 3
-    assert timing["scatter_kernel_launches"] == 3
+    assert timing["coverage_reduce_kernel_launches"] == 0
+    assert timing["scatter_kernel_launches"] == 0
+    assert timing["postprocess_kernel_launches"] == 3
+    assert timing["postprocess_mode"] == "fused_scatter_reduce"
     assert timing["batch_output_bytes"] == 2 * frames[0].size * 4
     assert timing["batch_coverage_bytes"] == 2 * frames[0].size
     assert timing["batch_workspace_bytes"] == (

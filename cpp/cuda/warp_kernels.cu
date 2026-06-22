@@ -575,6 +575,51 @@ void glass_warp_batch_scatter_f32_launch(
       batch_output, stack, frame_indices, frame_count, pixels_per_frame);
 }
 
+__global__ void glass_warp_batch_scatter_reduce_f32_kernel(
+    const float* batch_output,
+    const unsigned char* batch_coverage,
+    float* stack,
+    float* coverage_accumulator,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame) {
+  const std::size_t pixel = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (pixel >= pixels_per_frame) {
+    return;
+  }
+  unsigned int count = 0;
+  for (int frame = 0; frame < frame_count; ++frame) {
+    const std::size_t batch_index = static_cast<std::size_t>(frame) * pixels_per_frame + pixel;
+    if (batch_coverage[batch_index] != 0) {
+      ++count;
+    }
+    const std::size_t stack_index =
+        static_cast<std::size_t>(frame_indices[frame]) * pixels_per_frame + pixel;
+    stack[stack_index] = batch_output[batch_index];
+  }
+  coverage_accumulator[pixel] += static_cast<float>(count);
+}
+
+void glass_warp_batch_scatter_reduce_f32_launch(
+    const float* batch_output,
+    const unsigned char* batch_coverage,
+    float* stack,
+    float* coverage_accumulator,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  glass_warp_batch_scatter_reduce_f32_kernel<<<blocks, threads>>>(
+      batch_output,
+      batch_coverage,
+      stack,
+      coverage_accumulator,
+      frame_indices,
+      frame_count,
+      pixels_per_frame);
+}
+
 __global__ void glass_matrix_alignment_metrics_f32_kernel(
     const float* reference,
     const float* moving,

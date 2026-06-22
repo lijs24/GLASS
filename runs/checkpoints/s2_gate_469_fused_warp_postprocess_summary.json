@@ -1,0 +1,142 @@
+{
+  "gate": "S2-Gate 469",
+  "status": "passed",
+  "date_local": "2026-06-22",
+  "scope": "resident chunked matrix-warp fused postprocess kernel",
+  "implementation": {
+    "cuda_kernel": {
+      "file": "cpp/cuda/warp_kernels.cu",
+      "new_launcher": "glass_warp_batch_scatter_reduce_f32_launch",
+      "behavior": "one per-pixel kernel loops over chunk frames, writes batch output back to resident stack slots, and accumulates coverage"
+    },
+    "native_binding": {
+      "file": "cpp/src/native_bindings.cpp",
+      "changed_paths": [
+        "ResidentCalibratedStack.apply_matrix_bilinear_frames",
+        "ResidentCalibratedStack.apply_matrix_lanczos3_frames"
+      ],
+      "behavior": "replaces separate coverage-reduce and scatter launches with one fused postprocess launch per chunk"
+    },
+    "resident_artifact": {
+      "file": "src/glass/engine/resident_cuda.py",
+      "new_fields": [
+        "triangle_warp_batch_native_postprocess_enqueue_s",
+        "triangle_warp_batch_native_postprocess_mode",
+        "triangle_warp_batch_native_postprocess_kernel_launches"
+      ]
+    },
+    "unchanged_science": [
+      "warp interpolation equations",
+      "registration transform fitting",
+      "calibration",
+      "rejection",
+      "integration math",
+      "frame admission"
+    ]
+  },
+  "cuda": {
+    "available": true,
+    "devices": [
+      {
+        "device_id": 0,
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+        "compute_capability": "12.0",
+        "memory_total_mib": 97886,
+        "multi_processor_count": 188,
+        "native_backend": true,
+        "available_to_glass": true,
+        "driver_version": "596.21"
+      }
+    ]
+  },
+  "focused_validation": {
+    "bilinear_one_chunk": {
+      "test": "tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_bilinear_batch_warp_matches_cpu_reference",
+      "postprocess_mode": "fused_scatter_reduce",
+      "coverage_reduce_kernel_launches": 0,
+      "scatter_kernel_launches": 0,
+      "postprocess_kernel_launches": 1,
+      "cpu_reference_match": true
+    },
+    "bilinear_three_chunks": {
+      "test": "tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_bilinear_batch_respects_max_chunk_capacity",
+      "frame_count": 5,
+      "max_chunk_capacity_frames": 2,
+      "chunk_count": 3,
+      "postprocess_mode": "fused_scatter_reduce",
+      "coverage_reduce_kernel_launches": 0,
+      "scatter_kernel_launches": 0,
+      "postprocess_kernel_launches": 3,
+      "cpu_reference_match": true
+    },
+    "lanczos3_one_chunk": {
+      "test": "tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference",
+      "postprocess_mode": "fused_scatter_reduce",
+      "coverage_reduce_kernel_launches": 0,
+      "scatter_kernel_launches": 0,
+      "postprocess_kernel_launches": 1,
+      "cpu_reference_match": true
+    },
+    "lanczos3_three_chunks": {
+      "test": "tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_respects_max_chunk_capacity",
+      "frame_count": 5,
+      "max_chunk_capacity_frames": 2,
+      "chunk_count": 3,
+      "postprocess_mode": "fused_scatter_reduce",
+      "coverage_reduce_kernel_launches": 0,
+      "scatter_kernel_launches": 0,
+      "postprocess_kernel_launches": 3,
+      "cpu_reference_match": true
+    },
+    "resident_artifact": {
+      "test": "tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair",
+      "assertion": "resident registration artifact records fused postprocess mode and one postprocess launch for the one-chunk fixture"
+    }
+  },
+  "real_200_light_baseline": {
+    "rerun_for_gate_469": false,
+    "reason": "C: drive had about 0.141 GiB free during validation; this gate validates launch-count behavior with synthetic CUDA tests.",
+    "baseline_gate": "S2-Gate 465",
+    "baseline_run": "C:\\glass_runs\\phase2_s2_gate_465_200\\admission_capacity_default_parity_r3_20260622",
+    "input": "M38 H-alpha, 200 lights, 20 bias, 20 dark, 20 flat",
+    "internal_total_elapsed_s": 36.10379439999815,
+    "outer_powershell_elapsed_s": 36.4852659,
+    "wbpp_blackbox_elapsed_s": 1092.541,
+    "speedup_vs_wbpp": 30.261112942745317,
+    "warp_timing_model": "native_chunked_batch_warp_scatter_one_sync",
+    "native_chunk_frames": 8,
+    "native_chunk_count": 24,
+    "expected_postprocess_launch_reduction": "from 48 separate coverage/scatter launches to 24 fused postprocess launches",
+    "compare_rms_diff": 0.0017005768173342323,
+    "compare_abs_diff_p99": 0.000459801172837615,
+    "coverage_fraction": 0.961042639883733
+  },
+  "commands": {
+    "native_build": "cmd.exe /c 'call \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\" -arch=x64 -host_arch=x64 >nul && \".\\.venv\\Scripts\\cmake.exe\" --build build\\native-cuda-glass --config Release --target _glass_cuda_native'",
+    "ruff": ".\\.venv\\Scripts\\ruff.exe check cpp src tests",
+    "focused_pytest": ".\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_bilinear_batch_warp_matches_cpu_reference tests\\test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_bilinear_batch_respects_max_chunk_capacity tests\\test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference tests\\test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_respects_max_chunk_capacity tests\\test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair",
+    "resident_cuda_cli_pytest": ".\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_gpu_warp_vs_cpu.py tests\\test_cuda_resident_stack.py tests\\test_resident_cuda_run.py tests\\test_cli_smoke.py",
+    "full_pytest": ".\\.venv\\Scripts\\python.exe -m pytest -q"
+  },
+  "test_results": {
+    "native_build": "passed",
+    "ruff": "passed",
+    "focused_pytest": "5 passed in 1.09s",
+    "resident_cuda_cli_pytest": "158 passed in 14.35s",
+    "full_pytest": "1102 passed in 47.79s"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "notes": [
+      "No official PixInsight WBPP/PJSR source was read or used.",
+      "WBPP evidence remains limited to user-generated black-box timing/output metadata from earlier accepted baseline artifacts.",
+      "Input image directories were not modified."
+    ]
+  },
+  "known_limitations": [
+    "Chunked warp still launches one warp kernel and one fused postprocess kernel per chunk.",
+    "A new real 200-light run was skipped because C: free space was too low for a large output directory.",
+    "Further optimization likely needs CUDA Graph capture, stream batching, or a fused matrix-warped integration path."
+  ],
+  "next_gate_recommendation": "Investigate CUDA Graph capture for repeated chunk launches or default-path fused matrix-warped integration for accepted registration matrices."
+}

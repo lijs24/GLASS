@@ -3361,6 +3361,8 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_warp_batch_native_kernel_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_coverage_reduce_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_scatter_enqueue_s"] >= 0.0
+    assert resident_registration["triangle_warp_batch_native_postprocess_enqueue_s"] >= 0.0
+    assert resident_registration["triangle_warp_batch_native_postprocess_mode"] == "fused_scatter_reduce"
     assert resident_registration["triangle_warp_batch_native_device_copy_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_sync_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_total_s"] >= 0.0
@@ -3368,8 +3370,9 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_warp_batch_native_chunk_count"] == 1
     assert resident_registration["triangle_warp_batch_native_workspace_bytes"] > 0
     assert resident_registration["triangle_warp_batch_native_warp_kernel_launches"] == 1
-    assert resident_registration["triangle_warp_batch_native_coverage_reduce_kernel_launches"] == 1
-    assert resident_registration["triangle_warp_batch_native_scatter_kernel_launches"] == 1
+    assert resident_registration["triangle_warp_batch_native_coverage_reduce_kernel_launches"] == 0
+    assert resident_registration["triangle_warp_batch_native_scatter_kernel_launches"] == 0
+    assert resident_registration["triangle_warp_batch_native_postprocess_kernel_launches"] == 1
     assert resident_registration["triangle_pixel_refine_requested_coarse_stride"] == 1
     assert resident_registration["triangle_pixel_refine_requested_final_stride"] == 2
     assert resident_registration["triangle_pixel_refine_fast_coarse"] is True

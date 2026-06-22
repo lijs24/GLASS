@@ -9820,6 +9820,55 @@ Completed in Gate446:
     gate should reduce per-chunk launch overhead or fuse more work into
     resident integration.
 
+### S2-Gate 469: Resident Chunked Warp Fused Postprocess
+
+- Reduce resident chunked matrix-warp per-chunk launch overhead by fusing the
+  coverage-reduce and scatter postprocess steps into one CUDA kernel.
+- Required work:
+  - add a CUDA kernel that reads chunk output/coverage scratch, writes warped
+    pixels back to the resident stack, and accumulates per-pixel coverage;
+  - replace the separate coverage-reduce and scatter launches in chunked
+    bilinear and Lanczos3 matrix warp dispatch;
+  - preserve the chunked scratch model and in-place safety by keeping the
+    warp-output scratch buffer;
+  - add native timing fields for fused postprocess mode, enqueue time, and
+    launch count;
+  - carry fused postprocess evidence into resident registration artifacts;
+  - prove CPU/GPU numerical agreement on reduced-capacity multi-chunk bilinear
+    and Lanczos3 tests.
+- Completed in S2-Gate469:
+  - added `glass_warp_batch_scatter_reduce_f32_launch`, a per-pixel fused
+    postprocess kernel that loops over frames in the chunk, writes each warped
+    frame back to its resident stack slot, and accumulates coverage once;
+  - changed native chunked bilinear and Lanczos3 warp paths to call the fused
+    postprocess kernel once per chunk;
+  - kept legacy timing fields with zero independent coverage/scatter launches
+    and added `postprocess_mode=fused_scatter_reduce`,
+    `postprocess_enqueue_s`, and `postprocess_kernel_launches`;
+  - carried postprocess mode, enqueue time, and launch count into
+    `resident_registration`;
+  - focused CUDA tests prove one-chunk and three-chunk bilinear/Lanczos3 paths
+    now report zero independent coverage/scatter launches and one fused
+    postprocess launch per chunk while matching CPU reference output;
+  - resident/CUDA/CLI regression passed with `158 passed`;
+  - full pytest passed with `1102 passed`.
+- Performance and regression note:
+  - the five-frame reduced-capacity tests still execute `3` warp chunks but now
+    launch `3` fused postprocess kernels instead of `3` coverage-reduce plus
+    `3` scatter kernels;
+  - by the same native dispatch rule, the Gate465 200-light default path would
+    reduce chunked matrix-warp postprocess launches from `48` to `24` while
+    preserving the same warp interpolation and scratch-buffer safety model;
+  - a new 200-light run was not launched because C: had about `0.141 GiB` free
+    during validation.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_469_fused_warp_postprocess_summary.json`;
+  - `runs/checkpoints/s2_gate_469_status.md`.
+- Known limitation:
+  - chunked warp still launches one warp kernel and one fused postprocess
+    kernel per chunk. Further optimization likely needs CUDA Graph capture,
+    stream batching, or a fused matrix-warped integration path.
+
 ## Gate Rules
 
 Each gate requires:

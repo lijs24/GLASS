@@ -162,6 +162,14 @@ void glass_warp_batch_scatter_f32_launch(
     const unsigned long long* frame_indices,
     int frame_count,
     std::size_t pixels_per_frame);
+void glass_warp_batch_scatter_reduce_f32_launch(
+    const float* batch_output,
+    const unsigned char* batch_coverage,
+    float* stack,
+    float* coverage_accumulator,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame);
 void glass_coverage_accumulate_f32_launch(const float* coverage, float* accumulator, std::size_t n);
 void glass_coverage_accumulate_full_f32_launch(float* accumulator, std::size_t n);
 void glass_matrix_alignment_metrics_f32_launch(
@@ -4682,9 +4690,12 @@ class ResidentCalibratedStack {
       result["kernel_enqueue_s"] = 0.0;
       result["coverage_reduce_enqueue_s"] = 0.0;
       result["scatter_enqueue_s"] = 0.0;
+      result["postprocess_enqueue_s"] = 0.0;
+      result["postprocess_mode"] = "fused_scatter_reduce";
       result["warp_kernel_launches"] = 0;
       result["coverage_reduce_kernel_launches"] = 0;
       result["scatter_kernel_launches"] = 0;
+      result["postprocess_kernel_launches"] = 0;
       result["device_copy_enqueue_s"] = 0.0;
       result["sync_s"] = 0.0;
       result["total_s"] = 0.0;
@@ -4730,10 +4741,12 @@ class ResidentCalibratedStack {
     double kernel_enqueue_s = 0.0;
     double coverage_reduce_enqueue_s = 0.0;
     double scatter_enqueue_s = 0.0;
+    double postprocess_enqueue_s = 0.0;
     std::size_t chunk_count = 0;
     std::size_t warp_kernel_launches = 0;
     std::size_t coverage_reduce_kernel_launches = 0;
     std::size_t scatter_kernel_launches = 0;
+    std::size_t postprocess_kernel_launches = 0;
     for (std::size_t begin = 0; begin < indices.size(); begin += workspace.capacity_frames) {
       const std::size_t chunk_frames = std::min(workspace.capacity_frames, indices.size() - begin);
       const auto kernel_start = Clock::now();
@@ -4750,25 +4763,18 @@ class ResidentCalibratedStack {
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_bilinear_frames kernel launch");
       kernel_enqueue_s += seconds_since(kernel_start);
       ++warp_kernel_launches;
-      const auto coverage_start = Clock::now();
-      glass_warp_batch_coverage_reduce_f32_launch(
-          workspace.coverage.get(),
-          d_warp_coverage_,
-          static_cast<int>(chunk_frames),
-          pixels_per_frame_);
-      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_bilinear_frames coverage reduce launch");
-      coverage_reduce_enqueue_s += seconds_since(coverage_start);
-      ++coverage_reduce_kernel_launches;
-      const auto scatter_start = Clock::now();
-      glass_warp_batch_scatter_f32_launch(
+      const auto postprocess_start = Clock::now();
+      glass_warp_batch_scatter_reduce_f32_launch(
           workspace.output.get(),
+          workspace.coverage.get(),
           d_stack_,
+          d_warp_coverage_,
           workspace.indices.get() + begin,
           static_cast<int>(chunk_frames),
           pixels_per_frame_);
-      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_bilinear_frames scatter launch");
-      scatter_enqueue_s += seconds_since(scatter_start);
-      ++scatter_kernel_launches;
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_bilinear_frames fused scatter/reduce launch");
+      postprocess_enqueue_s += seconds_since(postprocess_start);
+      ++postprocess_kernel_launches;
       warp_coverage_frame_count_ += chunk_frames;
       ++chunk_count;
     }
@@ -4802,10 +4808,13 @@ class ResidentCalibratedStack {
     result["kernel_enqueue_s"] = kernel_enqueue_s;
     result["coverage_reduce_enqueue_s"] = coverage_reduce_enqueue_s;
     result["scatter_enqueue_s"] = scatter_enqueue_s;
+    result["postprocess_enqueue_s"] = postprocess_enqueue_s;
+    result["postprocess_mode"] = "fused_scatter_reduce";
     result["warp_kernel_launches"] = static_cast<unsigned long long>(warp_kernel_launches);
     result["coverage_reduce_kernel_launches"] = static_cast<unsigned long long>(coverage_reduce_kernel_launches);
     result["scatter_kernel_launches"] = static_cast<unsigned long long>(scatter_kernel_launches);
-    result["device_copy_enqueue_s"] = scatter_enqueue_s;
+    result["postprocess_kernel_launches"] = static_cast<unsigned long long>(postprocess_kernel_launches);
+    result["device_copy_enqueue_s"] = postprocess_enqueue_s;
     result["sync_s"] = sync_s;
     result["total_s"] = seconds_since(total_start);
     return result;
@@ -4852,9 +4861,12 @@ class ResidentCalibratedStack {
       result["kernel_enqueue_s"] = 0.0;
       result["coverage_reduce_enqueue_s"] = 0.0;
       result["scatter_enqueue_s"] = 0.0;
+      result["postprocess_enqueue_s"] = 0.0;
+      result["postprocess_mode"] = "fused_scatter_reduce";
       result["warp_kernel_launches"] = 0;
       result["coverage_reduce_kernel_launches"] = 0;
       result["scatter_kernel_launches"] = 0;
+      result["postprocess_kernel_launches"] = 0;
       result["device_copy_enqueue_s"] = 0.0;
       result["sync_s"] = 0.0;
       result["total_s"] = 0.0;
@@ -4900,10 +4912,12 @@ class ResidentCalibratedStack {
     double kernel_enqueue_s = 0.0;
     double coverage_reduce_enqueue_s = 0.0;
     double scatter_enqueue_s = 0.0;
+    double postprocess_enqueue_s = 0.0;
     std::size_t chunk_count = 0;
     std::size_t warp_kernel_launches = 0;
     std::size_t coverage_reduce_kernel_launches = 0;
     std::size_t scatter_kernel_launches = 0;
+    std::size_t postprocess_kernel_launches = 0;
     for (std::size_t begin = 0; begin < indices.size(); begin += workspace.capacity_frames) {
       const std::size_t chunk_frames = std::min(workspace.capacity_frames, indices.size() - begin);
       const auto kernel_start = Clock::now();
@@ -4921,25 +4935,18 @@ class ResidentCalibratedStack {
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frames kernel launch");
       kernel_enqueue_s += seconds_since(kernel_start);
       ++warp_kernel_launches;
-      const auto coverage_start = Clock::now();
-      glass_warp_batch_coverage_reduce_f32_launch(
-          workspace.coverage.get(),
-          d_warp_coverage_,
-          static_cast<int>(chunk_frames),
-          pixels_per_frame_);
-      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frames coverage reduce launch");
-      coverage_reduce_enqueue_s += seconds_since(coverage_start);
-      ++coverage_reduce_kernel_launches;
-      const auto scatter_start = Clock::now();
-      glass_warp_batch_scatter_f32_launch(
+      const auto postprocess_start = Clock::now();
+      glass_warp_batch_scatter_reduce_f32_launch(
           workspace.output.get(),
+          workspace.coverage.get(),
           d_stack_,
+          d_warp_coverage_,
           workspace.indices.get() + begin,
           static_cast<int>(chunk_frames),
           pixels_per_frame_);
-      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frames scatter launch");
-      scatter_enqueue_s += seconds_since(scatter_start);
-      ++scatter_kernel_launches;
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frames fused scatter/reduce launch");
+      postprocess_enqueue_s += seconds_since(postprocess_start);
+      ++postprocess_kernel_launches;
       warp_coverage_frame_count_ += chunk_frames;
       ++chunk_count;
     }
@@ -4973,10 +4980,13 @@ class ResidentCalibratedStack {
     result["kernel_enqueue_s"] = kernel_enqueue_s;
     result["coverage_reduce_enqueue_s"] = coverage_reduce_enqueue_s;
     result["scatter_enqueue_s"] = scatter_enqueue_s;
+    result["postprocess_enqueue_s"] = postprocess_enqueue_s;
+    result["postprocess_mode"] = "fused_scatter_reduce";
     result["warp_kernel_launches"] = static_cast<unsigned long long>(warp_kernel_launches);
     result["coverage_reduce_kernel_launches"] = static_cast<unsigned long long>(coverage_reduce_kernel_launches);
     result["scatter_kernel_launches"] = static_cast<unsigned long long>(scatter_kernel_launches);
-    result["device_copy_enqueue_s"] = scatter_enqueue_s;
+    result["postprocess_kernel_launches"] = static_cast<unsigned long long>(postprocess_kernel_launches);
+    result["device_copy_enqueue_s"] = postprocess_enqueue_s;
     result["sync_s"] = sync_s;
     result["total_s"] = seconds_since(total_start);
     return result;
