@@ -10572,6 +10572,79 @@ Completed in Gate446:
   - report:
     `C:\glass_runs\phase2_s2_gate485_resident_cuda_master_mean_ab_real\reports\warm_report.html`.
 
+### S2-Gate 486: Resident Master Raw-u16 GPU Decode
+
+- Continue the Gate485 finding that after GPU mean reduction, the remaining
+  cold master-cache cost is mostly calibration-frame FITS read/decode/upload.
+- Required work:
+  - keep the Gate485 StackEngine-compatible DQ/result contract and CPU fallback;
+  - reuse existing GLASS raw-u16 GPU decode primitives rather than adding a new
+    unverified kernel;
+  - only enable raw decode for simple `BITPIX=16`, `BSCALE=1`, `BZERO=32768`,
+    no-`BLANK` calibration FITS inputs;
+  - rerun the real 200-light cold/warm A/B and compare against Gate485 and the
+    WBPP black-box reference.
+- Completed:
+  - extended the resident CUDA master mean builder to prefer raw-u16 GPU decode
+    for eligible calibration master groups;
+  - raw frames are read as compact bytes via `read_simple_fits_u16be_raw_timed`,
+    then decoded into the resident stack with
+    `ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed`
+    with no bias/dark/flat masters set;
+  - groups record `resident_master_cache_builder_dispatch=resident_cuda_raw_u16_mean`,
+    `raw_u16_gpu_decode_enabled=True`, raw H2D bytes, avoided float32-host
+    bytes, native timing, and StackEngine-compatible DQ provenance;
+  - unsupported inputs fall back to the Gate485 native-direct float32 upload
+    path, and CUDA-unavailable systems fall back to the Gate484 CPUStackEngine
+    full-frame path;
+  - focused tests cover CPU fallback, native-direct CUDA, and raw-u16 CUDA
+    dispatch without requiring real CUDA in CI.
+- Real 200-light A/B:
+  - output root:
+    `C:\glass_runs\phase2_s2_gate486_master_raw_u16_ab_real`;
+  - cold raw-u16 total: `26.353526399994735 s`;
+  - cold `master_build_or_load`: `6.047361700038891 s`;
+  - cold `light_read_upload_calibrate`: `9.263657799980137 s`;
+  - warm raw-u16 total: `20.477806099923328 s`;
+  - warm `master_build_or_load`: `0.3097565000061877 s`;
+  - warm `light_read_upload_calibrate`: `3.5053099000360817 s`;
+  - Gate485 cold total comparison: `27.771337599959224 s` ->
+    `26.353526399994735 s` (`1.053791970328577x`);
+  - Gate485 cold master-build comparison: `7.568977500020992 s` ->
+    `6.047361700038891 s` (`1.2516164693724727x`);
+  - Gate484 cold master-build comparison: `15.344373799976893 s` ->
+    `6.047361700038891 s` (`2.5373666337633174x`);
+  - Gate481 helper cold master-build comparison: `10.911685600003693 s` ->
+    `6.047361700038891 s` (`1.8043712516705457x`);
+  - raw-u16 master-cache groups avoided float32 host payloads:
+    bias `1479628800` bytes, dark `2712652800` bytes, flat `986419200` bytes;
+  - warm-vs-cold master difference: RMS/p99/max all `0.0`;
+  - warm-vs-Gate485 warm master difference: RMS/p99/max all `0.0`;
+  - warm-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`;
+  - warm GLASS vs WBPP speedup: `53.35244384426956x`;
+  - threshold acceptance audit passed with the same 200-light, calibration,
+    frame-count, speedup, coverage, RMS, and p99 thresholds as Gate485.
+- Interpretation:
+  - raw-u16 GPU decode gives a real but smaller cold-cache improvement after
+    Gate485, because the master-cache path is now close to the FITS read floor;
+  - the output remains pixel-identical to Gate485 and the WBPP compare metrics
+    are unchanged;
+  - the remaining end-to-end cold gap is now mostly outside master-cache
+    reduction and should be pursued in light read/upload/calibration overlap,
+    registration orchestration, or formal DQ/mask contract work;
+  - robust resident master rejection remains deferred until a native/CUDA or
+    optimized batch implementation is available.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate486_master_raw_u16_ab_real\gate486_real_ab_summary.json`;
+  - threshold acceptance:
+    `C:\glass_runs\phase2_s2_gate486_master_raw_u16_ab_real\acceptance\warm_threshold_acceptance_audit.json`;
+  - speedup summary:
+    `C:\glass_runs\phase2_s2_gate486_master_raw_u16_ab_real\speedup\warm_vs_wbpp_speedup_with_compare.json`;
+  - report:
+    `C:\glass_runs\phase2_s2_gate486_master_raw_u16_ab_real\reports\warm_report.html`.
+
 ## Gate Rules
 
 Each gate requires:

@@ -93,7 +93,9 @@ _RESIDENT_WINSORIZED_MODES = {
 }
 _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE = False
 _RESIDENT_MASTER_STACK_TILE_SIZE = 512
-_RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_resident_cuda_mean_master_cache_v1"
+_RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_resident_cuda_raw_u16_mean_master_cache_v1"
+_RESIDENT_MASTER_RAW_U16_STREAM_COUNT = 4
+_RESIDENT_MASTER_RAW_U16_WAVE_FRAMES = 4
 
 
 def _cuda_module_required():
@@ -3581,6 +3583,22 @@ def _resident_master_cuda_mean_available() -> tuple[bool, str]:
     return True, ""
 
 
+def _resident_master_raw_u16_eligible(specs: list[Any], stack: Any) -> tuple[bool, str]:
+    method = "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed"
+    if not hasattr(stack, method):
+        return False, "resident_raw_u16_method_unavailable"
+    for index, spec in enumerate(specs):
+        if int(spec.bitpix) != 16:
+            return False, f"frame_{index}_bitpix_not_16:{spec.bitpix}"
+        if float(spec.bscale) != 1.0:
+            return False, f"frame_{index}_bscale_not_1:{spec.bscale:g}"
+        if float(spec.bzero) != 32768.0:
+            return False, f"frame_{index}_bzero_not_32768:{spec.bzero:g}"
+        if spec.blank is not None:
+            return False, f"frame_{index}_blank_present"
+    return True, ""
+
+
 def _stack_engine_mean_no_rejection_provenance(
     *,
     input_sample_total: int,
@@ -3645,7 +3663,6 @@ def _stack_resident_master_array_with_resident_cuda_mean(
     allocate_start = perf_counter()
     stack = glass_cuda.ResidentCalibratedStack(len(paths), height, width)
     allocate_s = perf_counter() - allocate_start
-    host_buffer = np.empty((height, width), dtype=np.float32)
 
     per_frame_read_s: list[float] = []
     per_frame_upload_s: list[float] = []
@@ -3657,29 +3674,87 @@ def _stack_resident_master_array_with_resident_cuda_mean(
     fits_native_bytes_read = 0
     input_nonfinite_sample_total = 0
     pixel_count = int(height) * int(width)
+    raw_u16_enabled, raw_u16_fallback_reason = _resident_master_raw_u16_eligible(specs, stack)
+    raw_u16_timing: dict[str, Any] | None = None
+    raw_h2d_bytes = 0
+    raw_float32_host_bytes_avoided = 0
+    host_buffer_bytes = 0
+    source_sample_format = "native_direct_float32_host"
+    native_method = "ResidentCalibratedStack.upload_calibrated_frame + integrate_mean"
 
-    for index, (path, spec) in enumerate(zip(paths, specs, strict=True)):
-        read_start = perf_counter()
-        frame, profile = read_simple_fits_image_native_direct_timed(path, dtype=np.float32, output=host_buffer)
-        per_frame_read_s.append(perf_counter() - read_start)
-        fits_backends.append(str(profile.get("fits_reader_backend") or "native_direct_simple"))
-        if "fits_native_file_read_s" in profile:
-            fits_native_file_read_s.append(float(profile.get("fits_native_file_read_s", 0.0) or 0.0))
-        if "fits_native_decode_s" in profile:
-            fits_native_decode_s.append(float(profile.get("fits_native_decode_s", 0.0) or 0.0))
-        if "fits_native_total_s" in profile:
-            fits_native_total_s.append(float(profile.get("fits_native_total_s", 0.0) or 0.0))
-        fits_native_bytes_read += int(profile.get("fits_native_bytes_read", 0) or 0)
-        if spec.bitpix > 0 and spec.blank is None:
-            nonfinite_count = 0
-        else:
-            nonfinite_count = int(np.count_nonzero(~np.isfinite(frame)))
-        per_frame_nonfinite.append(nonfinite_count)
-        input_nonfinite_sample_total += nonfinite_count
+    if raw_u16_enabled:
+        raw_buffers: list[np.ndarray | None] = []
+        for path in paths:
+            read_start = perf_counter()
+            raw, profile = read_simple_fits_u16be_raw_timed(path)
+            per_frame_read_s.append(perf_counter() - read_start)
+            raw_buffers.append(raw)
+            fits_backends.append(str(profile.get("fits_reader_backend") or "native_u16be_raw"))
+            if "fits_native_file_read_s" in profile:
+                fits_native_file_read_s.append(float(profile.get("fits_native_file_read_s", 0.0) or 0.0))
+            if "fits_native_decode_s" in profile:
+                fits_native_decode_s.append(float(profile.get("fits_native_decode_s", 0.0) or 0.0))
+            if "fits_native_total_s" in profile:
+                fits_native_total_s.append(float(profile.get("fits_native_total_s", 0.0) or 0.0))
+            fits_native_bytes_read += int(profile.get("fits_native_bytes_read", 0) or 0)
+            per_frame_nonfinite.append(0)
 
+        released_indices: list[int] = []
+
+        def _release_raw_buffers(indices: Any) -> None:
+            for index in indices:
+                idx = int(index)
+                if 0 <= idx < len(raw_buffers):
+                    raw_buffers[idx] = None
+                    released_indices.append(idx)
+
+        stream_count = min(_RESIDENT_MASTER_RAW_U16_STREAM_COUNT, len(paths))
+        wave_frames = min(_RESIDENT_MASTER_RAW_U16_WAVE_FRAMES, stream_count)
         upload_start = perf_counter()
-        stack.upload_calibrated_frame(index, frame)
+        raw_u16_timing = stack.calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed(
+            list(range(len(paths))),
+            raw_buffers,
+            np.ones(len(paths), dtype=np.float32),
+            np.full(len(paths), np.nan, dtype=np.float32),
+            stream_count,
+            wave_frames,
+            _release_raw_buffers,
+            None,
+        )
         per_frame_upload_s.append(perf_counter() - upload_start)
+        raw_h2d_bytes = int(raw_u16_timing.get("raw_h2d_bytes", 0) or 0)
+        raw_float32_host_bytes_avoided = int(raw_u16_timing.get("float32_host_bytes_avoided", 0) or 0)
+        host_buffer_bytes = raw_h2d_bytes
+        source_sample_format = str(raw_u16_timing.get("source_sample_format", "fits_bitpix16_bzero32768_big_endian"))
+        native_method = (
+            "ResidentCalibratedStack."
+            "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed + integrate_mean"
+        )
+    else:
+        host_buffer = np.empty((height, width), dtype=np.float32)
+        host_buffer_bytes = int(host_buffer.nbytes)
+        for index, (path, spec) in enumerate(zip(paths, specs, strict=True)):
+            read_start = perf_counter()
+            frame, profile = read_simple_fits_image_native_direct_timed(path, dtype=np.float32, output=host_buffer)
+            per_frame_read_s.append(perf_counter() - read_start)
+            fits_backends.append(str(profile.get("fits_reader_backend") or "native_direct_simple"))
+            if "fits_native_file_read_s" in profile:
+                fits_native_file_read_s.append(float(profile.get("fits_native_file_read_s", 0.0) or 0.0))
+            if "fits_native_decode_s" in profile:
+                fits_native_decode_s.append(float(profile.get("fits_native_decode_s", 0.0) or 0.0))
+            if "fits_native_total_s" in profile:
+                fits_native_total_s.append(float(profile.get("fits_native_total_s", 0.0) or 0.0))
+            fits_native_bytes_read += int(profile.get("fits_native_bytes_read", 0) or 0)
+            if spec.bitpix > 0 and spec.blank is None:
+                nonfinite_count = 0
+            else:
+                nonfinite_count = int(np.count_nonzero(~np.isfinite(frame)))
+            per_frame_nonfinite.append(nonfinite_count)
+            input_nonfinite_sample_total += nonfinite_count
+
+            upload_start = perf_counter()
+            stack.upload_calibrated_frame(index, frame)
+            per_frame_upload_s.append(perf_counter() - upload_start)
 
     integrate_start = perf_counter()
     master, weight_map = stack.integrate_mean()
@@ -3709,8 +3784,10 @@ def _stack_resident_master_array_with_resident_cuda_mean(
         "tile_size": 0,
         "tile_stack_mode": "stack_engine_cuda_mean",
         "resident_master_cache_builder": "ResidentCalibratedStack.integrate_mean",
-        "resident_master_cache_builder_dispatch": "resident_cuda_mean",
-        "native_method": "ResidentCalibratedStack.integrate_mean",
+        "resident_master_cache_builder_dispatch": "resident_cuda_raw_u16_mean"
+        if raw_u16_enabled
+        else "resident_cuda_native_direct_mean",
+        "native_method": native_method,
         "master_rejection_requested": policy.master_rejection,
         "master_rejection_applied": "none",
         "master_rejection_dispatch_reason": (
@@ -3721,6 +3798,7 @@ def _stack_resident_master_array_with_resident_cuda_mean(
             "resident_stack_allocate": float(allocate_s),
             "fits_read": float(sum(per_frame_read_s)),
             "resident_upload": float(sum(per_frame_upload_s)),
+            "resident_raw_u16_h2d_decode_store": float(sum(per_frame_upload_s)) if raw_u16_enabled else 0.0,
             "resident_integrate_mean": float(integrate_s),
         },
         "fits_backend_counts": _value_counts(fits_backends),
@@ -3729,7 +3807,13 @@ def _stack_resident_master_array_with_resident_cuda_mean(
         "fits_native_total_cumulative_s": _timing_summary(fits_native_total_s)["total"],
         "fits_native_bytes_read": int(fits_native_bytes_read),
         "per_frame_nonfinite_sample_counts": per_frame_nonfinite,
-        "host_buffer_bytes": int(host_buffer.nbytes),
+        "source_sample_format": source_sample_format,
+        "raw_u16_gpu_decode_enabled": bool(raw_u16_enabled),
+        "raw_u16_gpu_decode_fallback_reason": raw_u16_fallback_reason,
+        "raw_u16_gpu_decode_timing": raw_u16_timing,
+        "raw_h2d_bytes": int(raw_h2d_bytes),
+        "raw_float32_host_bytes_avoided": int(raw_float32_host_bytes_avoided),
+        "host_buffer_bytes": int(host_buffer_bytes),
         "resident_stack_required_bytes": int(len(paths) * pixel_count * 4),
     }
     provenance = _stack_engine_mean_no_rejection_provenance(

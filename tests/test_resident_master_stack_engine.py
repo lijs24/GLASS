@@ -6,6 +6,7 @@ import numpy as np
 
 import glass.engine.resident_cuda as resident_cuda
 from glass.engine.resident_cuda import _load_or_build_matching_masters
+from glass.io.fits_fast import SimpleFitsImageSpec
 from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.models import CalibrationPolicy
 
@@ -97,7 +98,7 @@ def test_resident_matching_master_cache_uses_stack_engine_contract(tmp_path: Pat
     )
 
     assert stats["cache_hit"] is False
-    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_mean_master_cache_v1"
+    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_raw_u16_mean_master_cache_v1"
     assert stats["tile_stack_mode"] == "stack_engine_cpu"
     assert stats["stack_engine_fallback_reason"] == "unit_test_cuda_unavailable"
     assert stats["stack_engine_enabled"] is True
@@ -224,12 +225,172 @@ def test_resident_matching_master_cache_can_use_resident_cuda_mean_builder(
     assert stats["cache_hit"] is False
     assert stats["tile_stack_mode"] == "stack_engine_cuda_mean"
     assert stats["stack_engine_fallback_reason"] is None
-    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_mean_master_cache_v1"
+    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_raw_u16_mean_master_cache_v1"
     assert stats["stack_engine_metrics"]["bias"]["execution_path"] == "resident_cuda_mean_no_rejection"
+    assert stats["stack_engine_metrics"]["bias"]["resident_master_cache_builder_dispatch"] == (
+        "resident_cuda_native_direct_mean"
+    )
     assert stats["stack_engine_metrics"]["bias"]["resident_master_cache_builder"] == (
         "ResidentCalibratedStack.integrate_mean"
     )
     assert stats["stack_engine_metrics"]["bias"]["fits_backend_counts"] == {"fake_native_direct_simple": 2}
+    assert stats["dq_provenance_summary"]["bias"]["engine"] == "stack_engine_cuda_mean"
+    assert stats["dq_provenance_summary"]["bias"]["sample_accounting_closure"]["status"] == "passed"
+    assert dark_exposure == 120.0
+    assert np.allclose(bias, 11.0)
+    assert np.allclose(dark, 91.0)
+    assert np.allclose(flat, 1.0)
+
+
+def test_resident_matching_master_cache_prefers_raw_u16_gpu_decode(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class FakeResidentCalibratedStack:
+        instances: list["FakeResidentCalibratedStack"] = []
+
+        def __init__(self, frame_count: int, height: int, width: int) -> None:
+            self.frame_count = int(frame_count)
+            self.height = int(height)
+            self.width = int(width)
+            self.frames: list[np.ndarray | None] = [None] * self.frame_count
+            FakeResidentCalibratedStack.instances.append(self)
+
+        def calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed(
+            self,
+            indices,
+            raw_lights,
+            light_exposures_s,
+            dark_exposures_s,
+            stream_count: int,
+            wave_frames: int,
+            release_callback,
+            policy=None,
+        ):
+            del light_exposures_s, dark_exposures_s, policy
+            raw_h2d_bytes = 0
+            for index, raw in zip(indices, raw_lights, strict=True):
+                raw_array = np.asarray(raw, dtype=np.uint8)
+                raw_h2d_bytes += int(raw_array.nbytes)
+                bits = np.frombuffer(raw_array.tobytes(), dtype=">u2")
+                values = (bits ^ np.uint16(0x8000)).astype(np.float32).reshape(self.height, self.width)
+                self.frames[int(index)] = values
+            release_callback(list(indices))
+            return {
+                "source_sample_format": "fits_bitpix16_bzero32768_big_endian",
+                "raw_h2d_bytes": raw_h2d_bytes,
+                "float32_host_bytes_avoided": raw_h2d_bytes * 2,
+                "requested_stream_count": int(stream_count),
+                "stream_count": int(stream_count),
+                "requested_wave_frames": int(wave_frames),
+                "wave_frames": int(wave_frames),
+                "frame_count": len(list(indices)),
+                "total_s": 0.01,
+            }
+
+        def integrate_mean(self):
+            stack = np.stack([frame for frame in self.frames if frame is not None], axis=0)
+            finite = np.isfinite(stack)
+            sums = np.where(finite, stack, 0.0).sum(axis=0, dtype=np.float64)
+            weight = finite.sum(axis=0, dtype=np.float32)
+            master = np.divide(sums, weight, out=np.zeros_like(sums), where=weight > 0).astype(np.float32)
+            return master, weight.astype(np.float32)
+
+    raw_values: dict[str, float] = {}
+
+    def write_raw_named(prefix: str, values: list[float]) -> list[str]:
+        frame_ids: list[str] = []
+        for index, value in enumerate(values):
+            frame_id = f"{prefix}{index}"
+            frame_ids.append(frame_id)
+            path = tmp_path / f"{frame_id}.fits"
+            path.write_bytes(b"raw placeholder")
+            raw_values[str(path)] = float(value)
+        return frame_ids
+
+    def fake_spec(path):
+        return SimpleFitsImageSpec(
+            path=Path(path),
+            bitpix=16,
+            width=4,
+            height=4,
+            data_offset=0,
+            dtype=np.dtype(">i2"),
+            bscale=1.0,
+            bzero=32768.0,
+            blank=None,
+        )
+
+    def fake_raw_read(path, output=None):
+        value = int(raw_values[str(Path(path))])
+        bits = np.full(16, value ^ 0x8000, dtype=">u2")
+        raw = bits.view(np.uint8).copy()
+        if output is not None:
+            output[...] = raw
+            raw = output
+        return raw, {
+            "fits_reader_backend": "native_u16be_raw",
+            "fits_native_file_read_s": 0.001,
+            "fits_native_decode_s": 0.0,
+            "fits_native_total_s": 0.001,
+            "fits_native_bytes_read": int(raw.nbytes),
+        }
+
+    monkeypatch.setattr(resident_cuda, "_resident_master_cuda_mean_available", lambda: (True, ""))
+    monkeypatch.setattr(resident_cuda, "simple_fits_image_spec", fake_spec)
+    monkeypatch.setattr(resident_cuda, "read_simple_fits_u16be_raw_timed", fake_raw_read)
+    monkeypatch.setattr(
+        resident_cuda,
+        "read_simple_fits_image_native_direct_timed",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("raw path should not use native-direct float read")),
+    )
+    monkeypatch.setattr("glass_cuda.ResidentCalibratedStack", FakeResidentCalibratedStack)
+
+    bias_ids = write_raw_named("B", [10.0, 12.0])
+    dark_ids = write_raw_named("D", [100.0, 104.0])
+    flat_ids = write_raw_named("F", [100.0, 120.0])
+    frames = {
+        frame_id: {
+            "id": frame_id,
+            "path": str(tmp_path / f"{frame_id}.fits"),
+            "exposure_s": 120.0 if frame_id.startswith("D") else 1.0,
+            "width": 4,
+            "height": 4,
+        }
+        for frame_id in [*bias_ids, *dark_ids, *flat_ids]
+    }
+    shape = {"height": 4, "width": 4}
+    groups = {
+        "B": {"group_id": "B", "group_type": "bias", "frames": bias_ids, "shape": shape},
+        "D": {"group_id": "D", "group_type": "dark", "frames": dark_ids, "shape": shape},
+        "F": {"group_id": "F", "group_type": "flat", "frames": flat_ids, "shape": shape},
+    }
+    policy = CalibrationPolicy(master_dark_includes_bias=False, flat_normalization="median", flat_floor=0.05)
+
+    bias, dark, flat, stats, dark_exposure = _load_or_build_matching_masters(
+        tmp_path / "run_raw",
+        "H",
+        4,
+        4,
+        frames,
+        groups,
+        "B",
+        "D",
+        "F",
+        policy,
+        master_cache_dir=tmp_path / "shared_raw_cache",
+    )
+
+    assert len(FakeResidentCalibratedStack.instances) == 3
+    assert stats["tile_stack_mode"] == "stack_engine_cuda_mean"
+    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_raw_u16_mean_master_cache_v1"
+    assert stats["stack_engine_metrics"]["bias"]["resident_master_cache_builder_dispatch"] == (
+        "resident_cuda_raw_u16_mean"
+    )
+    assert stats["stack_engine_metrics"]["bias"]["raw_u16_gpu_decode_enabled"] is True
+    assert stats["stack_engine_metrics"]["bias"]["raw_h2d_bytes"] == 64
+    assert stats["stack_engine_metrics"]["bias"]["raw_float32_host_bytes_avoided"] == 128
+    assert stats["stack_engine_metrics"]["bias"]["fits_backend_counts"] == {"native_u16be_raw": 2}
     assert stats["dq_provenance_summary"]["bias"]["engine"] == "stack_engine_cuda_mean"
     assert stats["dq_provenance_summary"]["bias"]["sample_accounting_closure"]["status"] == "passed"
     assert dark_exposure == 120.0
