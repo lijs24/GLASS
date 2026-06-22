@@ -151,6 +151,16 @@ void glass_warp_matrix_lanczos3_batch_f32_launch(
     int height,
     float fill,
     float clamping_threshold);
+void glass_warp_matrix_lanczos3_batch_unclamped_f32_launch(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill);
 void glass_warp_batch_coverage_reduce_f32_launch(
     const unsigned char* batch_coverage,
     float* coverage_accumulator,
@@ -5926,6 +5936,8 @@ class ResidentCalibratedStack {
       result["postprocess_enqueue_s"] = 0.0;
       result["postprocess_mode"] = track_coverage ? "fused_scatter_reduce" : "scatter_only_no_coverage_accumulator";
       result["lanczos3_clamping_enabled"] = clamping_threshold >= 0.0f;
+      result["lanczos3_clamp_path"] =
+          clamping_threshold >= 0.0f ? "generic_runtime_clamp" : "unclamped_specialized";
       result["warp_kernel_launches"] = 0;
       result["coverage_reduce_kernel_launches"] = 0;
       result["scatter_kernel_launches"] = 0;
@@ -5987,20 +5999,34 @@ class ResidentCalibratedStack {
     std::size_t coverage_reduce_kernel_launches = 0;
     std::size_t scatter_kernel_launches = 0;
     std::size_t postprocess_kernel_launches = 0;
+    const bool lanczos3_clamping_enabled = clamping_threshold >= 0.0f;
     for (std::size_t begin = 0; begin < indices.size(); begin += workspace.capacity_frames) {
       const std::size_t chunk_frames = std::min(workspace.capacity_frames, indices.size() - begin);
       const auto kernel_start = Clock::now();
-      glass_warp_matrix_lanczos3_batch_f32_launch(
-          d_stack_,
-          workspace.output.get(),
-          workspace.coverage.get(),
-          workspace.indices.get() + begin,
-          workspace.inverses.get() + begin * 9,
-          static_cast<int>(chunk_frames),
-          static_cast<int>(width_),
-          static_cast<int>(height_),
-          fill,
-          clamping_threshold);
+      if (lanczos3_clamping_enabled) {
+        glass_warp_matrix_lanczos3_batch_f32_launch(
+            d_stack_,
+            workspace.output.get(),
+            workspace.coverage.get(),
+            workspace.indices.get() + begin,
+            workspace.inverses.get() + begin * 9,
+            static_cast<int>(chunk_frames),
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            fill,
+            clamping_threshold);
+      } else {
+        glass_warp_matrix_lanczos3_batch_unclamped_f32_launch(
+            d_stack_,
+            workspace.output.get(),
+            workspace.coverage.get(),
+            workspace.indices.get() + begin,
+            workspace.inverses.get() + begin * 9,
+            static_cast<int>(chunk_frames),
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            fill);
+      }
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frames kernel launch");
       kernel_enqueue_s += seconds_since(kernel_start);
       ++warp_kernel_launches;
@@ -6068,7 +6094,9 @@ class ResidentCalibratedStack {
     result["scatter_enqueue_s"] = scatter_enqueue_s;
     result["postprocess_enqueue_s"] = postprocess_enqueue_s;
     result["postprocess_mode"] = track_coverage ? "fused_scatter_reduce" : "scatter_only_no_coverage_accumulator";
-    result["lanczos3_clamping_enabled"] = clamping_threshold >= 0.0f;
+    result["lanczos3_clamping_enabled"] = lanczos3_clamping_enabled;
+    result["lanczos3_clamp_path"] =
+        lanczos3_clamping_enabled ? "generic_runtime_clamp" : "unclamped_specialized";
     result["warp_kernel_launches"] = static_cast<unsigned long long>(warp_kernel_launches);
     result["coverage_reduce_kernel_launches"] = static_cast<unsigned long long>(coverage_reduce_kernel_launches);
     result["scatter_kernel_launches"] = static_cast<unsigned long long>(scatter_kernel_launches);

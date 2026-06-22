@@ -350,6 +350,71 @@ Validation commands:
   tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair`
 - `python -m pytest -q` (`1153 passed`)
 
+### S2-Gate 509: Specialized Unclamped Lanczos3 Batch Warp
+
+Gate 509 targets the largest remaining resident registration component in the
+current 200-light path: native batch Lanczos3 warp sync. The default benchmark
+keeps Lanczos3 overshoot clamping disabled, but the prior batch kernel still
+carried the runtime clamp branch and local min/max state. This gate adds a
+dedicated unclamped batch Lanczos3 CUDA kernel and routes only
+`clamping_threshold < 0` batch calls to it. The weight calculation order, fill
+behavior, scatter path, registration matrices, rejection, integration, and
+master pixels are unchanged.
+
+Implementation:
+
+- `cpp/cuda/warp_kernels.cu` adds
+  `glass_warp_matrix_lanczos3_batch_unclamped_f32_kernel` and launch wrapper.
+- `cpp/src/native_bindings.cpp` dispatches unclamped batch Lanczos3 warp calls
+  to the specialized launch and records `lanczos3_clamp_path`.
+- `src/glass/engine/resident_cuda.py` propagates the path into resident
+  artifacts as `triangle_warp_batch_native_lanczos3_clamp_path` and per-frame
+  warnings.
+- Focused CUDA/resident tests assert that clamped calls keep the generic
+  runtime-clamp path while unclamped calls use `unclamped_specialized`.
+
+Real 200-light evidence:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate509_lanczos_unclamped_specialized_ab_real\runs_20260623_062926`
+- Candidate runtime: `6.640441200055648 s`
+- Repeat runtime: `6.619877799996175 s`
+- Gate508 repeat runtime: `6.605046200042125 s`
+- Candidate, repeat, and Gate508 repeat masters are bitwise identical
+  (`RMS=0`, `p99=0`, `max_abs=0`).
+- Repeat artifact records:
+  - `triangle_warp_batch_native_lanczos3_clamping_enabled=false`;
+  - `triangle_warp_batch_native_lanczos3_clamp_path=unclamped_specialized`;
+  - `triangle_warp_batch_native_warp_kernel_launches=24`;
+  - `triangle_warp_batch_native_chunk_count=24`;
+  - `triangle_warp_batch_native_chunk_frames=8`.
+- Repeat warp component timing:
+  - `triangle_warp_native_batch=0.4622479 s`;
+  - `triangle_warp_native_sync=0.4458116 s`.
+- Gate508 repeat warp component timing:
+  - `triangle_warp_native_batch=0.466583 s`;
+  - `triangle_warp_native_sync=0.4500857 s`.
+- Interpretation: this is a small but direct kernel-path optimization that
+  preserves bitwise output. The remaining major speed targets are still
+  read/decode/upload orchestration and larger resident registration/warp
+  batching changes rather than more report-only gates.
+- WBPP fastIntegration comparison report:
+  `C:\glass_runs\phase2_s2_gate509_lanczos_unclamped_specialized_ab_real\runs_20260623_062926\compare_vs_wbpp_fastintegration_scaled_coverage190.html`
+- Gate509 repeat versus external reference:
+  `speedup=165.03945133256556x`, `RMS=0.0017794216505176163`,
+  `p99_abs=0.00042621337808668863`.
+
+Validation commands:
+
+- `cmd /c "VsDevCmd.bat -arch=x64 && cmake --build build --config Release -j 1"`
+- `python -m ruff check src\glass\engine\resident_cuda.py
+  tests\test_gpu_warp_vs_cpu.py tests\test_resident_cuda_run.py`
+- `python -m pytest -q
+  tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference
+  tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_records_unclamped_fast_path
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_auto_dispatch_keeps_lanczos_rejection_on_stack`
+- `python -m pytest -q` (`1153 passed`)
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

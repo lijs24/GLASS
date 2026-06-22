@@ -463,6 +463,7 @@ def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
     assert timing["postprocess_enqueue_s"] >= 0.0
     assert timing["postprocess_mode"] == "fused_scatter_reduce"
     assert timing["lanczos3_clamping_enabled"] is True
+    assert timing["lanczos3_clamp_path"] == "generic_runtime_clamp"
     assert timing["warp_kernel_launches"] == 1
     assert timing["coverage_reduce_kernel_launches"] == 0
     assert timing["scatter_kernel_launches"] == 0
@@ -608,6 +609,7 @@ def test_resident_stack_matrix_lanczos3_batch_can_skip_coverage_scratch_without_
     )
     assert skipped_timing["postprocess_mode"] == "scatter_only_no_coverage_accumulator"
     assert skipped_timing["lanczos3_clamping_enabled"] is True
+    assert skipped_timing["lanczos3_clamp_path"] == "generic_runtime_clamp"
     assert skipped_timing["scatter_kernel_launches"] == skipped_timing["batch_chunk_count"]
     assert skipped.warp_coverage_frame_count == 0
     assert np.array_equal(skipped_master, tracked_master, equal_nan=True)
@@ -640,6 +642,7 @@ def test_resident_stack_matrix_lanczos3_batch_records_unclamped_fast_path():
     expected, expected_coverage = _warp_matrix_lanczos3_cpu(frame, matrix[0], np.nan, -1.0)
 
     assert timing["lanczos3_clamping_enabled"] is False
+    assert timing["lanczos3_clamp_path"] == "unclamped_specialized"
     assert timing["postprocess_mode"] == "scatter_only_no_coverage_accumulator"
     assert np.allclose(warped, np.nan_to_num(expected, nan=0.0), atol=3.0e-5)
     assert np.array_equal(weight, expected_coverage)

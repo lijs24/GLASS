@@ -3830,6 +3830,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_warp_batch_native_postprocess_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_postprocess_mode"] == "fused_scatter_reduce"
     assert resident_registration["triangle_warp_batch_native_lanczos3_clamping_enabled"] is None
+    assert resident_registration["triangle_warp_batch_native_lanczos3_clamp_path"] == "off"
     assert resident_registration["triangle_warp_batch_native_device_copy_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_sync_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_total_s"] >= 0.0
@@ -4507,7 +4508,12 @@ def test_cli_resident_cuda_auto_dispatch_keeps_lanczos_rejection_on_stack(tmp_pa
     assert resident_registration["triangle_fused_matrix_deferred_count"] == 0
     assert resident_registration["triangle_warp_batch_mode"] == "native_matrix_lanczos3_frames"
     assert resident_registration["triangle_warp_batch_native_lanczos3_clamping_enabled"] is False
+    assert resident_registration["triangle_warp_batch_native_lanczos3_clamp_path"] == "unclamped_specialized"
     assert any("resident_registration_application=matrix_lanczos3_batch" == warning for warning in moving["warnings"])
+    assert any(
+        "triangle_warp_batch_lanczos3_clamp_path=unclamped_specialized" == warning
+        for warning in moving["warnings"]
+    )
 
 
 def test_cli_resident_cuda_run_similarity_catalog_rejects_low_quality_matrix(tmp_path: Path):
