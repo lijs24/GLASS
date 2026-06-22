@@ -6747,6 +6747,8 @@ def run_resident_calibration_integration(
                 triangle_catalog_output_download_copy_count = 0
                 triangle_catalog_centroid_before_download_copy_count = 0
                 triangle_catalog_output_download_bytes = 0
+                triangle_catalog_centroid_mean_sync_mode = "off"
+                triangle_catalog_centroid_mean_blocks = 0
                 triangle_catalog_sort_mode = "off"
                 triangle_catalog_topk_mode = "off"
                 triangle_pixel_refine_batch_enabled = bool(
@@ -7008,6 +7010,8 @@ def run_resident_calibration_integration(
                     nonlocal triangle_catalog_output_download_copy_count
                     nonlocal triangle_catalog_centroid_before_download_copy_count
                     nonlocal triangle_catalog_output_download_bytes
+                    nonlocal triangle_catalog_centroid_mean_sync_mode
+                    nonlocal triangle_catalog_centroid_mean_blocks
                     nonlocal triangle_catalog_sort_mode
                     nonlocal triangle_catalog_topk_mode
                     nonlocal triangle_catalog_timing_model
@@ -7106,6 +7110,13 @@ def run_resident_calibration_integration(
                                 )
                                 triangle_catalog_output_download_bytes = max(
                                     int(item.get("catalog_output_download_bytes", 0) or 0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_centroid_mean_sync_mode = str(
+                                    batch_results[0].get("catalog_centroid_mean_sync_mode", "off")
+                                )
+                                triangle_catalog_centroid_mean_blocks = max(
+                                    int(item.get("catalog_centroid_mean_blocks", 0) or 0)
                                     for item in batch_results
                                 )
                                 triangle_catalog_native_enqueue_s = sum(
@@ -8277,6 +8288,8 @@ def run_resident_calibration_integration(
                                         + str(int(triangle_catalog_output_download_copy_count)),
                                         "triangle_catalog_centroid_before_download_copy_count="
                                         + str(int(triangle_catalog_centroid_before_download_copy_count)),
+                                        "triangle_catalog_centroid_mean_sync_mode="
+                                        + str(triangle_catalog_centroid_mean_sync_mode),
                                         f"triangle_catalog_sort_mode={triangle_catalog_sort_mode}",
                                         f"triangle_catalog_topk_mode={triangle_catalog_topk_mode}",
                                         f"triangle_star_grid_cols={triangle_star_grid_cols}",
@@ -10473,6 +10486,14 @@ def run_resident_calibration_integration(
                         else 0,
                         "triangle_catalog_output_download_bytes": int(
                             triangle_catalog_output_download_bytes
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_catalog_centroid_mean_sync_mode": triangle_catalog_centroid_mean_sync_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_catalog_centroid_mean_blocks": int(
+                            triangle_catalog_centroid_mean_blocks
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,

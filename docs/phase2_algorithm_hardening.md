@@ -276,6 +276,80 @@ Validation commands:
   tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair`
 - `python -m pytest -q` (`1153 passed`)
 
+### S2-Gate 508: Fused Global-Mean Catalog Sync
+
+Gate 508 reduces one resident registration synchronization phase in the
+current 200-light path. Resident grid/NMS catalog generation already uses a
+global-mean background for GPU centroid refinement. Before this gate, that
+mean reduction was launched and synchronized after the initial catalog sync.
+Gate 508 allocates the mean workspaces up front and launches the per-frame mean
+reduction into the same per-frame catalog streams as the catalog kernels. The
+first catalog stream synchronization now covers both catalog candidate
+generation and mean reduction; centroid refinement remains a separate sync
+because it depends on the downloaded catalog seeds and per-frame background
+values.
+
+Implementation:
+
+- `cpp/src/native_bindings.cpp` fuses
+  `glass_frame_sum_f32_launch_stream` into the initial batch catalog stream
+  enqueue path when global-mean centroid background is active.
+- The real global-mean centroid path reports
+  `catalog_timing_model=batch_multistream_bulk_download_centroid_global_mean_fused_sync`,
+  `catalog_sync_phase_count=2`,
+  `catalog_centroid_mean_sync_mode=fused_with_catalog_sync`, and
+  `catalog_centroid_mean_blocks=4096` on the benchmark image size.
+- `src/glass_cuda.py` preserves the new native fields in Python wrapper
+  results.
+- `src/glass/engine/resident_cuda.py` aggregates the fields into resident
+  artifacts and per-frame warnings as `triangle_catalog_*` diagnostics.
+- Focused CUDA/resident tests assert the non-centroid `off` contract and the
+  resident triangle global-mean fused-sync contract.
+
+Real 200-light evidence:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate508_catalog_mean_fused_sync_ab_real\runs_20260623_062032`
+- Candidate runtime: `6.634354900044855 s`
+- Repeat runtime: `6.605046200042125 s`
+- Gate507 repeat runtime: `6.6277335999766365 s`
+- Candidate, repeat, and Gate507 repeat masters are bitwise identical
+  (`RMS=0`, `p99=0`, `max_abs=0`).
+- Repeat artifact records:
+  - `triangle_catalog_timing_model=batch_multistream_bulk_download_centroid_global_mean_fused_sync`;
+  - `triangle_catalog_sync_phase_count=2`;
+  - `triangle_catalog_centroid_mean_sync_mode=fused_with_catalog_sync`;
+  - `triangle_catalog_centroid_mean_blocks=4096`;
+  - `triangle_catalog_workspace_layout=contiguous_soa`;
+  - `triangle_catalog_output_download_copy_count=1`;
+  - `triangle_catalog_centroid_before_download_copy_count=1`.
+- Repeat catalog component timing:
+  - `triangle_moving_catalog=0.25295329990331084 s`;
+  - `triangle_moving_catalog_native_total=0.2463567 s`;
+  - `triangle_moving_catalog_native_sync=0.2331699 s`;
+  - `triangle_moving_catalog_native_output_download=0.0066761 s`;
+  - `triangle_moving_catalog_native_centroid_refine=0.0066019 s`.
+- Interpretation: the sync graph is structurally improved and the full
+  200-light run remains bitwise stable. The next registration optimization
+  should continue moving catalog, descriptor, scoring, and warp orchestration
+  toward a more resident batched execution model rather than adding report-only
+  gates.
+- WBPP fastIntegration comparison report:
+  `C:\glass_runs\phase2_s2_gate508_catalog_mean_fused_sync_ab_real\runs_20260623_062032\compare_vs_wbpp_fastintegration_scaled_coverage190.html`
+- Gate508 repeat versus external reference:
+  `speedup=165.41004663873994x`, `RMS=0.0017794216505176163`,
+  `p99_abs=0.00042621337808668863`.
+
+Validation commands:
+
+- `cmd /c "VsDevCmd.bat -arch=x64 && cmake --build build --config Release -j 1"`
+- `python -m ruff check src\glass_cuda.py src\glass\engine\resident_cuda.py
+  tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py`
+- `python -m pytest -q
+  tests/test_cuda_resident_stack.py::test_resident_stack_grid_star_catalog_batch_reports_native_timing
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair`
+- `python -m pytest -q` (`1153 passed`)
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

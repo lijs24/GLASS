@@ -7889,6 +7889,8 @@ class ResidentCalibratedStack {
     std::vector<cudaStream_t> catalog_streams;
     std::size_t catalog_stream_count = 0;
     int catalog_sync_phase_count = 1;
+    int centroid_mean_blocks = 0;
+    bool centroid_global_mean_fused_sync = false;
     try {
       const std::size_t grid_value_count = batch_count * grid_stride;
       const std::size_t catalog_value_count = batch_count * out_stride;
@@ -7920,6 +7922,27 @@ class ResidentCalibratedStack {
         check_cuda(
             cudaMalloc(&d_refine_status, batch_count * out_stride * sizeof(unsigned char)),
             "cudaMalloc(resident batch grid top nms centroid status)");
+      }
+      centroid_global_mean_fused_sync = centroid_radius > 0 && centroid_global_mean_background;
+      if (centroid_global_mean_fused_sync) {
+        constexpr int mean_threads = 256;
+        centroid_mean_blocks = static_cast<int>(
+            std::min<std::size_t>(
+                4096,
+                std::max<std::size_t>(
+                    1,
+                    (pixels_per_frame_ + static_cast<std::size_t>(mean_threads) - 1) /
+                        static_cast<std::size_t>(mean_threads))));
+        check_cuda(
+            cudaMalloc(
+                &d_mean_sums,
+                batch_count * static_cast<std::size_t>(centroid_mean_blocks) * sizeof(double)),
+            "cudaMalloc(resident batch grid top nms centroid fused mean sums)");
+        check_cuda(
+            cudaMalloc(
+                &d_mean_counts,
+                batch_count * static_cast<std::size_t>(centroid_mean_blocks) * sizeof(unsigned int)),
+            "cudaMalloc(resident batch grid top nms centroid fused mean counts)");
       }
       catalog_stream_count = std::min<std::size_t>(4, batch_count);
       catalog_streams.resize(catalog_stream_count, nullptr);
@@ -7979,6 +8002,15 @@ class ResidentCalibratedStack {
               min_separation_px,
               stream);
         }
+        if (centroid_global_mean_fused_sync) {
+          glass_frame_sum_f32_launch_stream(
+              d_stack_ + index * pixels_per_frame_,
+              d_mean_sums + batch_pos * static_cast<std::size_t>(centroid_mean_blocks),
+              d_mean_counts + batch_pos * static_cast<std::size_t>(centroid_mean_blocks),
+              pixels_per_frame_,
+              centroid_mean_blocks,
+              stream);
+        }
       }
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch kernel launch");
       const auto enqueue_end = std::chrono::steady_clock::now();
@@ -8026,42 +8058,8 @@ class ResidentCalibratedStack {
             centroid_before_xy.end());
         if (centroid_global_mean_background) {
           centroid_background_mode = "global_mean";
-          ++catalog_sync_phase_count;
-          constexpr int mean_threads = 256;
-          const int mean_blocks = static_cast<int>(
-              std::min<std::size_t>(
-                  4096,
-                  std::max<std::size_t>(
-                      1,
-                      (pixels_per_frame_ + static_cast<std::size_t>(mean_threads) - 1) /
-                          static_cast<std::size_t>(mean_threads))));
-          check_cuda(
-              cudaMalloc(&d_mean_sums, batch_count * static_cast<std::size_t>(mean_blocks) * sizeof(double)),
-              "cudaMalloc(resident batch grid top nms centroid mean sums)");
-          check_cuda(
-              cudaMalloc(
-                  &d_mean_counts,
-                  batch_count * static_cast<std::size_t>(mean_blocks) * sizeof(unsigned int)),
-              "cudaMalloc(resident batch grid top nms centroid mean counts)");
-          for (std::size_t batch_pos = 0; batch_pos < batch_count; ++batch_pos) {
-            const std::size_t index = indices[batch_pos];
-            cudaStream_t stream = catalog_streams[batch_pos % catalog_stream_count];
-            glass_frame_sum_f32_launch_stream(
-                d_stack_ + index * pixels_per_frame_,
-                d_mean_sums + batch_pos * static_cast<std::size_t>(mean_blocks),
-                d_mean_counts + batch_pos * static_cast<std::size_t>(mean_blocks),
-                pixels_per_frame_,
-                mean_blocks,
-                stream);
-          }
-          check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid mean kernel launch");
-          for (std::size_t stream_index = 0; stream_index < catalog_stream_count; ++stream_index) {
-            check_cuda(
-                cudaStreamSynchronize(catalog_streams[stream_index]),
-                "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid mean stream synchronize");
-          }
-          std::vector<double> mean_sums(batch_count * static_cast<std::size_t>(mean_blocks));
-          std::vector<unsigned int> mean_counts(batch_count * static_cast<std::size_t>(mean_blocks));
+          std::vector<double> mean_sums(batch_count * static_cast<std::size_t>(centroid_mean_blocks));
+          std::vector<unsigned int> mean_counts(batch_count * static_cast<std::size_t>(centroid_mean_blocks));
           check_cuda(
               cudaMemcpy(
                   mean_sums.data(),
@@ -8079,9 +8077,9 @@ class ResidentCalibratedStack {
           for (std::size_t batch_pos = 0; batch_pos < batch_count; ++batch_pos) {
             double sum = 0.0;
             std::size_t count = 0;
-            for (int block = 0; block < mean_blocks; ++block) {
+            for (int block = 0; block < centroid_mean_blocks; ++block) {
               const std::size_t offset =
-                  batch_pos * static_cast<std::size_t>(mean_blocks) + static_cast<std::size_t>(block);
+                  batch_pos * static_cast<std::size_t>(centroid_mean_blocks) + static_cast<std::size_t>(block);
               sum += mean_sums[offset];
               count += static_cast<std::size_t>(mean_counts[offset]);
             }
@@ -8204,7 +8202,9 @@ class ResidentCalibratedStack {
         result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
         result["catalog_topk_mode"] = grid_catalog_topk_mode(deterministic, candidates_per_cell);
         result["catalog_timing_model"] = centroid_radius > 0
-            ? "batch_multistream_bulk_download_centroid_multistream"
+            ? (centroid_global_mean_background
+                   ? "batch_multistream_bulk_download_centroid_global_mean_fused_sync"
+                   : "batch_multistream_bulk_download_centroid_multistream")
             : "batch_multistream_bulk_download";
         result["catalog_batch_size"] = static_cast<int>(batch_count);
         result["catalog_stream_count"] = static_cast<int>(catalog_stream_count);
@@ -8218,6 +8218,10 @@ class ResidentCalibratedStack {
         result["catalog_centroid_before_download_copy_count"] = centroid_before_download_copy_count;
         result["catalog_output_download_bytes"] =
             static_cast<unsigned long long>(host_catalog_values.size() * sizeof(float));
+        result["catalog_centroid_mean_sync_mode"] = centroid_global_mean_background
+            ? "fused_with_catalog_sync"
+            : (centroid_radius > 0 ? "not_applicable_local_median" : "off");
+        result["catalog_centroid_mean_blocks"] = centroid_mean_blocks;
         result["catalog_enqueue_s"] = enqueue_s * inv_batch;
         result["catalog_sync_s"] = sync_s * inv_batch;
         result["catalog_count_download_s"] = count_download_s * inv_batch;

@@ -1135,6 +1135,8 @@ def test_resident_stack_grid_star_catalog_batch_reports_native_timing():
         assert batch_item["catalog_output_download_copy_count"] == 1
         assert batch_item["catalog_centroid_before_download_copy_count"] == 0
         assert batch_item["catalog_output_download_bytes"] == 3 * 3 * 8 * 4
+        assert batch_item["catalog_centroid_mean_sync_mode"] == "off"
+        assert batch_item["catalog_centroid_mean_blocks"] == 0
         assert batch_item["catalog_sort_mode"] == "shared_bitonic_power2"
         assert batch_item["catalog_topk_mode"] == "strict_flux_precheck_per_cell_lock"
         assert batch_item["catalog_native_s"] >= 0.0
@@ -1195,6 +1197,8 @@ def test_resident_stack_grid_star_catalog_batch_reports_native_timing():
         assert batch_item["catalog_output_download_copy_count"] == 1
         assert batch_item["catalog_centroid_before_download_copy_count"] == 0
         assert batch_item["catalog_output_download_bytes"] == 3 * 3 * 8 * 4
+        assert batch_item["catalog_centroid_mean_sync_mode"] == "off"
+        assert batch_item["catalog_centroid_mean_blocks"] == 0
         assert batch_item["catalog_topk_mode"] == "deterministic_parallel_per_cell"
         assert batch_item["count"] == repeat_item["count"]
         assert batch_item["stored_count"] == repeat_item["stored_count"]
