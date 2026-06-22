@@ -1629,6 +1629,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     resident = read_json(run / "resident_artifacts.json")
     calibration = read_json(run / "calibration_artifacts.json")
     resident_result_contract = read_json(run / "resident_result_contract.json")
+    resident_calibration_contract = read_json(run / "resident_calibration_contract.json")
     assert integration["source_stage"] == "resident_calibrated_stack"
     assert integration["outputs"][0]["backend"] == "cuda_resident_stack"
     assert integration["outputs"][0]["resident_registration"] == "translation_preview"
@@ -1676,10 +1677,36 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert all(item["resident_calibration_contract"]["passed"] for item in calibration["masters"].values())
     assert all(item["stack_engine_surface_contract"]["passed"] for item in calibration["masters"].values())
     assert all(item["stack_engine_surface_contract"]["stack_request"]["frame_ids"] for item in calibration["masters"].values())
+    assert resident_calibration_contract["artifact_type"] == "resident_cuda_calibration_contract"
+    assert resident_calibration_contract["passed"] is True
+    assert resident_calibration_contract["outputs"][0]["filter"] == "H"
     assert resident_result_contract["artifact_type"] == "resident_cuda_result_contract"
     assert resident_result_contract["passed"] is True
     assert resident_result_contract["outputs"][0]["filter"] == "H"
     assert resident_result_contract["outputs"][0]["backend"] == "cuda_resident_stack"
+    stack_contract_out = tmp_path / "stack_engine_contract.json"
+    assert (
+        main(
+            [
+                "stack-engine-contract",
+                "--run",
+                str(run),
+                "--scope",
+                "all",
+                "--expected-integration-engine",
+                "cuda_resident_stack",
+                "--out",
+                str(stack_contract_out),
+                "--require-default-ready",
+            ]
+        )
+        == 0
+    )
+    stack_contract = read_json(stack_contract_out)
+    assert stack_contract["resident_calibration_contract_attached"] is True
+    assert stack_contract["resident_calibration_contract_source"] == "run_default"
+    assert stack_contract["default_promotion"]["ready"] is True
+    assert any(item["stage"] == "resident_calibration_contract" for item in state["artifacts"])
     assert resident["artifacts"][0]["resident_registration"]["mode"] == "translation_preview"
     assert resident["artifacts"][0]["output_diagnostics"]["clipping_probe"]["nonfinite_count"] == 0
     timing = resident["artifacts"][0]["timing_s"]

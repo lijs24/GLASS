@@ -89,6 +89,10 @@ from glass.report.resident_result_contract import (
     build_resident_result_contract,
     write_resident_result_contract,
 )
+from glass.report.resident_calibration_contract import (
+    build_resident_calibration_contract,
+    write_resident_calibration_contract,
+)
 
 
 _AUTO_STAR_THRESHOLD_SIGMAS = (0.75, 1.0, 1.25, 1.5, 2.0, 3.0)
@@ -11354,6 +11358,14 @@ def run_resident_calibration_integration(
             resident_payload,
         )
         calibration_artifacts = write_resident_calibration_artifacts(run, resident_payload)
+        resident_calibration_contract_path = run / "resident_calibration_contract.json"
+        resident_calibration_contract = build_resident_calibration_contract(run)
+        write_resident_calibration_contract(
+            resident_calibration_contract_path,
+            resident_calibration_contract,
+        )
+        if not resident_calibration_contract.get("passed"):
+            raise RuntimeError("resident CUDA calibration contract failed")
         if registration_results:
             matrix_warp_description = f"CUDA matrix {resident_warp_interpolation} warp"
             write_json(
@@ -11485,6 +11497,15 @@ def run_resident_calibration_integration(
                 format="json",
                 created_at=now_iso(),
                 source_frames=[item.get("frame_id") for item in calibration_artifacts.get("calibrated_lights", [])],
+            )
+        )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_calibration_contract",
+                path=str(resident_calibration_contract_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=list(frames.keys()),
             )
         )
         state.artifacts.append(

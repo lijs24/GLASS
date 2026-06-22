@@ -3514,10 +3514,12 @@ def _load_optional_run_contract(
 
 
 def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
-    resident_calibration_contract = (
-        read_json(args.resident_calibration_contract_json)
-        if getattr(args, "resident_calibration_contract_json", None)
-        else None
+    resident_calibration_contract, resident_calibration_contract_path, resident_calibration_contract_source = (
+        _load_optional_run_contract(
+            explicit_path=getattr(args, "resident_calibration_contract_json", None),
+            run=args.run,
+            default_name="resident_calibration_contract.json",
+        )
     )
     resident_result_contract, resident_result_contract_path, resident_result_contract_source = (
         _load_optional_run_contract(
@@ -3531,7 +3533,7 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
         scope=args.scope,
         expected_integration_engine=args.expected_integration_engine,
         resident_calibration_contract=resident_calibration_contract
-        if isinstance(resident_calibration_contract, dict)
+        if resident_calibration_contract_source == "explicit" and isinstance(resident_calibration_contract, dict)
         else None,
         resident_result_contract=resident_result_contract
         if resident_result_contract_source == "explicit" and isinstance(resident_result_contract, dict)
@@ -3546,6 +3548,8 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
             "scope": audit["scope"],
             "expected_integration_engine": audit["expected_integration_engine"],
             "resident_calibration_contract_attached": audit.get("resident_calibration_contract_attached"),
+            "resident_calibration_contract_json": resident_calibration_contract_path,
+            "resident_calibration_contract_source": resident_calibration_contract_source,
             "resident_result_contract_attached": audit.get("resident_result_contract_attached"),
             "resident_result_contract_json": resident_result_contract_path,
             "resident_result_contract_source": resident_result_contract_source,

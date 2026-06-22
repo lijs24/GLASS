@@ -765,9 +765,16 @@ def build_stack_engine_contract_audit(
     run_root = Path(run_dir)
     calibration_path = run_root / "calibration_artifacts.json"
     integration_path = run_root / "integration_results.json"
+    resident_calibration_contract_path = run_root / "resident_calibration_contract.json"
     resident_result_contract_path = run_root / "resident_result_contract.json"
     calibration = _load_json_object(calibration_path)
     integration = _load_json_object(integration_path)
+    resident_calibration_contract_source = (
+        "provided" if isinstance(resident_calibration_contract, dict) else "missing"
+    )
+    if resident_calibration_contract is None and resident_calibration_contract_path.exists():
+        resident_calibration_contract = _load_json_object(resident_calibration_contract_path)
+        resident_calibration_contract_source = "run_default"
     resident_result_contract_source = "provided" if isinstance(resident_result_contract, dict) else "missing"
     if resident_result_contract is None and resident_result_contract_path.exists():
         resident_result_contract = _load_json_object(resident_result_contract_path)
@@ -881,6 +888,12 @@ def build_stack_engine_contract_audit(
         "scope": scope,
         "expected_integration_engine": expected_integration_engine,
         "resident_calibration_contract_attached": bool(resident_calibration_contracts),
+        "resident_calibration_contract_path": str(resident_calibration_contract_path)
+        if resident_calibration_contract_source == "run_default"
+        else None,
+        "resident_calibration_contract_source": resident_calibration_contract_source
+        if bool(resident_calibration_contracts)
+        else "missing",
         "resident_result_contract_attached": bool(resident_contracts),
         "resident_result_contract_path": str(resident_result_contract_path)
         if resident_result_contract_source == "run_default"

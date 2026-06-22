@@ -842,6 +842,93 @@ def test_stack_engine_contract_cli_uses_resident_calibration_contract_json(tmp_p
     assert audit["default_path"]["strict_native_stack_engine_ready"] is False
 
 
+def test_stack_engine_contract_auto_discovers_native_resident_calibration_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    resident_calibration_contract = run / "resident_calibration_contract.json"
+    resident_result_contract = run / "resident_result_contract.json"
+    out = tmp_path / "stack_engine_contract.json"
+    write_json(
+        resident_calibration_contract,
+        {
+            "artifact_type": "resident_cuda_calibration_contract",
+            "passed": True,
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "passed": True,
+                    "status": "passed",
+                    "frame_count": 200,
+                    "set_count": 1,
+                    "bias_count": 20,
+                    "dark_count": 20,
+                    "flat_count": 20,
+                    "checks": [{"name": "resident_output_contracts_passed", "passed": True}],
+                }
+            ],
+        },
+    )
+    write_json(
+        resident_result_contract,
+        {
+            "artifact_type": "resident_cuda_result_contract",
+            "passed": True,
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "passed": True,
+                    "status": "passed",
+                    "checks": [{"name": "resident_identity", "passed": True}],
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                    },
+                }
+            ]
+        },
+    )
+
+    assert (
+        main(
+            [
+                "stack-engine-contract",
+                "--run",
+                str(run),
+                "--scope",
+                "all",
+                "--expected-integration-engine",
+                "cuda_resident_stack",
+                "--out",
+                str(out),
+                "--require-default-ready",
+            ]
+        )
+        == 0
+    )
+
+    audit = read_json(out)
+    assert audit["resident_calibration_contract_attached"] is True
+    assert audit["resident_calibration_contract_source"] == "run_default"
+    assert audit["resident_calibration_contract_path"] == str(resident_calibration_contract)
+    assert audit["resident_result_contract_attached"] is True
+    assert audit["resident_result_contract_source"] == "run_default"
+    assert audit["default_promotion"]["ready"] is True
+
+
 def test_stack_engine_contract_requires_master_stats_and_semantics(tmp_path: Path):
     run = tmp_path / "run"
     master_dir = run / "calib_cache" / "masters"

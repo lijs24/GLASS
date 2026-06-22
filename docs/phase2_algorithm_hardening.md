@@ -415,6 +415,75 @@ Validation commands:
   tests/test_resident_cuda_run.py::test_cli_resident_cuda_auto_dispatch_keeps_lanczos_rejection_on_stack`
 - `python -m pytest -q` (`1153 passed`)
 
+### S2-Gate 510: Resident Calibration Contract Auto-Bundle
+
+Gate 510 returns from the report/default-promotion detour to a concrete Phase 2
+pipeline contract gap found on the real 200-light resident CUDA run. Gate509
+already embedded per-master resident calibration contracts and an integration
+surface contract, but `glass stack-engine-contract --run ...` could not prove
+the calibration surface from the run directory alone unless the user manually
+attached a separate resident calibration contract JSON. This gate makes the
+resident CUDA run self-contained: the calibration contract is emitted during the
+run and the StackEngine contract audit auto-discovers it just like the resident
+result contract.
+
+Implementation:
+
+- `src/glass/engine/resident_cuda.py` writes
+  `resident_calibration_contract.json` immediately after
+  `resident_artifacts.json` and `calibration_artifacts.json`; the run fails
+  loudly if the calibration contract fails.
+- `run_state.json` records a `resident_calibration_contract` artifact.
+- `glass stack-engine-contract` auto-discovers
+  `resident_calibration_contract.json` from the run directory and reports
+  `resident_calibration_contract_source=run_default`.
+- Focused tests cover both synthetic contract discovery and an actual resident
+  CUDA smoke run whose default StackEngine contract audit passes
+  `--require-default-ready`.
+
+Real 200-light evidence:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate510_resident_calibration_contract_ab_real\runs_20260623_063856`
+- Candidate runtime with a fresh shared master cache:
+  `14.848058100033086 s`.
+- Repeat runtime with the warmed cache:
+  `6.658429500006605 s`.
+- Both candidate and repeat pass:
+  `glass stack-engine-contract --scope all --expected-integration-engine cuda_resident_stack --require-default-ready`.
+- Contract audit results for both runs:
+  - `resident_calibration_contract_attached=true`;
+  - `resident_calibration_contract_source=run_default`;
+  - `resident_result_contract_attached=true`;
+  - `default_path_status=resident_cuda_stack_engine_surface`;
+  - `default_promotion_ready=true`;
+  - `phase2_stack_engine_default_gap_count=0`.
+- Candidate and repeat masters are bitwise identical
+  (`RMS=0`, `p99=0`, `max_abs=0`).
+- Gate510 repeat and Gate509 repeat masters are bitwise identical
+  (`RMS=0`, `p99=0`, `max_abs=0`), proving this contract change did not alter
+  scientific pixels.
+- WBPP fastIntegration comparison metrics are inherited from Gate509 because
+  the Gate510 repeat master is bitwise identical to the Gate509 repeat master:
+  `RMS=0.0017794216505176163`, `p99_abs=0.00042621337808668863`,
+  coverage fraction `0.960532609259836`.
+- Updated speed evidence using the Gate510 repeat runtime and the same WBPP
+  black-box time `1092.541 s`: `164.08388794969088x`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\engine\resident_cuda.py
+  src\glass\report\stack_engine_contract.py src\glass\cli.py
+  tests\test_stack_engine_contract.py tests\test_resident_cuda_run.py`
+- `python -m pytest -q
+  tests/test_stack_engine_contract.py::test_stack_engine_contract_auto_discovers_native_resident_calibration_contract
+  tests/test_stack_engine_contract.py::test_stack_engine_contract_cli_uses_resident_calibration_contract_json`
+- `python -m pytest -q
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_smoke`
+- real 200-light candidate/repeat `glass run` with
+  `--resident-registration similarity_cuda_triangle`,
+  `--resident-warp-interpolation lanczos3`, and `--resident-output-maps minimal`.
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:
