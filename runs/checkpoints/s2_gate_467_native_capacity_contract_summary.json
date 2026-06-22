@@ -1,0 +1,103 @@
+{
+  "gate": "S2-Gate 467",
+  "status": "passed",
+  "date_local": "2026-06-22",
+  "scope": "admission-to-native chunk-capacity artifact contract",
+  "implementation": {
+    "resident_memory_admission": {
+      "file": "src/glass/engine/resident_cuda.py",
+      "change": "limitations now describe reduced chunk capacity as a selected runtime constraint passed to native chunked matrix-warp dispatch"
+    },
+    "resident_registration_artifact": {
+      "file": "src/glass/engine/resident_cuda.py",
+      "new_fields": [
+        "triangle_warp_batch_native_capacity_source",
+        "triangle_warp_batch_native_max_chunk_capacity_frames"
+      ],
+      "preserved_fields": [
+        "triangle_warp_batch_capacity_source",
+        "triangle_warp_batch_requested_chunk_capacity_frames",
+        "triangle_warp_batch_effective_chunk_capacity_frames"
+      ]
+    },
+    "runtime_behavior": "artifact-only contract propagation; no change to CUDA pixel math, matrix fitting, interpolation, rejection, integration, native allocation, or default dispatch"
+  },
+  "cuda": {
+    "available": true,
+    "devices": [
+      {
+        "device_id": 0,
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+        "compute_capability": "12.0",
+        "memory_total_mib": 97886,
+        "multi_processor_count": 188,
+        "native_backend": true,
+        "available_to_glass": true,
+        "driver_version": "596.21"
+      }
+    ]
+  },
+  "validation": {
+    "focused_admission": {
+      "test": "tests/test_resident_cuda_run.py::test_resident_memory_admission_recommends_reduced_chunk_capacity",
+      "assertions": [
+        "reduced-capacity admission still selects chunk capacity 4 for the constrained fixture",
+        "limitations include native chunked matrix-warp dispatch wording",
+        "limitations no longer contain allocator-driven wording"
+      ]
+    },
+    "focused_cuda_cli": {
+      "test": "tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair",
+      "assertions": [
+        "default triangle warp batch remains chunked",
+        "high-level capacity source is native_preferred",
+        "native capacity source is native_preferred",
+        "native max chunk capacity is 0 for the unforced default path"
+      ]
+    }
+  },
+  "real_200_light_baseline": {
+    "rerun_for_gate_467": false,
+    "reason": "C: drive had about 0.369 GiB free during validation; this gate only changes artifact contract fields and admission wording.",
+    "baseline_gate": "S2-Gate 465",
+    "baseline_run": "C:\\glass_runs\\phase2_s2_gate_465_200\\admission_capacity_default_parity_r3_20260622",
+    "input": "M38 H-alpha, 200 lights, 20 bias, 20 dark, 20 flat",
+    "internal_total_elapsed_s": 36.10379439999815,
+    "outer_powershell_elapsed_s": 36.4852659,
+    "wbpp_blackbox_elapsed_s": 1092.541,
+    "speedup_vs_wbpp": 30.261112942745317,
+    "warp_timing_model": "native_chunked_batch_warp_scatter_one_sync",
+    "capacity_source": "native_preferred",
+    "native_chunk_frames": 8,
+    "native_chunk_count": 24,
+    "compare_rms_diff": 0.0017005768173342323,
+    "compare_abs_diff_p99": 0.000459801172837615,
+    "coverage_fraction": 0.961042639883733
+  },
+  "commands": {
+    "ruff": ".\\.venv\\Scripts\\ruff.exe check src\\glass\\engine\\resident_cuda.py tests\\test_resident_cuda_run.py",
+    "focused_pytest": ".\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_resident_cuda_run.py::test_resident_memory_admission_recommends_reduced_chunk_capacity tests\\test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair",
+    "resident_cli_pytest": ".\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_resident_cuda_run.py tests\\test_cli_smoke.py",
+    "full_pytest": ".\\.venv\\Scripts\\python.exe -m pytest -q"
+  },
+  "test_results": {
+    "ruff": "passed",
+    "focused_pytest": "2 passed in 0.92s",
+    "resident_cli_pytest": "104 passed in 14.02s",
+    "full_pytest": "1101 passed in 47.37s"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "notes": [
+      "No official PixInsight WBPP/PJSR source was read or used.",
+      "WBPP evidence remains limited to user-generated black-box timing/output metadata from earlier accepted baseline artifacts.",
+      "Input image directories were not modified."
+    ]
+  },
+  "known_limitations": [
+    "This gate makes native capacity evidence auditable but does not reduce per-chunk launch overhead.",
+    "A new real 200-light run was skipped because C: free space was too low for a large output directory.",
+    "The next substantive optimization should target resident registration/warp orchestration or DQ/mask default-path behavior."
+  ],
+  "next_gate_recommendation": "Implement a performance gate that reduces resident registration/warp per-chunk orchestration overhead, or a DQ/mask gate that moves source-DQ closer to the default resident path."
+}

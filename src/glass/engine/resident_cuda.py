@@ -520,8 +520,8 @@ def build_resident_memory_admission(
         "groups": group_rows,
         "device": device_info,
         "limitations": [
-            "Pre-run admission uses metadata dimensions and planned frame admission; actual native fallback capacity is still recorded after execution.",
-            "Reduced chunk capacity is currently an admission recommendation; native batch warp capacity selection remains allocator-driven.",
+            "Pre-run admission uses metadata dimensions and planned frame admission; actual native fallback capacity is recorded after execution.",
+            "Reduced chunk capacity is selected pre-run and passed to native chunked matrix-warp dispatch; native may still lower capacity through its OOM fallback.",
             "When no explicit --vram-budget-gb is supplied, the device-total safety budget is recorded as evidence and does not block the run.",
         ],
     }
@@ -5994,6 +5994,8 @@ def run_resident_calibration_integration(
                 triangle_warp_batch_native_workspace_bytes = 0
                 triangle_warp_batch_native_output_bytes = 0
                 triangle_warp_batch_native_coverage_bytes = 0
+                triangle_warp_batch_native_max_chunk_capacity_frames = 0
+                triangle_warp_batch_native_capacity_source = "off"
                 triangle_warp_batch_native_warp_kernel_launches = 0
                 triangle_warp_batch_native_coverage_reduce_kernel_launches = 0
                 triangle_warp_batch_native_scatter_kernel_launches = 0
@@ -6516,10 +6518,12 @@ def run_resident_calibration_integration(
                     nonlocal triangle_warp_batch_native_inverse_upload_s
                     nonlocal triangle_warp_batch_native_kernel_enqueue_s
                     nonlocal triangle_warp_batch_native_output_bytes
+                    nonlocal triangle_warp_batch_native_capacity_source
                     nonlocal triangle_warp_batch_native_scatter_enqueue_s
                     nonlocal triangle_warp_batch_native_scatter_kernel_launches
                     nonlocal triangle_warp_batch_native_sync_s
                     nonlocal triangle_warp_batch_native_total_s
+                    nonlocal triangle_warp_batch_native_max_chunk_capacity_frames
                     nonlocal triangle_warp_batch_native_warp_kernel_launches
                     nonlocal triangle_warp_batch_native_workspace_bytes
                     nonlocal triangle_warp_batch_timing_model
@@ -6585,6 +6589,14 @@ def run_resident_calibration_integration(
                         )
                         triangle_warp_batch_native_chunk_count += int(
                             warp_timing.get("batch_chunk_count", 0) or 0
+                        )
+                        if warp_timing.get("batch_capacity_source") is not None:
+                            triangle_warp_batch_native_capacity_source = str(
+                                warp_timing.get("batch_capacity_source")
+                            )
+                        triangle_warp_batch_native_max_chunk_capacity_frames = max(
+                            triangle_warp_batch_native_max_chunk_capacity_frames,
+                            int(warp_timing.get("batch_max_chunk_capacity_frames", 0) or 0),
                         )
                         triangle_warp_batch_native_workspace_bytes = max(
                             triangle_warp_batch_native_workspace_bytes,
@@ -7541,6 +7553,14 @@ def run_resident_calibration_integration(
                             )
                             triangle_warp_batch_native_chunk_count += int(
                                 warp_timing.get("batch_chunk_count", 0) or 0
+                            )
+                            if warp_timing.get("batch_capacity_source") is not None:
+                                triangle_warp_batch_native_capacity_source = str(
+                                    warp_timing.get("batch_capacity_source")
+                                )
+                            triangle_warp_batch_native_max_chunk_capacity_frames = max(
+                                triangle_warp_batch_native_max_chunk_capacity_frames,
+                                int(warp_timing.get("batch_max_chunk_capacity_frames", 0) or 0),
                             )
                             triangle_warp_batch_native_workspace_bytes = max(
                                 triangle_warp_batch_native_workspace_bytes,
@@ -9322,6 +9342,16 @@ def run_resident_calibration_integration(
                         "triangle_warp_batch_capacity_source": triangle_warp_batch_capacity_source
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_warp_batch_native_capacity_source": (
+                            triangle_warp_batch_native_capacity_source
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_warp_batch_native_max_chunk_capacity_frames": int(
+                            triangle_warp_batch_native_max_chunk_capacity_frames
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
                         "triangle_warp_batch_timing_model": triangle_warp_batch_timing_model
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",

@@ -9713,6 +9713,56 @@ Completed in Gate446:
     native call. Future performance work should batch more registration/warp
     orchestration state on device and reduce per-chunk launch overhead.
 
+### S2-Gate 467: Admission-to-Native Chunk-Capacity Artifact Contract
+
+- Close the audit gap left after Gate466: resident memory admission selected a
+  reduced chunk capacity and native dispatch could honor it, but the final
+  resident registration artifact did not separately record the capacity source
+  reported by the native timing payload.
+- Required work:
+  - update resident memory admission wording so reduced capacity is described
+    as a selected runtime constraint passed to native chunked matrix-warp
+    dispatch, not merely as an advisory recommendation;
+  - carry native `batch_capacity_source` into resident registration artifacts;
+  - carry native `batch_max_chunk_capacity_frames` into resident registration
+    artifacts;
+  - preserve the high-level `triangle_warp_batch_capacity_source` field so the
+    artifact distinguishes admission origin from native execution evidence;
+  - add focused tests for both reduced-capacity admission wording and default
+    native-preferred artifact fields.
+- Completed in S2-Gate467:
+  - updated `build_resident_memory_admission` limitations to describe the
+    Gate466 runtime behavior and native OOM fallback boundary accurately;
+  - added `triangle_warp_batch_native_capacity_source` to resident registration
+    artifacts;
+  - added `triangle_warp_batch_native_max_chunk_capacity_frames` to resident
+    registration artifacts;
+  - updated both resident triangle-warp aggregation paths so native timing
+    metadata is preserved in artifacts for batched matrix warp execution;
+  - focused admission tests now reject the obsolete `allocator-driven`
+    limitation text and require explicit native-dispatch wording;
+  - focused CUDA CLI tests now assert the default path records
+    `triangle_warp_batch_capacity_source=native_preferred`,
+    `triangle_warp_batch_native_capacity_source=native_preferred`, and
+    `triangle_warp_batch_native_max_chunk_capacity_frames=0`;
+  - focused pytest passed with `2 passed`;
+  - full pytest passed with `1101 passed`.
+- Performance and regression note:
+  - this gate changes runtime artifact contract fields and admission text; it
+    does not change CUDA pixel math, registration fitting, native allocator
+    behavior, or default dispatch;
+  - the Gate465 200-light real-data baseline remains applicable for default
+    runtime performance and numerical evidence;
+  - a new 200-light run was not launched because C: had about `0.375 GiB` free
+    during validation.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_467_native_capacity_contract_summary.json`;
+  - `runs/checkpoints/s2_gate_467_status.md`.
+- Known limitation:
+  - the new artifact fields make reduced-capacity execution auditable, but the
+    next performance gate still needs to reduce native per-chunk launch
+    overhead or move more registration/warp orchestration state onto the GPU.
+
 ## Gate Rules
 
 Each gate requires:

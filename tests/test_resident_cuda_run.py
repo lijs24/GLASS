@@ -104,6 +104,11 @@ def test_resident_memory_admission_recommends_reduced_chunk_capacity() -> None:
     assert admission["preferred_fits_budget"] is False
     assert admission["peak_group"]["preferred_chunk_capacity_frames"] == 8
     assert admission["peak_group"]["planned_warp_frame_count"] == 9
+    assert any(
+        "passed to native chunked matrix-warp dispatch" in limitation
+        for limitation in admission["limitations"]
+    )
+    assert not any("allocator-driven" in limitation for limitation in admission["limitations"])
 
 
 def test_resident_memory_admission_counts_stem_excludes() -> None:
@@ -3306,6 +3311,11 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_warp_batch"] is True
     assert resident_registration["triangle_warp_batch_mode"] == "native_matrix_bilinear_frames"
     assert resident_registration["triangle_warp_batch_dispatch"] == "chunked"
+    assert resident_registration["triangle_warp_batch_requested_chunk_capacity_frames"] is None
+    assert resident_registration["triangle_warp_batch_effective_chunk_capacity_frames"] is None
+    assert resident_registration["triangle_warp_batch_capacity_source"] == "native_preferred"
+    assert resident_registration["triangle_warp_batch_native_capacity_source"] == "native_preferred"
+    assert resident_registration["triangle_warp_batch_native_max_chunk_capacity_frames"] == 0
     assert resident_registration["triangle_warp_batch_timing_model"] == (
         "native_chunked_batch_warp_scatter_one_sync"
     )
