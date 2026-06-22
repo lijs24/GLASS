@@ -462,6 +462,7 @@ def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
     assert timing["scatter_enqueue_s"] >= 0.0
     assert timing["postprocess_enqueue_s"] >= 0.0
     assert timing["postprocess_mode"] == "fused_scatter_reduce"
+    assert timing["lanczos3_clamping_enabled"] is True
     assert timing["warp_kernel_launches"] == 1
     assert timing["coverage_reduce_kernel_launches"] == 0
     assert timing["scatter_kernel_launches"] == 0
@@ -532,6 +533,7 @@ def test_resident_stack_matrix_lanczos3_batch_respects_max_chunk_capacity():
     assert timing["scatter_kernel_launches"] == 0
     assert timing["postprocess_kernel_launches"] == 3
     assert timing["postprocess_mode"] == "fused_scatter_reduce"
+    assert timing["lanczos3_clamping_enabled"] is True
     assert timing["batch_output_bytes"] == 2 * frames[0].size * 4
     assert timing["batch_coverage_bytes"] == 2 * frames[0].size
     assert timing["batch_workspace_bytes"] == (
@@ -605,10 +607,42 @@ def test_resident_stack_matrix_lanczos3_batch_can_skip_coverage_scratch_without_
         + len(frames) * 8
     )
     assert skipped_timing["postprocess_mode"] == "scatter_only_no_coverage_accumulator"
+    assert skipped_timing["lanczos3_clamping_enabled"] is True
     assert skipped_timing["scatter_kernel_launches"] == skipped_timing["batch_chunk_count"]
     assert skipped.warp_coverage_frame_count == 0
     assert np.array_equal(skipped_master, tracked_master, equal_nan=True)
     assert np.array_equal(skipped_weight, tracked_weight)
+
+
+def test_resident_stack_matrix_lanczos3_batch_records_unclamped_fast_path():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_matrix_lanczos3_frames"):
+        raise AssertionError("ResidentCalibratedStack.apply_matrix_lanczos3_frames is missing")
+
+    yy, xx = np.indices((18, 20), dtype=np.float32)
+    frame = (np.sin(xx * 0.09) + np.cos(yy * 0.14)).astype(np.float32)
+    matrix = np.asarray(
+        [[[0.9999, -0.012, 0.15], [0.012, 0.9999, -0.10], [0.0, 0.0, 1.0]]],
+        dtype=np.float32,
+    )
+    stack = module.ResidentCalibratedStack(1, frame.shape[0], frame.shape[1])
+    stack.upload_calibrated_frame(0, frame)
+
+    timing = stack.apply_matrix_lanczos3_frames(
+        [0],
+        matrix,
+        np.nan,
+        -1.0,
+        dispatch="chunked",
+        track_coverage=False,
+    )
+    warped, weight = stack.integrate_mean()
+    expected, expected_coverage = _warp_matrix_lanczos3_cpu(frame, matrix[0], np.nan, -1.0)
+
+    assert timing["lanczos3_clamping_enabled"] is False
+    assert timing["postprocess_mode"] == "scatter_only_no_coverage_accumulator"
+    assert np.allclose(warped, np.nan_to_num(expected, nan=0.0), atol=3.0e-5)
+    assert np.array_equal(weight, expected_coverage)
 
 
 def test_gpu_catalog_refined_translation_drives_bilinear_warp():

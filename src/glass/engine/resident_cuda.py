@@ -6862,6 +6862,7 @@ def run_resident_calibration_integration(
                 triangle_warp_batch_native_scatter_enqueue_s = 0.0
                 triangle_warp_batch_native_postprocess_enqueue_s = 0.0
                 triangle_warp_batch_native_postprocess_mode = "off"
+                triangle_warp_batch_native_lanczos3_clamping_enabled: bool | None = None
                 triangle_warp_batch_native_device_copy_enqueue_s = 0.0
                 triangle_warp_batch_native_sync_s = 0.0
                 triangle_warp_batch_native_total_s = 0.0
@@ -7501,6 +7502,7 @@ def run_resident_calibration_integration(
                     nonlocal triangle_warp_batch_native_postprocess_enqueue_s
                     nonlocal triangle_warp_batch_native_postprocess_kernel_launches
                     nonlocal triangle_warp_batch_native_postprocess_mode
+                    nonlocal triangle_warp_batch_native_lanczos3_clamping_enabled
                     nonlocal triangle_warp_batch_native_output_bytes
                     nonlocal triangle_warp_batch_native_capacity_source
                     nonlocal triangle_warp_batch_native_scatter_enqueue_s
@@ -7584,6 +7586,10 @@ def run_resident_calibration_integration(
                         if warp_timing.get("postprocess_mode") is not None:
                             triangle_warp_batch_native_postprocess_mode = str(
                                 warp_timing.get("postprocess_mode")
+                            )
+                        if warp_timing.get("lanczos3_clamping_enabled") is not None:
+                            triangle_warp_batch_native_lanczos3_clamping_enabled = bool(
+                                warp_timing.get("lanczos3_clamping_enabled")
                             )
                         triangle_warp_batch_native_device_copy_enqueue_s += float(
                             warp_timing.get("device_copy_enqueue_s", 0.0) or 0.0
@@ -8581,6 +8587,10 @@ def run_resident_calibration_integration(
                             if warp_timing.get("postprocess_mode") is not None:
                                 triangle_warp_batch_native_postprocess_mode = str(
                                     warp_timing.get("postprocess_mode")
+                                )
+                            if warp_timing.get("lanczos3_clamping_enabled") is not None:
+                                triangle_warp_batch_native_lanczos3_clamping_enabled = bool(
+                                    warp_timing.get("lanczos3_clamping_enabled")
                                 )
                             triangle_warp_batch_native_device_copy_enqueue_s += float(
                                 warp_timing.get("device_copy_enqueue_s", 0.0) or 0.0
@@ -10658,6 +10668,11 @@ def run_resident_calibration_integration(
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_warp_batch_native_lanczos3_clamping_enabled": (
+                            triangle_warp_batch_native_lanczos3_clamping_enabled
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
                         "triangle_warp_batch_native_device_copy_enqueue_s": float(
                             triangle_warp_batch_native_device_copy_enqueue_s
                         )

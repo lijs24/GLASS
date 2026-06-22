@@ -362,6 +362,7 @@ __global__ void glass_warp_matrix_lanczos3_f32_kernel(
 
   float weighted_sum = 0.0f;
   float weight_sum = 0.0f;
+  const bool clamp_enabled = clamping_threshold >= 0.0f;
   float local_min = 3.402823466e+38f;
   float local_max = -3.402823466e+38f;
 
@@ -376,8 +377,10 @@ __global__ void glass_warp_matrix_lanczos3_f32_kernel(
       }
       weighted_sum += value * w;
       weight_sum += w;
-      local_min = fminf(local_min, value);
-      local_max = fmaxf(local_max, value);
+      if (clamp_enabled) {
+        local_min = fminf(local_min, value);
+        local_max = fmaxf(local_max, value);
+      }
     }
   }
 
@@ -387,7 +390,7 @@ __global__ void glass_warp_matrix_lanczos3_f32_kernel(
     return;
   }
   float value = weighted_sum / weight_sum;
-  if (clamping_threshold >= 0.0f && local_max >= local_min) {
+  if (clamp_enabled && local_max >= local_min) {
     const float range = local_max - local_min;
     const float lo = local_min - clamping_threshold * range;
     const float hi = local_max + clamping_threshold * range;
@@ -472,6 +475,7 @@ __global__ void glass_warp_matrix_lanczos3_batch_f32_kernel(
 
   float weighted_sum = 0.0f;
   float weight_sum = 0.0f;
+  const bool clamp_enabled = clamping_threshold >= 0.0f;
   float local_min = 3.402823466e+38f;
   float local_max = -3.402823466e+38f;
   for (int ky = 0; ky < 6; ++ky) {
@@ -482,8 +486,10 @@ __global__ void glass_warp_matrix_lanczos3_batch_f32_kernel(
       const float value = input[yy * width + xx];
       weighted_sum += value * weight;
       weight_sum += weight;
-      local_min = fminf(local_min, value);
-      local_max = fmaxf(local_max, value);
+      if (clamp_enabled) {
+        local_min = fminf(local_min, value);
+        local_max = fmaxf(local_max, value);
+      }
     }
   }
 
@@ -495,7 +501,7 @@ __global__ void glass_warp_matrix_lanczos3_batch_f32_kernel(
     return;
   }
   float value = weighted_sum / weight_sum;
-  if (clamping_threshold >= 0.0f && local_max >= local_min) {
+  if (clamp_enabled && local_max >= local_min) {
     const float range = local_max - local_min;
     const float lo = local_min - clamping_threshold * range;
     const float hi = local_max + clamping_threshold * range;

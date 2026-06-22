@@ -98,6 +98,64 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
+
+Gate 505 keeps the current conservative `stack` route for non-bilinear resident
+registration/integration, but removes unnecessary per-sample min/max work from
+the Lanczos3 CUDA warp kernels when overshoot clamping is disabled. The default
+resident benchmark uses `--resident-warp-clamping-threshold -1.0`, so clamping is
+off and the kernel now skips local min/max updates while preserving identical
+pixel math for the unclamped path.
+
+Implementation:
+
+- `cpp/cuda/warp_kernels.cu` computes `clamp_enabled` once per Lanczos3 warp
+  kernel and gates local min/max tracking behind that flag.
+- `cpp/src/native_bindings.cpp` reports `lanczos3_clamping_enabled` in native
+  Lanczos3 timing dictionaries.
+- `src/glass/engine/resident_cuda.py` propagates that native flag into
+  `resident_artifacts.json`.
+- `tests/test_gpu_warp_vs_cpu.py` and `tests/test_resident_cuda_run.py` assert
+  both clamped and unclamped timing/artifact contracts.
+
+Negative probe:
+
+- An explicit `--resident-integration-dispatch fused_matrix
+  --resident-warp-interpolation lanczos3` 200-light probe was slower and changed
+  the output (`RMS=0.460783`, `max_abs=562.071` versus Gate 504), so the
+  conservative stack route remains required for Lanczos3 until fused Lanczos3 is
+  separately proven.
+
+Real 200-light evidence:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate505_lanczos_unclamped_warp_ab_real\runs_20260623_055211`
+- Gate 505 candidate runtime: `6.618832700012717 s`
+- Gate 505 repeat runtime: `6.707604100054596 s`
+- Gate 504 repeat runtime: `6.615711500053294 s`
+- Candidate and repeat outputs are bitwise identical to Gate 504 repeat
+  (`RMS=0`, `p99=0`, `max_abs=0`).
+- Resident artifact contract records
+  `triangle_warp_batch_native_lanczos3_clamping_enabled=false`.
+- Native Lanczos3 batch timing improved from `0.4781858 s` in Gate 504 repeat to
+  `0.4683928 s` in Gate 505 repeat; sync timing improved from `0.4615893 s` to
+  `0.4519578 s`. End-to-end runtime remains dominated by overlapped FITS
+  read/decode/upload/orchestration variance.
+- WBPP fastIntegration comparison report:
+  `C:\glass_runs\phase2_s2_gate505_lanczos_unclamped_warp_ab_real\runs_20260623_055211\compare_vs_wbpp_fastintegration_scaled_coverage190.html`
+- Gate 505 repeat versus external reference:
+  `speedup=162.880960728x`, `RMS=0.0017794216505176163`,
+  `p99_abs=0.00042621337808668863`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\engine\resident_cuda.py
+  tests\test_gpu_warp_vs_cpu.py tests\test_resident_cuda_run.py`
+- `python -m pytest -q tests/test_gpu_warp_vs_cpu.py
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_auto_dispatch_keeps_lanczos_rejection_on_stack`
+- `python -m pytest -q` (`1152 passed`)
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

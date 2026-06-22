@@ -5586,6 +5586,7 @@ class ResidentCalibratedStack {
       result["inverse_upload_s"] = 0.0;
       result["kernel_enqueue_s"] = 0.0;
       result["device_copy_enqueue_s"] = 0.0;
+      result["lanczos3_clamping_enabled"] = clamping_threshold >= 0.0f;
       result["track_coverage"] = track_coverage;
       result["coverage_accumulator_updated"] = false;
       result["warp_coverage_frame_count_delta"] = 0;
@@ -5672,6 +5673,7 @@ class ResidentCalibratedStack {
     result["inverse_upload_s"] = inverse_upload_s;
     result["kernel_enqueue_s"] = kernel_enqueue_s;
     result["device_copy_enqueue_s"] = copy_enqueue_s;
+    result["lanczos3_clamping_enabled"] = clamping_threshold >= 0.0f;
     result["track_coverage"] = track_coverage;
     result["coverage_accumulator_updated"] = track_coverage;
     result["warp_coverage_frame_count_delta"] = static_cast<unsigned long long>(
@@ -5923,6 +5925,7 @@ class ResidentCalibratedStack {
       result["scatter_enqueue_s"] = 0.0;
       result["postprocess_enqueue_s"] = 0.0;
       result["postprocess_mode"] = track_coverage ? "fused_scatter_reduce" : "scatter_only_no_coverage_accumulator";
+      result["lanczos3_clamping_enabled"] = clamping_threshold >= 0.0f;
       result["warp_kernel_launches"] = 0;
       result["coverage_reduce_kernel_launches"] = 0;
       result["scatter_kernel_launches"] = 0;
@@ -6065,6 +6068,7 @@ class ResidentCalibratedStack {
     result["scatter_enqueue_s"] = scatter_enqueue_s;
     result["postprocess_enqueue_s"] = postprocess_enqueue_s;
     result["postprocess_mode"] = track_coverage ? "fused_scatter_reduce" : "scatter_only_no_coverage_accumulator";
+    result["lanczos3_clamping_enabled"] = clamping_threshold >= 0.0f;
     result["warp_kernel_launches"] = static_cast<unsigned long long>(warp_kernel_launches);
     result["coverage_reduce_kernel_launches"] = static_cast<unsigned long long>(coverage_reduce_kernel_launches);
     result["scatter_kernel_launches"] = static_cast<unsigned long long>(scatter_kernel_launches);
