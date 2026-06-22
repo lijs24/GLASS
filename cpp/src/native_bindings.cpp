@@ -10375,10 +10375,8 @@ class ResidentCalibratedStack {
       throw std::invalid_argument("batch warp workspace requires at least one frame");
     }
     constexpr std::size_t preferred_frames = 8;
-    std::size_t capacity_limit = preferred_frames;
-    if (max_capacity_frames > 0) {
-      capacity_limit = std::min(capacity_limit, max_capacity_frames);
-    }
+    const std::size_t capacity_limit =
+        max_capacity_frames > 0 ? max_capacity_frames : preferred_frames;
     std::size_t capacity = std::min(requested_frames, capacity_limit);
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
     cudaError_t last_error = cudaSuccess;

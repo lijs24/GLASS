@@ -397,6 +397,42 @@ def test_resident_stack_matrix_bilinear_batch_respects_max_chunk_capacity():
     assert np.array_equal(weight_map, expected_weight)
 
 
+def test_resident_stack_matrix_bilinear_batch_allows_explicit_capacity_above_native_preferred():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_matrix_bilinear_frames"):
+        raise AssertionError("ResidentCalibratedStack.apply_matrix_bilinear_frames is missing")
+
+    base = np.arange(100, dtype=np.float32).reshape(10, 10)
+    frames = [(base + np.float32(index * 3)).astype(np.float32) for index in range(10)]
+    matrices = np.asarray(
+        [
+            [[1.0, 0.0, 0.03 * index], [0.0, 1.0, -0.02 * index], [0.0, 0.0, 1.0]]
+            for index in range(len(frames))
+        ],
+        dtype=np.float32,
+    )
+    stack = module.ResidentCalibratedStack(len(frames), frames[0].shape[0], frames[0].shape[1])
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    timing = stack.apply_matrix_bilinear_frames(
+        list(range(len(frames))),
+        matrices,
+        np.nan,
+        dispatch="chunked",
+        max_chunk_capacity_frames=16,
+        track_coverage=False,
+    )
+
+    assert timing["batch_capacity_source"] == "explicit_max_chunk_capacity"
+    assert timing["batch_max_chunk_capacity_frames"] == 16
+    assert timing["batch_chunk_frames"] == len(frames)
+    assert timing["batch_chunk_count"] == 1
+    assert timing["warp_kernel_launches"] == 1
+    assert timing["scatter_kernel_launches"] == 1
+    assert timing["postprocess_kernel_launches"] == 1
+
+
 def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_matrix_lanczos3_frames"):

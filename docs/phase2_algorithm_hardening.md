@@ -558,6 +558,59 @@ Validation commands:
   tests/test_acceptance_audit.py::test_acceptance_audit_accepts_io_runtime_preset_from_artifact`
 - real 200-light default `glass run` without explicit prefetch overrides.
 
+### S2-Gate 512: Explicit Resident Warp Chunk Probe
+
+Gate 512 returns to the resident registration/warp optimization target. The
+native resident matrix-warp workspace previously accepted
+`--resident-warp-chunk-capacity-frames`, but the allocator still capped every
+explicit request at the native preferred value of `8`. Gate512 removes that
+artificial cap so explicit real-data probes can test larger resident warp
+chunks on high-VRAM GPUs.
+
+Implementation:
+
+- `cpp/src/native_bindings.cpp` now treats `max_chunk_capacity_frames` as the
+  explicit chunk capacity ceiling instead of `min(8, requested)`.
+- `tests/test_gpu_warp_vs_cpu.py` adds a 10-frame resident batch-warp test that
+  would fail if an explicit `16`-frame capacity were silently truncated back to
+  `8`.
+
+Real 200-light probe:
+
+- Probe root:
+  `C:\glass_runs\phase2_s2_gate512_warp_chunk_probe\runs_20260623_065637`
+- Gate511 default baseline:
+  `6.5765664000064135 s`, native warp total `0.4617859 s`, chunk `8`, `24`
+  warp launches, bitwise baseline.
+- Explicit chunk16:
+  `6.80365089996485 s`, native warp total `0.4766107 s`, chunk `16`, `12`
+  warp launches, bitwise equal to Gate511.
+- Explicit chunk24:
+  `6.626598200004082 s`, native warp total `0.4927578 s`, chunk `24`, `8`
+  warp launches, bitwise equal to Gate511.
+
+Decision:
+
+- Keep the default resident warp chunk at the native preferred `8`.
+- Do not promote larger chunks despite fewer kernel launches. On this dataset
+  and RTX PRO 6000 Blackwell run, larger output workspaces increased native warp
+  time and did not improve end-to-end runtime.
+- The next performance target should avoid the extra workspace/scatter round
+  trip or correctly fuse warp output with integration while preserving Gate511
+  pixels. The prior fused-matrix probe remains blocked because it was slower and
+  not bitwise equal.
+
+Validation commands:
+
+- `cmake --build build --config Release -j 1` inside the VS BuildTools
+  developer environment.
+- `python -m pytest -q tests/test_gpu_warp_vs_cpu.py
+  tests/test_cli_smoke.py::test_cli_resident_run_passes_explicit_chunk_capacity_from_admission
+  tests/test_resident_cuda_run.py::test_resident_memory_admission_accepts_explicit_chunk_capacity
+  tests/test_resident_cuda_run.py::test_resident_registration_matrix_batch_honors_chunk_capacity`
+- real 200-light chunk16/chunk24 `glass run` commands with the Gate511 plan,
+  master cache, reference frame, Lanczos3 warp, and minimal output-map policy.
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:
