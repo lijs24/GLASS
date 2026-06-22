@@ -1,0 +1,107 @@
+{
+  "gate": "S2-Gate 460",
+  "status": "passed",
+  "scope": "resident_cuda_batched_source_dq_threshold_apply",
+  "date_local": "2026-06-22",
+  "default_path_changed": false,
+  "source_dq_mode_for_real_regression": "off",
+  "opt_in_threshold_source": "cuda_resident_histogram_median_mad_scalar",
+  "opt_in_threshold_apply_native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames",
+  "opt_in_threshold_apply_detector_execution": "cuda_threshold_apply_batch",
+  "batch_single_kernel_launch": true,
+  "batch_single_sync": true,
+  "real_run": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_460_200\\contract_parity_audit_required_20260622",
+    "dataset": "M38_H_200light_20bias_20dark_20flat",
+    "internal_elapsed_s": 36.23059789999388,
+    "outer_elapsed_s": 36.6230273,
+    "backend": "cuda",
+    "memory_mode": "resident",
+    "resident_runtime_preset": "throughput-v1",
+    "resident_h2d_mode": "pinned_ring",
+    "resident_fits_read_mode": "auto",
+    "registration": "similarity_cuda_triangle",
+    "warp_interpolation": "lanczos3",
+    "local_normalization": "off",
+    "rejection": "winsorized_sigma",
+    "winsorized_mode": "fast_approx",
+    "weighting": "none",
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "zero_weight_frames": 7,
+    "quality_rejected_frames": 7
+  },
+  "stage_timing_s": {
+    "total_internal": 36.23059789999388,
+    "master_build_or_load": 11.832780299999285,
+    "light_read_upload_calibrate": 15.062824100023136,
+    "light_fits_native_file_read_worker_cumulative": 20.301837,
+    "light_read_wait_wall": 2.1676025003544055,
+    "light_calibrate_store": 0.8067642555236816,
+    "light_loop_unaccounted": 12.058857799798716,
+    "resident_registration_component_accounted": 9.947972800113117,
+    "resident_registration_warp": 4.386193900427315,
+    "resident_integration": 0.49044129997491837,
+    "output_write": 2.469752700009849
+  },
+  "memory": {
+    "estimated_peak_gib": 47.3117358982563,
+    "calibrated_stack_gib": 45.93372344970703,
+    "resident_base_gib": 46.85239791870117
+  },
+  "wbpp_blackbox": {
+    "elapsed_s": 1092.541,
+    "result_path": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json",
+    "reference_master": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf"
+  },
+  "speedup": {
+    "acceptance_audit_speedup_vs_wbpp": 30.15520204816119,
+    "compare_timing_speedup_vs_wbpp": 29.832077808597763
+  },
+  "compare": {
+    "json": "C:\\glass_runs\\phase2_s2_gate_460_200\\contract_parity_audit_required_20260622\\s2_gate_460_compare.json",
+    "html": "C:\\glass_runs\\phase2_s2_gate_460_200\\contract_parity_audit_required_20260622\\s2_gate_460_compare.html",
+    "shape_match": true,
+    "coverage_fraction": 0.960955682938856,
+    "coverage_max": 193.0,
+    "coverage_median": 192.0,
+    "rms_diff": 0.0016833910120351344,
+    "abs_diff_p99": 0.00045765244867652585
+  },
+  "contracts": {
+    "resident_calibration_contract": "passed",
+    "resident_result_contract": "passed",
+    "pipeline_contract": "passed",
+    "stack_engine_contract": "passed",
+    "acceptance_audit": "passed"
+  },
+  "tests": {
+    "focused_source_dq_cuda_cli": "4 passed",
+    "focused_ruff": "passed",
+    "resident_source_dq_regression": "120 passed in 9.06 s",
+    "full_pytest": "1091 passed in 47.59 s",
+    "native_cuda_build": "passed"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "driver": "596.21",
+    "toolkit": "13.2"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "notes": [
+      "Used GLASS code, GLASS fixtures, GLASS artifacts, and user-owned benchmark outputs.",
+      "Original image directories remained read-only.",
+      "No official PixInsight/WBPP/PJSR implementation source was read, copied, summarized, or modified."
+    ]
+  },
+  "known_limitations": [
+    "cosmetic_cuda remains opt-in and default resident_inline_source_dq remains off.",
+    "The real 200-light default-path regression intentionally does not enable source-DQ because that changes sample admission.",
+    "Batch threshold extraction still scans compact histogram bins on the host.",
+    "This gate does not change registration, warp, winsorized rejection, local normalization, or default frame admission."
+  ]
+}

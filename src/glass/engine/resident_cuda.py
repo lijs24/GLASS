@@ -42,6 +42,7 @@ from glass.engine.resident_master_cache import (
 )
 from glass.engine.resident_source_dq import (
     apply_resident_inline_cosmetic_thresholds,
+    apply_resident_inline_cosmetic_thresholds_batch,
     apply_resident_source_invalid_mask,
     build_resident_source_dq_execution_group,
     build_resident_source_dq_summary,
@@ -3941,6 +3942,7 @@ def run_resident_calibration_integration(
                             if resident_inline_source_dq == "cosmetic_cuda"
                             else {}
                         )
+                        batch_threshold_apply_items: list[dict[str, Any]] = []
                         frame_share = 1.0 / float(len(batch_items))
                         for position, (item_index, frame, _light, _exposure) in enumerate(batch_items):
                             pending = source_dq_pending_by_index.get(int(item_index))
@@ -3968,14 +3970,12 @@ def run_resident_calibration_integration(
                                     resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                                 )
                             if threshold_info is not None:
-                                source_dq_rows.append(
-                                    apply_resident_inline_cosmetic_thresholds(
-                                        stack,
-                                        frame_index=int(item_index),
-                                        frame_id=str(frame["id"]),
-                                        threshold_info=threshold_info,
-                                        source="resident_calibrated_batch_input_cosmetic_cuda",
-                                    )
+                                batch_threshold_apply_items.append(
+                                    {
+                                        "frame_index": int(item_index),
+                                        "frame_id": str(frame["id"]),
+                                        "threshold_info": threshold_info,
+                                    }
                                 )
                             frame_weight = 0.0 if _matches_any_token(frame, excluded_tokens) else 1.0
                             frame_weights[str(frame["id"])] = frame_weight
@@ -3987,6 +3987,15 @@ def run_resident_calibration_integration(
                                 float(calibration_timing.get("calibrate_store_s", 0.0)) * frame_share
                             )
                             calibration_event_modes.append(str(calibration_timing.get("event_mode", "unknown")))
+                        if batch_threshold_apply_items:
+                            source_dq_rows.extend(
+                                apply_resident_inline_cosmetic_thresholds_batch(
+                                    stack,
+                                    items=batch_threshold_apply_items,
+                                    source="resident_calibrated_batch_input_cosmetic_cuda",
+                                )
+                            )
+                        for position, _item in enumerate(batch_items):
                             per_frame_s.append(perf_counter() - batch_frame_starts[position])
                         del batch_items
                         if index % 10 == 9:

@@ -2548,6 +2548,26 @@ class ResidentCalibratedStack:
         )
         return dict(result)
 
+    def apply_cosmetic_threshold_mask_frames(
+        self,
+        indices: list[int],
+        low_thresholds: list[float],
+        high_thresholds: list[float],
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "apply_cosmetic_threshold_mask_frames"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames is not available"
+            )
+        result = dict(
+            self._impl.apply_cosmetic_threshold_mask_frames(
+                [int(index) for index in indices],
+                [float(value) for value in low_thresholds],
+                [float(value) for value in high_thresholds],
+            )
+        )
+        result["frames"] = [dict(frame) for frame in list(result.get("frames") or [])]
+        return result
+
     def calibrate_frame(
         self,
         index: int,

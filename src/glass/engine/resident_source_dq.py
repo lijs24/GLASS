@@ -716,6 +716,7 @@ def apply_resident_inline_cosmetic_thresholds(
     threshold_info: dict[str, Any],
     source: str,
     require_native: bool = True,
+    native_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "schema_version": 1,
@@ -781,7 +782,7 @@ def apply_resident_inline_cosmetic_thresholds(
     if not row["supported"]:
         row["status"] = "unsupported_no_invalid_samples"
         return row
-    if not hasattr(stack, "apply_cosmetic_threshold_mask_frame"):
+    if native_result is None and not hasattr(stack, "apply_cosmetic_threshold_mask_frame"):
         row["status"] = "native_method_unavailable"
         if require_native:
             raise RuntimeError(
@@ -790,11 +791,15 @@ def apply_resident_inline_cosmetic_thresholds(
             )
         return row
 
-    native = dict(
-        stack.apply_cosmetic_threshold_mask_frame(
-            int(frame_index),
-            float(row["low_threshold"]),
-            float(row["high_threshold"]),
+    native = (
+        dict(native_result)
+        if native_result is not None
+        else dict(
+            stack.apply_cosmetic_threshold_mask_frame(
+                int(frame_index),
+                float(row["low_threshold"]),
+                float(row["high_threshold"]),
+            )
         )
     )
     hot = int(native.get("hot_samples") or 0)
@@ -825,6 +830,7 @@ def apply_resident_inline_cosmetic_thresholds(
                 or "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
             ),
             "native": native,
+            "detector_execution": str(native.get("detector_execution") or row["detector_execution"]),
             "invalid_samples": invalid,
             "flagged_samples": invalid,
             "nonfinite_samples": nonfinite,
@@ -888,6 +894,74 @@ def apply_resident_inline_cosmetic_thresholds(
         }
     )
     return row
+
+
+def apply_resident_inline_cosmetic_thresholds_batch(
+    stack: Any,
+    *,
+    items: list[dict[str, Any]],
+    source: str,
+    require_native: bool = True,
+) -> list[dict[str, Any]]:
+    if not items:
+        return []
+    if not hasattr(stack, "apply_cosmetic_threshold_mask_frames"):
+        return [
+            apply_resident_inline_cosmetic_thresholds(
+                stack,
+                frame_index=int(item["frame_index"]),
+                frame_id=str(item["frame_id"]),
+                threshold_info=dict(item["threshold_info"]),
+                source=source,
+                require_native=require_native,
+            )
+            for item in items
+        ]
+
+    indices = [int(item["frame_index"]) for item in items]
+    low_thresholds = [float(dict(item["threshold_info"])["low_threshold"]) for item in items]
+    high_thresholds = [float(dict(item["threshold_info"])["high_threshold"]) for item in items]
+    native_batch = dict(stack.apply_cosmetic_threshold_mask_frames(indices, low_thresholds, high_thresholds))
+    native_by_index = {
+        int(frame_result.get("frame_index")): dict(frame_result)
+        for frame_result in list(native_batch.get("frames") or [])
+    }
+    rows: list[dict[str, Any]] = []
+    for item in items:
+        frame_index = int(item["frame_index"])
+        native_result = native_by_index.get(frame_index)
+        if native_result is None:
+            if require_native:
+                raise RuntimeError(
+                    "resident CUDA batch cosmetic threshold application did not return "
+                    f"a result for frame index {frame_index}"
+                )
+            rows.append(
+                apply_resident_inline_cosmetic_thresholds(
+                    stack,
+                    frame_index=frame_index,
+                    frame_id=str(item["frame_id"]),
+                    threshold_info=dict(item["threshold_info"]),
+                    source=source,
+                    require_native=False,
+                )
+            )
+            continue
+        native_result.setdefault("batch_native_method", native_batch.get("native_method"))
+        native_result.setdefault("batch_frame_count", native_batch.get("frame_count"))
+        native_result.setdefault("batch_total_s", native_batch.get("total_s"))
+        rows.append(
+            apply_resident_inline_cosmetic_thresholds(
+                stack,
+                frame_index=frame_index,
+                frame_id=str(item["frame_id"]),
+                threshold_info=dict(item["threshold_info"]),
+                source=source,
+                require_native=require_native,
+                native_result=native_result,
+            )
+        )
+    return rows
 
 
 def build_resident_source_dq_summary(

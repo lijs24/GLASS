@@ -9329,6 +9329,48 @@ Completed in Gate446:
     should move the final quantile scan device-side and batch the threshold
     apply kernel launch/synchronization as well.
 
+### S2-Gate 460: Resident CUDA Batched Source-DQ Threshold Apply
+
+- Move Gate459's opt-in `cosmetic_cuda` source-DQ threshold application from
+  per-frame native calls to a resident batch API.
+- Required work:
+  - add a native batch threshold-apply kernel for multiple resident calibrated
+    frames;
+  - expose `ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames`
+    through the Python CUDA wrapper;
+  - make resident batch calibration call the batch apply API once per
+    calibrated batch after batch histogram threshold extraction;
+  - record batch native method, single-kernel/single-sync evidence,
+    per-frame counts, and timing in resident source-DQ rows;
+  - preserve the default 200-light contract-parity route with
+    `resident_inline_source_dq=off`.
+- Completed in S2-Gate460:
+  - added `glass_apply_cosmetic_threshold_mask_frames_f32_launch` and the
+    native resident stack batch binding;
+  - added `glass_cuda.ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames`;
+  - added `apply_resident_inline_cosmetic_thresholds_batch` and routed
+    resident batch calibration through it for opt-in `cosmetic_cuda`;
+  - focused CUDA/source-DQ/CLI pytest passed with `4 passed`;
+  - resident/source-DQ regression pytest passed with `120 passed`;
+  - full pytest passed with `1091 passed`;
+  - real 200-light contract-token audit-map run completed in `36.230598 s`
+    internal run timing (`36.623027 s` outer PowerShell timing), integrated
+    `193/200` frames, and passed acceptance at `30.155202x` versus the WBPP
+    black-box timing `1092.541 s`;
+  - comparison remained inside the 200-light contract: shape matched,
+    coverage fraction `0.960956`, RMS diff `0.00168339`, and P99 absolute
+    diff `0.000457652`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_460_200\contract_parity_audit_required_20260622`;
+  - `runs/checkpoints/s2_gate_460_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_460_status.md`.
+- Known limitation:
+  - `cosmetic_cuda` remains opt-in and the real default-path regression keeps
+    source-DQ off to avoid changing sample admission. Batch threshold
+    extraction still scans compact histogram bins on the host. The next
+    substantive optimization should reduce Python orchestration in resident
+    registration/warp and/or move remaining quantile work device-side.
+
 ## Gate Rules
 
 Each gate requires:

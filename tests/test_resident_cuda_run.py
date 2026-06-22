@@ -1711,8 +1711,8 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert source_dq["passed"] is True
     assert source_dq["input_invalid_samples_before_rejection"] == 1
     assert source_dq["source_dq_flag_counts"] == {"cosmetic_corrected": 1, "hot_pixel": 1}
-    assert source_dq["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
-    assert source_dq["native_methods"] == ["ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"]
+    assert source_dq["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"
+    assert source_dq["native_methods"] == ["ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"]
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq"] == "cosmetic_cuda"
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector"] == (
         "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
@@ -1731,9 +1731,11 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert not (run / "resident_source_dq_cache_route.json").exists()
     applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
     assert len(applied_rows) == 1
-    assert applied_rows[0]["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+    assert applied_rows[0]["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"
     assert applied_rows[0]["native"]["mask_upload_s"] == 0.0
-    assert applied_rows[0]["detector_execution"] == "cuda_threshold_apply"
+    assert applied_rows[0]["native"]["batch_single_kernel_launch"] is True
+    assert applied_rows[0]["native"]["batch_single_sync"] is True
+    assert applied_rows[0]["detector_execution"] == "cuda_threshold_apply_batch"
     assert applied_rows[0]["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
     assert applied_rows[0]["threshold_stats_native_method"] == (
         "ResidentCalibratedStack.frames_histogram_robust_stats"
