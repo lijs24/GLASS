@@ -67,7 +67,7 @@ def test_source_invalid_mask_from_inline_cosmetic_flags_hot_and_cold_samples_wit
     assert mask is not None
     assert int(mask[1, 2]) == 1
     assert int(mask[3, 4]) == 1
-    assert info["source_model"] == "inline_cosmetic_source_dq"
+    assert info["source_model"] == "inline_structure_cosmetic_source_dq"
     assert info["inline_source_dq"] is True
     assert info["inline_source_dq_applies_replacement"] is False
     assert info["invalid_samples"] == 2
@@ -77,6 +77,34 @@ def test_source_invalid_mask_from_inline_cosmetic_flags_hot_and_cold_samples_wit
     assert info["flag_counts"]["cosmetic_corrected"] == 2
     assert info["cosmetic_metrics"]["hot_pixels"] == 1
     assert info["cosmetic_metrics"]["cold_pixels"] == 1
+    assert info["inline_source_dq_detector"] == "glass.cpu.cosmetic.detect_isolated_cosmetic_defects"
+
+
+def test_source_invalid_mask_from_inline_cosmetic_protects_star_like_structure():
+    data = np.full((9, 9), 100.0, dtype=np.float32)
+    data[1, 1] = 1000.0
+    data[4, 4] = 1000.0
+    for y in range(3, 6):
+        for x in range(3, 6):
+            if (y, x) != (4, 4):
+                data[y, x] = 650.0
+
+    mask, info = source_invalid_mask_from_inline_cosmetic(
+        data,
+        height=9,
+        width=9,
+        hot_sigma=2.0,
+        cold_sigma=2.0,
+    )
+
+    assert mask is not None
+    assert int(mask[1, 1]) == 1
+    assert int(mask[4, 4]) == 0
+    assert info["source_model"] == "inline_structure_cosmetic_source_dq"
+    assert info["flag_counts"]["hot_pixel"] == 1
+    assert info["flag_counts"]["cosmetic_corrected"] == 1
+    assert info["cosmetic_metrics"]["candidate_hot_pixels"] >= 2
+    assert info["cosmetic_metrics"]["protected_hot_pixels"] >= 1
 
 
 def test_inline_cosmetic_thresholds_match_cpu_baseline_scalar_thresholds():

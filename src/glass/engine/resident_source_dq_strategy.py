@@ -154,7 +154,7 @@ def build_resident_source_dq_strategy(
         "detector": (
             "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
             if str(resident_inline_source_dq) == "cosmetic_cuda"
-            else "glass.cpu.cosmetic.correct_cosmetic_defects"
+            else "glass.cpu.cosmetic.detect_isolated_cosmetic_defects"
             if str(resident_inline_source_dq) == "cosmetic"
             else None
         ),

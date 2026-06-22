@@ -9755,7 +9755,7 @@ def run_resident_calibration_integration(
                         "resident_inline_source_dq_detector": (
                             "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
                             if resident_inline_source_dq == "cosmetic_cuda"
-                            else "glass.cpu.cosmetic.correct_cosmetic_defects"
+                            else "glass.cpu.cosmetic.detect_isolated_cosmetic_defects"
                             if resident_inline_source_dq == "cosmetic"
                             else None
                         ),

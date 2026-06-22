@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from glass.cpu.cosmetic import correct_cosmetic_defects
+from glass.cpu.cosmetic import detect_isolated_cosmetic_defects
 from glass.engine.contracts import DQFlag, DQMask
 from glass.io.fits_io import read_fits_data
 
@@ -98,7 +98,7 @@ def source_invalid_mask_from_inline_cosmetic(
             "expected_shape": list(shape),
             "invalid_samples": 0,
             "flag_counts": {},
-            "source_model": "inline_cosmetic_source_dq",
+            "source_model": "inline_structure_cosmetic_source_dq",
         }
     if not np.issubdtype(array.dtype, np.number):
         return None, {
@@ -108,10 +108,10 @@ def source_invalid_mask_from_inline_cosmetic(
             "dtype": str(array.dtype),
             "invalid_samples": 0,
             "flag_counts": {},
-            "source_model": "inline_cosmetic_source_dq",
+            "source_model": "inline_structure_cosmetic_source_dq",
         }
 
-    result = correct_cosmetic_defects(
+    result = detect_isolated_cosmetic_defects(
         np.asarray(array, dtype=np.float32),
         hot_sigma=float(hot_sigma),
         cold_sigma=float(cold_sigma),
@@ -119,9 +119,9 @@ def source_invalid_mask_from_inline_cosmetic(
     invalid_mask, info = source_invalid_mask_from_dq_mask(result.dq_mask, height=height, width=width)
     info.update(
         {
-            "source_model": "inline_cosmetic_source_dq",
+            "source_model": "inline_structure_cosmetic_source_dq",
             "inline_source_dq": True,
-            "inline_source_dq_detector": "glass.cpu.cosmetic.correct_cosmetic_defects",
+            "inline_source_dq_detector": "glass.cpu.cosmetic.detect_isolated_cosmetic_defects",
             "inline_source_dq_applies_replacement": False,
             "hot_sigma": float(hot_sigma),
             "cold_sigma": float(cold_sigma),
@@ -591,6 +591,19 @@ def combine_source_invalid_masks(
         invalid_count = int(np.count_nonzero(combined_bool))
         combined = combined_bool.astype(np.uint8, copy=False)
 
+    inline_detectors = sorted(
+        {
+            str(item.get("inline_source_dq_detector"))
+            for item in component_summaries
+            if item.get("inline_source_dq_detector")
+        }
+    )
+    inline_replacement_modes = {
+        bool(item.get("inline_source_dq_applies_replacement"))
+        for item in component_summaries
+        if item.get("inline_source_dq_applies_replacement") is not None
+    }
+
     return combined, {
         "supported": supported,
         "reason": ";".join(reasons),
@@ -609,6 +622,14 @@ def combine_source_invalid_masks(
         "inline_source_dq": any(
             bool(item.get("inline_source_dq")) for item in component_summaries
         ),
+        "inline_source_dq_detector": inline_detectors[0]
+        if len(inline_detectors) == 1
+        else "+".join(inline_detectors)
+        if inline_detectors
+        else None,
+        "inline_source_dq_applies_replacement": any(inline_replacement_modes)
+        if inline_replacement_modes
+        else None,
     }
 
 

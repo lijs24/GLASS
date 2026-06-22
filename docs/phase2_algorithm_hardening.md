@@ -11135,6 +11135,57 @@ Completed in Gate446:
   - source-DQ guarded vs default compare:
     `C:\glass_runs\phase2_s2_gate493_guard001_ab_real\compare\cosmetic_cuda_guarded_vs_default.json`.
 
+### S2-Gate 494: Structure-Aware CPU Baseline For Inline Cosmetic Source-DQ
+
+- Replace the resident inline CPU `cosmetic` source-DQ detector with a more
+  scientifically conservative baseline before attempting a CUDA implementation.
+  Gate493 proved that global light-frame thresholds are too broad for real
+  stars; Gate494 adds an isolated-defect model that protects star-like local
+  structure.
+- Completed:
+  - added `glass.cpu.cosmetic.detect_isolated_cosmetic_defects`;
+  - the detector flags hot/cold candidates only when they are strong global and
+    local outliers and have insufficient same-sign support in the 8-neighborhood;
+  - compact star-like structure is protected because neighboring pixels provide
+    support, while isolated hot/cold pixels remain flagged;
+  - resident `--resident-inline-source-dq cosmetic` now uses this detector and
+    records `inline_structure_cosmetic_source_dq` plus
+    `glass.cpu.cosmetic.detect_isolated_cosmetic_defects` in artifacts;
+  - combined source-DQ rows now promote a single inline detector to the row
+    top level, making resident artifacts easier to audit.
+- Focused validation:
+  - CPU synthetic test proves an isolated hot pixel is flagged while a compact
+    star core is protected;
+  - resident source-DQ synthetic test proves the same behavior through the
+    invalid-mask helper;
+  - resident CUDA CLI smoke test proves inline CPU `cosmetic` still excludes a
+    finite hot pixel without materializing a DQ cache, while recording the new
+    detector/model;
+  - related focused pytest: `23 passed`.
+- Real 200-light default regression:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate494_structure_cosmetic_ab_real\runs\default_runtime_stack_ab_current`;
+  - total runtime: `17.611496199970134 s`;
+  - active frames: `193 / 200`;
+  - GLASS-vs-Gate493 master difference: RMS/p99/max all `0.0`;
+  - pixel-verifying pipeline contract and StackEngine contract passed.
+- Interpretation:
+  - the default production route is unaffected because inline source-DQ remains
+    off by default;
+  - the opt-in CPU `cosmetic` source-DQ path now has a defensible baseline for
+    isolated defects and star-core protection;
+  - `cosmetic_cuda` still uses scalar thresholds plus the Gate493 guard. The
+    next substantive step is to port the structure-aware isolated-defect model
+    to resident CUDA so GPU source-DQ can apply a useful mask instead of only
+    refusing unsafe global masks.
+- Artifacts:
+  - default pipeline contract:
+    `C:\glass_runs\phase2_s2_gate494_structure_cosmetic_ab_real\contracts\ab_current_pipeline_contract.json`;
+  - default StackEngine contract:
+    `C:\glass_runs\phase2_s2_gate494_structure_cosmetic_ab_real\contracts\ab_current_stack_engine_contract.json`;
+  - default vs Gate493 compare:
+    `C:\glass_runs\phase2_s2_gate494_structure_cosmetic_ab_real\compare\ab_current_vs_gate493_master.json`.
+
 ## Gate Rules
 
 Each gate requires:

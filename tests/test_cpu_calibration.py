@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from glass.cpu.calibration import apply_overscan_trim, calibrate_light
-from glass.cpu.cosmetic import correct_cosmetic_defects
+from glass.cpu.cosmetic import correct_cosmetic_defects, detect_isolated_cosmetic_defects
 from glass.engine.contracts import DQFlag
 from glass.models import CalibrationPolicy
 
@@ -68,3 +68,22 @@ def test_cosmetic_correction_marks_hot_cold_and_corrected_pixels():
     assert result.dq_mask.count(DQFlag.HOT_PIXEL) == 1
     assert result.dq_mask.count(DQFlag.COLD_PIXEL) == 1
     assert result.dq_mask.count(DQFlag.COSMETIC_CORRECTED) == 2
+
+
+def test_structure_aware_cosmetic_detection_protects_star_cores():
+    data = np.full((9, 9), 100.0, dtype=np.float32)
+    data[1, 1] = 1000.0
+    data[4, 4] = 1000.0
+    for y in range(3, 6):
+        for x in range(3, 6):
+            if (y, x) != (4, 4):
+                data[y, x] = 650.0
+
+    result = detect_isolated_cosmetic_defects(data, hot_sigma=2.0, cold_sigma=2.0)
+
+    assert result.dq_mask.has_flag(DQFlag.HOT_PIXEL)[1, 1]
+    assert not result.dq_mask.has_flag(DQFlag.HOT_PIXEL)[4, 4]
+    assert result.dq_mask.count(DQFlag.HOT_PIXEL) == 1
+    assert result.dq_mask.count(DQFlag.COSMETIC_CORRECTED) == 1
+    assert result.metrics["candidate_hot_pixels"] >= 2
+    assert result.metrics["protected_hot_pixels"] >= 1

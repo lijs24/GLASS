@@ -2009,6 +2009,7 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_source_dq_without_cache(t
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_materializes_cache"] is False
     assert strategy["inline_source_dq"]["enabled"] is True
     assert strategy["inline_source_dq"]["mode"] == "cosmetic"
+    assert strategy["inline_source_dq"]["detector"] == "glass.cpu.cosmetic.detect_isolated_cosmetic_defects"
     assert execution["summary"]["passed"] is True
     assert execution["summary"]["materializes_calibrated_dq_cache"] is False
     assert timing["resident_inline_source_dq"] == "cosmetic"
@@ -2016,8 +2017,11 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_source_dq_without_cache(t
     applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
     assert applied_rows[0]["inline_source_dq"] is True
     assert any(
-        item["source_model"] == "inline_cosmetic_source_dq"
+        item["source_model"] == "inline_structure_cosmetic_source_dq"
         for item in applied_rows[0]["component_summaries"]
+    )
+    assert applied_rows[0]["inline_source_dq_detector"] == (
+        "glass.cpu.cosmetic.detect_isolated_cosmetic_defects"
     )
 
 
