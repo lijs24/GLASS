@@ -69,6 +69,32 @@ def test_resident_memory_estimate_includes_chunked_warp_workspace() -> None:
     assert memory["estimated_peak_bytes"] == base_peak_bytes + workspace_bytes
 
 
+def test_resident_memory_estimate_counts_full_chunk_metadata_workspace() -> None:
+    frame_bytes = 10 * 12 * 4
+    base_peak_bytes = (6 + 1 + 3 + 2) * frame_bytes + 6 * 4
+    workspace_bytes = 2 * frame_bytes + 2 * (10 * 12) + 5 * 9 * 4 + 5 * 8
+
+    memory = _memory_estimate(
+        6,
+        10,
+        12,
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        chunked_warp_frame_count=5,
+        chunked_warp_capacity_frames=2,
+    )
+
+    assert memory["estimated_peak_without_chunked_warp_bytes"] == base_peak_bytes
+    assert memory["chunked_warp_planned_frame_count"] == 5
+    assert memory["chunked_warp_planned_capacity_frames"] == 2
+    assert memory["chunked_warp_planned_output_bytes"] == 2 * frame_bytes
+    assert memory["chunked_warp_planned_coverage_bytes"] == 2 * (10 * 12)
+    assert memory["chunked_warp_planned_inverse_bytes"] == 5 * 9 * 4
+    assert memory["chunked_warp_planned_index_bytes"] == 5 * 8
+    assert memory["chunked_warp_planned_workspace_bytes"] == workspace_bytes
+    assert memory["estimated_peak_bytes"] == base_peak_bytes + workspace_bytes
+
+
 def test_resident_memory_admission_recommends_reduced_chunk_capacity() -> None:
     frames = [
         {"id": f"L{index:03d}", "frame_type": "light", "filter": "H", "height": 72, "width": 80}
@@ -3320,13 +3346,18 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
         "native_chunked_batch_warp_scatter_one_sync"
     )
     assert resident_registration["triangle_warp_batch_native_inverse_upload_mode"] == "chunked_device_batch"
+    assert resident_registration["triangle_warp_batch_native_chunk_metadata_upload_mode"] == (
+        "single_device_batch_reused_by_chunks"
+    )
     assert resident_registration["triangle_warp_batch_frame_count"] == 1
     assert resident_registration["triangle_warp_batch_fallback_frame_count"] == 0
     assert resident_registration["triangle_warp_batch_native_inverse_prepare_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_inverse_batch_alloc_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_inverse_batch_bytes"] > 0
     assert resident_registration["triangle_warp_batch_native_index_upload_s"] >= 0.0
+    assert resident_registration["triangle_warp_batch_native_index_upload_count"] == 1
     assert resident_registration["triangle_warp_batch_native_inverse_upload_s"] >= 0.0
+    assert resident_registration["triangle_warp_batch_native_inverse_upload_count"] == 1
     assert resident_registration["triangle_warp_batch_native_kernel_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_coverage_reduce_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_scatter_enqueue_s"] >= 0.0

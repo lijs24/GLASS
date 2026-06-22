@@ -9763,6 +9763,63 @@ Completed in Gate446:
     next performance gate still needs to reduce native per-chunk launch
     overhead or move more registration/warp orchestration state onto the GPU.
 
+### S2-Gate 468: Resident Chunked Warp Metadata Upload Reuse
+
+- Reduce resident chunked matrix-warp orchestration overhead by uploading the
+  tiny frame-index and inverse-matrix metadata batch once per native call,
+  then reusing device pointer offsets for each chunk.
+- Required work:
+  - change native chunked bilinear and Lanczos3 matrix batch warp dispatch so
+    indices and inverse matrices are prepared and uploaded once for the full
+    batch instead of once per chunk;
+  - keep output and coverage scratch allocation bounded by chunk capacity;
+  - update memory planning so chunked-warp metadata bytes are counted for all
+    planned warp frames, while output/coverage bytes remain chunk-capacity
+    bounded;
+  - record upload-count and metadata-upload-mode evidence in native timing and
+    resident registration artifacts;
+  - verify CUDA output remains CPU-equivalent for reduced-capacity multi-chunk
+    bilinear and Lanczos3 warps.
+- Completed in S2-Gate468:
+  - updated native batch warp workspace allocation so output/coverage scratch
+    remains chunk-capacity sized, while index/inverse metadata allocation covers
+    the full requested frame batch;
+  - changed chunked bilinear and Lanczos3 paths to prepare and upload all
+    indices/inverses once, then pass offset device pointers to each chunk's
+    warp and scatter kernels;
+  - fixed the scatter path to use the same chunk-offset index pointer as the
+    warp kernel, after focused CUDA tests caught a frame-writeback mismatch in
+    the first implementation attempt;
+  - added native timing fields `chunk_metadata_upload_mode`,
+    `index_upload_count`, and `inverse_upload_count`;
+  - carried those fields into resident registration artifacts as
+    `triangle_warp_batch_native_chunk_metadata_upload_mode`,
+    `triangle_warp_batch_native_index_upload_count`, and
+    `triangle_warp_batch_native_inverse_upload_count`;
+  - changed the resident memory model to account for full-batch metadata bytes;
+  - focused reduced-capacity CUDA tests prove five-frame batches with two-frame
+    chunk capacity still launch three chunks but now upload index/inverse
+    metadata once and match CPU reference output;
+  - resident/CLI/CUDA regression passed with `158 passed`;
+  - full pytest passed with `1102 passed`.
+- Performance and regression note:
+  - for the five-frame focused tests, metadata uploads are now `1` index upload
+    and `1` inverse upload despite `3` warp chunks;
+  - by the same native dispatch rule, the Gate465 200-light default path would
+    reduce matrix-warp metadata uploads from `24` per-kind chunk uploads to one
+    per-kind batch upload while keeping the same warp/coverage/scatter chunk
+    count;
+  - a new 200-light run was not launched because C: had about `0.17 GiB` free
+    during validation.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_468_chunk_metadata_upload_summary.json`;
+  - `runs/checkpoints/s2_gate_468_status.md`.
+- Known limitation:
+  - this gate removes repeated metadata uploads but still launches warp,
+    coverage-reduce, and scatter kernels once per chunk. The next performance
+    gate should reduce per-chunk launch overhead or fuse more work into
+    resident integration.
+
 ## Gate Rules
 
 Each gate requires:

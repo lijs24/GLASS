@@ -1,0 +1,125 @@
+{
+  "gate": "S2-Gate 468",
+  "status": "passed",
+  "date_local": "2026-06-22",
+  "scope": "resident chunked matrix-warp metadata upload reuse",
+  "implementation": {
+    "native_binding": {
+      "file": "cpp/src/native_bindings.cpp",
+      "changed_paths": [
+        "ResidentCalibratedStack.apply_matrix_bilinear_frames",
+        "ResidentCalibratedStack.apply_matrix_lanczos3_frames",
+        "ResidentCalibratedStack.allocate_batch_warp_workspace"
+      ],
+      "behavior": "index and inverse metadata are prepared/uploaded once for the full batch; output and coverage scratch remain chunk-capacity bounded; each chunk uses offset device metadata pointers"
+    },
+    "resident_memory_model": {
+      "file": "src/glass/engine/resident_cuda.py",
+      "behavior": "planned chunked-warp output/coverage bytes remain capacity-bound, while planned index/inverse bytes now cover all planned warp frames"
+    },
+    "resident_artifact": {
+      "file": "src/glass/engine/resident_cuda.py",
+      "new_fields": [
+        "triangle_warp_batch_native_chunk_metadata_upload_mode",
+        "triangle_warp_batch_native_index_upload_count",
+        "triangle_warp_batch_native_inverse_upload_count"
+      ]
+    }
+  },
+  "cuda": {
+    "available": true,
+    "devices": [
+      {
+        "device_id": 0,
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+        "compute_capability": "12.0",
+        "memory_total_mib": 97886,
+        "multi_processor_count": 188,
+        "native_backend": true,
+        "available_to_glass": true,
+        "driver_version": "596.21"
+      }
+    ]
+  },
+  "focused_validation": {
+    "first_attempt": {
+      "status": "failed_and_fixed_before_gate_acceptance",
+      "failure": "focused CUDA tests caught wrong output because scatter still used the unoffset full index pointer for later chunks",
+      "fix": "pass workspace.indices.get() + begin to the scatter kernel, matching the warp kernel's metadata offset"
+    },
+    "bilinear": {
+      "test": "tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_bilinear_batch_respects_max_chunk_capacity",
+      "frame_count": 5,
+      "max_chunk_capacity_frames": 2,
+      "chunk_count": 3,
+      "index_upload_count": 1,
+      "inverse_upload_count": 1,
+      "metadata_upload_mode": "single_device_batch_reused_by_chunks",
+      "cpu_reference_match": true
+    },
+    "lanczos3": {
+      "test": "tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_respects_max_chunk_capacity",
+      "frame_count": 5,
+      "max_chunk_capacity_frames": 2,
+      "chunk_count": 3,
+      "index_upload_count": 1,
+      "inverse_upload_count": 1,
+      "metadata_upload_mode": "single_device_batch_reused_by_chunks",
+      "cpu_reference_match": true
+    },
+    "memory_model": {
+      "test": "tests/test_resident_cuda_run.py::test_resident_memory_estimate_counts_full_chunk_metadata_workspace",
+      "assertion": "planned output/coverage bytes are capacity-bound while planned inverse/index bytes cover full planned warp frame count"
+    },
+    "resident_artifact": {
+      "test": "tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair",
+      "assertion": "resident registration artifact records single metadata upload mode/counts for default chunked warp"
+    }
+  },
+  "real_200_light_baseline": {
+    "rerun_for_gate_468": false,
+    "reason": "C: drive had about 0.17 GiB free during validation; this gate validates native upload-count behavior with synthetic CUDA tests.",
+    "baseline_gate": "S2-Gate 465",
+    "baseline_run": "C:\\glass_runs\\phase2_s2_gate_465_200\\admission_capacity_default_parity_r3_20260622",
+    "input": "M38 H-alpha, 200 lights, 20 bias, 20 dark, 20 flat",
+    "internal_total_elapsed_s": 36.10379439999815,
+    "outer_powershell_elapsed_s": 36.4852659,
+    "wbpp_blackbox_elapsed_s": 1092.541,
+    "speedup_vs_wbpp": 30.261112942745317,
+    "warp_timing_model": "native_chunked_batch_warp_scatter_one_sync",
+    "native_chunk_frames": 8,
+    "native_chunk_count": 24,
+    "expected_metadata_upload_reduction": "from one index+inverse upload per chunk to one index+inverse upload per native batch call",
+    "compare_rms_diff": 0.0017005768173342323,
+    "compare_abs_diff_p99": 0.000459801172837615,
+    "coverage_fraction": 0.961042639883733
+  },
+  "commands": {
+    "native_build": "cmd.exe /c 'call \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\" -arch=x64 -host_arch=x64 >nul && \".\\.venv\\Scripts\\cmake.exe\" --build build\\native-cuda-glass --config Release --target _glass_cuda_native'",
+    "ruff": ".\\.venv\\Scripts\\ruff.exe check cpp src tests",
+    "focused_pytest": ".\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_bilinear_batch_respects_max_chunk_capacity tests\\test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_respects_max_chunk_capacity tests\\test_resident_cuda_run.py::test_resident_memory_estimate_counts_full_chunk_metadata_workspace tests\\test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair",
+    "resident_cuda_cli_pytest": ".\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_gpu_warp_vs_cpu.py tests\\test_cuda_resident_stack.py tests\\test_resident_cuda_run.py tests\\test_cli_smoke.py",
+    "full_pytest": ".\\.venv\\Scripts\\python.exe -m pytest -q"
+  },
+  "test_results": {
+    "native_build": "passed",
+    "ruff": "passed",
+    "focused_pytest_after_fix": "4 passed in 0.58s",
+    "resident_cuda_cli_pytest": "158 passed in 14.39s",
+    "full_pytest": "1102 passed in 48.64s"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "notes": [
+      "No official PixInsight WBPP/PJSR source was read or used.",
+      "WBPP evidence remains limited to user-generated black-box timing/output metadata from earlier accepted baseline artifacts.",
+      "Input image directories were not modified."
+    ]
+  },
+  "known_limitations": [
+    "Warp, coverage-reduce, and scatter kernels still launch once per chunk.",
+    "The gate reduces metadata upload orchestration but does not fuse chunk kernels.",
+    "A new real 200-light run was skipped because C: free space was too low for a large output directory."
+  ],
+  "next_gate_recommendation": "Reduce resident warp per-chunk launch overhead, likely by fusing coverage/scatter work or moving toward matrix-warped integration for accepted registration matrices."
+}

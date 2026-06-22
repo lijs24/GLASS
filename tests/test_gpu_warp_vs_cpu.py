@@ -373,11 +373,21 @@ def test_resident_stack_matrix_bilinear_batch_respects_max_chunk_capacity():
     assert timing["batch_max_chunk_capacity_frames"] == 2
     assert timing["batch_chunk_frames"] == 2
     assert timing["batch_chunk_count"] == 3
+    assert timing["chunk_metadata_upload_mode"] == "single_device_batch_reused_by_chunks"
+    assert timing["index_upload_count"] == 1
+    assert timing["inverse_upload_count"] == 1
+    assert timing["inverse_batch_bytes"] == len(frames) * 9 * 4
     assert timing["warp_kernel_launches"] == 3
     assert timing["coverage_reduce_kernel_launches"] == 3
     assert timing["scatter_kernel_launches"] == 3
     assert timing["batch_output_bytes"] == 2 * frames[0].size * 4
     assert timing["batch_coverage_bytes"] == 2 * frames[0].size
+    assert timing["batch_workspace_bytes"] == (
+        timing["batch_output_bytes"]
+        + timing["batch_coverage_bytes"]
+        + len(frames) * 9 * 4
+        + len(frames) * 8
+    )
     assert np.allclose(warped, expected, atol=1.0e-5)
     assert np.array_equal(weight_map, expected_weight)
 
@@ -505,11 +515,21 @@ def test_resident_stack_matrix_lanczos3_batch_respects_max_chunk_capacity():
     assert timing["batch_max_chunk_capacity_frames"] == 2
     assert timing["batch_chunk_frames"] == 2
     assert timing["batch_chunk_count"] == 3
+    assert timing["chunk_metadata_upload_mode"] == "single_device_batch_reused_by_chunks"
+    assert timing["index_upload_count"] == 1
+    assert timing["inverse_upload_count"] == 1
+    assert timing["inverse_batch_bytes"] == len(frames) * 9 * 4
     assert timing["warp_kernel_launches"] == 3
     assert timing["coverage_reduce_kernel_launches"] == 3
     assert timing["scatter_kernel_launches"] == 3
     assert timing["batch_output_bytes"] == 2 * frames[0].size * 4
     assert timing["batch_coverage_bytes"] == 2 * frames[0].size
+    assert timing["batch_workspace_bytes"] == (
+        timing["batch_output_bytes"]
+        + timing["batch_coverage_bytes"]
+        + len(frames) * 9 * 4
+        + len(frames) * 8
+    )
     assert np.allclose(warped, expected, atol=3.0e-5)
     assert np.array_equal(weight_map, expected_weight)
 
