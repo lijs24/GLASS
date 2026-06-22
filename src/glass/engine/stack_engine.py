@@ -40,6 +40,9 @@ class CPUStackEngine:
         ordered_sources = [sources[frame_id] for frame_id in request.frame_ids]
         width, height = self._validate_sources(request, ordered_sources)
 
+        if self._can_stream_mean_no_rejection(request):
+            return self._stack_mean_no_rejection_streaming(request, ordered_sources, width, height)
+
         master = np.zeros((height, width), dtype=np.float32)
         weight_map = (
             np.zeros((height, width), dtype=np.float32) if request.output_maps.weight else None
@@ -160,6 +163,185 @@ class CPUStackEngine:
                 "source DQ flag counts are preserved here for audit. Input invalid "
                 "samples are not rejected samples."
             ),
+        }
+        if variance_map is not None:
+            finite_variance = variance_map[np.isfinite(variance_map)]
+            metrics["variance_mean"] = float(np.mean(finite_variance)) if finite_variance.size else 0.0
+            metrics["variance_max"] = float(np.max(finite_variance)) if finite_variance.size else 0.0
+
+        result = StackEngineResult(
+            master=master,
+            weight_map=weight_map,
+            coverage_map=coverage_map,
+            low_rejection_map=low_rejection_map,
+            high_rejection_map=high_rejection_map,
+            variance_map=variance_map,
+            dq_mask=dq_mask,
+            dq_provenance=dq_provenance,
+            metrics=metrics,
+        )
+        result_contract = build_stack_engine_result_contract(result, request=request)
+        result.dq_provenance["result_contract"] = result_contract
+        result.metrics["result_contract_passed"] = bool(result_contract["passed"])
+        return result
+
+    def _can_stream_mean_no_rejection(self, request: StackRequest) -> bool:
+        return (
+            request.combine.method in {"mean", "weighted_mean"}
+            and (request.rejection.method == "none" or request.rejection.iterations == 0)
+        )
+
+    def _stack_mean_no_rejection_streaming(
+        self,
+        request: StackRequest,
+        sources: list[ImageSource],
+        width: int,
+        height: int,
+    ) -> StackEngineResult:
+        master = np.zeros((height, width), dtype=np.float32)
+        weight_map = (
+            np.zeros((height, width), dtype=np.float32) if request.output_maps.weight else None
+        )
+        coverage_map = (
+            np.zeros((height, width), dtype=np.float32) if request.output_maps.coverage else None
+        )
+        low_rejection_map = (
+            np.zeros((height, width), dtype=np.float32) if request.output_maps.low_rejection else None
+        )
+        high_rejection_map = (
+            np.zeros((height, width), dtype=np.float32) if request.output_maps.high_rejection else None
+        )
+        variance_map = (
+            np.zeros((height, width), dtype=np.float32) if request.output_maps.variance else None
+        )
+        dq_mask = DQMask.empty((height, width)) if request.output_maps.dq else None
+
+        frame_weights = self._frame_weights(request)
+        accumulator_dtype = np.float64 if request.combine.accumulator_dtype == "float64" else np.float32
+
+        valid_total = 0
+        input_sample_total = 0
+        input_valid_sample_total = 0
+        input_invalid_sample_total = 0
+        input_flagged_sample_total = 0
+        input_nonfinite_sample_total = 0
+        coverage_zero_pixel_total = 0
+        input_dq_flag_counts = {flag.name.lower(): 0 for flag in DQFlag if flag != DQFlag.VALID}
+
+        for tile in iter_tiles(width, height, self.tile_size):
+            window = TileWindow(tile.y0, tile.y1, tile.x0, tile.x1)
+            tile_shape = window.shape
+            weighted_sum = np.zeros(tile_shape, dtype=accumulator_dtype)
+            weighted_square_sum = (
+                np.zeros(tile_shape, dtype=accumulator_dtype)
+                if variance_map is not None
+                else None
+            )
+            weight_sum = np.zeros(tile_shape, dtype=accumulator_dtype)
+            coverage = np.zeros(tile_shape, dtype=np.float32)
+
+            for source_index, source in enumerate(sources):
+                source_tile = np.asarray(source.read_tile(window, dtype=np.float32), dtype=np.float32)
+                if source_tile.shape != tile_shape:
+                    raise ValueError(f"source returned tile shape {source_tile.shape}, expected {tile_shape}")
+                dq = source.read_mask_tile(window)
+                finite = np.isfinite(source_tile)
+                valid = finite & (dq.data == 0)
+                if request.combine.method == "mean":
+                    source_weight = np.float32(1.0)
+                else:
+                    source_weight = np.float32(frame_weights[source_index])
+                effective_weight = np.where(valid, source_weight, np.float32(0.0)).astype(accumulator_dtype)
+                source_values = np.where(valid, source_tile, np.float32(0.0)).astype(accumulator_dtype)
+                weighted_sum += source_values * effective_weight
+                if weighted_square_sum is not None:
+                    weighted_square_sum += source_values * source_values * effective_weight
+                weight_sum += effective_weight
+                coverage += valid.astype(np.float32)
+
+                input_sample_total += int(source_tile.size)
+                input_valid_sample_total += int(np.count_nonzero(valid))
+                input_invalid_sample_total += int(np.count_nonzero(~valid))
+                input_flagged_sample_total += int(np.count_nonzero(dq.data != 0))
+                input_nonfinite_sample_total += int(np.count_nonzero(~finite))
+                for flag in DQFlag:
+                    if flag == DQFlag.VALID:
+                        continue
+                    input_dq_flag_counts[flag.name.lower()] += int(
+                        np.count_nonzero((dq.data & np.uint32(int(flag))) != 0)
+                    )
+
+            tile_master = np.divide(
+                weighted_sum,
+                weight_sum,
+                out=np.zeros_like(weight_sum, dtype=accumulator_dtype),
+                where=weight_sum > 0,
+            )
+            tile_master = np.where(np.isfinite(tile_master), tile_master, 0.0).astype(np.float32)
+            y_slice, x_slice = window.as_slices()
+            master[y_slice, x_slice] = tile_master
+            if weight_map is not None:
+                weight_map[y_slice, x_slice] = weight_sum.astype(np.float32)
+            if coverage_map is not None:
+                coverage_map[y_slice, x_slice] = coverage
+            if variance_map is not None and weighted_square_sum is not None:
+                tile_variance = np.divide(
+                    weighted_square_sum,
+                    weight_sum,
+                    out=np.zeros_like(weight_sum, dtype=accumulator_dtype),
+                    where=weight_sum > 0,
+                ) - tile_master.astype(accumulator_dtype) * tile_master.astype(accumulator_dtype)
+                tile_variance = np.where(tile_variance > 0.0, tile_variance, 0.0)
+                tile_variance = np.where(np.isfinite(tile_variance), tile_variance, 0.0)
+                variance_map[y_slice, x_slice] = tile_variance.astype(np.float32)
+            if dq_mask is not None:
+                dq_tile = DQMask.empty(tile_shape)
+                dq_tile.mark(DQFlag.NO_DATA, coverage <= 0)
+                dq_mask.data[y_slice, x_slice] = dq_tile.data
+
+            coverage_zero_pixel_total += int(np.count_nonzero(coverage <= 0))
+            valid_total += int(np.sum(coverage))
+
+        metrics: dict[str, float | int | str] = {
+            "frame_count": len(request.frame_ids),
+            "width": width,
+            "height": height,
+            "combine": request.combine.method,
+            "rejection": request.rejection.method,
+            "rejection_scale_estimator": rejection_scale_estimator(request.rejection),
+            "valid_samples": valid_total,
+            "input_valid_samples": input_valid_sample_total,
+            "input_invalid_samples": input_invalid_sample_total,
+            "low_rejected": 0,
+            "high_rejected": 0,
+            "rejected_samples": 0,
+            "execution_path": "streaming_mean_no_rejection",
+        }
+        dq_provenance: dict[str, Any] = {
+            "schema_version": 1,
+            "input_samples": input_sample_total,
+            "input_valid_samples_before_rejection": input_valid_sample_total,
+            "input_invalid_samples_before_rejection": input_invalid_sample_total,
+            "input_flagged_samples": input_flagged_sample_total,
+            "input_nonfinite_samples": input_nonfinite_sample_total,
+            "input_dq_flag_counts": input_dq_flag_counts,
+            "valid_samples_after_rejection": valid_total,
+            "low_rejected_samples": 0,
+            "high_rejected_samples": 0,
+            "rejected_samples": 0,
+            "rejection_policy": rejection_policy_provenance(request.rejection),
+            "output_coverage_zero_pixels": coverage_zero_pixel_total,
+            "output_low_rejected_pixels": 0,
+            "output_high_rejected_pixels": 0,
+            "output_dq_summary": dq_mask.summary() if dq_mask is not None else None,
+            "semantics": (
+                "Source DQ flags and non-finite samples are consumed as invalid "
+                "input stack samples before rejection. The output DQ map marks pixels "
+                "with no valid samples and pixels touched by low/high rejection; "
+                "source DQ flag counts are preserved here for audit. Input invalid "
+                "samples are not rejected samples."
+            ),
+            "execution_path": "streaming_mean_no_rejection",
         }
         if variance_map is not None:
             finite_variance = variance_map[np.isfinite(variance_map)]

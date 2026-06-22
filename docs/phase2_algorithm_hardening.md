@@ -10369,6 +10369,61 @@ Completed in Gate446:
   - report:
     `C:\glass_runs\phase2_s2_gate482_stackengine_mean_master_cache_ab_real\reports\warm_report.html`.
 
+### S2-Gate 483: StackEngine Mean Fast Path And Cold-Cache Regression
+
+- Continue the Gate482 finding that resident master-cache cold builds became
+  the dominant regression after moving construction under StackEngine.
+- Required work:
+  - keep resident master cache inside `CPUStackEngine`;
+  - optimize only the mean/no-rejection execution path without changing
+    scientific output;
+  - preserve StackEngine result-contract and DQ provenance semantics;
+  - rerun the real 200-light cold/warm A/B.
+- Completed:
+  - added an internal `CPUStackEngine` fast path for mean/weighted-mean with
+    rejection disabled;
+  - the fast path streams one source tile at a time into weighted-sum,
+    weight-sum, coverage, and optional variance accumulators;
+  - it avoids per-tile 3D `np.stack` arrays and records
+    `execution_path=streaming_mean_no_rejection`;
+  - added tests proving the fast path does not call `np.stack`, preserves DQ
+    and non-finite sample accounting, and embeds a passing StackEngine result
+    contract.
+- Real 200-light A/B:
+  - output root:
+    `C:\glass_runs\phase2_s2_gate483_stackengine_fast_mean_ab_real`;
+  - cold fast-mean total: `52.42856379994191 s`;
+  - cold `master_build_or_load`: `32.28885949996766 s`;
+  - warm fast-mean total: `20.60115920001408 s`;
+  - warm `master_build_or_load`: `0.30893689999356866 s`;
+  - Gate482 cold total comparison: `66.35778469999786 s` -> `52.42856379994191 s`
+    (`1.2656800013291873x`);
+  - Gate482 cold master-build comparison: `46.852212900004815 s` ->
+    `32.28885949996766 s` (`1.4510333788671521x`);
+  - warm-vs-cold master difference: RMS/p99/max all `0.0`;
+  - warm-vs-Gate482 warm master difference: RMS/p99/max all `0.0`;
+  - warm-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`, coverage fraction `0.960532609259836`;
+  - warm GLASS vs WBPP speedup: `53.032986609765786x`;
+  - threshold acceptance audit passed with the same 200-light, calibration,
+    frame-count, speedup, coverage, RMS, and p99 thresholds as Gate482.
+- Interpretation:
+  - this is a real StackEngine cold-cache improvement and keeps the output
+    pixel-identical;
+  - it does not yet recover Gate481 helper cold performance
+    (`10.911685600003693 s` master build/load), so the next optimization should
+    target a native/CUDA master mean builder or a lower-overhead finite-only
+    StackEngine source path;
+  - robust resident master rejection remains deferred until its implementation
+    can run full-size calibration frames without dominating first-run time.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate483_stackengine_fast_mean_ab_real\gate483_real_ab_summary.json`;
+  - threshold acceptance:
+    `C:\glass_runs\phase2_s2_gate483_stackengine_fast_mean_ab_real\acceptance\warm_threshold_acceptance_audit.json`;
+  - report:
+    `C:\glass_runs\phase2_s2_gate483_stackengine_fast_mean_ab_real\reports\warm_report.html`.
+
 ## Gate Rules
 
 Each gate requires:

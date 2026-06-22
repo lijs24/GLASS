@@ -83,6 +83,56 @@ def test_cpu_stack_engine_tiled_matches_full_frame_mean():
     assert tiled.metrics["valid_samples"] == full.metrics["valid_samples"]
 
 
+def test_cpu_stack_engine_mean_no_rejection_fast_path_avoids_np_stack(monkeypatch):
+    frames = [
+        np.ones((4, 5), dtype=np.float32),
+        np.ones((4, 5), dtype=np.float32) * 3.0,
+        np.ones((4, 5), dtype=np.float32) * 5.0,
+    ]
+
+    def fail_stack(*args, **kwargs):
+        raise AssertionError("mean/no-rejection StackEngine path should stream without np.stack")
+
+    monkeypatch.setattr(np, "stack", fail_stack)
+    result = CPUStackEngine(tile_size=2).stack(_request(len(frames)), _sources(frames))
+
+    assert np.allclose(result.master, 3.0)
+    assert np.all(result.coverage_map == 3)
+    assert result.metrics["execution_path"] == "streaming_mean_no_rejection"
+    assert result.dq_provenance["execution_path"] == "streaming_mean_no_rejection"
+    assert result.dq_provenance["result_contract"]["passed"] is True
+
+
+def test_cpu_stack_engine_streaming_mean_tracks_dq_and_nonfinite_samples():
+    frames = [
+        np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
+        np.array([[5.0, np.nan], [7.0, 8.0]], dtype=np.float32),
+    ]
+    dq = np.zeros((2, 2), dtype=np.uint32)
+    dq[1, 0] = int(DQFlag.HOT_PIXEL)
+    request = _request(
+        len(frames),
+        combine=CombinePolicy(method="weighted_mean", accumulator_dtype="float64"),
+        weights={"f0": 1.0, "f1": 3.0},
+    )
+
+    result = CPUStackEngine(tile_size=1).stack(request, _sources(frames, [np.zeros_like(dq), dq]))
+
+    assert result.master[0, 0] == pytest.approx(4.0)
+    assert result.master[0, 1] == pytest.approx(2.0)
+    assert result.master[1, 0] == pytest.approx(3.0)
+    assert result.master[1, 1] == pytest.approx(7.0)
+    assert result.weight_map[1, 0] == pytest.approx(1.0)
+    assert result.coverage_map[1, 0] == pytest.approx(1.0)
+    assert result.dq_provenance["input_samples"] == 8
+    assert result.dq_provenance["input_valid_samples_before_rejection"] == 6
+    assert result.dq_provenance["input_invalid_samples_before_rejection"] == 2
+    assert result.dq_provenance["input_flagged_samples"] == 1
+    assert result.dq_provenance["input_nonfinite_samples"] == 1
+    assert result.dq_provenance["input_dq_flag_counts"]["hot_pixel"] == 1
+    assert result.dq_provenance["result_contract"]["passed"] is True
+
+
 def test_cpu_stack_engine_weighted_mean_consumes_dq_masks():
     frames = [
         np.ones((3, 3), dtype=np.float32),
