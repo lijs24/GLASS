@@ -9283,6 +9283,52 @@ Completed in Gate446:
     batch threshold extraction across frames and keep the final quantile scan
     device-side when opt-in source-DQ is enabled on large real stacks.
 
+### S2-Gate 459: Resident CUDA Batched Histogram Source-DQ Thresholds
+
+- Move Gate458's opt-in `cosmetic_cuda` histogram threshold extraction closer
+  to the resident batch execution model.
+- Required work:
+  - add a native batch histogram robust-stats API for multiple resident
+    calibrated frames;
+  - reuse device work buffers across the batch instead of allocating partial
+    and histogram buffers per frame;
+  - make resident batch calibration prefetch threshold stats once per batch
+    before applying the existing CUDA threshold mask kernel per frame;
+  - record batch native method, batch frame count, work-buffer reuse,
+    histogram download bytes, and timing in source-DQ rows and component
+    summaries;
+  - preserve the default 200-light contract-parity route with
+    `resident_inline_source_dq=off`.
+- Completed in S2-Gate459:
+  - added native `ResidentCalibratedStack.frames_histogram_robust_stats`;
+  - exposed `frames_histogram_robust_stats` through `glass_cuda`;
+  - added `inline_cosmetic_thresholds_batch_from_resident_stack`;
+  - updated the resident batch calibration path to compute `cosmetic_cuda`
+    threshold infos for the whole batch before per-frame threshold application;
+  - focused `cosmetic_cuda` batch tests passed, including CLI evidence that
+    rows now report
+    `ResidentCalibratedStack.frames_histogram_robust_stats` and
+    `threshold_stats_batch_reuses_device_work_buffers=true`;
+  - resident/source-DQ regression pytest passed with `118 passed`;
+  - full pytest passed with `1089 passed`;
+  - real 200-light contract-token audit-map run completed in `36.545063 s`
+    internal run timing (`36.957384 s` outer PowerShell timing), integrated
+    `193/200` frames, and passed acceptance at `29.895721x` versus the WBPP
+    black-box timing `1092.541 s`;
+  - comparison remained inside the 200-light contract: shape matched,
+    coverage fraction `0.960897`, RMS diff `0.00166370`, and P99 absolute
+    diff `0.000451557`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_459_200\contract_parity_audit_required_20260622`;
+  - `runs/checkpoints/s2_gate_459_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_459_status.md`.
+- Known limitation:
+  - the batch method reuses buffers and removes per-frame Python/native
+    threshold extraction calls, but it still performs per-frame kernel
+    synchronizations and host-side compact histogram bin scans. A later gate
+    should move the final quantile scan device-side and batch the threshold
+    apply kernel launch/synchronization as well.
+
 ## Gate Rules
 
 Each gate requires:

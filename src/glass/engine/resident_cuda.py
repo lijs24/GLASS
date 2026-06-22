@@ -46,6 +46,7 @@ from glass.engine.resident_source_dq import (
     build_resident_source_dq_execution_group,
     build_resident_source_dq_summary,
     combine_source_invalid_masks,
+    inline_cosmetic_thresholds_batch_from_resident_stack,
     inline_cosmetic_thresholds_from_resident_stack,
     source_invalid_mask_from_array,
     source_invalid_mask_from_inline_cosmetic,
@@ -1667,6 +1668,28 @@ def _resident_source_inline_cosmetic_thresholds_from_resident_stack(
     return inline_cosmetic_thresholds_from_resident_stack(
         stack,
         frame_index=int(frame_index),
+        height=height,
+        width=width,
+        hot_sigma=resident_inline_source_dq_hot_sigma,
+        cold_sigma=resident_inline_source_dq_cold_sigma,
+    )
+
+
+def _resident_source_inline_cosmetic_thresholds_batch_from_resident_stack(
+    stack: Any,
+    *,
+    frame_indices: list[int],
+    height: int,
+    width: int,
+    resident_inline_source_dq: str = "off",
+    resident_inline_source_dq_hot_sigma: float = 8.0,
+    resident_inline_source_dq_cold_sigma: float = 8.0,
+) -> dict[int, dict[str, Any]]:
+    if resident_inline_source_dq != "cosmetic_cuda":
+        return {}
+    return inline_cosmetic_thresholds_batch_from_resident_stack(
+        stack,
+        frame_indices=[int(index) for index in frame_indices],
         height=height,
         width=width,
         hot_sigma=resident_inline_source_dq_hot_sigma,
@@ -3905,6 +3928,19 @@ def run_resident_calibration_integration(
                         calibration_float32_host_bytes_avoided += int(
                             calibration_timing.get("float32_host_bytes_avoided", 0) or 0
                         )
+                        batch_thresholds_by_index = (
+                            _resident_source_inline_cosmetic_thresholds_batch_from_resident_stack(
+                                stack,
+                                frame_indices=[int(item[0]) for item in batch_items],
+                                height=height,
+                                width=width,
+                                resident_inline_source_dq=resident_inline_source_dq,
+                                resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
+                                resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
+                            )
+                            if resident_inline_source_dq == "cosmetic_cuda"
+                            else {}
+                        )
                         frame_share = 1.0 / float(len(batch_items))
                         for position, (item_index, frame, _light, _exposure) in enumerate(batch_items):
                             pending = source_dq_pending_by_index.get(int(item_index))
@@ -3920,15 +3956,17 @@ def run_resident_calibration_integration(
                                         source="resident_calibrated_batch_input",
                                     )
                                 )
-                            threshold_info = _resident_source_inline_cosmetic_thresholds_from_resident_stack(
-                                stack,
-                                frame_index=int(item_index),
-                                height=height,
-                                width=width,
-                                resident_inline_source_dq=resident_inline_source_dq,
-                                resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
-                                resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
-                            )
+                            threshold_info = batch_thresholds_by_index.get(int(item_index))
+                            if threshold_info is None:
+                                threshold_info = _resident_source_inline_cosmetic_thresholds_from_resident_stack(
+                                    stack,
+                                    frame_index=int(item_index),
+                                    height=height,
+                                    width=width,
+                                    resident_inline_source_dq=resident_inline_source_dq,
+                                    resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
+                                    resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
+                                )
                             if threshold_info is not None:
                                 source_dq_rows.append(
                                     apply_resident_inline_cosmetic_thresholds(

@@ -880,6 +880,63 @@ def test_resident_stack_histogram_robust_stats_approximates_cpu_thresholds():
     assert stats["high_threshold"] == pytest.approx(median + 2.0 * sigma, abs=4.0 * mad_tol)
 
 
+def test_resident_stack_batch_histogram_robust_stats_reuses_work_buffers():
+    module = cuda_module_or_skip()
+    frames = np.array(
+        [
+            [
+                [10.0, 11.0, 12.0, 13.0, 999.0],
+                [9.0, 10.0, 11.0, 12.0, 13.0],
+                [8.0, 9.0, np.nan, 11.0, 12.0],
+                [-200.0, 8.0, 9.0, 10.0, np.inf],
+            ],
+            [
+                [30.0, 31.0, 32.0, 33.0, 1200.0],
+                [29.0, 30.0, 31.0, 32.0, 33.0],
+                [28.0, 29.0, np.nan, 31.0, 32.0],
+                [-100.0, 28.0, 29.0, 30.0, np.inf],
+            ],
+        ],
+        dtype=np.float32,
+    )
+
+    stack = module.ResidentCalibratedStack(2, frames.shape[1], frames.shape[2])
+    stack.upload_calibrated_frame(0, frames[0])
+    stack.upload_calibrated_frame(1, frames[1])
+    batch = stack.frames_histogram_robust_stats([0, 1], 4096, 2.0, 3.0)
+
+    assert batch["native_method"] == "ResidentCalibratedStack.frames_histogram_robust_stats"
+    assert batch["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
+    assert batch["robust_stats_execution"] == (
+        "cuda_histogram_quantile_batch_reused_buffers_then_host_bin_scan_scalar"
+    )
+    assert batch["materializes_host_frame"] is False
+    assert batch["batch_reuses_device_work_buffers"] is True
+    assert batch["frame_count"] == 2
+    assert batch["bin_count"] == 4096
+    assert batch["histogram_download_bytes"] == 2 * 4096 * 8 * 2
+    assert batch["device_alloc_s"] >= 0.0
+    assert len(batch["frames"]) == 2
+
+    for index, stats in enumerate(batch["frames"]):
+        finite = frames[index][np.isfinite(frames[index])]
+        median = float(np.median(finite))
+        mad = float(np.median(np.abs(finite - np.float32(median))))
+        sigma = 1.4826 * mad
+        assert stats["native_method"] == "ResidentCalibratedStack.frames_histogram_robust_stats"
+        assert stats["per_frame_native_method"] == "ResidentCalibratedStack.frame_histogram_robust_stats"
+        assert stats["frame_index"] == index
+        assert stats["batch_reuses_device_work_buffers"] is True
+        assert stats["device_alloc_s"] == 0.0
+        assert stats["batch_device_alloc_s"] == pytest.approx(batch["device_alloc_s"])
+        assert stats["histogram_download_bytes"] == 4096 * 8 * 2
+        value_tol = stats["value_bin_width"] * 1.5
+        mad_tol = max(stats["absdev_bin_width"] * 1.5, value_tol)
+        assert stats["median"] == pytest.approx(median, abs=value_tol)
+        assert stats["mad"] == pytest.approx(mad, abs=mad_tol)
+        assert stats["sigma"] == pytest.approx(sigma, abs=1.4826 * mad_tol)
+
+
 def test_resident_stack_global_normalization_matches_reference_stats():
     module = cuda_module_or_skip()
     reference = np.array([[10, 20], [30, 40]], dtype=np.float32)

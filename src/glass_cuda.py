@@ -3188,23 +3188,8 @@ class ResidentCalibratedStack:
                 normalized[key] = str(value)
         return normalized
 
-    def frame_histogram_robust_stats(
-        self,
-        index: int,
-        bin_count: int = 4096,
-        hot_sigma: float = 8.0,
-        cold_sigma: float = 8.0,
-    ) -> dict[str, Any]:
-        if not hasattr(self._impl, "frame_histogram_robust_stats"):
-            raise RuntimeError("native ResidentCalibratedStack.frame_histogram_robust_stats is not available")
-        result = dict(
-            self._impl.frame_histogram_robust_stats(
-                int(index),
-                int(bin_count),
-                float(hot_sigma),
-                float(cold_sigma),
-            )
-        )
+    @staticmethod
+    def _normalize_histogram_robust_stats_result(result: dict[str, Any]) -> dict[str, Any]:
         int_keys = {
             "schema_version",
             "frame_index",
@@ -3228,6 +3213,91 @@ class ResidentCalibratedStack:
             "low_threshold",
             "high_threshold",
             "device_alloc_s",
+            "batch_device_alloc_s",
+            "minmax_kernel_enqueue_s",
+            "minmax_sync_s",
+            "minmax_download_s",
+            "value_histogram_kernel_enqueue_s",
+            "value_histogram_sync_s",
+            "value_histogram_download_s",
+            "absdev_histogram_kernel_enqueue_s",
+            "absdev_histogram_sync_s",
+            "absdev_histogram_download_s",
+            "host_bin_scan_s",
+            "total_s",
+        }
+        bool_keys = {
+            "histogram_approximation",
+            "materializes_host_frame",
+            "sigma_fallback_used",
+            "batch_reuses_device_work_buffers",
+        }
+        normalized: dict[str, Any] = {}
+        for key, value in result.items():
+            if key in int_keys:
+                normalized[key] = int(value)
+            elif key in float_keys:
+                normalized[key] = float(value)
+            elif key in bool_keys:
+                normalized[key] = bool(value)
+            else:
+                normalized[key] = str(value)
+        return normalized
+
+    def frame_histogram_robust_stats(
+        self,
+        index: int,
+        bin_count: int = 4096,
+        hot_sigma: float = 8.0,
+        cold_sigma: float = 8.0,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "frame_histogram_robust_stats"):
+            raise RuntimeError("native ResidentCalibratedStack.frame_histogram_robust_stats is not available")
+        result = dict(
+            self._impl.frame_histogram_robust_stats(
+                int(index),
+                int(bin_count),
+                float(hot_sigma),
+                float(cold_sigma),
+            )
+        )
+        return self._normalize_histogram_robust_stats_result(result)
+
+    def frames_histogram_robust_stats(
+        self,
+        indices: list[int],
+        bin_count: int = 4096,
+        hot_sigma: float = 8.0,
+        cold_sigma: float = 8.0,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "frames_histogram_robust_stats"):
+            raise RuntimeError("native ResidentCalibratedStack.frames_histogram_robust_stats is not available")
+        result = dict(
+            self._impl.frames_histogram_robust_stats(
+                [int(index) for index in indices],
+                int(bin_count),
+                float(hot_sigma),
+                float(cold_sigma),
+            )
+        )
+        frame_results = [
+            self._normalize_histogram_robust_stats_result(dict(frame))
+            for frame in list(result.get("frames") or [])
+        ]
+        int_keys = {
+            "schema_version",
+            "frame_count",
+            "total_pixels_per_frame",
+            "bin_count",
+            "valid_pixels",
+            "nonfinite_pixels",
+            "histogram_download_bytes",
+            "minmax_partial_download_bytes",
+        }
+        float_keys = {
+            "hot_sigma",
+            "cold_sigma",
+            "device_alloc_s",
             "minmax_kernel_enqueue_s",
             "minmax_sync_s",
             "minmax_download_s",
@@ -3242,14 +3312,17 @@ class ResidentCalibratedStack:
         }
         normalized: dict[str, Any] = {}
         for key, value in result.items():
+            if key == "frames":
+                continue
             if key in int_keys:
                 normalized[key] = int(value)
             elif key in float_keys:
                 normalized[key] = float(value)
-            elif key in {"histogram_approximation", "materializes_host_frame", "sigma_fallback_used"}:
+            elif key in {"histogram_approximation", "materializes_host_frame", "batch_reuses_device_work_buffers"}:
                 normalized[key] = bool(value)
             else:
                 normalized[key] = str(value)
+        normalized["frames"] = frame_results
         return normalized
 
     def frame_pair_grid_stats(

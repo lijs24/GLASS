@@ -8,6 +8,7 @@ from glass.engine.resident_source_dq import (
     build_resident_source_dq_execution_group,
     build_resident_source_dq_summary,
     combine_source_invalid_masks,
+    inline_cosmetic_thresholds_batch_from_resident_stack,
     inline_cosmetic_thresholds_from_array,
     inline_cosmetic_thresholds_from_resident_stack,
     source_invalid_mask_from_array,
@@ -161,6 +162,103 @@ def test_inline_cosmetic_thresholds_from_resident_stack_records_histogram_native
     assert threshold_info["threshold_stats_histogram_approximation"] is True
     assert threshold_info["low_threshold"] == pytest.approx(91.1044)
     assert threshold_info["high_threshold"] == pytest.approx(105.9304)
+
+
+def test_inline_cosmetic_thresholds_batch_from_resident_stack_records_batch_histogram_stats():
+    class FakeResidentStack:
+        def frames_histogram_robust_stats(
+            self,
+            indices: list[int],
+            bin_count: int,
+            hot_sigma: float,
+            cold_sigma: float,
+        ) -> dict[str, object]:
+            assert indices == [3, 5]
+            assert bin_count == 4096
+            assert hot_sigma == pytest.approx(2.0)
+            assert cold_sigma == pytest.approx(3.0)
+            return {
+                "native_method": "ResidentCalibratedStack.frames_histogram_robust_stats",
+                "threshold_source": "cuda_resident_histogram_median_mad_scalar",
+                "stats_domain": "resident_calibrated_frame",
+                "robust_stats_execution": "cuda_histogram_quantile_batch_reused_buffers_then_host_bin_scan_scalar",
+                "materializes_host_frame": False,
+                "batch_reuses_device_work_buffers": True,
+                "frame_count": 2,
+                "bin_count": 4096,
+                "histogram_download_bytes": 131072,
+                "minmax_partial_download_bytes": 512,
+                "device_alloc_s": 0.001,
+                "total_s": 0.01,
+                "frames": [
+                    {
+                        "native_method": "ResidentCalibratedStack.frames_histogram_robust_stats",
+                        "threshold_source": "cuda_resident_histogram_median_mad_scalar",
+                        "stats_domain": "resident_calibrated_frame",
+                        "robust_stats_execution": (
+                            "cuda_histogram_quantile_batch_reused_buffers_then_host_bin_scan_scalar"
+                        ),
+                        "materializes_host_frame": False,
+                        "batch_reuses_device_work_buffers": True,
+                        "frame_index": 3,
+                        "bin_count": 4096,
+                        "histogram_download_bytes": 65536,
+                        "histogram_approximation": True,
+                        "median": 100.0,
+                        "mad": 2.0,
+                        "sigma": 2.9652,
+                        "low_threshold": 91.1044,
+                        "high_threshold": 105.9304,
+                    },
+                    {
+                        "native_method": "ResidentCalibratedStack.frames_histogram_robust_stats",
+                        "threshold_source": "cuda_resident_histogram_median_mad_scalar",
+                        "stats_domain": "resident_calibrated_frame",
+                        "robust_stats_execution": (
+                            "cuda_histogram_quantile_batch_reused_buffers_then_host_bin_scan_scalar"
+                        ),
+                        "materializes_host_frame": False,
+                        "batch_reuses_device_work_buffers": True,
+                        "frame_index": 5,
+                        "bin_count": 4096,
+                        "histogram_download_bytes": 65536,
+                        "histogram_approximation": True,
+                        "median": 120.0,
+                        "mad": 3.0,
+                        "sigma": 4.4478,
+                        "low_threshold": 106.6566,
+                        "high_threshold": 128.8956,
+                    },
+                ],
+            }
+
+    threshold_infos = inline_cosmetic_thresholds_batch_from_resident_stack(
+        FakeResidentStack(),
+        frame_indices=[3, 5],
+        height=8,
+        width=9,
+        hot_sigma=2.0,
+        cold_sigma=3.0,
+    )
+
+    assert sorted(threshold_infos) == [3, 5]
+    first = threshold_infos[3]
+    assert first["threshold_stats_native_method"] == (
+        "ResidentCalibratedStack.frames_histogram_robust_stats"
+    )
+    assert first["threshold_stats_execution"] == (
+        "cuda_histogram_quantile_batch_reused_buffers_then_host_bin_scan_scalar"
+    )
+    assert first["threshold_stats_batch_native_method"] == (
+        "ResidentCalibratedStack.frames_histogram_robust_stats"
+    )
+    assert first["threshold_stats_batch_frame_count"] == 2
+    assert first["threshold_stats_batch_reuses_device_work_buffers"] is True
+    assert first["threshold_stats_batch_histogram_download_bytes"] == 131072
+    assert first["threshold_stats_batch_minmax_partial_download_bytes"] == 512
+    assert first["threshold_stats_batch_device_alloc_s"] == pytest.approx(0.001)
+    assert first["low_threshold"] == pytest.approx(91.1044)
+    assert threshold_infos[5]["high_threshold"] == pytest.approx(128.8956)
 
 
 def test_source_invalid_mask_from_sidecar_path_reads_fits_dq_bits(tmp_path):

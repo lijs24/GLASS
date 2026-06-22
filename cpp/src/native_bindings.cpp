@@ -2494,6 +2494,357 @@ class ResidentCalibratedStack {
     return result;
   }
 
+  py::dict frames_histogram_robust_stats(
+      py::iterable indices_obj,
+      int bin_count,
+      float hot_sigma,
+      float cold_sigma) const {
+    if (bin_count < 16 || bin_count > 65536) {
+      throw std::invalid_argument("bin_count must be in [16, 65536]");
+    }
+    if (!(hot_sigma > 0.0f) || !(cold_sigma > 0.0f)) {
+      throw std::invalid_argument("hot_sigma and cold_sigma must be positive");
+    }
+    std::vector<std::size_t> indices;
+    for (py::handle item : indices_obj) {
+      const auto index = py::cast<std::size_t>(item);
+      require_loaded(index, "resident batch histogram robust frame statistics");
+      indices.push_back(index);
+    }
+
+    const auto batch_total_start = Clock::now();
+    constexpr int threads = 256;
+    const int reduction_blocks = std::min<int>(
+        4096,
+        std::max<int>(
+            1,
+            static_cast<int>((pixels_per_frame_ + static_cast<std::size_t>(threads) - 1) / threads)));
+    const int histogram_blocks = reduction_blocks;
+    float* d_partial_min = nullptr;
+    float* d_partial_max = nullptr;
+    unsigned long long* d_partial_count = nullptr;
+    unsigned long long* d_histogram = nullptr;
+    std::vector<float> partial_min(static_cast<std::size_t>(reduction_blocks), 0.0f);
+    std::vector<float> partial_max(static_cast<std::size_t>(reduction_blocks), 0.0f);
+    std::vector<unsigned long long> partial_count(static_cast<std::size_t>(reduction_blocks), 0ULL);
+    std::vector<unsigned long long> histogram(static_cast<std::size_t>(bin_count), 0ULL);
+    std::vector<unsigned long long> absdev_histogram(static_cast<std::size_t>(bin_count), 0ULL);
+    py::list frames;
+    double alloc_s = 0.0;
+    double total_minmax_kernel_s = 0.0;
+    double total_minmax_sync_s = 0.0;
+    double total_minmax_download_s = 0.0;
+    double total_value_histogram_s = 0.0;
+    double total_value_histogram_sync_s = 0.0;
+    double total_value_histogram_download_s = 0.0;
+    double total_absdev_histogram_s = 0.0;
+    double total_absdev_histogram_sync_s = 0.0;
+    double total_absdev_histogram_download_s = 0.0;
+    double total_host_bin_scan_s = 0.0;
+    unsigned long long total_valid_pixels = 0ULL;
+    unsigned long long total_nonfinite_pixels = 0ULL;
+    try {
+      const auto alloc_start = Clock::now();
+      check_cuda(
+          cudaMalloc(&d_partial_min, partial_min.size() * sizeof(float)),
+          "cudaMalloc(resident batch histogram stats partial min)");
+      check_cuda(
+          cudaMalloc(&d_partial_max, partial_max.size() * sizeof(float)),
+          "cudaMalloc(resident batch histogram stats partial max)");
+      check_cuda(
+          cudaMalloc(&d_partial_count, partial_count.size() * sizeof(unsigned long long)),
+          "cudaMalloc(resident batch histogram stats partial count)");
+      check_cuda(
+          cudaMalloc(&d_histogram, histogram.size() * sizeof(unsigned long long)),
+          "cudaMalloc(resident batch histogram stats histogram)");
+      alloc_s = seconds_since(alloc_start);
+
+      for (const std::size_t index : indices) {
+        const auto frame_total_start = Clock::now();
+        double minmax_kernel_s = 0.0;
+        double minmax_sync_s = 0.0;
+        double minmax_download_s = 0.0;
+        double value_histogram_s = 0.0;
+        double value_histogram_sync_s = 0.0;
+        double value_histogram_download_s = 0.0;
+        double absdev_histogram_s = 0.0;
+        double absdev_histogram_sync_s = 0.0;
+        double absdev_histogram_download_s = 0.0;
+        double host_bin_scan_s = 0.0;
+
+        const auto minmax_start = Clock::now();
+        glass_frame_minmax_count_f32_launch(
+            d_stack_ + index * pixels_per_frame_,
+            d_partial_min,
+            d_partial_max,
+            d_partial_count,
+            pixels_per_frame_,
+            reduction_blocks);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.frames_histogram_robust_stats minmax kernel launch");
+        minmax_kernel_s = seconds_since(minmax_start);
+
+        const auto minmax_sync_start = Clock::now();
+        check_cuda(
+            cudaDeviceSynchronize(),
+            "ResidentCalibratedStack.frames_histogram_robust_stats minmax synchronize");
+        minmax_sync_s = seconds_since(minmax_sync_start);
+
+        const auto minmax_download_start = Clock::now();
+        check_cuda(
+            cudaMemcpy(partial_min.data(), d_partial_min, partial_min.size() * sizeof(float), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch histogram stats partial min)");
+        check_cuda(
+            cudaMemcpy(partial_max.data(), d_partial_max, partial_max.size() * sizeof(float), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch histogram stats partial max)");
+        check_cuda(
+            cudaMemcpy(
+                partial_count.data(),
+                d_partial_count,
+                partial_count.size() * sizeof(unsigned long long),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch histogram stats partial count)");
+        minmax_download_s = seconds_since(minmax_download_start);
+
+        float finite_min = std::numeric_limits<float>::infinity();
+        float finite_max = -std::numeric_limits<float>::infinity();
+        unsigned long long finite_count = 0ULL;
+        for (int i = 0; i < reduction_blocks; ++i) {
+          const unsigned long long block_count = partial_count[static_cast<std::size_t>(i)];
+          if (block_count == 0ULL) {
+            continue;
+          }
+          finite_count += block_count;
+          finite_min = std::min(finite_min, partial_min[static_cast<std::size_t>(i)]);
+          finite_max = std::max(finite_max, partial_max[static_cast<std::size_t>(i)]);
+        }
+
+        double median = 0.0;
+        double mad = 0.0;
+        double sigma = 0.0;
+        float low_threshold = -std::numeric_limits<float>::infinity();
+        float high_threshold = std::numeric_limits<float>::infinity();
+        bool sigma_fallback_used = false;
+        double value_bin_width = 0.0;
+        double absdev_bin_width = 0.0;
+        if (finite_count > 0ULL) {
+          if (!(finite_max > finite_min)) {
+            median = static_cast<double>(finite_min);
+            sigma = 1.0;
+            sigma_fallback_used = true;
+          } else {
+            value_bin_width = (static_cast<double>(finite_max) - static_cast<double>(finite_min)) /
+                static_cast<double>(bin_count);
+            const float inv_value_bin_width = static_cast<float>(1.0 / value_bin_width);
+            check_cuda(
+                cudaMemset(d_histogram, 0, histogram.size() * sizeof(unsigned long long)),
+                "cudaMemset(resident batch value histogram)");
+            const auto histogram_start = Clock::now();
+            glass_frame_histogram_f32_launch(
+                d_stack_ + index * pixels_per_frame_,
+                d_histogram,
+                pixels_per_frame_,
+                finite_min,
+                inv_value_bin_width,
+                bin_count,
+                histogram_blocks);
+            check_cuda(
+                cudaGetLastError(),
+                "ResidentCalibratedStack.frames_histogram_robust_stats value histogram launch");
+            value_histogram_s = seconds_since(histogram_start);
+
+            const auto histogram_sync_start = Clock::now();
+            check_cuda(
+                cudaDeviceSynchronize(),
+                "ResidentCalibratedStack.frames_histogram_robust_stats value histogram synchronize");
+            value_histogram_sync_s = seconds_since(histogram_sync_start);
+
+            const auto histogram_download_start = Clock::now();
+            check_cuda(
+                cudaMemcpy(
+                    histogram.data(),
+                    d_histogram,
+                    histogram.size() * sizeof(unsigned long long),
+                    cudaMemcpyDeviceToHost),
+                "cudaMemcpy(resident batch value histogram)");
+            value_histogram_download_s = seconds_since(histogram_download_start);
+
+            const auto host_scan_start = Clock::now();
+            median = histogram_quantile_center(
+                histogram,
+                finite_count,
+                static_cast<double>(finite_min),
+                value_bin_width,
+                0.5);
+            host_bin_scan_s += seconds_since(host_scan_start);
+
+            const double max_dev = std::max(
+                std::fabs(static_cast<double>(finite_min) - median),
+                std::fabs(static_cast<double>(finite_max) - median));
+            if (!(max_dev > 0.0)) {
+              sigma = 1.0;
+              sigma_fallback_used = true;
+            } else {
+              absdev_bin_width = max_dev / static_cast<double>(bin_count);
+              const float inv_absdev_bin_width = static_cast<float>(1.0 / absdev_bin_width);
+              check_cuda(
+                  cudaMemset(d_histogram, 0, absdev_histogram.size() * sizeof(unsigned long long)),
+                  "cudaMemset(resident batch absdev histogram)");
+              const auto absdev_start = Clock::now();
+              glass_frame_absdev_histogram_f32_launch(
+                  d_stack_ + index * pixels_per_frame_,
+                  d_histogram,
+                  pixels_per_frame_,
+                  static_cast<float>(median),
+                  inv_absdev_bin_width,
+                  bin_count,
+                  histogram_blocks);
+              check_cuda(
+                  cudaGetLastError(),
+                  "ResidentCalibratedStack.frames_histogram_robust_stats absdev histogram launch");
+              absdev_histogram_s = seconds_since(absdev_start);
+
+              const auto absdev_sync_start = Clock::now();
+              check_cuda(
+                  cudaDeviceSynchronize(),
+                  "ResidentCalibratedStack.frames_histogram_robust_stats absdev histogram synchronize");
+              absdev_histogram_sync_s = seconds_since(absdev_sync_start);
+
+              const auto absdev_download_start = Clock::now();
+              check_cuda(
+                  cudaMemcpy(
+                      absdev_histogram.data(),
+                      d_histogram,
+                      absdev_histogram.size() * sizeof(unsigned long long),
+                      cudaMemcpyDeviceToHost),
+                  "cudaMemcpy(resident batch absdev histogram)");
+              absdev_histogram_download_s = seconds_since(absdev_download_start);
+
+              const auto absdev_scan_start = Clock::now();
+              mad = histogram_quantile_center(absdev_histogram, finite_count, 0.0, absdev_bin_width, 0.5);
+              host_bin_scan_s += seconds_since(absdev_scan_start);
+              sigma = 1.4826 * mad;
+              if (sigma <= 0.0 || !std::isfinite(sigma)) {
+                sigma = 1.0;
+                sigma_fallback_used = true;
+              }
+            }
+          }
+          low_threshold = static_cast<float>(median - static_cast<double>(cold_sigma) * sigma);
+          high_threshold = static_cast<float>(median + static_cast<double>(hot_sigma) * sigma);
+        }
+
+        total_minmax_kernel_s += minmax_kernel_s;
+        total_minmax_sync_s += minmax_sync_s;
+        total_minmax_download_s += minmax_download_s;
+        total_value_histogram_s += value_histogram_s;
+        total_value_histogram_sync_s += value_histogram_sync_s;
+        total_value_histogram_download_s += value_histogram_download_s;
+        total_absdev_histogram_s += absdev_histogram_s;
+        total_absdev_histogram_sync_s += absdev_histogram_sync_s;
+        total_absdev_histogram_download_s += absdev_histogram_download_s;
+        total_host_bin_scan_s += host_bin_scan_s;
+        total_valid_pixels += finite_count;
+        total_nonfinite_pixels += static_cast<unsigned long long>(pixels_per_frame_) - finite_count;
+
+        py::dict frame_result;
+        frame_result["schema_version"] = 1;
+        frame_result["native_method"] = "ResidentCalibratedStack.frames_histogram_robust_stats";
+        frame_result["per_frame_native_method"] = "ResidentCalibratedStack.frame_histogram_robust_stats";
+        frame_result["frame_index"] = static_cast<unsigned long long>(index);
+        frame_result["total_pixels"] = static_cast<unsigned long long>(pixels_per_frame_);
+        frame_result["valid_pixels"] = finite_count;
+        frame_result["nonfinite_pixels"] = static_cast<unsigned long long>(pixels_per_frame_) - finite_count;
+        frame_result["bin_count"] = bin_count;
+        frame_result["finite_min"] = finite_count > 0ULL ? static_cast<double>(finite_min) : 0.0;
+        frame_result["finite_max"] = finite_count > 0ULL ? static_cast<double>(finite_max) : 0.0;
+        frame_result["value_bin_width"] = value_bin_width;
+        frame_result["absdev_bin_width"] = absdev_bin_width;
+        frame_result["median"] = median;
+        frame_result["mad"] = mad;
+        frame_result["sigma"] = sigma;
+        frame_result["sigma_fallback_used"] = sigma_fallback_used;
+        frame_result["hot_sigma"] = hot_sigma;
+        frame_result["cold_sigma"] = cold_sigma;
+        frame_result["low_threshold"] = low_threshold;
+        frame_result["high_threshold"] = high_threshold;
+        frame_result["stats_domain"] = "resident_calibrated_frame";
+        frame_result["threshold_source"] = "cuda_resident_histogram_median_mad_scalar";
+        frame_result["robust_stats_execution"] =
+            "cuda_histogram_quantile_batch_reused_buffers_then_host_bin_scan_scalar";
+        frame_result["histogram_approximation"] = true;
+        frame_result["materializes_host_frame"] = false;
+        frame_result["batch_reuses_device_work_buffers"] = true;
+        frame_result["histogram_download_bytes"] = static_cast<unsigned long long>(
+            2ULL * static_cast<unsigned long long>(bin_count) * sizeof(unsigned long long));
+        frame_result["minmax_partial_download_bytes"] = static_cast<unsigned long long>(
+            reduction_blocks * (2 * sizeof(float) + sizeof(unsigned long long)));
+        frame_result["device_alloc_s"] = 0.0;
+        frame_result["batch_device_alloc_s"] = alloc_s;
+        frame_result["minmax_kernel_enqueue_s"] = minmax_kernel_s;
+        frame_result["minmax_sync_s"] = minmax_sync_s;
+        frame_result["minmax_download_s"] = minmax_download_s;
+        frame_result["value_histogram_kernel_enqueue_s"] = value_histogram_s;
+        frame_result["value_histogram_sync_s"] = value_histogram_sync_s;
+        frame_result["value_histogram_download_s"] = value_histogram_download_s;
+        frame_result["absdev_histogram_kernel_enqueue_s"] = absdev_histogram_s;
+        frame_result["absdev_histogram_sync_s"] = absdev_histogram_sync_s;
+        frame_result["absdev_histogram_download_s"] = absdev_histogram_download_s;
+        frame_result["host_bin_scan_s"] = host_bin_scan_s;
+        frame_result["total_s"] = seconds_since(frame_total_start);
+        frames.append(frame_result);
+      }
+    } catch (...) {
+      cudaFree(d_partial_min);
+      cudaFree(d_partial_max);
+      cudaFree(d_partial_count);
+      cudaFree(d_histogram);
+      throw;
+    }
+    cudaFree(d_partial_min);
+    cudaFree(d_partial_max);
+    cudaFree(d_partial_count);
+    cudaFree(d_histogram);
+
+    py::dict result;
+    result["schema_version"] = 1;
+    result["native_method"] = "ResidentCalibratedStack.frames_histogram_robust_stats";
+    result["frame_count"] = static_cast<unsigned long long>(indices.size());
+    result["total_pixels_per_frame"] = static_cast<unsigned long long>(pixels_per_frame_);
+    result["bin_count"] = bin_count;
+    result["hot_sigma"] = hot_sigma;
+    result["cold_sigma"] = cold_sigma;
+    result["threshold_source"] = "cuda_resident_histogram_median_mad_scalar";
+    result["robust_stats_execution"] =
+        "cuda_histogram_quantile_batch_reused_buffers_then_host_bin_scan_scalar";
+    result["stats_domain"] = "resident_calibrated_frame";
+    result["histogram_approximation"] = true;
+    result["materializes_host_frame"] = false;
+    result["batch_reuses_device_work_buffers"] = true;
+    result["valid_pixels"] = total_valid_pixels;
+    result["nonfinite_pixels"] = total_nonfinite_pixels;
+    result["histogram_download_bytes"] = static_cast<unsigned long long>(
+        indices.size() * 2ULL * static_cast<unsigned long long>(bin_count) * sizeof(unsigned long long));
+    result["minmax_partial_download_bytes"] = static_cast<unsigned long long>(
+        indices.size() * static_cast<std::size_t>(reduction_blocks) *
+        (2 * sizeof(float) + sizeof(unsigned long long)));
+    result["device_alloc_s"] = alloc_s;
+    result["minmax_kernel_enqueue_s"] = total_minmax_kernel_s;
+    result["minmax_sync_s"] = total_minmax_sync_s;
+    result["minmax_download_s"] = total_minmax_download_s;
+    result["value_histogram_kernel_enqueue_s"] = total_value_histogram_s;
+    result["value_histogram_sync_s"] = total_value_histogram_sync_s;
+    result["value_histogram_download_s"] = total_value_histogram_download_s;
+    result["absdev_histogram_kernel_enqueue_s"] = total_absdev_histogram_s;
+    result["absdev_histogram_sync_s"] = total_absdev_histogram_sync_s;
+    result["absdev_histogram_download_s"] = total_absdev_histogram_download_s;
+    result["host_bin_scan_s"] = total_host_bin_scan_s;
+    result["total_s"] = seconds_since(batch_total_start);
+    result["frames"] = frames;
+    return result;
+  }
+
   py::dict frame_sampled_robust_stats(
       std::size_t index,
       std::size_t sample_limit,
@@ -12490,6 +12841,13 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           "frame_histogram_robust_stats",
           &ResidentCalibratedStack::frame_histogram_robust_stats,
           py::arg("index"),
+          py::arg("bin_count") = 4096,
+          py::arg("hot_sigma") = 8.0f,
+          py::arg("cold_sigma") = 8.0f)
+      .def(
+          "frames_histogram_robust_stats",
+          &ResidentCalibratedStack::frames_histogram_robust_stats,
+          py::arg("indices"),
           py::arg("bin_count") = 4096,
           py::arg("hot_sigma") = 8.0f,
           py::arg("cold_sigma") = 8.0f)

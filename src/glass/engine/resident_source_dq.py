@@ -214,6 +214,78 @@ def inline_cosmetic_thresholds_from_array(
     }
 
 
+def _inline_cosmetic_threshold_info_from_stats(
+    stats: dict[str, Any],
+    *,
+    shape: tuple[int, int],
+    hot_sigma: float,
+    cold_sigma: float,
+    fallback_threshold_source: str,
+    fallback_native_method: str,
+    fallback_execution: str,
+    batch_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    info = {
+        "supported": True,
+        "reason": "",
+        "shape": list(shape),
+        "dtype": "float32",
+        "invalid_samples": 0,
+        "flagged_samples": 0,
+        "nonfinite_samples": 0,
+        "flag_counts": {},
+        "source_model": "inline_cosmetic_cuda_thresholds",
+        "inline_source_dq": True,
+        "inline_source_dq_detector": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
+        "inline_source_dq_applies_replacement": False,
+        "detector_execution": "cuda_threshold_apply",
+        "threshold_source": str(stats.get("threshold_source") or fallback_threshold_source),
+        "threshold_stats": stats,
+        "threshold_stats_native_method": str(stats.get("native_method") or fallback_native_method),
+        "threshold_stats_domain": str(stats.get("stats_domain") or "resident_calibrated_frame"),
+        "threshold_stats_execution": str(stats.get("robust_stats_execution") or fallback_execution),
+        "threshold_stats_materializes_host_frame": bool(stats.get("materializes_host_frame", False)),
+        "threshold_stats_sample_count": int(stats.get("sample_count") or 0),
+        "threshold_stats_sample_download_bytes": int(stats.get("sample_download_bytes") or 0),
+        "threshold_stats_bin_count": int(stats.get("bin_count") or 0),
+        "threshold_stats_histogram_download_bytes": int(stats.get("histogram_download_bytes") or 0),
+        "threshold_stats_histogram_approximation": stats.get("histogram_approximation"),
+        "threshold_stats_batch_reuses_device_work_buffers": stats.get(
+            "batch_reuses_device_work_buffers"
+        ),
+        "hot_sigma": float(hot_sigma),
+        "cold_sigma": float(cold_sigma),
+        "low_threshold": float(stats.get("low_threshold", float("-inf"))),
+        "high_threshold": float(stats.get("high_threshold", float("inf"))),
+        "cosmetic_metrics": {
+            "median": float(stats.get("median", 0.0)),
+            "sigma": float(stats.get("sigma", 0.0)),
+            "mad": float(stats.get("mad", 0.0)),
+            "hot_pixels": None,
+            "cold_pixels": None,
+        },
+    }
+    if batch_summary:
+        info.update(
+            {
+                "threshold_stats_batch_native_method": batch_summary.get("native_method"),
+                "threshold_stats_batch_frame_count": batch_summary.get("frame_count"),
+                "threshold_stats_batch_total_s": batch_summary.get("total_s"),
+                "threshold_stats_batch_device_alloc_s": batch_summary.get("device_alloc_s"),
+                "threshold_stats_batch_histogram_download_bytes": batch_summary.get(
+                    "histogram_download_bytes"
+                ),
+                "threshold_stats_batch_minmax_partial_download_bytes": batch_summary.get(
+                    "minmax_partial_download_bytes"
+                ),
+                "threshold_stats_batch_reuses_device_work_buffers": batch_summary.get(
+                    "batch_reuses_device_work_buffers"
+                ),
+            }
+        )
+    return info
+
+
 def inline_cosmetic_thresholds_from_resident_stack(
     stack: Any,
     *,
@@ -262,46 +334,71 @@ def inline_cosmetic_thresholds_from_resident_stack(
         if hasattr(stack, "frame_histogram_robust_stats")
         else "cuda_resident_sampled_median_mad_scalar"
     )
+    return _inline_cosmetic_threshold_info_from_stats(
+        stats,
+        shape=shape,
+        hot_sigma=hot_sigma,
+        cold_sigma=cold_sigma,
+        fallback_threshold_source=fallback_threshold_source,
+        fallback_native_method="ResidentCalibratedStack.frame_histogram_robust_stats",
+        fallback_execution="cuda_histogram_quantile_then_host_bin_scan_scalar",
+    )
+
+
+def inline_cosmetic_thresholds_batch_from_resident_stack(
+    stack: Any,
+    *,
+    frame_indices: list[int],
+    height: int,
+    width: int,
+    hot_sigma: float = 8.0,
+    cold_sigma: float = 8.0,
+    sample_limit: int = 65536,
+    histogram_bins: int = 4096,
+) -> dict[int, dict[str, Any]]:
+    """Compute cosmetic thresholds for a batch of resident calibrated frames."""
+
+    indices = [int(index) for index in frame_indices]
+    if not indices:
+        return {}
+    shape = (int(height), int(width))
+    if hasattr(stack, "frames_histogram_robust_stats"):
+        batch_stats = dict(
+            stack.frames_histogram_robust_stats(
+                indices,
+                int(histogram_bins),
+                float(hot_sigma),
+                float(cold_sigma),
+            )
+        )
+        batch_summary = {key: value for key, value in batch_stats.items() if key != "frames"}
+        threshold_by_index: dict[int, dict[str, Any]] = {}
+        for frame_stats in list(batch_stats.get("frames") or []):
+            stats = dict(frame_stats)
+            frame_index = int(stats.get("frame_index"))
+            threshold_by_index[frame_index] = _inline_cosmetic_threshold_info_from_stats(
+                stats,
+                shape=shape,
+                hot_sigma=hot_sigma,
+                cold_sigma=cold_sigma,
+                fallback_threshold_source="cuda_resident_histogram_median_mad_scalar",
+                fallback_native_method="ResidentCalibratedStack.frames_histogram_robust_stats",
+                fallback_execution="cuda_histogram_quantile_batch_reused_buffers_then_host_bin_scan_scalar",
+                batch_summary=batch_summary,
+            )
+        return threshold_by_index
     return {
-        "supported": True,
-        "reason": "",
-        "shape": list(shape),
-        "dtype": "float32",
-        "invalid_samples": 0,
-        "flagged_samples": 0,
-        "nonfinite_samples": 0,
-        "flag_counts": {},
-        "source_model": "inline_cosmetic_cuda_thresholds",
-        "inline_source_dq": True,
-        "inline_source_dq_detector": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
-        "inline_source_dq_applies_replacement": False,
-        "detector_execution": "cuda_threshold_apply",
-        "threshold_source": str(stats.get("threshold_source") or fallback_threshold_source),
-        "threshold_stats": stats,
-        "threshold_stats_native_method": str(
-            stats.get("native_method") or "ResidentCalibratedStack.frame_histogram_robust_stats"
-        ),
-        "threshold_stats_domain": str(stats.get("stats_domain") or "resident_calibrated_frame"),
-        "threshold_stats_execution": str(
-            stats.get("robust_stats_execution") or "cuda_histogram_quantile_then_host_bin_scan_scalar"
-        ),
-        "threshold_stats_materializes_host_frame": bool(stats.get("materializes_host_frame", False)),
-        "threshold_stats_sample_count": int(stats.get("sample_count") or 0),
-        "threshold_stats_sample_download_bytes": int(stats.get("sample_download_bytes") or 0),
-        "threshold_stats_bin_count": int(stats.get("bin_count") or 0),
-        "threshold_stats_histogram_download_bytes": int(stats.get("histogram_download_bytes") or 0),
-        "threshold_stats_histogram_approximation": stats.get("histogram_approximation"),
-        "hot_sigma": float(hot_sigma),
-        "cold_sigma": float(cold_sigma),
-        "low_threshold": float(stats.get("low_threshold", float("-inf"))),
-        "high_threshold": float(stats.get("high_threshold", float("inf"))),
-        "cosmetic_metrics": {
-            "median": float(stats.get("median", 0.0)),
-            "sigma": float(stats.get("sigma", 0.0)),
-            "mad": float(stats.get("mad", 0.0)),
-            "hot_pixels": None,
-            "cold_pixels": None,
-        },
+        index: inline_cosmetic_thresholds_from_resident_stack(
+            stack,
+            frame_index=index,
+            height=height,
+            width=width,
+            hot_sigma=hot_sigma,
+            cold_sigma=cold_sigma,
+            sample_limit=sample_limit,
+            histogram_bins=histogram_bins,
+        )
+        for index in indices
     }
 
 
@@ -445,6 +542,23 @@ def combine_source_invalid_masks(
                 "threshold_stats_histogram_approximation": info.get(
                     "threshold_stats_histogram_approximation"
                 ),
+                "threshold_stats_batch_native_method": info.get(
+                    "threshold_stats_batch_native_method"
+                ),
+                "threshold_stats_batch_frame_count": info.get("threshold_stats_batch_frame_count"),
+                "threshold_stats_batch_total_s": info.get("threshold_stats_batch_total_s"),
+                "threshold_stats_batch_device_alloc_s": info.get(
+                    "threshold_stats_batch_device_alloc_s"
+                ),
+                "threshold_stats_batch_histogram_download_bytes": info.get(
+                    "threshold_stats_batch_histogram_download_bytes"
+                ),
+                "threshold_stats_batch_minmax_partial_download_bytes": info.get(
+                    "threshold_stats_batch_minmax_partial_download_bytes"
+                ),
+                "threshold_stats_batch_reuses_device_work_buffers": info.get(
+                    "threshold_stats_batch_reuses_device_work_buffers"
+                ),
                 "detector_execution": info.get("detector_execution"),
                 "cosmetic_metrics": info.get("cosmetic_metrics"),
             }
@@ -547,6 +661,13 @@ def apply_resident_source_invalid_mask(
         "threshold_stats_bin_count",
         "threshold_stats_histogram_download_bytes",
         "threshold_stats_histogram_approximation",
+        "threshold_stats_batch_native_method",
+        "threshold_stats_batch_frame_count",
+        "threshold_stats_batch_total_s",
+        "threshold_stats_batch_device_alloc_s",
+        "threshold_stats_batch_histogram_download_bytes",
+        "threshold_stats_batch_minmax_partial_download_bytes",
+        "threshold_stats_batch_reuses_device_work_buffers",
         "detector_execution",
         "low_threshold",
         "high_threshold",
@@ -630,6 +751,23 @@ def apply_resident_inline_cosmetic_thresholds(
         ),
         "threshold_stats_histogram_approximation": threshold_info.get(
             "threshold_stats_histogram_approximation"
+        ),
+        "threshold_stats_batch_native_method": threshold_info.get(
+            "threshold_stats_batch_native_method"
+        ),
+        "threshold_stats_batch_frame_count": threshold_info.get("threshold_stats_batch_frame_count"),
+        "threshold_stats_batch_total_s": threshold_info.get("threshold_stats_batch_total_s"),
+        "threshold_stats_batch_device_alloc_s": threshold_info.get(
+            "threshold_stats_batch_device_alloc_s"
+        ),
+        "threshold_stats_batch_histogram_download_bytes": threshold_info.get(
+            "threshold_stats_batch_histogram_download_bytes"
+        ),
+        "threshold_stats_batch_minmax_partial_download_bytes": threshold_info.get(
+            "threshold_stats_batch_minmax_partial_download_bytes"
+        ),
+        "threshold_stats_batch_reuses_device_work_buffers": threshold_info.get(
+            "threshold_stats_batch_reuses_device_work_buffers"
         ),
         "detector_execution": str(threshold_info.get("detector_execution") or "cuda_threshold_apply"),
         "hot_sigma": float(threshold_info.get("hot_sigma") or 0.0),
@@ -725,6 +863,23 @@ def apply_resident_inline_cosmetic_thresholds(
                     ],
                     "threshold_stats_histogram_approximation": row[
                         "threshold_stats_histogram_approximation"
+                    ],
+                    "threshold_stats_batch_native_method": row[
+                        "threshold_stats_batch_native_method"
+                    ],
+                    "threshold_stats_batch_frame_count": row["threshold_stats_batch_frame_count"],
+                    "threshold_stats_batch_total_s": row["threshold_stats_batch_total_s"],
+                    "threshold_stats_batch_device_alloc_s": row[
+                        "threshold_stats_batch_device_alloc_s"
+                    ],
+                    "threshold_stats_batch_histogram_download_bytes": row[
+                        "threshold_stats_batch_histogram_download_bytes"
+                    ],
+                    "threshold_stats_batch_minmax_partial_download_bytes": row[
+                        "threshold_stats_batch_minmax_partial_download_bytes"
+                    ],
+                    "threshold_stats_batch_reuses_device_work_buffers": row[
+                        "threshold_stats_batch_reuses_device_work_buffers"
                     ],
                     "detector_execution": row["detector_execution"],
                     "cosmetic_metrics": metrics,
