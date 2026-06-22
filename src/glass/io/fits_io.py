@@ -6,6 +6,14 @@ from typing import Any
 import numpy as np
 from astropy.io import fits
 
+_DIRECT_FITS_DTYPES: dict[np.dtype, tuple[int, str]] = {
+    np.dtype(np.uint8): (8, ">u1"),
+    np.dtype(np.int16): (16, ">i2"),
+    np.dtype(np.int32): (32, ">i4"),
+    np.dtype(np.float32): (-32, ">f4"),
+    np.dtype(np.float64): (-64, ">f8"),
+}
+
 
 def open_fits_image(path: str | Path, memmap: bool = True) -> fits.HDUList:
     hdul = fits.open(path, memmap=memmap)
@@ -30,6 +38,51 @@ def read_fits_header(path: str | Path) -> dict[str, Any]:
     return {str(k): header[k] for k in header.keys()}
 
 
+def fits_write_backend(data: np.ndarray, dtype: Any = np.float32) -> str:
+    array = np.asarray(data)
+    target_dtype = np.dtype(dtype)
+    if array.ndim == 2 and target_dtype in _DIRECT_FITS_DTYPES:
+        return "direct_simple_primary"
+    return "astropy_primary_hdu"
+
+
+def _write_simple_fits_direct(
+    path: Path,
+    data: np.ndarray,
+    header: dict[str, Any] | None,
+    dtype: Any,
+) -> None:
+    target_dtype = np.dtype(dtype)
+    bitpix, storage_dtype = _DIRECT_FITS_DTYPES[target_dtype]
+    array = np.ascontiguousarray(np.asarray(data, dtype=target_dtype))
+    if array.ndim != 2:
+        raise ValueError("direct FITS writer supports only 2D primary images")
+
+    h = fits.Header()
+    h["SIMPLE"] = True
+    h["BITPIX"] = int(bitpix)
+    h["NAXIS"] = 2
+    h["NAXIS1"] = int(array.shape[1])
+    h["NAXIS2"] = int(array.shape[0])
+    if header:
+        for key, value in header.items():
+            if value is not None and len(str(key)) <= 8:
+                h[str(key)] = value
+    header_bytes = h.tostring(endcard=True, padding=True).encode("ascii")
+    stored = array.astype(np.dtype(storage_dtype), copy=False)
+    data_bytes = int(stored.nbytes)
+    padding = (2880 - (data_bytes % 2880)) % 2880
+    tmp = path.with_name(f"{path.name}.tmp")
+    if tmp.exists():
+        tmp.unlink()
+    with tmp.open("wb") as f:
+        f.write(header_bytes)
+        f.write(memoryview(stored).cast("B"))
+        if padding:
+            f.write(b"\0" * padding)
+    tmp.replace(path)
+
+
 def write_fits_data(
     path: str | Path,
     data: np.ndarray,
@@ -38,6 +91,9 @@ def write_fits_data(
 ) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
+    if fits_write_backend(data, dtype) == "direct_simple_primary":
+        _write_simple_fits_direct(target, data, header, dtype)
+        return
     hdu = fits.PrimaryHDU(np.asarray(data, dtype=dtype))
     if header:
         for key, value in header.items():

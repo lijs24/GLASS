@@ -12,7 +12,7 @@ from glass.io.fits_fast import (
     read_simple_fits_u16be_raw_timed,
     simple_fits_image_spec,
 )
-from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
+from glass.io.fits_io import FitsImageReader, fits_write_backend, read_fits_data, write_fits_data
 from glass.engine.resident_cuda import _read_light_timed, _write_resident_outputs
 from tests.conftest import cuda_module_or_skip
 
@@ -184,6 +184,34 @@ def test_write_fits_data_can_preserve_integer_count_maps(tmp_path):
         assert np.array_equal(hdul[0].data, counts)
 
 
+def test_write_fits_data_direct_simple_primary_roundtrips_float32(tmp_path):
+    path = tmp_path / "master.fits"
+    data = np.array([[1.5, np.nan, -2.0], [0.0, 42.25, 8.0]], dtype=np.float32)
+
+    assert fits_write_backend(data, np.float32) == "direct_simple_primary"
+    write_fits_data(path, data, {"IMAGETYP": "master", "FILTER": "H"}, dtype=np.float32)
+
+    assert path.stat().st_size % 2880 == 0
+    with fits.open(path, memmap=True) as hdul:
+        assert hdul[0].header["BITPIX"] == -32
+        assert hdul[0].header["NAXIS1"] == 3
+        assert hdul[0].header["NAXIS2"] == 2
+        assert hdul[0].header["FILTER"] == "H"
+        assert hdul[0].data.dtype == np.dtype(">f4")
+        assert np.array_equal(hdul[0].data, data, equal_nan=True)
+
+
+def test_write_fits_data_falls_back_for_non_2d_primary(tmp_path):
+    path = tmp_path / "cube.fits"
+    data = np.zeros((2, 3, 4), dtype=np.float32)
+
+    assert fits_write_backend(data, np.float32) == "astropy_primary_hdu"
+    write_fits_data(path, data, dtype=np.float32)
+
+    with fits.open(path, memmap=True) as hdul:
+        assert hdul[0].data.shape == (2, 3, 4)
+
+
 def test_write_resident_outputs_parallel_records_storage_and_timings(tmp_path):
     master = np.arange(9, dtype=np.float32).reshape(3, 3)
     counts = np.array([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]], dtype=np.float32)
@@ -211,7 +239,9 @@ def test_write_resident_outputs_parallel_records_storage_and_timings(tmp_path):
     assert workers == 2
     assert set(breakdown) == {"master", "coverage"}
     assert storage["master"]["dtype"] == "float32"
+    assert storage["master"]["writer_backend"] == "direct_simple_primary"
     assert storage["coverage"]["dtype"] == "int16"
+    assert storage["coverage"]["writer_backend"] == "direct_simple_primary"
     assert storage["coverage"]["estimated_data_bytes"] == counts.size * np.dtype(np.int16).itemsize
     with fits.open(tmp_path / "coverage.fits", do_not_scale_image_data=True) as hdul:
         assert hdul[0].header["BITPIX"] == 16

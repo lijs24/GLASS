@@ -11532,6 +11532,56 @@ Completed in Gate446:
   - WBPP compare:
     `C:\glass_runs\phase2_s2_gate500_io_prefetch_ab_real\compare\gate500_default_v3_vs_wbpp.json`.
 
+### S2-Gate 501: Direct Simple FITS Output Writer
+
+- Continued the real 200-light performance path. A deeper prefetch probe was
+  tested first, but it was not promoted: `prefetch48/workers16` reduced
+  read-wait from about `0.991456 s` to `0.584379 s`, yet increased native
+  calibration/orchestration enough that total runtime improved only from
+  `7.234865 s` to `7.192066 s`. More aggressive `prefetch64/workers20`
+  regressed to `7.582610 s`.
+- Completed:
+  - added a GLASS-owned direct simple-primary FITS writer for 2D
+    `uint8`, `int16`, `int32`, `float32`, and `float64` arrays;
+  - kept unsupported cases on the existing Astropy `PrimaryHDU` fallback;
+  - writes direct FITS data as big-endian storage with FITS-block padding and
+    atomic temp-file replacement;
+  - records resident output `writer_backend` in `output_write_storage`;
+  - added roundtrip/header/padding tests and resident output storage tests.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate501_direct_fits_writer_ab_real\runs\default_v3_direct_fits`;
+  - default runtime preset: `throughput-v3-io`;
+  - output writer backend for master: `direct_simple_primary`;
+  - run-timing total: `7.147139 s`;
+  - output write total: `0.548847800004296 s`;
+  - master FITS write breakdown: `0.548796399962157 s`;
+  - Gate500 default output write was `0.68125790002523 s`, so this removes
+    about `0.1324101 s` from the final output stage on the same dataset;
+  - conservative shell wall: `7.505 s`;
+  - WBPP black-box elapsed time remains `1092.541 s`;
+  - speedup versus WBPP by GLASS run timing: `152.8641040841657x`.
+- Numerical validation:
+  - Gate501 master versus Gate500 master: bitwise equal, NaN mask equal,
+    RMS/p99/max all `0.0`;
+  - FITS storage dtype remains big-endian float32 (`>f4`);
+  - WBPP full-frame/no-coverage compare: RMS `0.012336290253351909`, p99
+    absolute difference `0.0007338253874331693`, shape match `true`.
+- Interpretation:
+  - this is an output-stage implementation optimization, not a science change;
+  - it helps the speed/minimal path because that path now writes only the final
+    master, and the master is a large 235 MiB FITS file;
+  - next larger wins remain resident registration/warp orchestration and the
+    light read/upload/calibration bucket.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_501_status.md`;
+  - real A/B root:
+    `C:\glass_runs\phase2_s2_gate501_direct_fits_writer_ab_real`;
+  - GLASS internal diff:
+    `C:\glass_runs\phase2_s2_gate501_direct_fits_writer_ab_real\compare\gate501_vs_gate500_master_diff.json`;
+  - WBPP compare:
+    `C:\glass_runs\phase2_s2_gate501_direct_fits_writer_ab_real\compare\gate501_default_direct_vs_wbpp.json`.
+
 ## Gate Rules
 
 Each gate requires:
