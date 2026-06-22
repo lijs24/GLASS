@@ -5732,7 +5732,8 @@ class ResidentCalibratedStack {
     }
     auto workspace = allocate_batch_warp_workspace(
         indices.size(),
-        static_cast<std::size_t>(std::max(0, max_chunk_capacity_frames)));
+        static_cast<std::size_t>(std::max(0, max_chunk_capacity_frames)),
+        track_coverage);
     std::vector<unsigned long long> index_host(indices.size(), 0ULL);
     std::vector<float> inverse_host(indices.size() * 9, 0.0f);
     const auto inverse_prepare_start = Clock::now();
@@ -5930,7 +5931,8 @@ class ResidentCalibratedStack {
     }
     auto workspace = allocate_batch_warp_workspace(
         indices.size(),
-        static_cast<std::size_t>(std::max(0, max_chunk_capacity_frames)));
+        static_cast<std::size_t>(std::max(0, max_chunk_capacity_frames)),
+        track_coverage);
     std::vector<unsigned long long> index_host(indices.size(), 0ULL);
     std::vector<float> inverse_host(indices.size() * 9, 0.0f);
     const auto inverse_prepare_start = Clock::now();
@@ -10320,7 +10322,8 @@ class ResidentCalibratedStack {
 
   BatchWarpWorkspace allocate_batch_warp_workspace(
       std::size_t requested_frames,
-      std::size_t max_capacity_frames = 0) {
+      std::size_t max_capacity_frames = 0,
+      bool include_coverage = true) {
     if (requested_frames == 0) {
       throw std::invalid_argument("batch warp workspace requires at least one frame");
     }
@@ -10339,11 +10342,12 @@ class ResidentCalibratedStack {
       float* raw_inverses = nullptr;
       unsigned long long* raw_indices = nullptr;
       const std::size_t output_bytes = capacity * frame_bytes;
-      const std::size_t coverage_bytes = capacity * pixels_per_frame_ * sizeof(unsigned char);
+      const std::size_t coverage_bytes =
+          include_coverage ? capacity * pixels_per_frame_ * sizeof(unsigned char) : 0;
       const std::size_t inverse_bytes = requested_frames * 9 * sizeof(float);
       const std::size_t index_bytes = requested_frames * sizeof(unsigned long long);
       last_error = cudaMalloc(&raw_output, output_bytes);
-      if (last_error == cudaSuccess) {
+      if (last_error == cudaSuccess && include_coverage) {
         last_error = cudaMalloc(&raw_coverage, coverage_bytes);
       }
       if (last_error == cudaSuccess) {

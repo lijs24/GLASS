@@ -240,13 +240,16 @@ __global__ void glass_warp_matrix_bilinear_batch_f32_kernel(
   const float* input = stack + static_cast<std::size_t>(frame_indices[frame]) * pixels_per_frame;
   const float* inverse = inverses + static_cast<std::size_t>(frame) * 9;
   float* output = batch_output + static_cast<std::size_t>(frame) * pixels_per_frame;
-  unsigned char* coverage = batch_coverage + static_cast<std::size_t>(frame) * pixels_per_frame;
+  unsigned char* coverage =
+      batch_coverage == nullptr ? nullptr : batch_coverage + static_cast<std::size_t>(frame) * pixels_per_frame;
   const float fx = static_cast<float>(x);
   const float fy = static_cast<float>(y);
   const float denom = inverse[6] * fx + inverse[7] * fy + inverse[8];
   if (fabsf(denom) < 1.0e-12f) {
     output[pixel] = fill;
-    coverage[pixel] = 0;
+    if (coverage != nullptr) {
+      coverage[pixel] = 0;
+    }
     return;
   }
   const float sx = (inverse[0] * fx + inverse[1] * fy + inverse[2]) / denom;
@@ -254,7 +257,9 @@ __global__ void glass_warp_matrix_bilinear_batch_f32_kernel(
   if (sx < 0.0f || sx > static_cast<float>(width - 1) ||
       sy < 0.0f || sy > static_cast<float>(height - 1)) {
     output[pixel] = fill;
-    coverage[pixel] = 0;
+    if (coverage != nullptr) {
+      coverage[pixel] = 0;
+    }
     return;
   }
 
@@ -272,7 +277,9 @@ __global__ void glass_warp_matrix_bilinear_batch_f32_kernel(
   const float top = v00 * (1.0f - tx) + v10 * tx;
   const float bottom = v01 * (1.0f - tx) + v11 * tx;
   output[pixel] = top * (1.0f - ty) + bottom * ty;
-  coverage[pixel] = 1;
+  if (coverage != nullptr) {
+    coverage[pixel] = 1;
+  }
 }
 
 void glass_warp_matrix_bilinear_batch_f32_launch(
@@ -430,13 +437,16 @@ __global__ void glass_warp_matrix_lanczos3_batch_f32_kernel(
   const float* input = stack + static_cast<std::size_t>(frame_indices[frame]) * pixels_per_frame;
   const float* inverse = inverses + static_cast<std::size_t>(frame) * 9;
   float* output = batch_output + static_cast<std::size_t>(frame) * pixels_per_frame;
-  unsigned char* coverage = batch_coverage + static_cast<std::size_t>(frame) * pixels_per_frame;
+  unsigned char* coverage =
+      batch_coverage == nullptr ? nullptr : batch_coverage + static_cast<std::size_t>(frame) * pixels_per_frame;
   const float fx = static_cast<float>(x);
   const float fy = static_cast<float>(y);
   const float denom = inverse[6] * fx + inverse[7] * fy + inverse[8];
   if (fabsf(denom) < 1.0e-12f) {
     output[pixel] = fill;
-    coverage[pixel] = 0;
+    if (coverage != nullptr) {
+      coverage[pixel] = 0;
+    }
     return;
   }
 
@@ -445,7 +455,9 @@ __global__ void glass_warp_matrix_lanczos3_batch_f32_kernel(
   if (sx < 2.0f || sx >= static_cast<float>(width - 3) ||
       sy < 2.0f || sy >= static_cast<float>(height - 3)) {
     output[pixel] = fill;
-    coverage[pixel] = 0;
+    if (coverage != nullptr) {
+      coverage[pixel] = 0;
+    }
     return;
   }
 
@@ -477,7 +489,9 @@ __global__ void glass_warp_matrix_lanczos3_batch_f32_kernel(
 
   if (fabsf(weight_sum) < 1.0e-12f) {
     output[pixel] = fill;
-    coverage[pixel] = 0;
+    if (coverage != nullptr) {
+      coverage[pixel] = 0;
+    }
     return;
   }
   float value = weighted_sum / weight_sum;
@@ -488,7 +502,9 @@ __global__ void glass_warp_matrix_lanczos3_batch_f32_kernel(
     value = fminf(hi, fmaxf(lo, value));
   }
   output[pixel] = value;
-  coverage[pixel] = 1;
+  if (coverage != nullptr) {
+    coverage[pixel] = 1;
+  }
 }
 
 void glass_warp_matrix_lanczos3_batch_f32_launch(

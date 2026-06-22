@@ -11406,6 +11406,62 @@ Completed in Gate446:
   - compare:
     `C:\glass_runs\phase2_s2_gate498_skip_warpcoverage_ab_real\compare\gate498_vs_wbpp_scaled_no_coverage.json`.
 
+### S2-Gate 499: Resident Minimal Batch Warp Coverage Scratch Skip
+
+- Continue the same resident CUDA speed path. Gate498 skipped the global
+  geometric warp coverage accumulator in minimal mode, but the batch warp
+  kernels still allocated and wrote per-frame `batch_coverage` scratch even
+  though scatter-only postprocess no longer consumed it.
+- Completed:
+  - made resident batch bilinear/Lanczos3 warp kernels accept
+    `batch_coverage=nullptr`;
+  - changed native batch-warp workspace allocation so `track_coverage=false`
+    does not allocate `batch_coverage`;
+  - kept audit/science and `track_coverage=true` behavior unchanged;
+  - added CUDA regression coverage proving `track_coverage=false` returns
+    `batch_coverage_bytes=0`, keeps `warp_coverage_frame_count==0`, and
+    produces the same integrated pixels/weights as `track_coverage=true`.
+- Focused validation:
+  - new CUDA warp test passed;
+  - existing bilinear/Lanczos3 batch warp CPU-reference tests passed;
+  - resident helper no-coverage propagation test passed.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate499_no_coverage_scratch_ab_real\runs\stack_minimal_no_coverage_scratch`;
+  - total runtime: `7.620175199990626 s`;
+  - `triangle_warp_batch_native_coverage_bytes` changed from Gate498
+    `493209600` to `0`;
+  - `triangle_warp_batch_native_workspace_bytes` changed from Gate498
+    `2466056448` to `1972846848`;
+  - native triangle warp sync/total changed from Gate498
+    `0.465614 / 0.4856435 s` to `0.4639118 / 0.4807978 s`;
+  - resident registration warp total changed from Gate498
+    `0.5552570992149413 s` to `0.5493012004881166 s`;
+  - GLASS-vs-Gate498 master difference: RMS/p99/max all `0.0`, bitwise equal
+    including NaN mask;
+  - WBPP black-box elapsed time remains `1092.541 s`;
+  - Gate499 speedup versus WBPP: `143.37478749850055x`;
+  - no-coverage-mask compare report:
+    `C:\glass_runs\phase2_s2_gate499_no_coverage_scratch_ab_real\compare\gate499_vs_wbpp_scaled_no_coverage.json`;
+  - because Gate499 and Gate498/Gate497 masters are bitwise identical, the
+    established WBPP scaled coverage-190 compare is unchanged: RMS
+    `0.0017794216505176163`, p99 abs diff `0.00042621337808668863`, coverage
+    fraction `0.960532609259836`.
+- Interpretation:
+  - this removes an unnecessary 493 MB resident warp scratch allocation and
+    per-pixel coverage write from minimal speed mode;
+  - the optimization is deliberately limited to speed mode; audit/science keep
+    full geometric coverage artifacts;
+  - the next larger wins remain I/O/upload/calibration overlap and resident
+    registration orchestration, where the real 200-light timing still spends
+    most of its time.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_499_status.md`;
+  - real run root:
+    `C:\glass_runs\phase2_s2_gate499_no_coverage_scratch_ab_real`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate499_no_coverage_scratch_ab_real\compare\gate499_vs_wbpp_scaled_no_coverage.json`.
+
 ## Gate Rules
 
 Each gate requires:

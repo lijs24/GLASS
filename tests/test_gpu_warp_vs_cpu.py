@@ -544,6 +544,73 @@ def test_resident_stack_matrix_lanczos3_batch_respects_max_chunk_capacity():
     assert np.array_equal(weight_map, expected_weight)
 
 
+def test_resident_stack_matrix_lanczos3_batch_can_skip_coverage_scratch_without_pixel_change():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_matrix_lanczos3_frames"):
+        raise AssertionError("ResidentCalibratedStack.apply_matrix_lanczos3_frames is missing")
+
+    yy, xx = np.indices((18, 20), dtype=np.float32)
+    frames = [
+        (np.sin(xx * 0.09) + np.cos(yy * 0.14) + index * 0.25).astype(np.float32)
+        for index in range(3)
+    ]
+    matrices = np.asarray(
+        [
+            [[1.0, 0.0, 0.12], [0.0, 1.0, -0.08], [0.0, 0.0, 1.0]],
+            [[0.9999, -0.014, -0.10], [0.014, 0.9999, 0.06], [0.0, 0.0, 1.0]],
+            [[0.9998, 0.018, 0.05], [-0.018, 0.9998, -0.04], [0.0, 0.0, 1.0]],
+        ],
+        dtype=np.float32,
+    )
+
+    tracked = module.ResidentCalibratedStack(len(frames), frames[0].shape[0], frames[0].shape[1])
+    skipped = module.ResidentCalibratedStack(len(frames), frames[0].shape[0], frames[0].shape[1])
+    for index, frame in enumerate(frames):
+        tracked.upload_calibrated_frame(index, frame)
+        skipped.upload_calibrated_frame(index, frame)
+
+    tracked_timing = tracked.apply_matrix_lanczos3_frames(
+        list(range(len(frames))),
+        matrices,
+        np.nan,
+        0.30,
+        dispatch="chunked",
+        max_chunk_capacity_frames=2,
+        track_coverage=True,
+    )
+    skipped_timing = skipped.apply_matrix_lanczos3_frames(
+        list(range(len(frames))),
+        matrices,
+        np.nan,
+        0.30,
+        dispatch="chunked",
+        max_chunk_capacity_frames=2,
+        track_coverage=False,
+    )
+
+    tracked_master, tracked_weight = tracked.integrate_mean()
+    skipped_master, skipped_weight = skipped.integrate_mean()
+
+    assert tracked_timing["track_coverage"] is True
+    assert tracked_timing["coverage_accumulator_updated"] is True
+    assert tracked_timing["batch_coverage_bytes"] > 0
+    assert tracked.warp_coverage_frame_count == len(frames)
+    assert skipped_timing["track_coverage"] is False
+    assert skipped_timing["coverage_accumulator_updated"] is False
+    assert skipped_timing["warp_coverage_frame_count_delta"] == 0
+    assert skipped_timing["batch_coverage_bytes"] == 0
+    assert skipped_timing["batch_workspace_bytes"] == (
+        skipped_timing["batch_output_bytes"]
+        + len(frames) * 9 * 4
+        + len(frames) * 8
+    )
+    assert skipped_timing["postprocess_mode"] == "scatter_only_no_coverage_accumulator"
+    assert skipped_timing["scatter_kernel_launches"] == skipped_timing["batch_chunk_count"]
+    assert skipped.warp_coverage_frame_count == 0
+    assert np.array_equal(skipped_master, tracked_master, equal_nan=True)
+    assert np.array_equal(skipped_weight, tracked_weight)
+
+
 def test_gpu_catalog_refined_translation_drives_bilinear_warp():
     module = cuda_module_or_skip()
     reference = np.zeros((64, 64), dtype=np.float32)
