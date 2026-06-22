@@ -10304,6 +10304,71 @@ Completed in Gate446:
     new preset is deliberately opt-in and should only be considered for default
     promotion after repeat runs show a stable gain.
 
+### S2-Gate 482: Resident Master-Cache StackEngine Builder And 200-Light A/B
+
+- Return to a substantive Phase 2 target after the report/contract-only gate
+  stretch: resident master-cache construction now routes through GLASS
+  `CPUStackEngine`, records StackEngine metrics and DQ provenance summaries,
+  and uses a new shared-cache fingerprint builder id so legacy helper-built
+  caches are not silently reused.
+- Real-data guardrail discovered during implementation:
+  - a first attempt to apply CPU StackEngine robust master-frame rejection on
+    the full M38 H-alpha calibration set exceeded 30 minutes before writing any
+    master-cache files;
+  - the gate was corrected to keep resident master-cache combine as
+    mean/no-rejection for speed and numerical continuity, while recording
+    `master_rejection_requested=winsorized_sigma` and
+    `master_rejection_applied=none`;
+  - optimized robust resident master rejection is therefore a future CUDA or
+    optimized-CPU gate, not part of this default cold-cache path.
+- Code changes:
+  - `src/glass/engine/resident_cuda.py`:
+    - uses `CPUStackEngine` for resident master-cache bias/dark/flat mean
+      stacks;
+    - adds cached FITS source tiles so StackEngine mask reads do not re-read
+      the same tile;
+    - records StackEngine metrics, DQ provenance, requested/applied master
+      rejection, and cache builder metadata in set stats;
+  - `src/glass/engine/resident_calibration_artifacts.py`:
+    - surfaces actual applied resident master rejection when calibration
+      artifacts are generated;
+  - `tests/test_resident_master_stack_engine.py`:
+    - proves cold cache writes StackEngine/DQ metadata and warm cache reuses it.
+- Real 200-light A/B:
+  - output root:
+    `C:\glass_runs\phase2_s2_gate482_stackengine_mean_master_cache_ab_real`;
+  - cold StackEngine-cache run total: `66.35778469999786 s`;
+  - cold `master_build_or_load`: `46.852212900004815 s`;
+  - warm StackEngine-cache run total: `20.40486560005229 s`;
+  - warm `master_build_or_load`: `0.31111190002411604 s`;
+  - warm speedup over cold: `3.2520569358627784x`;
+  - warm-vs-cold master difference: RMS/p99/max all `0.0`;
+  - warm-vs-Gate481 warm master difference: RMS/p99/max all `0.0`;
+  - warm-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`, coverage fraction `0.960532609259836`;
+  - warm GLASS vs WBPP speedup: `53.54316080362716x`;
+  - threshold acceptance audit passed for `200` lights, `20` bias, `20` dark,
+    `20` flats, `193` active frames, speedup >= `20x`, coverage >= `0.95`,
+    RMS <= `0.01`, and p99 abs diff <= `0.01`.
+- Interpretation:
+  - this closes a real resident master-cache StackEngine/DQ provenance gap;
+  - hot-cache production performance remains at the Gate481 level and output is
+    pixel-identical to Gate481;
+  - cold-cache StackEngine construction is now the biggest regression and must
+    be optimized before treating this path as an efficient first-run default;
+  - strict benchmark-contract acceptance failed only because it expected an
+    attached pipeline/StackEngine promotion evidence chain and older command
+    tokens outside this gate's run recipe.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate482_stackengine_mean_master_cache_ab_real\gate482_real_ab_summary.json`;
+  - threshold acceptance:
+    `C:\glass_runs\phase2_s2_gate482_stackengine_mean_master_cache_ab_real\acceptance\warm_threshold_acceptance_audit.json`;
+  - strict contract failure diagnostic:
+    `C:\glass_runs\phase2_s2_gate482_stackengine_mean_master_cache_ab_real\acceptance\warm_acceptance_audit.json`;
+  - report:
+    `C:\glass_runs\phase2_s2_gate482_stackengine_mean_master_cache_ab_real\reports\warm_report.html`.
+
 ## Gate Rules
 
 Each gate requires:

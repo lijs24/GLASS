@@ -4,6 +4,7 @@ import copy
 import gc
 import hashlib
 import json
+from contextlib import ExitStack
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
@@ -14,9 +15,10 @@ from typing import Any
 import numpy as np
 
 from glass.cpu.registration import estimate_translation_phase_correlation, translation_matrix
-from glass.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
-from glass.engine.contracts import DQFlag, DQMask
-from glass.engine.dq import dq_provenance_summary_from_resident
+from glass.cpu.master_frames import image_stats
+from glass.engine.contracts import CombinePolicy, DQFlag, DQMask, OutputMapPolicy, RejectionPolicy, StackRequest
+from glass.engine.dq import dq_provenance_summary_from_resident, dq_provenance_summary_from_stack_engine
+from glass.engine.stack_engine import CPUStackEngine
 from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
@@ -70,6 +72,7 @@ from glass.io.fits_fast import (
     read_simple_fits_u16be_raw_timed,
 )
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
+from glass.io.image_source import FitsImageSource
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
 from glass.report.resident_result_contract import (
@@ -85,6 +88,8 @@ _RESIDENT_WINSORIZED_MODES = {
     RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
 }
 _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE = False
+_RESIDENT_MASTER_STACK_TILE_SIZE = 512
+_RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_mean_master_cache_v1"
 
 
 def _cuda_module_required():
@@ -3437,7 +3442,8 @@ def _master_cache_fingerprint(
     policy: CalibrationPolicy,
 ) -> str:
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "builder": _RESIDENT_MASTER_CACHE_BUILDER,
         "filter": filter_name,
         "shape": {"height": int(height), "width": int(width)},
         "groups": {
@@ -3479,6 +3485,158 @@ def _cached_master_files_complete(paths: dict[str, Path], stats: dict[str, Any])
         and (int(stats.get("dark_count") or 0) <= 0 or paths["dark"].exists())
         and (int(stats.get("flat_count") or 0) <= 0 or paths["flat"].exists())
     )
+
+
+class _ResidentMasterFitsImageSource(FitsImageSource):
+    __slots__ = ("_last_tile", "_last_window_key")
+
+    def __enter__(self) -> "_ResidentMasterFitsImageSource":
+        super().__enter__()
+        self._last_tile = None
+        self._last_window_key = None
+        return self
+
+    @staticmethod
+    def _window_key(window: Any) -> tuple[int, int, int, int]:
+        return (int(window.y0), int(window.y1), int(window.x0), int(window.x1))
+
+    def read_tile(self, window: Any, dtype: Any = np.float32) -> np.ndarray:
+        tile = super().read_tile(window, dtype=dtype)
+        self._last_window_key = self._window_key(window)
+        self._last_tile = np.asarray(tile, dtype=np.float32)
+        return tile
+
+    def read_mask_tile(self, window: Any) -> DQMask:
+        key = self._window_key(window)
+        if getattr(self, "_last_window_key", None) == key and getattr(self, "_last_tile", None) is not None:
+            tile = self._last_tile
+        else:
+            tile = super().read_tile(window, dtype=np.float32)
+            self._last_window_key = key
+            self._last_tile = np.asarray(tile, dtype=np.float32)
+        mask = DQMask.empty(window.shape)
+        invalid = ~np.isfinite(tile)
+        if np.any(invalid):
+            mask.mark(DQFlag.NO_DATA, invalid)
+        return mask
+
+
+def _resident_master_rejection_policy(policy: CalibrationPolicy) -> RejectionPolicy:
+    del policy
+    return RejectionPolicy(
+        method="none",
+        iterations=0,
+        min_samples=1,
+    )
+
+
+def _stack_resident_master_array_with_engine(
+    paths: list[Path],
+    policy: CalibrationPolicy,
+    *,
+    source_kind: str,
+    tile_size: int = _RESIDENT_MASTER_STACK_TILE_SIZE,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    if not paths:
+        raise ValueError("cannot stack an empty resident master frame list")
+    with ExitStack() as stack:
+        sources = {
+            f"{source_kind}-{index}": stack.enter_context(_ResidentMasterFitsImageSource(path))
+            for index, path in enumerate(paths)
+        }
+        request = StackRequest(
+            frame_ids=tuple(sources.keys()),
+            source_kind=source_kind,
+            combine=CombinePolicy(method="mean", accumulator_dtype="float64"),
+            rejection=_resident_master_rejection_policy(policy),
+            output_maps=OutputMapPolicy(
+                coverage=False,
+                weight=False,
+                variance=False,
+                low_rejection=False,
+                high_rejection=False,
+                dq=False,
+            ),
+            metadata={"stage": "resident_master_cache", "source_kind": source_kind},
+        )
+        result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
+    metrics: dict[str, Any] = dict(result.metrics)
+    metrics["dq_provenance"] = result.dq_provenance
+    metrics["tile_size"] = int(tile_size)
+    metrics["tile_stack_mode"] = "stack_engine_cpu"
+    metrics["resident_master_cache_builder"] = "CPUStackEngine"
+    metrics["master_rejection_requested"] = policy.master_rejection
+    metrics["master_rejection_applied"] = "none"
+    metrics["master_rejection_dispatch_reason"] = (
+        "resident_master_cache_preserves_phase1_mean_builder_until_robust_master_stack_is_gpu_or_optimized"
+    )
+    return result.master.astype(np.float32, copy=True), metrics
+
+
+def _subtract_resident_master(
+    data: np.ndarray,
+    subtract: np.ndarray | None,
+    *,
+    source_kind: str,
+) -> np.ndarray:
+    if subtract is None:
+        return np.asarray(data, dtype=np.float32)
+    if data.shape != subtract.shape:
+        raise ValueError(f"{source_kind} master subtraction shape mismatch: {data.shape} != {subtract.shape}")
+    return (np.asarray(data, dtype=np.float32) - np.asarray(subtract, dtype=np.float32)).astype(np.float32)
+
+
+def _normalize_resident_master_flat(
+    raw_flat: np.ndarray,
+    master_bias: np.ndarray | None,
+    policy: CalibrationPolicy,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    data = _subtract_resident_master(raw_flat, master_bias, source_kind="flat")
+    norm = float(np.mean(data) if policy.flat_normalization == "mean" else np.median(data))
+    if abs(norm) < policy.flat_floor:
+        raise ValueError("flat normalization is below flat_floor")
+    normalized = np.maximum(
+        data / np.float32(norm),
+        np.float32(policy.flat_floor),
+    ).astype(np.float32)
+    return normalized, {
+        "normalization_stage": "master_after_stack",
+        "normalization_method": policy.flat_normalization,
+        "normalization_scalar": norm,
+        "flat_floor": policy.flat_floor,
+    }
+
+
+def _resident_stack_engine_audit_fields(
+    metrics: dict[str, dict[str, Any]],
+    *,
+    flat_normalization: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    provenance = {
+        key: value.get("dq_provenance")
+        for key, value in metrics.items()
+        if isinstance(value, dict) and isinstance(value.get("dq_provenance"), dict)
+    }
+    summaries = {
+        key: dq_provenance_summary_from_stack_engine(
+            value if isinstance(value, dict) else None,
+            stage="master_calibration",
+            item=f"resident_{key}",
+        )
+        for key, value in provenance.items()
+    }
+    fields: dict[str, Any] = {
+        "tile_stack_mode": "stack_engine_cpu",
+        "stack_engine_enabled": True,
+        "stack_engine_fallback_reason": None,
+        "stack_engine_tile_size": _RESIDENT_MASTER_STACK_TILE_SIZE,
+        "stack_engine_metrics": metrics,
+        "stack_engine_dq_provenance": provenance,
+        "dq_provenance_summary": summaries,
+    }
+    if flat_normalization is not None:
+        fields["flat_normalization"] = flat_normalization
+    return fields
 
 
 def _load_or_build_matching_masters(
@@ -3542,29 +3700,47 @@ def _load_or_build_matching_masters(
             return master_bias, master_dark, master_flat, stats, stats.get("dark_exposure_s")
 
     master_bias = None
+    master_metrics: dict[str, dict[str, Any]] = {}
     bias_paths = _paths_for_records(bias_records)
     if bias_paths:
-        master_bias = make_master_bias(bias_paths).data
+        master_bias, master_metrics["bias"] = _stack_resident_master_array_with_engine(
+            bias_paths,
+            policy,
+            source_kind="bias",
+        )
 
     master_dark = None
     dark_paths = _paths_for_records(dark_records)
     if dark_paths:
         dark_bias = None if policy.master_dark_includes_bias else master_bias
-        master_dark = make_master_dark(dark_paths, dark_bias).data
+        raw_dark, master_metrics["dark"] = _stack_resident_master_array_with_engine(
+            dark_paths,
+            policy,
+            source_kind="dark",
+        )
+        master_dark = _subtract_resident_master(raw_dark, dark_bias, source_kind="dark")
 
     master_flat = None
+    flat_normalization: dict[str, Any] | None = None
     flat_paths = _paths_for_records(flat_records)
     if flat_paths:
         flat_bias = master_bias
         if flat_bias_group != bias_group:
             flat_bias_paths = _paths_for_records(flat_bias_records)
-            flat_bias = make_master_bias(flat_bias_paths).data if flat_bias_paths else None
-        master_flat = make_master_flat(
+            if flat_bias_paths:
+                flat_bias, master_metrics["flat_bias"] = _stack_resident_master_array_with_engine(
+                    flat_bias_paths,
+                    policy,
+                    source_kind="flat_bias",
+                )
+            else:
+                flat_bias = None
+        raw_flat, master_metrics["flat"] = _stack_resident_master_array_with_engine(
             flat_paths,
-            master_bias=flat_bias,
-            normalization=policy.flat_normalization,
-            flat_floor=policy.flat_floor,
-        ).data
+            policy,
+            source_kind="flat",
+        )
+        master_flat, flat_normalization = _normalize_resident_master_flat(raw_flat, flat_bias, policy)
 
     dark_exposures = [
         float(frame["exposure_s"]) for frame in dark_records if frame.get("exposure_s") is not None
@@ -3593,6 +3769,16 @@ def _load_or_build_matching_masters(
         "cache_key": key,
         "cache_base_key": base_key,
         "cache_fingerprint": fingerprint,
+        "cache_builder": _RESIDENT_MASTER_CACHE_BUILDER,
+        "master_rejection_requested": policy.master_rejection,
+        "master_rejection_applied": "none",
+        "master_rejection_dispatch_reason": (
+            "resident_master_cache_preserves_phase1_mean_builder_until_robust_master_stack_is_gpu_or_optimized"
+        ),
+        **_resident_stack_engine_audit_fields(
+            master_metrics,
+            flat_normalization=flat_normalization,
+        ),
     }
     if master_bias is not None:
         np.save(paths["bias"], master_bias)
@@ -3622,28 +3808,41 @@ def _load_or_build_aggregate_masters(
     flat_path = cache / f"{key}_master_flat.npy"
     stats_path = cache / f"{key}_master_stats.json"
     if bias_path.exists() and dark_path.exists() and flat_path.exists() and stats_path.exists():
-        return np.load(bias_path), np.load(dark_path), np.load(flat_path), read_json(stats_path)
+        stats = read_json(stats_path)
+        if stats.get("stack_engine_enabled") is True:
+            return np.load(bias_path), np.load(dark_path), np.load(flat_path), stats
 
     master_bias = None
+    master_metrics: dict[str, dict[str, Any]] = {}
     bias_paths = _paths_for_records(bias_records)
     if bias_paths:
-        master_bias = make_master_bias(bias_paths).data
+        master_bias, master_metrics["bias"] = _stack_resident_master_array_with_engine(
+            bias_paths,
+            policy,
+            source_kind="bias",
+        )
 
     master_dark = None
     dark_paths = _paths_for_records(dark_records)
     if dark_paths:
         dark_bias = None if policy.master_dark_includes_bias else master_bias
-        master_dark = make_master_dark(dark_paths, dark_bias).data
+        raw_dark, master_metrics["dark"] = _stack_resident_master_array_with_engine(
+            dark_paths,
+            policy,
+            source_kind="dark",
+        )
+        master_dark = _subtract_resident_master(raw_dark, dark_bias, source_kind="dark")
 
     master_flat = None
+    flat_normalization: dict[str, Any] | None = None
     flat_paths = _paths_for_records(flat_records)
     if flat_paths:
-        master_flat = make_master_flat(
+        raw_flat, master_metrics["flat"] = _stack_resident_master_array_with_engine(
             flat_paths,
-            master_bias=master_bias,
-            normalization=policy.flat_normalization,
-            flat_floor=policy.flat_floor,
-        ).data
+            policy,
+            source_kind="flat",
+        )
+        master_flat, flat_normalization = _normalize_resident_master_flat(raw_flat, master_bias, policy)
 
     stats = {
         "calibration_group_policy": "aggregate_same_shape_filter_for_resident_mode",
@@ -3659,6 +3858,17 @@ def _load_or_build_aggregate_masters(
         "dark": None if master_dark is None else image_stats(master_dark),
         "flat": None if master_flat is None else image_stats(master_flat),
         "master_dark_includes_bias": policy.master_dark_includes_bias,
+        "shape": {"height": height, "width": width},
+        "cache_builder": _RESIDENT_MASTER_CACHE_BUILDER,
+        "master_rejection_requested": policy.master_rejection,
+        "master_rejection_applied": "none",
+        "master_rejection_dispatch_reason": (
+            "resident_master_cache_preserves_phase1_mean_builder_until_robust_master_stack_is_gpu_or_optimized"
+        ),
+        **_resident_stack_engine_audit_fields(
+            master_metrics,
+            flat_normalization=flat_normalization,
+        ),
     }
     if master_bias is not None:
         np.save(bias_path, master_bias)

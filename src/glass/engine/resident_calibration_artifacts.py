@@ -156,7 +156,13 @@ def _resident_master_record(
         "streaming": False,
         "resident": True,
         "resident_surface_scope": "full_frame_vram",
-        "master_rejection": policy.get("master_rejection") or "none",
+        "master_rejection": calibration_set.get("master_rejection_applied")
+        or policy.get("master_rejection")
+        or "none",
+        "master_rejection_requested": calibration_set.get("master_rejection_requested")
+        or policy.get("master_rejection")
+        or "none",
+        "master_rejection_dispatch_reason": calibration_set.get("master_rejection_dispatch_reason"),
         "tile_size": _full_frame_tile_size(shape),
         "shape": shape,
         "source_frame_count": source_count,
