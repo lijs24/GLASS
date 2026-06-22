@@ -3072,27 +3072,28 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_warp_batch"] is True
     assert resident_registration["triangle_warp_batch_mode"] == "native_matrix_bilinear_frames"
     assert resident_registration["triangle_warp_batch_timing_model"] == (
-        "native_loop_batched_inverse_one_sync"
+        "native_chunked_batch_warp_scatter_one_sync"
     )
-    assert resident_registration["triangle_warp_batch_native_inverse_upload_mode"] == "single_device_batch"
+    assert resident_registration["triangle_warp_batch_native_inverse_upload_mode"] == "chunked_device_batch"
     assert resident_registration["triangle_warp_batch_frame_count"] == 1
     assert resident_registration["triangle_warp_batch_fallback_frame_count"] == 0
     assert resident_registration["triangle_warp_batch_native_inverse_prepare_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_inverse_batch_alloc_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_inverse_batch_bytes"] > 0
-    assert resident_registration["triangle_warp_batch_native_index_upload_s"] == 0.0
+    assert resident_registration["triangle_warp_batch_native_index_upload_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_inverse_upload_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_kernel_enqueue_s"] >= 0.0
-    assert resident_registration["triangle_warp_batch_native_coverage_reduce_enqueue_s"] == 0.0
-    assert resident_registration["triangle_warp_batch_native_scatter_enqueue_s"] == 0.0
+    assert resident_registration["triangle_warp_batch_native_coverage_reduce_enqueue_s"] >= 0.0
+    assert resident_registration["triangle_warp_batch_native_scatter_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_device_copy_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_sync_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_total_s"] >= 0.0
-    assert resident_registration["triangle_warp_batch_native_chunk_frames"] == 0
-    assert resident_registration["triangle_warp_batch_native_chunk_count"] == 0
-    assert resident_registration["triangle_warp_batch_native_workspace_bytes"] == 0
-    assert resident_registration["triangle_warp_batch_native_warp_kernel_launches"] == 0
-    assert resident_registration["triangle_warp_batch_native_scatter_kernel_launches"] == 0
+    assert resident_registration["triangle_warp_batch_native_chunk_frames"] >= 1
+    assert resident_registration["triangle_warp_batch_native_chunk_count"] == 1
+    assert resident_registration["triangle_warp_batch_native_workspace_bytes"] > 0
+    assert resident_registration["triangle_warp_batch_native_warp_kernel_launches"] == 1
+    assert resident_registration["triangle_warp_batch_native_coverage_reduce_kernel_launches"] == 1
+    assert resident_registration["triangle_warp_batch_native_scatter_kernel_launches"] == 1
     assert resident_registration["triangle_pixel_refine_requested_coarse_stride"] == 1
     assert resident_registration["triangle_pixel_refine_requested_final_stride"] == 2
     assert resident_registration["triangle_pixel_refine_fast_coarse"] is True
@@ -3159,8 +3160,11 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert registration_components["triangle_pixel_refine_batch"] >= 0.0
     assert registration_components["triangle_pixel_refine_native_coarse"] >= 0.0
     assert registration_components["triangle_pixel_refine_native_fine"] >= 0.0
-    assert resident["artifacts"][0]["resident_warp_scratch_bytes"] > 0
-    assert resident["artifacts"][0]["resident_io_pipeline"]["warp_scratch_bytes"] > 0
+    assert resident["artifacts"][0]["resident_warp_scratch_bytes"] == 0
+    assert resident_registration["triangle_warp_batch_native_workspace_bytes"] > 0
+    assert resident_registration["triangle_warp_batch_native_output_bytes"] > 0
+    assert resident_registration["triangle_warp_batch_native_coverage_bytes"] > 0
+    assert resident["artifacts"][0]["resident_io_pipeline"]["warp_scratch_bytes"] == 0
     assert resident["artifacts"][0]["resident_warp_copy_mode"] == "default_stream_async_device_to_device"
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity_cuda_triangle"
@@ -3224,7 +3228,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_warp_batch=true" in warning for warning in moving["warnings"])
     assert any("triangle_warp_batch_mode=native_matrix_bilinear_frames" in warning for warning in moving["warnings"])
     assert any(
-        "triangle_warp_batch_timing_model=native_loop_batched_inverse_one_sync" in warning
+        "triangle_warp_batch_timing_model=native_chunked_batch_warp_scatter_one_sync" in warning
         for warning in moving["warnings"]
     )
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])

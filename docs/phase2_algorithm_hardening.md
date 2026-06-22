@@ -9420,6 +9420,53 @@ Completed in Gate446:
     performance gate should evaluate and harden `--resident-warp-batch-dispatch
     chunked` on the same 200-light contract before promoting it.
 
+### S2-Gate 462: Resident Chunked Warp Default Promotion
+
+- Promote the resident matrix batch warp dispatch from loop-batched to chunked
+  by default after real 200-light contract validation.
+- Required work:
+  - run an explicit `--resident-warp-batch-dispatch chunked` 200-light probe
+    and compare it against the Gate461 loop-batched baseline;
+  - change `glass run`, `glass audit`, and the resident engine default to
+    `chunked`;
+  - update CLI/resident tests so the default path asserts chunked warp
+    provenance and workspace diagnostics;
+  - prove the default 200-light command, without an explicit dispatch flag,
+    emits `warp_batch_dispatch=chunked` and passes the same compare and
+    contract/audit checks.
+- Completed in S2-Gate462:
+  - changed the resident warp batch default from `loop` to `chunked` in the
+    CLI and engine;
+  - retained the lower-level CUDA wrapper default as `loop` for direct API
+    compatibility while the high-level pipeline default is now chunked;
+  - updated resident registration tests to assert
+    `native_chunked_batch_warp_scatter_one_sync`, chunk workspace bytes, and
+    launch counts on the default CLI path;
+  - explicit chunked 200-light probe passed acceptance at `29.963156x` versus
+    WBPP black-box timing;
+  - default chunked 200-light run completed in `36.018981 s` internal timing
+    (`36.420235 s` outer timing), integrated `193/200` frames, and passed
+    acceptance at `30.332368x` versus WBPP black-box timing `1092.541 s`;
+  - default run recorded `warp_batch_dispatch=chunked`,
+    `triangle_warp_batch_frame_count=192`,
+    `triangle_warp_batch_native_chunk_frames=8`, `chunk_count=24`, and 24
+    warp/coverage/scatter kernel launches;
+  - default run comparison remained inside the 200-light contract: shape
+    matched, coverage fraction `0.960990`, RMS diff `0.00169833`, and P99
+    absolute diff `0.000453470`;
+  - full pytest passed with `1092 passed`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_462_200\default_chunked_contract_parity_20260622`;
+  - `C:\glass_runs\phase2_s2_gate_462_200\chunked_warp_probe_20260622`;
+  - `runs/checkpoints/s2_gate_462_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_462_status.md`.
+- Known limitation:
+  - chunked dispatch allocates temporary output and coverage workspace. The
+    native workspace allocator halves chunk capacity until allocation succeeds,
+    but this gate does not yet add a user-facing VRAM-budget prediction for
+    chunked warp. The next gate should make the chunk capacity and fallback
+    decision explicit in memory planning/reporting.
+
 ## Gate Rules
 
 Each gate requires:

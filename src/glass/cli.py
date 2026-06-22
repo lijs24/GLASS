@@ -4591,8 +4591,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--resident-warp-batch-dispatch",
         choices=["loop", "chunked"],
-        default="loop",
-        help="resident matrix batch warp dispatch mode; chunked is experimental",
+        default="chunked",
+        help="resident matrix batch warp dispatch mode",
     )
     run.add_argument(
         "--resident-integration-dispatch",
@@ -5019,8 +5019,8 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--resident-warp-batch-dispatch",
         choices=["loop", "chunked"],
-        default="loop",
-        help="resident matrix batch warp dispatch mode; chunked is experimental",
+        default="chunked",
+        help="resident matrix batch warp dispatch mode",
     )
     audit.add_argument(
         "--resident-integration-dispatch",

@@ -3133,7 +3133,7 @@ def run_resident_calibration_integration(
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
-    resident_warp_batch_dispatch: str = "loop",
+    resident_warp_batch_dispatch: str = "chunked",
     resident_integration_dispatch: str = "stack",
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,

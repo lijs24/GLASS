@@ -1,0 +1,134 @@
+{
+  "gate": "S2-Gate 462",
+  "status": "passed",
+  "scope": "resident_chunked_warp_default_promotion",
+  "date_local": "2026-06-22",
+  "default_path_changed": true,
+  "default_path_change": "resident matrix batch warp dispatch now defaults to chunked in glass run, glass audit, and the resident engine",
+  "explicit_chunked_probe": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_462_200\\chunked_warp_probe_20260622",
+    "internal_elapsed_s": 36.46281460003229,
+    "outer_elapsed_s": 36.8736654,
+    "acceptance_audit_speedup_vs_wbpp": 29.963155943508333,
+    "warp_batch_dispatch": "chunked",
+    "triangle_warp_batch_frame_count": 192,
+    "triangle_warp_batch_timing_model": "native_chunked_batch_warp_scatter_one_sync",
+    "resident_registration_warp_s": 3.528503199806437
+  },
+  "real_run": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_462_200\\default_chunked_contract_parity_20260622",
+    "dataset": "M38_H_200light_20bias_20dark_20flat",
+    "internal_elapsed_s": 36.01898110000184,
+    "outer_elapsed_s": 36.4202346,
+    "backend": "cuda",
+    "memory_mode": "resident",
+    "resident_runtime_preset": "throughput-v1",
+    "resident_h2d_mode": "pinned_ring",
+    "resident_fits_read_mode": "auto",
+    "resident_inline_source_dq": "off",
+    "registration": "similarity_cuda_triangle",
+    "warp_interpolation": "lanczos3",
+    "warp_batch_dispatch": "chunked",
+    "local_normalization": "off",
+    "rejection": "winsorized_sigma",
+    "winsorized_mode": "fast_approx",
+    "weighting": "none",
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "zero_weight_frames": 7,
+    "quality_rejected_frames": 7
+  },
+  "warp_batch": {
+    "enabled": true,
+    "mode": "native_matrix_lanczos3_frames",
+    "timing_model": "native_chunked_batch_warp_scatter_one_sync",
+    "frame_count": 192,
+    "fallback_frame_count": 0,
+    "chunk_frames": 8,
+    "chunk_count": 24,
+    "warp_kernel_launches": 24,
+    "coverage_reduce_kernel_launches": 24,
+    "scatter_kernel_launches": 24,
+    "workspace_bytes": 2466048352,
+    "output_bytes": 1972838400,
+    "coverage_bytes": 493209600,
+    "inverse_upload_mode": "chunked_device_batch",
+    "native_total_s": 0.9816314,
+    "native_sync_s": 0.9584914
+  },
+  "stage_timing_s": {
+    "total_internal": 36.01898110000184,
+    "master_build_or_load": 11.429789899964817,
+    "light_read_upload_calibrate": 14.666512300027534,
+    "light_fits_native_file_read_worker_cumulative": 20.429808100000002,
+    "light_read_wait_wall": 2.1873448997503147,
+    "light_calibrate_store": 0.7985850162506104,
+    "light_loop_unaccounted": 11.646854200225789,
+    "resident_registration_warp": 3.359519899939187,
+    "resident_registration_warp_gate461_loop_s": 3.566975000256207,
+    "resident_registration_warp_delta_vs_gate461_loop_s": -0.20745510031701962,
+    "resident_registration_component_accounted": 10.752466500538738,
+    "resident_integration": 0.4863084999960847,
+    "output_write": 2.2152306000352837
+  },
+  "memory": {
+    "estimated_peak_gib": 47.3117358982563,
+    "calibrated_stack_gib": 45.93372344970703,
+    "resident_base_gib": 46.85239791870117,
+    "chunked_warp_workspace_gib": 2.2966741025447845
+  },
+  "wbpp_blackbox": {
+    "elapsed_s": 1092.541,
+    "result_path": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json",
+    "reference_master": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf"
+  },
+  "speedup": {
+    "acceptance_audit_speedup_vs_wbpp": 30.33236828567436,
+    "compare_timing_speedup_vs_wbpp": 29.998186777193354
+  },
+  "compare": {
+    "json": "C:\\glass_runs\\phase2_s2_gate_462_200\\default_chunked_contract_parity_20260622\\s2_gate_462_default_compare.json",
+    "html": "C:\\glass_runs\\phase2_s2_gate_462_200\\default_chunked_contract_parity_20260622\\s2_gate_462_default_compare.html",
+    "shape_match": true,
+    "coverage_fraction": 0.9609903294664175,
+    "coverage_max": 193.0,
+    "coverage_median": 192.0,
+    "rms_diff": 0.0016983322246963276,
+    "abs_diff_p99": 0.00045346975326537864
+  },
+  "contracts": {
+    "resident_calibration_contract": "passed",
+    "resident_result_contract": "passed",
+    "pipeline_contract": "passed",
+    "stack_engine_contract": "passed",
+    "acceptance_audit": "passed"
+  },
+  "tests": {
+    "focused_ruff": "passed",
+    "focused_default_chunked": "4 passed",
+    "resident_cuda_run": "66 passed in 8.78 s",
+    "gpu_warp_resident_stack_cli_smoke": "82 passed in 6.21 s",
+    "full_pytest": "1092 passed in 47.56 s"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "driver": "596.21",
+    "toolkit": "13.2"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "notes": [
+      "Used GLASS code, GLASS fixtures, GLASS artifacts, and user-owned benchmark outputs.",
+      "Original image directories remained read-only.",
+      "No official PixInsight/WBPP/PJSR implementation source was read, copied, summarized, or modified."
+    ]
+  },
+  "known_limitations": [
+    "Chunked dispatch uses additional temporary output and coverage workspace; the native allocator can reduce chunk capacity on allocation failure, but this gate does not yet expose that prediction in memory planning/reporting.",
+    "The low-level glass_cuda ResidentCalibratedStack wrapper keeps dispatch='loop' as its direct API default for compatibility; the high-level run/audit/engine default is chunked.",
+    "This gate does not change star detection, descriptor fitting, matrix estimation, rejection, local normalization, source-DQ, or frame admission."
+  ]
+}
