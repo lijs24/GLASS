@@ -123,6 +123,92 @@ def _safe_filter_name(value: str | None) -> str:
 
 
 _BATCH_WARP_PREFERRED_FRAMES = 8
+_FUSED_MATRIX_REGISTRATION_MODES = {"off", "external_matrix", "similarity_cuda_triangle"}
+
+
+def _resident_local_norm_enabled_for_admission(
+    plan: dict[str, Any],
+    local_normalization: str,
+) -> bool:
+    local_norm_policy = plan.get("local_normalization_policy", {})
+    return local_normalization == "on" or (
+        local_normalization == "auto"
+        and isinstance(local_norm_policy, dict)
+        and bool(local_norm_policy.get("enabled", False))
+    )
+
+
+def _resolve_resident_integration_dispatch_for_admission(
+    plan: dict[str, Any],
+    *,
+    resident_registration: str,
+    resident_integration_dispatch: str = "stack",
+    resident_warp_interpolation: str = "bilinear",
+    local_normalization: str = "auto",
+    integration_rejection: str = "auto",
+    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+) -> dict[str, Any]:
+    requested = str(resident_integration_dispatch or "stack")
+    rejection_mode = "none" if integration_rejection == "auto" else str(integration_rejection or "none")
+    local_norm_enabled = _resident_local_norm_enabled_for_admission(plan, str(local_normalization or "auto"))
+    reason = f"explicit_{requested}"
+    effective = requested
+    valid = True
+
+    if requested == "auto":
+        if (
+            rejection_mode == "winsorized_sigma"
+            and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+        ):
+            effective = "stack"
+            reason = "auto_stack_hardened_winsorized_requires_stack"
+        elif local_norm_enabled:
+            effective = "stack"
+            reason = "auto_stack_local_normalization_enabled"
+        elif resident_registration not in _FUSED_MATRIX_REGISTRATION_MODES:
+            effective = "stack"
+            reason = "auto_stack_registration_mode_not_fused_supported"
+        elif resident_warp_interpolation != "bilinear":
+            effective = "stack"
+            reason = "auto_stack_non_bilinear_matrix_route"
+        else:
+            effective = "fused_matrix"
+            reason = "auto_fused_bilinear_matrix_route"
+    elif requested == "fused_matrix":
+        if local_norm_enabled:
+            effective = "stack"
+            reason = "admission_stack_explicit_fused_local_normalization_enabled"
+            valid = False
+        elif resident_registration not in _FUSED_MATRIX_REGISTRATION_MODES:
+            effective = "stack"
+            reason = "admission_stack_explicit_fused_registration_mode_not_supported"
+            valid = False
+        elif (
+            rejection_mode == "winsorized_sigma"
+            and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+        ):
+            effective = "stack"
+            reason = "admission_stack_explicit_fused_hardened_winsorized_requires_stack"
+            valid = False
+    elif requested != "stack":
+        effective = "stack"
+        reason = "admission_stack_unknown_integration_dispatch"
+        valid = False
+
+    return {
+        "requested_mode": requested,
+        "effective_mode": effective,
+        "selection_reason": reason,
+        "valid": valid,
+        "fused_matrix_admission": bool(effective == "fused_matrix"),
+        "resident_registration": resident_registration,
+        "resident_warp_interpolation": resident_warp_interpolation,
+        "local_normalization": local_normalization,
+        "local_normalization_enabled": local_norm_enabled,
+        "integration_rejection": integration_rejection,
+        "resolved_rejection_mode": rejection_mode,
+        "resident_winsorized_mode": resident_winsorized_mode,
+    }
 
 
 def _chunked_warp_workspace_estimate(
@@ -338,6 +424,11 @@ def build_resident_memory_admission(
     cuda_module: Any | None = None,
     resident_registration: str = "off",
     resident_warp_batch_dispatch: str = "chunked",
+    resident_integration_dispatch: str = "stack",
+    resident_warp_interpolation: str = "bilinear",
+    local_normalization: str = "auto",
+    integration_rejection: str = "auto",
+    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     exclude_frame_ids: list[str] | None = None,
     vram_budget_gb: float | None = None,
     enforce_explicit_budget: bool = True,
@@ -354,9 +445,19 @@ def build_resident_memory_admission(
         explicit_budget_bytes=explicit_budget_bytes,
         safety_fraction=safety_fraction,
     )
+    integration_dispatch = _resolve_resident_integration_dispatch_for_admission(
+        payload,
+        resident_registration=resident_registration,
+        resident_integration_dispatch=resident_integration_dispatch,
+        resident_warp_interpolation=resident_warp_interpolation,
+        local_normalization=local_normalization,
+        integration_rejection=integration_rejection,
+        resident_winsorized_mode=resident_winsorized_mode,
+    )
     chunked_enabled = bool(
         resident_registration == "similarity_cuda_triangle"
         and resident_warp_batch_dispatch == "chunked"
+        and not integration_dispatch["fused_matrix_admission"]
     )
     group_rows: list[dict[str, Any]] = []
     peak_row: dict[str, Any] | None = None
@@ -409,9 +510,14 @@ def build_resident_memory_admission(
             "estimated_peak_without_chunked_warp_bytes": preferred_estimate[
                 "estimated_peak_without_chunked_warp_bytes"
             ],
+            "estimated_peak_includes_chunked_warp_workspace": preferred_estimate[
+                "estimated_peak_includes_chunked_warp_workspace"
+            ],
             "chunked_warp_planned_workspace_bytes": preferred_estimate[
                 "chunked_warp_planned_workspace_bytes"
             ],
+            "resident_integration_dispatch_effective": integration_dispatch["effective_mode"],
+            "fused_matrix_admission": integration_dispatch["fused_matrix_admission"],
             "capacity_options": capacity_options,
         }
         group_rows.append(row)
@@ -484,6 +590,11 @@ def build_resident_memory_admission(
             else "estimated_peak_exceeds_recorded_budget"
         ),
         "resident_registration": resident_registration,
+        "resident_integration_dispatch_requested": integration_dispatch["requested_mode"],
+        "resident_integration_dispatch_effective": integration_dispatch["effective_mode"],
+        "resident_integration_dispatch_reason": integration_dispatch["selection_reason"],
+        "resident_integration_dispatch_admission": integration_dispatch,
+        "fused_matrix_admission": integration_dispatch["fused_matrix_admission"],
         "requested_warp_batch_dispatch": resident_warp_batch_dispatch,
         "effective_warp_batch_dispatch": selected_dispatch,
         "dispatch_explicit": bool(dispatch_explicit),
@@ -3693,7 +3804,7 @@ def run_resident_calibration_integration(
         if resident_warp_batch_dispatch == "chunked" and resident_warp_chunk_capacity_frames is not None
         else None
     )
-    fused_matrix_registration_modes = {"off", "external_matrix", "similarity_cuda_triangle"}
+    fused_matrix_registration_modes = _FUSED_MATRIX_REGISTRATION_MODES
     if (
         resident_integration_dispatch == "fused_matrix"
         and resident_registration not in fused_matrix_registration_modes

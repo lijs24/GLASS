@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "plan": "C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json",
+  "device": {
+    "device_id": 0,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "multi_processor_count": 188,
+    "native_backend": true,
+    "available_to_glass": true
+  },
+  "stack_lanczos3": {
+    "resident_integration_dispatch_effective": "stack",
+    "resident_integration_dispatch_reason": "explicit_stack",
+    "estimated_peak_gib": 49.60843022540212,
+    "planned_warp_frame_count": 199,
+    "chunked_warp_planned_workspace_bytes": 2466056756,
+    "recommended_action": "resident_full_frame"
+  },
+  "auto_bilinear_fused": {
+    "resident_integration_dispatch_effective": "fused_matrix",
+    "resident_integration_dispatch_reason": "auto_fused_bilinear_matrix_route",
+    "estimated_peak_gib": 47.3117358982563,
+    "planned_warp_frame_count": 0,
+    "chunked_warp_planned_workspace_bytes": 0,
+    "recommended_action": "resident_full_frame"
+  },
+  "estimated_peak_gib_delta_stack_minus_fused": 2.296694327145815,
+  "chunked_workspace_bytes_delta_stack_minus_fused": 2466056756
+}

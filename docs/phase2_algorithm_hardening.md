@@ -10026,6 +10026,60 @@ Completed in Gate446:
     confirms the resident CUDA path is still scientifically and operationally
     healthy after Gates 469-471.
 
+### S2-Gate 473: Fused Integration Memory Admission Model
+
+- Prepare the next clean 200-light A/B by making resident VRAM admission aware
+  of the `throughput-v2-fused` route.
+- Required work:
+  - resolve `resident_integration_dispatch` in the pre-run admission model with
+    the same conservative conditions used by the resident engine;
+  - remove chunked registered-stack warp workspace from the estimate only when
+    admission resolves to effective `fused_matrix`;
+  - keep Lanczos3, local normalization, unsupported registration modes, and
+    hardened winsorized rejection on the stack estimate;
+  - pass the relevant CLI options into `resident_memory_admission.json`;
+  - prove the behavior on synthetic/unit tests and on the real 200-light plan
+    without launching another large run while the GPU is busy.
+- Completed in S2-Gate473:
+  - added an admission dispatch resolver in `src/glass/engine/resident_cuda.py`;
+  - extended `build_resident_memory_admission()` with
+    `resident_integration_dispatch`, `resident_warp_interpolation`,
+    `local_normalization`, `integration_rejection`, and
+    `resident_winsorized_mode`;
+  - updated `src/glass/cli.py` so `glass run` and `glass audit` write
+    admission artifacts that reflect the effective integration route;
+  - added unit coverage for auto bilinear fused admission and auto Lanczos3
+    stack admission;
+  - extended the existing CUDA `throughput-v2-fused` CLI smoke test to assert
+    that `resident_memory_admission.json` records effective fused dispatch and
+    zero planned chunked-warp workspace;
+  - ran a real-plan admission comparison using
+    `C:\gpwbpp_runs\final_m38_h_200\processing_plan.json`.
+- Real-plan admission comparison:
+  - stack/Lanczos3 estimated peak: `49.60843022540212 GiB`;
+  - auto/bilinear fused estimated peak: `47.3117358982563 GiB`;
+  - estimated peak delta: `2.296694327145815 GiB`;
+  - stack planned warp frames: `199`;
+  - fused planned warp frames: `0`;
+  - stack planned chunked workspace: `2466056756` bytes;
+  - fused planned chunked workspace: `0` bytes.
+- Performance and regression note:
+  - this gate changes admission/reporting and pre-run scheduling evidence only;
+    it does not change calibration, registration, interpolation, rejection,
+    DQ, or integration pixel math;
+  - the change directly supports the next idle-GPU `throughput-v2-fused`
+    200-light A/B by preventing false VRAM pressure from a workspace that the
+    fused integration path does not allocate;
+  - GPU was still busy with another compute workload, so no new large timed
+    200-light execution was launched.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_473_real_plan_admission_compare.json`;
+  - `runs/checkpoints/s2_gate_473_status.md`.
+- Known limitation:
+  - explicit invalid fused requests are conservatively estimated as stack in
+    admission so memory is not undercounted before the engine raises the
+    corresponding runtime validation error.
+
 ## Gate Rules
 
 Each gate requires:

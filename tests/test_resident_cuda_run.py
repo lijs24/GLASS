@@ -178,6 +178,73 @@ def test_resident_memory_admission_counts_stem_excludes() -> None:
     assert admission["peak_group"]["planned_warp_frame_count"] == 1
 
 
+def test_resident_memory_admission_auto_fused_skips_registered_stack_workspace() -> None:
+    frames = [
+        {"id": f"L{index:03d}", "frame_type": "light", "filter": "H", "height": 72, "width": 80}
+        for index in range(10)
+    ]
+    stack = build_resident_memory_admission(
+        {"frames": frames},
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        resident_integration_dispatch="stack",
+        resident_warp_interpolation="bilinear",
+        local_normalization="off",
+        integration_rejection="none",
+        vram_budget_gb=1.0,
+    )
+    fused = build_resident_memory_admission(
+        {"frames": frames},
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        resident_integration_dispatch="auto",
+        resident_warp_interpolation="bilinear",
+        local_normalization="off",
+        integration_rejection="none",
+        vram_budget_gb=1.0,
+    )
+
+    assert fused["resident_integration_dispatch_requested"] == "auto"
+    assert fused["resident_integration_dispatch_effective"] == "fused_matrix"
+    assert fused["resident_integration_dispatch_reason"] == "auto_fused_bilinear_matrix_route"
+    assert fused["fused_matrix_admission"] is True
+    assert fused["peak_group"]["fused_matrix_admission"] is True
+    assert fused["peak_group"]["planned_warp_frame_count"] == 0
+    assert fused["peak_group"]["preferred_chunk_capacity_frames"] == 0
+    assert fused["peak_group"]["chunked_warp_planned_workspace_bytes"] == 0
+    assert fused["peak_group"]["estimated_peak_includes_chunked_warp_workspace"] is False
+    assert fused["estimated_peak_bytes"] == fused["peak_group"]["estimated_peak_without_chunked_warp_bytes"]
+    assert stack["peak_group"]["planned_warp_frame_count"] == 9
+    assert stack["peak_group"]["chunked_warp_planned_workspace_bytes"] > 0
+    assert fused["estimated_peak_bytes"] < stack["estimated_peak_bytes"]
+
+
+def test_resident_memory_admission_auto_lanczos_keeps_stack_workspace() -> None:
+    frames = [
+        {"id": f"L{index:03d}", "frame_type": "light", "filter": "H", "height": 72, "width": 80}
+        for index in range(10)
+    ]
+
+    admission = build_resident_memory_admission(
+        {"frames": frames},
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        resident_integration_dispatch="auto",
+        resident_warp_interpolation="lanczos3",
+        local_normalization="off",
+        integration_rejection="none",
+        vram_budget_gb=1.0,
+    )
+
+    assert admission["resident_integration_dispatch_requested"] == "auto"
+    assert admission["resident_integration_dispatch_effective"] == "stack"
+    assert admission["resident_integration_dispatch_reason"] == "auto_stack_non_bilinear_matrix_route"
+    assert admission["fused_matrix_admission"] is False
+    assert admission["peak_group"]["planned_warp_frame_count"] == 9
+    assert admission["peak_group"]["chunked_warp_planned_workspace_bytes"] > 0
+    assert admission["peak_group"]["estimated_peak_includes_chunked_warp_workspace"] is True
+
+
 def test_resident_memory_admission_blocks_explicit_budget() -> None:
     frames = [
         {"id": f"L{index:03d}", "frame_type": "light", "filter": "H", "height": 72, "width": 80}
@@ -3903,6 +3970,7 @@ def test_cli_resident_cuda_auto_dispatch_selects_verified_bilinear_fused_path(tm
     integration = read_json(run / "integration_results.json")
     registration = read_json(run / "registration_results.json")
     timing = read_json(run / "run_timing.json")
+    admission = read_json(run / "resident_memory_admission.json")
     dispatch = resident["artifacts"][0]["resident_integration_dispatch"]
     resident_registration = resident["artifacts"][0]["resident_registration"]
     moving = [item for item in registration["results"] if item["status"] != "reference"][0]
@@ -3917,6 +3985,12 @@ def test_cli_resident_cuda_auto_dispatch_selects_verified_bilinear_fused_path(tm
     assert dispatch["auto_policy"]["verified_fast_path"] is True
     assert dispatch["used"] is True
     assert dispatch["deferred_matrix_frame_count"] == 1
+    assert admission["resident_integration_dispatch_requested"] == "auto"
+    assert admission["resident_integration_dispatch_effective"] == "fused_matrix"
+    assert admission["resident_integration_dispatch_reason"] == "auto_fused_bilinear_matrix_route"
+    assert admission["fused_matrix_admission"] is True
+    assert admission["peak_group"]["planned_warp_frame_count"] == 0
+    assert admission["peak_group"]["chunked_warp_planned_workspace_bytes"] == 0
     assert integration["outputs"][0]["resident_integration_dispatch"] == "fused_matrix"
     assert integration["outputs"][0]["resident_integration_dispatch_requested"] == "auto"
     assert resident_registration["triangle_fused_matrix_deferred"] is True
