@@ -1451,7 +1451,7 @@ def build_windows_release_matrix(
     release_decision_json: str | Path,
     acceptance_audit_json: str | Path | None = None,
     default_promotion_manifest_json: str | Path | None = None,
-    default_runtime_preset: str = "throughput-v1",
+    default_runtime_preset: str = "throughput-v3-io",
     required_cuda_packages: tuple[str, ...] = ("cuda13", "cuda12", "cuda11"),
     require_cuda: bool = True,
     require_default_change_ready: bool = True,
@@ -3063,8 +3063,8 @@ def build_windows_release_matrix(
         ),
         _check(
             "default_runtime_preset",
-            default_runtime_preset == "throughput-v1",
-            {"actual": default_runtime_preset, "required": "throughput-v1"},
+            default_runtime_preset == "throughput-v3-io",
+            {"actual": default_runtime_preset, "required": "throughput-v3-io"},
         ),
         _check(
             "runtime_repeat_ratio_within_release_bound",

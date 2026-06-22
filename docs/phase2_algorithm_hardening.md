@@ -11462,6 +11462,76 @@ Completed in Gate446:
   - compare:
     `C:\glass_runs\phase2_s2_gate499_no_coverage_scratch_ab_real\compare\gate499_vs_wbpp_scaled_no_coverage.json`.
 
+### S2-Gate 500: Resident v3 I/O Preset Default
+
+- Returned to the substantive Phase 2 performance path after the C: space
+  check. C: had about `436.84 GB` free; the project tree was not the pressure
+  point, and the largest reclaimable items were historical
+  `C:\glass_runs` evidence directories, so no audit artifacts were deleted.
+- Completed:
+  - promoted the resident CUDA default runtime preset from `throughput-v1` to
+    `throughput-v3-io`;
+  - kept explicit `--resident-runtime-preset throughput-v1` as the lower-memory
+    fallback schedule;
+  - updated CLI help, benchmark-contract preset artifact matching, default
+    promotion metadata, Windows release-matrix metadata, and tests so the new
+    default is auditable from both `run_timing.json` and
+    `resident_io_pipeline`;
+  - did not change calibration math, registration math, warp interpolation,
+    winsorized rejection, frame admission, output dimensions, or master pixels.
+- Same-window real 200-light scheduling A/B:
+  - control v1 run 1: `7.616734 s`;
+  - control v1 run 2: `7.604248 s`;
+  - explicit v3-io run 1: `6.813073 s`;
+  - explicit v3-io run 2: `6.788299 s`;
+  - average v1: `7.610491 s`;
+  - average v3-io: `6.800686 s`;
+  - average improvement: about `10.64%`;
+  - read-wait average changed from about `2.289033 s` to `0.978885 s`;
+  - prefetch slot blocking changed from `70` to `31`;
+  - pinned host ring increased from about `1.378 GiB` to `3.675 GiB`.
+- Default-route real 200-light validation after the code change:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate500_io_prefetch_ab_real\runs\default_v3_io_after_code`;
+  - no `--resident-runtime-preset` was passed;
+  - `run_timing.json` recorded `resident_runtime_preset=throughput-v3-io`;
+  - `resident_io_pipeline` recorded `prefetch_frames=32`,
+    `prefetch_workers=12`, `calibration_batch_requested_frames=16`,
+    `calibration_wave_requested_frames=4`, and
+    `prefetch_fill_blocked_no_slot_count=31`;
+  - run-timing total: `7.274755600024946 s`;
+  - conservative shell wall used in the compare report: `7.631 s`;
+  - WBPP black-box elapsed time remains `1092.541 s`;
+  - speedup versus WBPP is `150.184x` by GLASS run timing and `143.171x`
+    by conservative shell wall.
+- Numerical validation:
+  - default v3-io versus Gate499 master: bitwise equal, RMS/p99/max all `0.0`,
+    NaN mask equal;
+  - default v3-io versus explicit v3-io master: bitwise equal, RMS/p99/max all
+    `0.0`, NaN mask equal;
+  - explicit v3-io versus same-window v1 control master: bitwise equal,
+    RMS/p99/max all `0.0`, NaN mask equal;
+  - full-frame/no-coverage WBPP compare:
+    RMS `0.012336290253351909`, p99 absolute difference
+    `0.0007338253874331693`, shape match `true`.
+- Interpretation:
+  - this is a resident I/O/upload/calibration scheduling optimization. It uses
+    more host pinned memory to keep the GPU-fed resident path closer to its
+    current speed limit;
+  - output pixels are unchanged because the preset only changes prefetch,
+    pinned-ring H2D, batch size, and callback release scheduling;
+  - the next performance work should continue inside resident registration and
+    warp orchestration, where CUDA work is still launched through many
+    per-frame control steps.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_500_status.md`;
+  - real A/B root:
+    `C:\glass_runs\phase2_s2_gate500_io_prefetch_ab_real`;
+  - GLASS internal diff:
+    `C:\glass_runs\phase2_s2_gate500_io_prefetch_ab_real\compare\gate500_glass_internal_diffs.json`;
+  - WBPP compare:
+    `C:\glass_runs\phase2_s2_gate500_io_prefetch_ab_real\compare\gate500_default_v3_vs_wbpp.json`.
+
 ## Gate Rules
 
 Each gate requires:

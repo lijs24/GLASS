@@ -327,7 +327,7 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_release_mode": "callback_queue",
     },
 }
-DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v1"
+DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v3-io"
 DEFAULT_MEMORY_MODE = "resident"
 FALLBACK_MEMORY_MODE = "tile"
 DEFAULT_UNTIL_STAGE = "integration"
@@ -4671,8 +4671,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=sorted(RESIDENT_RUNTIME_PRESETS),
         default=DEFAULT_RESIDENT_RUNTIME_PRESET,
         help=(
-            "resident runtime scheduling preset; throughput-v1 is the default promoted by Gate180 and "
-            "applies prefetch/H2D/calibration settings unless an individual option is explicitly provided; "
+            "resident runtime scheduling preset; throughput-v3-io is the default high-throughput "
+            "I/O/upload/calibration schedule unless an individual option is explicitly provided; "
+            "throughput-v1 remains available as the lower-memory fallback schedule; "
             "throughput-v2-fused adds resident integration auto dispatch as a non-default A/B candidate; "
             "use manual for the legacy conservative schedule"
         ),
@@ -5153,10 +5154,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=sorted(RESIDENT_RUNTIME_PRESETS),
         default=DEFAULT_RESIDENT_RUNTIME_PRESET,
         help=(
-            "resident runtime scheduling preset for the audit run; throughput-v1 is the default promoted by "
-            "Gate180 and applies prefetch/H2D/calibration settings unless an individual option is explicitly "
-            "provided; throughput-v2-fused adds resident integration auto dispatch as a non-default A/B "
-            "candidate; use manual for the legacy conservative schedule"
+            "resident runtime scheduling preset for the audit run; throughput-v3-io is the default "
+            "high-throughput I/O/upload/calibration schedule unless an individual option is explicitly "
+            "provided; throughput-v1 remains available as the lower-memory fallback schedule; "
+            "throughput-v2-fused adds resident integration auto dispatch as a non-default A/B candidate; "
+            "use manual for the legacy conservative schedule"
         ),
     )
     audit.add_argument(

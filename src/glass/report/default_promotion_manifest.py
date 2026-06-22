@@ -1761,7 +1761,7 @@ def build_default_promotion_manifest(
     doctor_json: str | Path | None = None,
     default_memory_mode: str = "resident",
     fallback_memory_mode: str = "tile",
-    default_runtime_preset: str = "throughput-v1",
+    default_runtime_preset: str = "throughput-v3-io",
     integration_engine: str = "cuda_resident_stack",
     min_runtime_runs: int = 2,
     max_runtime_ratio: float = 1.25,
@@ -2393,8 +2393,8 @@ def build_default_promotion_manifest(
         ),
         _check(
             "default_runtime_preset_candidate",
-            default_runtime_preset == "throughput-v1",
-            {"actual": default_runtime_preset, "required": "throughput-v1"},
+            default_runtime_preset == "throughput-v3-io",
+            {"actual": default_runtime_preset, "required": "throughput-v3-io"},
         ),
         _check(
             "integration_engine_candidate",

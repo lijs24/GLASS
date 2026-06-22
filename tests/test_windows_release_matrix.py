@@ -788,7 +788,7 @@ def _default_promotion(
             "default_candidate": {
                 "memory_mode": "resident",
                 "fallback_memory_mode": "tile",
-                "resident_runtime_preset": "throughput-v1",
+                "resident_runtime_preset": "throughput-v3-io",
                 "integration_engine": "cuda_resident_stack",
             },
             "default_route_acceptance": {
@@ -1537,7 +1537,7 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert payload["status"] == "release_matrix_ready"
     assert payload["current_machine"]["primary_package"] == "cuda13"
     assert payload["default_promotion_manifest"]["status"] == "default_promotion_ready"
-    assert payload["default_runtime"]["resident_runtime_preset"] == "throughput-v1"
+    assert payload["default_runtime"]["resident_runtime_preset"] == "throughput-v3-io"
     assert checks["default_promotion_manifest_present"] is True
     assert checks["default_promotion_manifest_ready"] is True
     assert checks["default_promotion_default_route_passed"] is True

@@ -126,22 +126,20 @@ def test_resident_runtime_preset_throughput_v3_io_applies_probe_values() -> None
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
 
 
-def test_resident_runtime_preset_defaults_to_throughput_v1() -> None:
+def test_resident_runtime_preset_defaults_to_throughput_v3_io() -> None:
     args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
 
     _apply_resident_runtime_preset(args)
 
-    assert args.resident_runtime_preset == "throughput-v1"
-    assert args.resident_prefetch_frames == 12
-    assert args.resident_prefetch_workers == 7
+    assert args.resident_runtime_preset == "throughput-v3-io"
+    assert args.resident_prefetch_frames == 32
+    assert args.resident_prefetch_workers == 12
     assert args.resident_h2d_mode == "pinned_ring"
+    assert args.resident_calibration_batch_frames == 16
+    assert args.resident_calibration_wave_frames == 4
     assert args.resident_calibration_release_mode == "callback_queue"
     assert args.resident_integration_dispatch == "stack"
-    assert args._resident_runtime_preset_effective["preset"] == "throughput-v1"
-    assert (
-        args._resident_runtime_preset_effective["applied"]["resident_integration_dispatch"]
-        == "stack"
-    )
+    assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
 
 
 def test_resident_runtime_preset_manual_keeps_legacy_values() -> None:

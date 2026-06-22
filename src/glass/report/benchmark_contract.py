@@ -212,6 +212,17 @@ def _resident_runtime_preset_expectations(preset: str) -> dict[str, Any] | None:
             "calibration_release_mode_requested": "callback_queue",
             "calibration_release_mode_effective": "callback_queue",
         }
+    if preset == "throughput-v3-io":
+        return {
+            "h2d_mode": "pinned_ring",
+            "prefetch_frames": 32,
+            "prefetch_workers": 12,
+            "calibration_batch_requested_frames": 16,
+            "calibration_batch_requested_streams": 4,
+            "calibration_wave_requested_frames": 4,
+            "calibration_release_mode_requested": "callback_queue",
+            "calibration_release_mode_effective": "callback_queue",
+        }
     if preset == "manual":
         return {
             "h2d_mode": "pageable",
