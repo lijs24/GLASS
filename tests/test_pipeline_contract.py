@@ -25,6 +25,7 @@ def _write_resident_pipeline_run(
     sample_closure_status: str | None = None,
     omit_rejection_semantics: bool = False,
     resident_artifact_legacy_rejection_semantics: bool = False,
+    active_frame_count: int = 3,
 ) -> None:
     integration_dir = path / "integration"
     integration_dir.mkdir(parents=True)
@@ -60,7 +61,7 @@ def _write_resident_pipeline_run(
         "source_schema": "resident_dq_coverage_provenance",
         "stage": "integration",
         "engine": "cuda_resident_stack",
-        "active_frame_count": 3,
+        "active_frame_count": active_frame_count,
         "source_terms": source_terms,
         "rejected_samples": 3,
         "output_dq_summary": dq_summary,
@@ -87,7 +88,7 @@ def _write_resident_pipeline_run(
         "dq_summary": dq_summary,
         "dq_coverage_provenance": {
             "available": True,
-            "active_frame_count": 3,
+            "active_frame_count": active_frame_count,
             "geometric_frame_count_matches_active": True,
             "rejected_sample_count": 3.0,
             "rejected_sample_count_source": "low_high_rejection_maps",
@@ -96,7 +97,7 @@ def _write_resident_pipeline_run(
         "dq_provenance_summary": provenance_summary,
         "geometric_warp_coverage": {
             "available": True,
-            "frame_count": 3,
+            "frame_count": active_frame_count,
             "frame_count_matches_active": True,
         },
         "output_map_policy": {
@@ -148,6 +149,89 @@ def _write_resident_pipeline_run(
                 ],
             },
         )
+
+
+def _write_resident_source_dq_execution_fixture(path: Path, *, passed: bool = True) -> None:
+    input_invalid = 2
+    applied_invalid = 2 if passed else 1
+    group_checks = [
+        {"name": "source_dq_summary_passed", "passed": passed, "details": {"passed": passed}},
+        {
+            "name": "invalid_samples_applied",
+            "passed": passed,
+            "details": {
+                "input_invalid_samples": input_invalid,
+                "applied_invalid_samples": applied_invalid,
+            },
+        },
+        {"name": "no_unsupported_frames", "passed": True, "details": {"unsupported_frame_count": 0}},
+        {"name": "native_method_available", "passed": True, "details": {"native_missing_frame_count": 0}},
+        {
+            "name": "no_calibrated_dq_disk_cache_required",
+            "passed": True,
+            "details": {
+                "materializes_calibrated_dq_cache": False,
+                "execution_route": "resident_in_memory_mask_streaming",
+            },
+        },
+    ]
+    write_json(
+        path / "resident_source_dq_execution.json",
+        {
+            "artifact": "resident_source_dq_execution",
+            "schema_version": 1,
+            "summary": {
+                "schema_version": 1,
+                "status": "passed" if passed else "failed",
+                "passed": passed,
+                "group_count": 1,
+                "frame_count": 3,
+                "frame_with_invalid_count": 1,
+                "applied_frame_count": 1,
+                "input_invalid_samples_before_rejection": input_invalid,
+                "applied_invalid_samples": applied_invalid,
+                "input_flagged_samples": input_invalid,
+                "input_nonfinite_samples": 0,
+                "materializes_calibrated_dq_cache": False,
+                "execution_routes": ["resident_in_memory_mask_streaming"],
+                "estimated_peak_batch_mask_bytes": 4,
+                "estimated_all_frame_mask_bytes": 12,
+            },
+            "groups": [
+                {
+                    "schema_version": 1,
+                    "artifact": "resident_source_dq_execution_group",
+                    "filter": "H",
+                    "status": "passed" if passed else "failed",
+                    "passed": passed,
+                    "execution_route": "resident_in_memory_mask_streaming",
+                    "native_method": "ResidentCalibratedStack.apply_invalid_mask_frame",
+                    "native_methods": ["ResidentCalibratedStack.apply_invalid_mask_frame"],
+                    "materializes_calibrated_dq_cache": False,
+                    "frame_count": 3,
+                    "height": 2,
+                    "width": 2,
+                    "frame_with_invalid_count": 1,
+                    "applied_frame_count": 1,
+                    "input_invalid_samples_before_rejection": input_invalid,
+                    "applied_invalid_samples": applied_invalid,
+                    "input_flagged_samples": input_invalid,
+                    "input_nonfinite_samples": 0,
+                    "source_dq_flag_counts": {"hot_pixel": input_invalid},
+                    "source_counts": {"explicit_sidecar": 1},
+                    "status_counts": {"applied": 1},
+                    "streaming_memory": {
+                        "invalid_mask_bytes_per_pixel": 1,
+                        "estimated_per_frame_mask_bytes": 4,
+                        "batch_frames": 1,
+                        "estimated_batch_mask_bytes": 4,
+                        "estimated_all_frame_mask_bytes": 12,
+                    },
+                    "checks": group_checks,
+                }
+            ],
+        },
+    )
 
 
 def _write_frame_accounting_fixture(path: Path, *, conflict: bool = False) -> None:
@@ -496,6 +580,43 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["required"] is True
     assert resident_contract["passed"] is True
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
+
+
+def test_pipeline_contract_passes_resident_source_dq_execution_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    _write_resident_source_dq_execution_fixture(run)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    source_dq = audit["resident_source_dq_execution"]
+
+    assert audit["passed"] is True
+    assert checks["resident_source_dq_execution_contract"]["passed"] is True
+    assert checks["resident_source_dq_execution_contract"]["evidence"]["exists"] is True
+    assert source_dq["status"] == "passed"
+    assert source_dq["summary"]["input_invalid_samples_before_rejection"] == 2
+    assert source_dq["summary"]["applied_invalid_samples"] == 2
+    assert source_dq["groups"][0]["execution_route"] == "resident_in_memory_mask_streaming"
+    assert source_dq["groups"][0]["materializes_calibrated_dq_cache"] is False
+    assert audit["artifacts"]["resident_source_dq_execution"]["exists"] is True
+
+
+def test_pipeline_contract_fails_resident_source_dq_execution_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    _write_resident_source_dq_execution_fixture(run, passed=False)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    evidence = checks["resident_source_dq_execution_contract"]["evidence"]
+
+    assert audit["passed"] is False
+    assert checks["resident_source_dq_execution_contract"]["passed"] is False
+    assert evidence["status"] == "failed"
+    assert evidence["failed_groups"][0]["filter"] == "H"
+    assert evidence["failed_checks"][0]["check"] == "source_dq_summary_passed"
+    assert any(item["check"] == "invalid_samples_applied" for item in evidence["failed_checks"])
 
 
 def test_pipeline_contract_passes_frame_accounting_admission_consistency(tmp_path: Path):
@@ -910,6 +1031,22 @@ def test_html_report_surfaces_resident_result_contract_failures(tmp_path: Path):
     assert "cuda_resident_stack" in text
 
 
+def test_html_report_surfaces_resident_source_dq_execution_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    _write_resident_source_dq_execution_fixture(run)
+    audit = build_pipeline_contract_audit(run)
+    report = tmp_path / "report.html"
+
+    write_html_report(report, pipeline_contract=audit, run_root=run)
+
+    text = report.read_text(encoding="utf-8")
+    assert "resident source-DQ execution rows" in text
+    assert "source_dq_execution" in text
+    assert "resident_in_memory_mask_streaming" in text
+    assert "ResidentCalibratedStack.apply_invalid_mask_frame" in text
+
+
 def test_pipeline_contract_pixel_verification_reports_resident_rejection_sample_accounting(tmp_path: Path):
     run = tmp_path / "run"
     _write_resident_pipeline_run(run)
@@ -1171,6 +1308,25 @@ def test_pipeline_contract_fails_resident_result_contract(tmp_path: Path):
         item["name"]: item for item in audit["integration"]["outputs"][0]["resident_result_contract"]["contract"]["checks"]
     }
     assert resident_checks["source_terms_present"]["passed"] is False
+
+
+def test_pipeline_contract_fails_degenerate_resident_active_frame_count(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run, active_frame_count=1)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    resident_checks = {
+        item["name"]: item for item in audit["integration"]["outputs"][0]["resident_result_contract"]["contract"]["checks"]
+    }
+
+    assert audit["passed"] is False
+    assert checks["integration_resident_result_contract"]["passed"] is False
+    assert resident_checks["active_frame_count_valid"]["passed"] is True
+    assert resident_checks["active_frame_count_not_degenerate"]["passed"] is False
+    assert resident_checks["active_frame_count_not_degenerate"]["evidence"][
+        "min_required_active_frame_count"
+    ] == 2
 
 
 def test_pipeline_contract_fails_missing_maps_and_crop_records(tmp_path: Path):

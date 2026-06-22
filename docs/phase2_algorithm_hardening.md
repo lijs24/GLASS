@@ -10895,6 +10895,99 @@ Completed in Gate446:
   - report:
     `C:\glass_runs\phase2_s2_gate489_runtime_default_stack_ab_real\reports\default_runtime_report.html`.
 
+### S2-Gate 490: Post-Cleanup Real 200-Light A/B Regression
+
+- Return to the real M38 H-alpha 200-light A/B after reclaiming generated run
+  space from C: without deleting inputs, plans, WBPP black-box outputs, or shared
+  master caches.
+- Completed:
+  - removed only old generated `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_*`
+    output directories, reclaiming `268.08 GiB`;
+  - reran the default resident CUDA stack route after cleanup;
+  - reran pixel-verifying pipeline contract, StackEngine contract, GLASS-vs-GLASS
+    drift compare, GLASS-vs-WBPP coverage-masked compare, speedup summary, and
+    acceptance audit.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate490_post_cleanup_ab_real\runs\default_runtime_stack`;
+  - total runtime: `19.786300399980973 s`;
+  - active frames: `193 / 200`;
+  - GLASS-vs-Gate489 master difference: RMS/p99/max all `0.0`;
+  - GLASS-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`, coverage fraction
+    `0.960532609259836`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - GLASS speedup versus WBPP: `55.21704300016847x`;
+  - acceptance audit passed with the real-data frame minima, active-frame,
+    speedup, coverage, RMS, p99, StackEngine, and pipeline-contract checks.
+- Interpretation:
+  - the repository and benchmark workspace can be cleaned without invalidating
+    the current green 200-light evidence chain;
+  - the resident default stack path remained numerically identical to Gate489.
+- Artifacts:
+  - checkpoint:
+    `runs/checkpoints/s2_gate_490_status.md`;
+  - acceptance audit:
+    `C:\glass_runs\phase2_s2_gate490_post_cleanup_ab_real\acceptance\gate490_post_cleanup_acceptance_audit.json`;
+  - speedup summary:
+    `C:\glass_runs\phase2_s2_gate490_post_cleanup_ab_real\speedup\gate490_vs_wbpp_speedup_with_compare.json`;
+  - report:
+    `C:\glass_runs\phase2_s2_gate490_post_cleanup_ab_real\reports\gate490_post_cleanup_report.html`.
+
+### S2-Gate 491: Resident Source-DQ Degenerate Active-Frame Guard
+
+- Harden the DQ/source-mask contract while returning immediately to the real
+  200-light A/B mainline. A diagnostic `cosmetic_cuda` source-DQ run showed an
+  important failure mode: a global light-frame cosmetic threshold can mask real
+  stars, causing registration to reject `199 / 200` frames and leaving a
+  scientifically meaningless single-frame integration that older contracts still
+  accepted.
+- Completed:
+  - added a resident source-DQ execution contract to `pipeline-contract` and the
+    HTML report, including streaming route, summary status, invalid-sample
+    closure, and calibrated-DQ-cache materialization evidence;
+  - added `active_frame_count_not_degenerate` to the resident result contract:
+    multi-frame resident integrations must keep at least two active frames
+    unless the input itself is single-frame;
+  - added regression tests proving the new contract fails a multi-frame
+    resident output collapsed to one active frame;
+  - verified that the Gate490 default run still passes the new guard, while the
+    diagnostic `cosmetic_cuda` source-DQ run now fails specifically on
+    `active_frame_count_not_degenerate`;
+  - reran the current-code default resident CUDA 200-light A/B.
+- Real 200-light current-code validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate491_source_dq_contract_ab_real\runs\default_runtime_stack_ab_current`;
+  - total runtime: `19.793096599983983 s`;
+  - active frames: `193 / 200`;
+  - GLASS-vs-Gate490 master difference: RMS/p99/max all `0.0`;
+  - GLASS-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`, coverage fraction
+    `0.960532609259836`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - GLASS speedup versus WBPP: `55.19808355812724x`;
+  - pixel-verifying pipeline contract, StackEngine contract, speedup summary,
+    acceptance audit, and HTML report all passed for the default A/B run.
+- Interpretation:
+  - source-DQ is now better audited: execution evidence can pass independently,
+    but a source-DQ policy that destroys registration cannot be mistaken for a
+    valid multi-frame stack;
+  - the production/default route remains unaffected and continues to meet the
+    real 200-light speed and result-consistency thresholds;
+  - opt-in light-frame `cosmetic_cuda` source-DQ needs star-aware masking or a
+    more conservative detector before it can be promoted beyond diagnostic use.
+- Artifacts:
+  - default A/B acceptance:
+    `C:\glass_runs\phase2_s2_gate491_source_dq_contract_ab_real\acceptance\ab_current_acceptance_audit.json`;
+  - default A/B speedup:
+    `C:\glass_runs\phase2_s2_gate491_source_dq_contract_ab_real\speedup\ab_current_vs_wbpp_speedup_with_compare.json`;
+  - default A/B report:
+    `C:\glass_runs\phase2_s2_gate491_source_dq_contract_ab_real\reports\ab_current_report.html`;
+  - source-DQ diagnostic failure contract:
+    `C:\glass_runs\phase2_s2_gate491_source_dq_contract_ab_real\contracts\cosmetic_cuda_pipeline_contract_with_degenerate_guard.json`.
+
 ## Gate Rules
 
 Each gate requires:

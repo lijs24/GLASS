@@ -1291,6 +1291,122 @@ def _frame_accounting_admission_state(frame_accounting: dict[str, Any]) -> dict[
     }
 
 
+def _resident_source_dq_execution_state(run_root: Path) -> dict[str, Any]:
+    path = run_root / "resident_source_dq_execution.json"
+    if not path.exists():
+        return {
+            "path": str(path),
+            "exists": False,
+            "required": False,
+            "status": "not_present",
+            "passed": True,
+            "summary": {},
+            "groups": [],
+            "failed_groups": [],
+            "check_count": 0,
+            "failed_checks": [],
+        }
+
+    payload = _load_json_object(path)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    raw_groups = payload.get("groups") if isinstance(payload.get("groups"), list) else []
+    groups = [group for group in raw_groups if isinstance(group, dict)]
+    failed_groups: list[dict[str, Any]] = []
+    failed_checks: list[dict[str, Any]] = []
+    check_count = 0
+    for group in groups:
+        group_failures: list[str] = []
+        for check in group.get("checks") or []:
+            if not isinstance(check, dict):
+                continue
+            check_count += 1
+            if not check.get("passed"):
+                name = str(check.get("name") or "unknown")
+                group_failures.append(name)
+                failed_checks.append(
+                    {
+                        "filter": group.get("filter"),
+                        "check": name,
+                        "details": check.get("details") if isinstance(check.get("details"), dict) else {},
+                    }
+                )
+        input_invalid = _optional_rounded_int(group.get("input_invalid_samples_before_rejection"))
+        applied_invalid = _optional_rounded_int(group.get("applied_invalid_samples"))
+        if input_invalid is not None and applied_invalid is not None and input_invalid != applied_invalid:
+            group_failures.append("invalid_samples_not_fully_applied")
+            failed_checks.append(
+                {
+                    "filter": group.get("filter"),
+                    "check": "invalid_samples_not_fully_applied",
+                    "details": {
+                        "input_invalid_samples_before_rejection": input_invalid,
+                        "applied_invalid_samples": applied_invalid,
+                    },
+                }
+            )
+        if group.get("materializes_calibrated_dq_cache") is True:
+            group_failures.append("materializes_calibrated_dq_cache")
+            failed_checks.append(
+                {
+                    "filter": group.get("filter"),
+                    "check": "materializes_calibrated_dq_cache",
+                    "details": {"materializes_calibrated_dq_cache": True},
+                }
+            )
+        if group.get("passed") is not True or group_failures:
+            failed_groups.append(
+                {
+                    "filter": group.get("filter"),
+                    "status": group.get("status"),
+                    "failures": group_failures,
+                }
+            )
+
+    malformed = not payload or payload.get("artifact") != "resident_source_dq_execution"
+    summary_passed = summary.get("passed") is True
+    groups_present = bool(groups)
+    passed = (not malformed) and summary_passed and groups_present and not failed_groups and not failed_checks
+    return {
+        "path": str(path),
+        "exists": True,
+        "required": True,
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "artifact": payload.get("artifact"),
+        "summary": summary,
+        "groups": [
+            {
+                "filter": group.get("filter"),
+                "status": group.get("status"),
+                "passed": group.get("passed"),
+                "execution_route": group.get("execution_route"),
+                "native_method": group.get("native_method"),
+                "native_methods": group.get("native_methods"),
+                "frame_count": group.get("frame_count"),
+                "frame_with_invalid_count": group.get("frame_with_invalid_count"),
+                "applied_frame_count": group.get("applied_frame_count"),
+                "input_invalid_samples_before_rejection": group.get("input_invalid_samples_before_rejection"),
+                "applied_invalid_samples": group.get("applied_invalid_samples"),
+                "input_flagged_samples": group.get("input_flagged_samples"),
+                "input_nonfinite_samples": group.get("input_nonfinite_samples"),
+                "source_dq_flag_counts": group.get("source_dq_flag_counts"),
+                "source_counts": group.get("source_counts"),
+                "status_counts": group.get("status_counts"),
+                "materializes_calibrated_dq_cache": group.get("materializes_calibrated_dq_cache"),
+                "streaming_memory": group.get("streaming_memory"),
+                "check_count": len([item for item in group.get("checks") or [] if isinstance(item, dict)]),
+            }
+            for group in groups
+        ],
+        "failed_groups": failed_groups,
+        "check_count": check_count,
+        "failed_checks": failed_checks,
+        "malformed": malformed,
+        "summary_passed": summary_passed,
+        "groups_present": groups_present,
+    }
+
+
 def build_pipeline_contract_audit(
     run_dir: str | Path,
     *,
@@ -1338,6 +1454,7 @@ def build_pipeline_contract_audit(
     integration_map_rows = _integration_map_rows(integration, run_root)
     integration_engine_policy = _integration_engine_policy_state(integration, integration_rows)
     frame_accounting_admission = _frame_accounting_admission_state(frame_accounting)
+    resident_source_dq_execution = _resident_source_dq_execution_state(run_root)
     stack_engine_runtime_default = _stack_engine_runtime_default_state(
         calibration_master_rows=calibration_master_rows,
         integration_rows=integration_rows,
@@ -1464,6 +1581,25 @@ def build_pipeline_contract_audit(
                 ],
             },
             "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
+        ),
+        _check(
+            "resident_source_dq_execution_contract",
+            bool(resident_source_dq_execution["passed"]),
+            {
+                "exists": resident_source_dq_execution["exists"],
+                "required": resident_source_dq_execution["required"],
+                "status": resident_source_dq_execution["status"],
+                "summary_status": (resident_source_dq_execution["summary"] or {}).get("status"),
+                "summary_passed": resident_source_dq_execution.get("summary_passed"),
+                "group_count": len(resident_source_dq_execution["groups"]),
+                "check_count": resident_source_dq_execution["check_count"],
+                "failed_groups": resident_source_dq_execution["failed_groups"],
+                "failed_checks": resident_source_dq_execution["failed_checks"],
+                "materializes_calibrated_dq_cache": (
+                    resident_source_dq_execution["summary"] or {}
+                ).get("materializes_calibrated_dq_cache"),
+            },
+            "When resident source-DQ execution evidence is present, invalid samples must be applied in memory and the contract must pass.",
         ),
         _check(
             "integration_sample_accounting_closure",
@@ -1784,6 +1920,12 @@ def build_pipeline_contract_audit(
                 "path": str(frame_accounting_path),
                 "exists": frame_accounting_path.exists(),
             },
+            "resident_source_dq_execution": {
+                "path": resident_source_dq_execution["path"],
+                "exists": resident_source_dq_execution["exists"],
+                "status": resident_source_dq_execution["status"],
+                "passed": resident_source_dq_execution["passed"],
+            },
         },
         "calibration": {
             "artifact_path": str(calibration_path),
@@ -1825,6 +1967,7 @@ def build_pipeline_contract_audit(
             "engine_policy": integration_engine_policy,
         },
         "frame_accounting": frame_accounting_admission,
+        "resident_source_dq_execution": resident_source_dq_execution,
         "stack_engine_runtime_default": stack_engine_runtime_default,
         "pixel_verification": {
             "enabled": bool(pixel_verify),
@@ -1919,6 +2062,30 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
             f"{conflict.get('frame_id')}: status `{conflict.get('final_status')}`, "
             f"weight `{conflict.get('integration_weight')}`, "
             f"conflicts `{conflict.get('integration_conflicts')}`"
+        )
+    source_dq = audit.get("resident_source_dq_execution") or {}
+    summary = source_dq.get("summary") if isinstance(source_dq.get("summary"), dict) else {}
+    lines.extend(["", "## Resident Source-DQ Execution", ""])
+    lines.append(
+        "- "
+        f"exists `{source_dq.get('exists')}`, "
+        f"status `{source_dq.get('status')}`, "
+        f"passed `{source_dq.get('passed')}`, "
+        f"groups `{len(source_dq.get('groups') or [])}`, "
+        f"invalid `{summary.get('input_invalid_samples_before_rejection')}`, "
+        f"applied `{summary.get('applied_invalid_samples')}`, "
+        f"cache `{summary.get('materializes_calibrated_dq_cache')}`"
+    )
+    for group in source_dq.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        lines.append(
+            "- "
+            f"{group.get('filter')}: route `{group.get('execution_route')}`, "
+            f"status `{group.get('status')}`, "
+            f"invalid `{group.get('input_invalid_samples_before_rejection')}`, "
+            f"applied `{group.get('applied_invalid_samples')}`, "
+            f"cache `{group.get('materializes_calibrated_dq_cache')}`"
         )
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)

@@ -1577,6 +1577,8 @@ def _pipeline_contract_summary_rows(contract: dict[str, Any] | None) -> list[dic
     artifacts = contract.get("artifacts") if isinstance(contract.get("artifacts"), dict) else {}
     pixel = contract.get("pixel_verification") if isinstance(contract.get("pixel_verification"), dict) else {}
     calibration = contract.get("calibration") if isinstance(contract.get("calibration"), dict) else {}
+    source_dq = contract.get("resident_source_dq_execution")
+    source_dq = source_dq if isinstance(source_dq, dict) else {}
     return [
         {
             "status": contract.get("status"),
@@ -1589,6 +1591,11 @@ def _pipeline_contract_summary_rows(contract: dict[str, Any] | None) -> list[dic
             "warp_artifact": (artifacts.get("warp") or {}).get("exists"),
             "local_norm_artifact": (artifacts.get("local_norm") or {}).get("exists"),
             "integration_artifact": (artifacts.get("integration") or {}).get("exists"),
+            "source_dq_execution": source_dq.get("status"),
+            "source_dq_groups": len(source_dq.get("groups") or []),
+            "source_dq_invalid": (source_dq.get("summary") or {}).get(
+                "input_invalid_samples_before_rejection"
+            ),
             "pixel_verification": pixel.get("enabled"),
             "pixel_tile_size": pixel.get("tile_size"),
             "check_count": len(contract.get("checks") or []),
@@ -1680,6 +1687,55 @@ def _pipeline_contract_resident_result_failure_rows(
                     ),
                 }
             )
+    return rows
+
+
+def _pipeline_contract_source_dq_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    source_dq = (contract or {}).get("resident_source_dq_execution")
+    if not isinstance(source_dq, dict):
+        return []
+    summary = source_dq.get("summary") if isinstance(source_dq.get("summary"), dict) else {}
+    rows = [
+        {
+            "scope": "summary",
+            "filter": None,
+            "exists": source_dq.get("exists"),
+            "status": source_dq.get("status"),
+            "passed": source_dq.get("passed"),
+            "execution_route": ", ".join(str(item) for item in summary.get("execution_routes") or []),
+            "native_method": summary.get("native_method"),
+            "frame_count": summary.get("frame_count"),
+            "invalid_samples": summary.get("input_invalid_samples_before_rejection"),
+            "applied_invalid_samples": summary.get("applied_invalid_samples"),
+            "flagged_samples": summary.get("input_flagged_samples"),
+            "nonfinite_samples": summary.get("input_nonfinite_samples"),
+            "frame_with_invalid_count": summary.get("frame_with_invalid_count"),
+            "cache": summary.get("materializes_calibrated_dq_cache"),
+            "failed": source_dq.get("failed_groups"),
+        }
+    ]
+    for group in source_dq.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        rows.append(
+            {
+                "scope": "group",
+                "filter": group.get("filter"),
+                "exists": True,
+                "status": group.get("status"),
+                "passed": group.get("passed"),
+                "execution_route": group.get("execution_route"),
+                "native_method": group.get("native_method"),
+                "frame_count": group.get("frame_count"),
+                "invalid_samples": group.get("input_invalid_samples_before_rejection"),
+                "applied_invalid_samples": group.get("applied_invalid_samples"),
+                "flagged_samples": group.get("input_flagged_samples"),
+                "nonfinite_samples": group.get("input_nonfinite_samples"),
+                "frame_with_invalid_count": group.get("frame_with_invalid_count"),
+                "cache": group.get("materializes_calibrated_dq_cache"),
+                "failed": None,
+            }
+        )
     return rows
 
 
@@ -2406,6 +2462,7 @@ def write_html_report(
     pipeline_contract_resident_result_failure_rows = (
         _pipeline_contract_resident_result_failure_rows(pipeline_contract)
     )
+    pipeline_contract_source_dq_rows = _pipeline_contract_source_dq_rows(pipeline_contract)
     pipeline_contract_calibration_master_rows = _pipeline_contract_calibration_master_rows(pipeline_contract)
     pipeline_contract_calibrated_light_rows = _pipeline_contract_calibrated_light_rows(pipeline_contract)
     pipeline_contract_map_rows = _pipeline_contract_map_rows(pipeline_contract)
@@ -2600,6 +2657,9 @@ def write_html_report(
   <p>resident result-contract failure rows expand failed checks from resident
   CUDA integration output contracts, including nested DQ/source-term failures.</p>
   {_limited_table(pipeline_contract_resident_result_failure_rows, label="pipeline contract resident result-contract failure rows", artifact="pipeline_contract JSON")}
+  <p>resident source-DQ execution rows prove source invalid samples were applied
+  in memory, without materializing a calibrated+DQ disk cache.</p>
+  {_limited_table(pipeline_contract_source_dq_rows, label="pipeline contract resident source-DQ execution rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_calibration_master_rows, label="pipeline contract calibration master rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_calibrated_light_rows, label="pipeline contract calibrated light rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_map_rows, label="pipeline contract map rows", artifact="pipeline_contract JSON")}

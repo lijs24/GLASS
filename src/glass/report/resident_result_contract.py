@@ -480,6 +480,7 @@ def _resident_output_contract(
         coverage_provenance.get("active_frame_count")
     )
     frame_count = _int_value(output.get("frame_count"))
+    min_required_active_frame_count = 2 if frame_count is not None and frame_count > 1 else 1
     map_rows = _map_rows(output, run_root, rejection=rejection)
     coverage_required = _map_required(output, "coverage", rejection=rejection)
     coverage_available = bool(coverage_provenance) and bool(coverage_provenance.get("available", True))
@@ -547,6 +548,19 @@ def _resident_output_contract(
             "active_frame_count_valid",
             active_frame_count is not None and active_frame_count > 0 and (frame_count is None or active_frame_count <= frame_count),
             {"active_frame_count": active_frame_count, "frame_count": frame_count},
+        ),
+        _check(
+            "active_frame_count_not_degenerate",
+            active_frame_count is not None and active_frame_count >= min_required_active_frame_count,
+            {
+                "active_frame_count": active_frame_count,
+                "frame_count": frame_count,
+                "min_required_active_frame_count": min_required_active_frame_count,
+                "reason": (
+                    "multi-frame resident integrations must not silently collapse to a single "
+                    "active frame; use a one-frame input if a single-frame diagnostic output is intended"
+                ),
+            },
         ),
         _check(
             "coverage_provenance_present",
