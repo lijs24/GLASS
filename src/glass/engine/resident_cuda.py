@@ -4302,6 +4302,7 @@ def run_resident_calibration_integration(
     resident_inline_source_dq: str = "off",
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
+    resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     resident_fits_read_mode: str = "astropy",
     resident_fits_read_mode_resolution: dict[str, Any] | None = None,
@@ -4318,6 +4319,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_inline_source_dq_hot_sigma must be positive")
     if resident_inline_source_dq_cold_sigma <= 0.0:
         raise ValueError("resident_inline_source_dq_cold_sigma must be positive")
+    if resident_inline_source_dq_max_invalid_fraction < 0.0:
+        raise ValueError("resident_inline_source_dq_max_invalid_fraction must be non-negative")
     if resident_winsorized_mode not in _RESIDENT_WINSORIZED_MODES:
         raise ValueError("resident_winsorized_mode must be fast_approx or hardened_cpu_parity")
     if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
@@ -4729,12 +4732,14 @@ def run_resident_calibration_integration(
                     stack_obj,
                     items=pending_items,
                     source=source,
+                    max_invalid_fraction=resident_inline_source_dq_max_invalid_fraction,
                 )
                 deferred_inline_cosmetic_cuda_stats["apply_s"] = (
                     float(deferred_inline_cosmetic_cuda_stats["apply_s"]) + perf_counter() - apply_start
                 )
+                applied_row_count = sum(1 for row in rows if bool(row.get("applied")))
                 deferred_inline_cosmetic_cuda_stats["applied_frame_count"] = (
-                    int(deferred_inline_cosmetic_cuda_stats["applied_frame_count"]) + len(rows)
+                    int(deferred_inline_cosmetic_cuda_stats["applied_frame_count"]) + applied_row_count
                 )
                 for row in rows:
                     row["application_order"] = "post_registration_pre_warp"
@@ -5231,6 +5236,7 @@ def run_resident_calibration_integration(
                                 stack,
                                 items=batch_threshold_apply_items,
                                 source="resident_calibrated_batch_input_cosmetic_cuda",
+                                max_invalid_fraction=resident_inline_source_dq_max_invalid_fraction,
                             )
                             for row in rows:
                                 row["application_order"] = "calibration_pre_registration"
@@ -5394,6 +5400,7 @@ def run_resident_calibration_integration(
                                     frame_id=str(frame["id"]),
                                     threshold_info=threshold_info,
                                     source="resident_calibrated_input_cosmetic_cuda",
+                                    max_invalid_fraction=resident_inline_source_dq_max_invalid_fraction,
                                 )
                                 row["application_order"] = "calibration_pre_registration"
                                 source_dq_rows.append(row)
@@ -9789,6 +9796,22 @@ def run_resident_calibration_integration(
                         ),
                         "resident_inline_source_dq_hot_sigma": float(resident_inline_source_dq_hot_sigma),
                         "resident_inline_source_dq_cold_sigma": float(resident_inline_source_dq_cold_sigma),
+                        "resident_inline_source_dq_max_invalid_fraction": float(
+                            resident_inline_source_dq_max_invalid_fraction
+                        ),
+                        "resident_inline_source_dq_high_fraction_guard_enabled": bool(
+                            resident_inline_source_dq == "cosmetic_cuda"
+                            and resident_inline_source_dq_max_invalid_fraction > 0.0
+                        ),
+                        "resident_inline_source_dq_high_fraction_skipped_frame_count": int(
+                            (source_dq_summary.get("status_counts") or {}).get(
+                                "skipped_high_invalid_fraction",
+                                0,
+                            )
+                        ),
+                        "resident_inline_source_dq_high_fraction_would_invalid_samples": int(
+                            sum(int(row.get("would_invalid_samples") or 0) for row in source_dq_rows)
+                        ),
                         "resident_inline_source_dq_materializes_cache": False,
                         "fits_backend_counts": fits_backend_counts,
                         "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,

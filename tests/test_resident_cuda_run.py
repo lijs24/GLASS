@@ -1957,6 +1957,8 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_source_dq_without_cache(t
             "2.0",
             "--resident-inline-source-dq-cold-sigma",
             "8.0",
+            "--resident-inline-source-dq-max-invalid-fraction",
+            "0.01",
             "--resident-runtime-preset",
             "manual",
             "--until-stage",
@@ -2046,6 +2048,8 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
             "2.0",
             "--resident-inline-source-dq-cold-sigma",
             "8.0",
+            "--resident-inline-source-dq-max-invalid-fraction",
+            "0.01",
             "--resident-runtime-preset",
             "manual",
             "--until-stage",
@@ -2102,10 +2106,15 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
         "resident_calibrated_frame"
     )
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector_execution"] == "cuda_threshold_apply"
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_max_invalid_fraction"] == pytest.approx(0.01)
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_high_fraction_guard_enabled"] is True
     assert strategy["inline_source_dq"]["mode"] == "cosmetic_cuda"
     assert strategy["inline_source_dq"]["detector"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
     assert strategy["inline_source_dq"]["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
+    assert strategy["inline_source_dq"]["max_invalid_fraction"] == pytest.approx(0.01)
+    assert strategy["inline_source_dq"]["high_fraction_guard_enabled"] is True
     assert timing["resident_inline_source_dq"] == "cosmetic_cuda"
+    assert timing["resident_inline_source_dq_max_invalid_fraction"] == pytest.approx(0.01)
     assert not (run / "resident_source_dq_cache_route.json").exists()
     applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
     assert len(applied_rows) == 1
@@ -2139,6 +2148,87 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     )
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_deferred_frame_count"] == 0
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_deferred_applied_frame_count"] == 0
+
+
+def test_cli_resident_cuda_run_skips_inline_cosmetic_cuda_high_fraction_guard(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_cosmetic_cache_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "rdq_inline_cosmetic_cuda_guard"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-inline-source-dq",
+            "cosmetic_cuda",
+            "--resident-inline-source-dq-hot-sigma",
+            "2.0",
+            "--resident-inline-source-dq-cold-sigma",
+            "8.0",
+            "--resident-runtime-preset",
+            "manual",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-output-maps",
+            "audit",
+        ]
+    ) == 0
+
+    integration = read_json(run / "integration_results.json")
+    output = integration["outputs"][0]
+    master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
+    weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
+    resident = read_json(run / "resident_artifacts.json")
+    artifact = resident["artifacts"][0]
+    source_dq = artifact["source_dq_summary"]
+    skipped_rows = [row for row in source_dq["rows"] if row["status"] == "skipped_high_invalid_fraction"]
+
+    assert master[4, 5] == pytest.approx(5050.0)
+    assert weight[4, 5] == pytest.approx(2.0)
+    assert source_dq["passed"] is True
+    assert source_dq["input_invalid_samples_before_rejection"] == 0
+    assert source_dq["input_would_invalid_samples_before_guard"] == 1
+    assert source_dq["input_guarded_invalid_samples_skipped"] == 1
+    assert source_dq["status_counts"]["skipped_high_invalid_fraction"] == 1
+    assert len(skipped_rows) == 1
+    assert skipped_rows[0]["would_invalid_samples"] == 1
+    assert skipped_rows[0]["would_invalid_fraction"] == pytest.approx(1.0 / 256.0)
+    assert skipped_rows[0]["threshold_guard"]["max_invalid_fraction"] == pytest.approx(0.0001)
+    assert skipped_rows[0]["native_method"] == "ResidentCalibratedStack.count_cosmetic_threshold_mask_frames"
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_max_invalid_fraction"] == pytest.approx(0.0001)
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_high_fraction_guard_enabled"] is True
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_high_fraction_skipped_frame_count"] == 1
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_high_fraction_would_invalid_samples"] == 1
 
 
 def test_cli_resident_cuda_run_defers_inline_cosmetic_cuda_source_dq_until_after_registration(
@@ -2184,6 +2274,8 @@ def test_cli_resident_cuda_run_defers_inline_cosmetic_cuda_source_dq_until_after
             "2.0",
             "--resident-inline-source-dq-cold-sigma",
             "8.0",
+            "--resident-inline-source-dq-max-invalid-fraction",
+            "0",
             "--resident-runtime-preset",
             "manual",
             "--until-stage",

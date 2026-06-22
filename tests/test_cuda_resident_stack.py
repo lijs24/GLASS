@@ -1512,6 +1512,52 @@ def test_resident_stack_apply_cosmetic_threshold_mask_frame_excludes_hot_cold_no
     )
 
 
+def test_resident_stack_count_cosmetic_threshold_mask_frame_does_not_modify_pixels():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "count_cosmetic_threshold_mask_frame"):
+        raise AssertionError("ResidentCalibratedStack.count_cosmetic_threshold_mask_frame is missing")
+
+    frames = [
+        np.full((2, 3), 10.0, dtype=np.float32),
+        np.array([[20.0, 999.0, -999.0], [np.nan, 20.0, 20.0]], dtype=np.float32),
+        np.full((2, 3), 30.0, dtype=np.float32),
+    ]
+    stack = module.ResidentCalibratedStack(len(frames), 2, 3)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    result = stack.count_cosmetic_threshold_mask_frame(1, 0.0, 100.0)
+    master, weight_map = stack.integrate_mean()
+
+    assert result["native_method"] == "ResidentCalibratedStack.count_cosmetic_threshold_mask_frame"
+    assert result["hot_samples"] == 1
+    assert result["cold_samples"] == 1
+    assert result["nonfinite_samples"] == 1
+    assert result["cosmetic_corrected_samples"] == 2
+    assert result["invalid_samples"] == 3
+    assert result["applied"] is False
+    assert result["detector_execution"] == "cuda_threshold_count"
+    assert np.isfinite(master[0, 1])
+    assert np.allclose(
+        master,
+        np.array(
+            [
+                [20.0, (10.0 + 999.0 + 30.0) / 3.0, (10.0 - 999.0 + 30.0) / 3.0],
+                [20.0, 20.0, 20.0],
+            ],
+            dtype=np.float32,
+        ),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    assert np.allclose(
+        weight_map,
+        np.array([[3.0, 3.0, 3.0], [2.0, 3.0, 3.0]], dtype=np.float32),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+
+
 def test_resident_stack_apply_cosmetic_threshold_mask_frames_batches_counts_and_sync():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_cosmetic_threshold_mask_frames"):
@@ -1563,6 +1609,54 @@ def test_resident_stack_apply_cosmetic_threshold_mask_frames_batches_counts_and_
     assert np.allclose(
         weight_map,
         np.array([[3.0, 2.0, 1.0], [2.0, 2.0, 3.0]], dtype=np.float32),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+
+
+def test_resident_stack_count_cosmetic_threshold_mask_frames_batches_without_modifying_pixels():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "count_cosmetic_threshold_mask_frames"):
+        raise AssertionError("ResidentCalibratedStack.count_cosmetic_threshold_mask_frames is missing")
+
+    frames = [
+        np.full((2, 3), 10.0, dtype=np.float32),
+        np.array([[20.0, 999.0, -999.0], [np.nan, 20.0, 20.0]], dtype=np.float32),
+        np.array([[30.0, 30.0, 777.0], [30.0, -5.0, 30.0]], dtype=np.float32),
+    ]
+    stack = module.ResidentCalibratedStack(len(frames), 2, 3)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    result = stack.count_cosmetic_threshold_mask_frames([1, 2], [0.0, 0.0], [100.0, 100.0])
+    master, weight_map = stack.integrate_mean()
+
+    assert result["native_method"] == "ResidentCalibratedStack.count_cosmetic_threshold_mask_frames"
+    assert result["frame_count"] == 2
+    assert result["hot_samples"] == 2
+    assert result["cold_samples"] == 2
+    assert result["nonfinite_samples"] == 1
+    assert result["cosmetic_corrected_samples"] == 4
+    assert result["invalid_samples"] == 5
+    assert result["applied"] is False
+    assert result["detector_execution"] == "cuda_threshold_count_batch"
+    assert result["frames"][0]["frame_index"] == 1
+    assert result["frames"][1]["frame_index"] == 2
+    assert np.allclose(
+        master,
+        np.array(
+            [
+                [20.0, (10.0 + 999.0 + 30.0) / 3.0, (-212.0) / 3.0],
+                [20.0, 25.0 / 3.0, 20.0],
+            ],
+            dtype=np.float32,
+        ),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    assert np.allclose(
+        weight_map,
+        np.array([[3.0, 3.0, 3.0], [2.0, 3.0, 3.0]], dtype=np.float32),
         rtol=1e-6,
         atol=1e-6,
     )

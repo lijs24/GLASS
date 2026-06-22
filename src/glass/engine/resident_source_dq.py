@@ -717,6 +717,8 @@ def apply_resident_inline_cosmetic_thresholds(
     source: str,
     require_native: bool = True,
     native_result: dict[str, Any] | None = None,
+    native_count_result: dict[str, Any] | None = None,
+    max_invalid_fraction: float | None = None,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "schema_version": 1,
@@ -782,6 +784,107 @@ def apply_resident_inline_cosmetic_thresholds(
     if not row["supported"]:
         row["status"] = "unsupported_no_invalid_samples"
         return row
+
+    guard_enabled = max_invalid_fraction is not None and float(max_invalid_fraction) > 0.0
+    if guard_enabled and native_count_result is None and hasattr(
+        stack, "count_cosmetic_threshold_mask_frame"
+    ):
+        native_count_result = dict(
+            stack.count_cosmetic_threshold_mask_frame(
+                int(frame_index),
+                float(row["low_threshold"]),
+                float(row["high_threshold"]),
+            )
+        )
+    if native_count_result is not None:
+        count_native = dict(native_count_result)
+        count_hot = int(count_native.get("hot_samples") or 0)
+        count_cold = int(count_native.get("cold_samples") or 0)
+        count_nonfinite = int(count_native.get("nonfinite_samples") or 0)
+        count_cosmetic = int(count_native.get("cosmetic_corrected_samples") or (count_hot + count_cold))
+        count_invalid = int(count_native.get("invalid_samples") or (count_cosmetic + count_nonfinite))
+        count_total = max(1, int(count_native.get("total_pixels") or count_native.get("total_pixels_per_frame") or 1))
+        count_fraction = float(count_invalid) / float(count_total)
+        row.update(
+            {
+                "threshold_guard": {
+                    "enabled": bool(guard_enabled),
+                    "max_invalid_fraction": None
+                    if max_invalid_fraction is None
+                    else float(max_invalid_fraction),
+                    "would_invalid_samples": int(count_invalid),
+                    "would_hot_samples": int(count_hot),
+                    "would_cold_samples": int(count_cold),
+                    "would_nonfinite_samples": int(count_nonfinite),
+                    "would_invalid_fraction": float(count_fraction),
+                    "native_method": str(
+                        count_native.get("native_method")
+                        or "ResidentCalibratedStack.count_cosmetic_threshold_mask_frame"
+                    ),
+                    "detector_execution": str(
+                        count_native.get("detector_execution") or "cuda_threshold_count"
+                    ),
+                },
+                "native_count": count_native,
+                "would_invalid_samples": int(count_invalid),
+                "would_hot_samples": int(count_hot),
+                "would_cold_samples": int(count_cold),
+                "would_nonfinite_samples": int(count_nonfinite),
+                "would_invalid_fraction": float(count_fraction),
+            }
+        )
+        if guard_enabled and count_fraction > float(max_invalid_fraction):
+            metrics = dict(row["cosmetic_metrics"])
+            metrics["would_hot_pixels"] = count_hot
+            metrics["would_cold_pixels"] = count_cold
+            row.update(
+                {
+                    "status": "skipped_high_invalid_fraction",
+                    "reason": (
+                        "resident inline cosmetic threshold would invalidate "
+                        f"{count_fraction:.6g} of frame samples, above "
+                        f"{float(max_invalid_fraction):.6g}"
+                    ),
+                    "applied": False,
+                    "native_method": str(
+                        count_native.get("native_method")
+                        or "ResidentCalibratedStack.count_cosmetic_threshold_mask_frame"
+                    ),
+                    "native": count_native,
+                    "detector_execution": str(
+                        count_native.get("detector_execution") or "cuda_threshold_count"
+                    ),
+                    "invalid_samples": 0,
+                    "flagged_samples": 0,
+                    "nonfinite_samples": 0,
+                    "flag_counts": {},
+                    "cosmetic_metrics": metrics,
+                    "component_summaries": [
+                        {
+                            "source_model": row["source_model"],
+                            "supported": True,
+                            "reason": row["reason"],
+                            "invalid_samples": 0,
+                            "flagged_samples": 0,
+                            "nonfinite_samples": 0,
+                            "would_invalid_samples": int(count_invalid),
+                            "would_invalid_fraction": float(count_fraction),
+                            "inline_source_dq": True,
+                            "inline_source_dq_detector": row["inline_source_dq_detector"],
+                            "inline_source_dq_applies_replacement": False,
+                            "hot_sigma": row["hot_sigma"],
+                            "cold_sigma": row["cold_sigma"],
+                            "low_threshold": row["low_threshold"],
+                            "high_threshold": row["high_threshold"],
+                            "threshold_source": row["threshold_source"],
+                            "threshold_stats": row["threshold_stats"],
+                            "detector_execution": row["detector_execution"],
+                            "cosmetic_metrics": metrics,
+                        }
+                    ],
+                }
+            )
+            return row
     if native_result is None and not hasattr(stack, "apply_cosmetic_threshold_mask_frame"):
         row["status"] = "native_method_unavailable"
         if require_native:
@@ -831,6 +934,10 @@ def apply_resident_inline_cosmetic_thresholds(
             ),
             "native": native,
             "detector_execution": str(native.get("detector_execution") or row["detector_execution"]),
+            "threshold_guard": row.get("threshold_guard"),
+            "native_count": row.get("native_count"),
+            "would_invalid_samples": row.get("would_invalid_samples"),
+            "would_invalid_fraction": row.get("would_invalid_fraction"),
             "invalid_samples": invalid,
             "flagged_samples": invalid,
             "nonfinite_samples": nonfinite,
@@ -902,6 +1009,7 @@ def apply_resident_inline_cosmetic_thresholds_batch(
     items: list[dict[str, Any]],
     source: str,
     require_native: bool = True,
+    max_invalid_fraction: float | None = None,
 ) -> list[dict[str, Any]]:
     if not items:
         return []
@@ -914,6 +1022,7 @@ def apply_resident_inline_cosmetic_thresholds_batch(
                 threshold_info=dict(item["threshold_info"]),
                 source=source,
                 require_native=require_native,
+                max_invalid_fraction=max_invalid_fraction,
             )
             for item in items
         ]
@@ -921,7 +1030,64 @@ def apply_resident_inline_cosmetic_thresholds_batch(
     indices = [int(item["frame_index"]) for item in items]
     low_thresholds = [float(dict(item["threshold_info"])["low_threshold"]) for item in items]
     high_thresholds = [float(dict(item["threshold_info"])["high_threshold"]) for item in items]
-    native_batch = dict(stack.apply_cosmetic_threshold_mask_frames(indices, low_thresholds, high_thresholds))
+    native_count_by_index: dict[int, dict[str, Any]] = {}
+    guard_enabled = max_invalid_fraction is not None and float(max_invalid_fraction) > 0.0
+    if guard_enabled and hasattr(stack, "count_cosmetic_threshold_mask_frames"):
+        native_count_batch = dict(
+            stack.count_cosmetic_threshold_mask_frames(indices, low_thresholds, high_thresholds)
+        )
+        native_count_by_index = {
+            int(frame_result.get("frame_index")): dict(frame_result)
+            for frame_result in list(native_count_batch.get("frames") or [])
+        }
+        for frame_result in native_count_by_index.values():
+            frame_result.setdefault("batch_native_method", native_count_batch.get("native_method"))
+            frame_result.setdefault("batch_frame_count", native_count_batch.get("frame_count"))
+            frame_result.setdefault("batch_total_s", native_count_batch.get("total_s"))
+
+    apply_items: list[dict[str, Any]] = []
+    skipped_rows_by_index: dict[int, dict[str, Any]] = {}
+    for item in items:
+        frame_index = int(item["frame_index"])
+        count_result = native_count_by_index.get(frame_index)
+        if count_result is None:
+            apply_items.append(item)
+            continue
+        count_invalid = int(
+            count_result.get("invalid_samples")
+            or count_result.get("cosmetic_corrected_samples")
+            or 0
+        )
+        count_total = max(1, int(count_result.get("total_pixels") or count_result.get("total_pixels_per_frame") or 1))
+        if not guard_enabled or (float(count_invalid) / float(count_total)) <= float(max_invalid_fraction):
+            apply_items.append(item)
+            continue
+        row = apply_resident_inline_cosmetic_thresholds(
+            stack,
+            frame_index=frame_index,
+            frame_id=str(item["frame_id"]),
+            threshold_info=dict(item["threshold_info"]),
+            source=source,
+            require_native=require_native,
+            native_count_result=count_result,
+            max_invalid_fraction=max_invalid_fraction,
+        )
+        if row["status"] == "skipped_high_invalid_fraction":
+            skipped_rows_by_index[frame_index] = row
+        else:
+            apply_items.append(item)
+
+    native_batch = (
+        dict(
+            stack.apply_cosmetic_threshold_mask_frames(
+                [int(item["frame_index"]) for item in apply_items],
+                [float(dict(item["threshold_info"])["low_threshold"]) for item in apply_items],
+                [float(dict(item["threshold_info"])["high_threshold"]) for item in apply_items],
+            )
+        )
+        if apply_items
+        else {"frames": [], "native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"}
+    )
     native_by_index = {
         int(frame_result.get("frame_index")): dict(frame_result)
         for frame_result in list(native_batch.get("frames") or [])
@@ -929,6 +1095,10 @@ def apply_resident_inline_cosmetic_thresholds_batch(
     rows: list[dict[str, Any]] = []
     for item in items:
         frame_index = int(item["frame_index"])
+        skipped_row = skipped_rows_by_index.get(frame_index)
+        if skipped_row is not None:
+            rows.append(skipped_row)
+            continue
         native_result = native_by_index.get(frame_index)
         if native_result is None:
             if require_native:
@@ -941,10 +1111,12 @@ def apply_resident_inline_cosmetic_thresholds_batch(
                     stack,
                     frame_index=frame_index,
                     frame_id=str(item["frame_id"]),
-                    threshold_info=dict(item["threshold_info"]),
-                    source=source,
-                    require_native=False,
-                )
+                threshold_info=dict(item["threshold_info"]),
+                source=source,
+                require_native=False,
+                native_count_result=native_count_by_index.get(frame_index),
+                max_invalid_fraction=max_invalid_fraction,
+            )
             )
             continue
         native_result.setdefault("batch_native_method", native_batch.get("native_method"))
@@ -959,6 +1131,8 @@ def apply_resident_inline_cosmetic_thresholds_batch(
                 source=source,
                 require_native=require_native,
                 native_result=native_result,
+                native_count_result=native_count_by_index.get(frame_index),
+                max_invalid_fraction=max_invalid_fraction,
             )
         )
     return rows
@@ -978,6 +1152,7 @@ def build_resident_source_dq_summary(
     total_invalid = sum(int(row.get("invalid_samples") or 0) for row in rows)
     total_flagged = sum(int(row.get("flagged_samples") or 0) for row in rows)
     total_nonfinite = sum(int(row.get("nonfinite_samples") or 0) for row in rows)
+    total_would_invalid = sum(int(row.get("would_invalid_samples") or 0) for row in rows)
     applied_invalid = sum(
         int(row.get("invalid_samples") or 0) for row in rows if bool(row.get("applied"))
     )
@@ -1037,6 +1212,8 @@ def build_resident_source_dq_summary(
         "input_samples": int(input_samples),
         "input_valid_samples_before_rejection": int(input_valid_before_rejection),
         "input_invalid_samples_before_rejection": int(total_invalid),
+        "input_would_invalid_samples_before_guard": int(total_would_invalid),
+        "input_guarded_invalid_samples_skipped": int(max(0, total_would_invalid - total_invalid)),
         "input_flagged_samples": int(total_flagged),
         "input_nonfinite_samples": int(total_nonfinite),
         "source_dq_flag_counts": {key: value for key, value in sorted(flag_counts.items()) if value},

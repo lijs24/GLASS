@@ -11055,6 +11055,86 @@ Completed in Gate446:
   - source-DQ vs default compare:
     `C:\glass_runs\phase2_s2_gate492_deferred_source_dq_ab_real\compare\cosmetic_cuda_deferred_vs_default.json`.
 
+### S2-Gate 493: Conservative Cosmetic CUDA Source-DQ High-Fraction Guard
+
+- Harden the opt-in `cosmetic_cuda` resident source-DQ path so a global
+  threshold detector cannot silently mark a large fraction of light-frame
+  samples as NaN. Gate492 made the ordering registration-safe; Gate493 makes
+  the destructive application conservative and auditable.
+- Completed:
+  - added native CUDA count-only threshold kernels and Python wrappers:
+    `ResidentCalibratedStack.count_cosmetic_threshold_mask_frame` and
+    `ResidentCalibratedStack.count_cosmetic_threshold_mask_frames`;
+  - added a count-only preflight for `cosmetic_cuda` rows. Frames above
+    `--resident-inline-source-dq-max-invalid-fraction` are recorded as
+    `skipped_high_invalid_fraction` with `would_*` counts and are not modified;
+  - changed the default guard from `0.002` to `0.0001` (`0.01%` of frame
+    samples). Users can still explicitly raise the fraction or set it to `0`
+    to disable the guard for controlled experiments;
+  - source-DQ summaries now record
+    `input_would_invalid_samples_before_guard` and
+    `input_guarded_invalid_samples_skipped`;
+  - resident artifacts now record the guard fraction, enabled state, skipped
+    frame count, and would-invalid sample count;
+  - fixed deferred source-DQ accounting so
+    `resident_inline_source_dq_deferred_applied_frame_count` counts only rows
+    with `applied=true`, not rows skipped by the high-fraction guard.
+- Focused validation:
+  - count-only CUDA tests prove the preflight counts hot/cold/nonfinite samples
+    without modifying resident pixels;
+  - CLI/source-DQ tests prove default guard skipping, explicit guard override
+    application, and post-registration deferred application accounting;
+  - focused pytest: `6 passed`.
+- Real 200-light default A/B validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate493_guard001_ab_real\runs\default_runtime_stack_ab_current`;
+  - total runtime: `17.58118659997126 s`;
+  - active frames: `193 / 200`;
+  - GLASS-vs-Gate492 master difference: RMS/p99/max all `0.0`;
+  - GLASS-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`, coverage fraction
+    `0.960532609259836`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - GLASS speedup versus WBPP: `62.14262011198868x`;
+  - pixel-verifying pipeline contract, StackEngine contract, speedup summary,
+    acceptance audit, and HTML report passed.
+- Real 200-light `cosmetic_cuda` guard diagnostic:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate493_guard001_ab_real\runs\cosmetic_cuda_source_dq_guarded`;
+  - default guard fraction: `0.0001`;
+  - source-DQ rows: `200`, all `skipped_high_invalid_fraction`;
+  - would-invalid samples before guard: `96,803,833`;
+  - guarded invalid samples skipped: `96,803,833`;
+  - applied invalid samples before rejection: `0`;
+  - deferred frame count: `200`, deferred applied frame count: `0`, pending
+    frame count: `0`;
+  - min/max would-invalid frame fraction:
+    `0.0009139968078480225` / `0.015298420793107028`;
+  - pixel-verifying pipeline contract passed;
+  - guarded diagnostic vs default compare: RMS/p99/max all `0.0`.
+- Interpretation:
+  - the default production route remains source-DQ off and pixel-identical to
+    Gate492 while improving the recorded guard default;
+  - opt-in `cosmetic_cuda` now refuses to apply global-threshold masks on this
+    real dataset because every frame would invalidate more than `0.01%` of
+    samples. The detector remains useful as a diagnostic until a star-aware or
+    structure-aware light-frame source-DQ model is implemented;
+  - the next substantive DQ step is not another report gate: it is a
+    scientifically safer hot/cold-pixel detector that distinguishes defects
+    from stars and nebulosity before applying resident NaNs.
+- Artifacts:
+  - default A/B acceptance:
+    `C:\glass_runs\phase2_s2_gate493_guard001_ab_real\acceptance\ab_current_acceptance_audit.json`;
+  - default A/B speedup:
+    `C:\glass_runs\phase2_s2_gate493_guard001_ab_real\speedup\ab_current_vs_wbpp_speedup_with_compare.json`;
+  - default A/B report:
+    `C:\glass_runs\phase2_s2_gate493_guard001_ab_real\reports\ab_current_report.html`;
+  - source-DQ diagnostic contract:
+    `C:\glass_runs\phase2_s2_gate493_guard001_ab_real\contracts\cosmetic_cuda_guarded_pipeline_contract.json`;
+  - source-DQ guarded vs default compare:
+    `C:\glass_runs\phase2_s2_gate493_guard001_ab_real\compare\cosmetic_cuda_guarded_vs_default.json`.
+
 ## Gate Rules
 
 Each gate requires:

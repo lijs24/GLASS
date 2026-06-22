@@ -579,6 +579,9 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
     timing["resident_source_dq_cache"] = getattr(args, "resident_source_dq_cache", "off")
     timing["resident_inline_source_dq"] = getattr(args, "resident_inline_source_dq", "off")
+    timing["resident_inline_source_dq_max_invalid_fraction"] = getattr(
+        args, "resident_inline_source_dq_max_invalid_fraction", None
+    )
     preset = getattr(args, "_resident_runtime_preset_effective", None)
     if isinstance(preset, dict):
         timing["resident_runtime_preset_effective"] = preset
@@ -765,6 +768,9 @@ def _write_resident_source_dq_strategy(
         resident_inline_source_dq=getattr(args, "resident_inline_source_dq", "off"),
         resident_inline_source_dq_hot_sigma=getattr(args, "resident_inline_source_dq_hot_sigma", 8.0),
         resident_inline_source_dq_cold_sigma=getattr(args, "resident_inline_source_dq_cold_sigma", 8.0),
+        resident_inline_source_dq_max_invalid_fraction=getattr(
+            args, "resident_inline_source_dq_max_invalid_fraction", 0.0001
+        ),
     )
     strategy_path = _resident_source_dq_strategy_path(run)
     write_json(strategy_path, strategy)
@@ -1388,6 +1394,9 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_inline_source_dq=args.resident_inline_source_dq,
                 resident_inline_source_dq_hot_sigma=args.resident_inline_source_dq_hot_sigma,
                 resident_inline_source_dq_cold_sigma=args.resident_inline_source_dq_cold_sigma,
+                resident_inline_source_dq_max_invalid_fraction=(
+                    args.resident_inline_source_dq_max_invalid_fraction
+                ),
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
@@ -1574,6 +1583,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_inline_source_dq=args.resident_inline_source_dq,
                 resident_inline_source_dq_hot_sigma=args.resident_inline_source_dq_hot_sigma,
                 resident_inline_source_dq_cold_sigma=args.resident_inline_source_dq_cold_sigma,
+                resident_inline_source_dq_max_invalid_fraction=(
+                    args.resident_inline_source_dq_max_invalid_fraction
+                ),
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
@@ -4780,6 +4792,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="cold-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_cuda",
     )
     run.add_argument(
+        "--resident-inline-source-dq-max-invalid-fraction",
+        type=float,
+        default=0.0001,
+        help=(
+            "for cosmetic_cuda, skip applying a threshold mask to any frame when the count-only "
+            "preflight would invalidate more than this fraction of samples; set 0 to disable"
+        ),
+    )
+    run.add_argument(
         "--resident-output-maps",
         choices=["audit", "science", "minimal"],
         default="audit",
@@ -5220,6 +5241,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=8.0,
         help="cold-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_cuda mode",
+    )
+    audit.add_argument(
+        "--resident-inline-source-dq-max-invalid-fraction",
+        type=float,
+        default=0.0001,
+        help=(
+            "for cosmetic_cuda audit runs, skip applying a threshold mask to any frame when the "
+            "count-only preflight would invalidate more than this fraction of samples; set 0 to disable"
+        ),
     )
     audit.add_argument(
         "--resident-winsorized-mode",

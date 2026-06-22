@@ -60,6 +60,7 @@ def build_resident_source_dq_strategy(
     resident_inline_source_dq: str = "off",
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
+    resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
     artifact_type: str = "resident_source_dq_strategy",
 ) -> dict[str, Any]:
     plan_payload, plan_path = _load_plan(plan)
@@ -167,6 +168,16 @@ def build_resident_source_dq_strategy(
         ),
         "hot_sigma": float(resident_inline_source_dq_hot_sigma),
         "cold_sigma": float(resident_inline_source_dq_cold_sigma),
+        "max_invalid_fraction": float(resident_inline_source_dq_max_invalid_fraction),
+        "high_fraction_guard_enabled": bool(
+            str(resident_inline_source_dq) == "cosmetic_cuda"
+            and float(resident_inline_source_dq_max_invalid_fraction) > 0.0
+        ),
+        "count_only_preflight": (
+            "ResidentCalibratedStack.count_cosmetic_threshold_mask_frame"
+            if str(resident_inline_source_dq) == "cosmetic_cuda"
+            else None
+        ),
         "materializes_calibrated_dq_cache": False,
         "semantics": (
             "Inline source-DQ mode creates resident invalid masks while loading frames; "

@@ -202,6 +202,31 @@ __global__ void glass_apply_cosmetic_threshold_mask_f32_kernel(
   }
 }
 
+__global__ void glass_count_cosmetic_threshold_mask_f32_kernel(
+    const float* frame,
+    std::size_t n,
+    float low_threshold,
+    float high_threshold,
+    unsigned long long* counts) {
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= n) {
+    return;
+  }
+
+  const float value = frame[i];
+  if (!isfinite(value)) {
+    atomicAdd(&counts[2], 1ULL);
+    return;
+  }
+  if (value > high_threshold) {
+    atomicAdd(&counts[0], 1ULL);
+    return;
+  }
+  if (value < low_threshold) {
+    atomicAdd(&counts[1], 1ULL);
+  }
+}
+
 void glass_apply_cosmetic_threshold_mask_f32_launch(
     float* frame,
     std::size_t n,
@@ -211,6 +236,22 @@ void glass_apply_cosmetic_threshold_mask_f32_launch(
   constexpr int threads = 256;
   const int blocks = static_cast<int>((n + threads - 1) / threads);
   glass_apply_cosmetic_threshold_mask_f32_kernel<<<blocks, threads>>>(
+      frame,
+      n,
+      low_threshold,
+      high_threshold,
+      counts);
+}
+
+void glass_count_cosmetic_threshold_mask_f32_launch(
+    const float* frame,
+    std::size_t n,
+    float low_threshold,
+    float high_threshold,
+    unsigned long long* counts) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  glass_count_cosmetic_threshold_mask_f32_kernel<<<blocks, threads>>>(
       frame,
       n,
       low_threshold,
@@ -252,6 +293,37 @@ __global__ void glass_apply_cosmetic_threshold_mask_frames_f32_kernel(
   }
 }
 
+__global__ void glass_count_cosmetic_threshold_mask_frames_f32_kernel(
+    const float* stack,
+    std::size_t n,
+    const unsigned long long* frame_indices,
+    const float* low_thresholds,
+    const float* high_thresholds,
+    std::size_t frame_count,
+    unsigned long long* counts) {
+  const std::size_t frame_pos = static_cast<std::size_t>(blockIdx.y);
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (frame_pos >= frame_count || i >= n) {
+    return;
+  }
+
+  const std::size_t frame_index = static_cast<std::size_t>(frame_indices[frame_pos]);
+  const float* frame = stack + frame_index * n;
+  unsigned long long* frame_counts = counts + frame_pos * 3;
+  const float value = frame[i];
+  if (!isfinite(value)) {
+    atomicAdd(&frame_counts[2], 1ULL);
+    return;
+  }
+  if (value > high_thresholds[frame_pos]) {
+    atomicAdd(&frame_counts[0], 1ULL);
+    return;
+  }
+  if (value < low_thresholds[frame_pos]) {
+    atomicAdd(&frame_counts[1], 1ULL);
+  }
+}
+
 void glass_apply_cosmetic_threshold_mask_frames_f32_launch(
     float* stack,
     std::size_t n,
@@ -264,6 +336,27 @@ void glass_apply_cosmetic_threshold_mask_frames_f32_launch(
   const int blocks = static_cast<int>((n + threads - 1) / threads);
   const dim3 grid(blocks, static_cast<unsigned int>(frame_count));
   glass_apply_cosmetic_threshold_mask_frames_f32_kernel<<<grid, threads>>>(
+      stack,
+      n,
+      frame_indices,
+      low_thresholds,
+      high_thresholds,
+      frame_count,
+      counts);
+}
+
+void glass_count_cosmetic_threshold_mask_frames_f32_launch(
+    const float* stack,
+    std::size_t n,
+    const unsigned long long* frame_indices,
+    const float* low_thresholds,
+    const float* high_thresholds,
+    std::size_t frame_count,
+    unsigned long long* counts) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  const dim3 grid(blocks, static_cast<unsigned int>(frame_count));
+  glass_count_cosmetic_threshold_mask_frames_f32_kernel<<<grid, threads>>>(
       stack,
       n,
       frame_indices,
