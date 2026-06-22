@@ -438,6 +438,28 @@ def test_resident_source_dq_summary_matches_stackengine_input_sample_closure():
     assert summary["passed"] is True
 
 
+def test_resident_source_dq_summary_records_no_source_dq_fast_skip():
+    summary = build_resident_source_dq_summary(
+        [],
+        frame_count=3,
+        height=4,
+        width=5,
+        fast_skip_frame_count=3,
+        fast_skip_reason="native_u16_gpu_integer_payload_without_inline_or_sidecar_source_dq",
+    )
+
+    assert summary["passed"] is True
+    assert summary["frame_count"] == 3
+    assert summary["input_samples"] == 60
+    assert summary["input_valid_samples_before_rejection"] == 60
+    assert summary["input_invalid_samples_before_rejection"] == 0
+    assert summary["fast_skip_frame_count"] == 3
+    assert summary["fast_skip_reason"] == "native_u16_gpu_integer_payload_without_inline_or_sidecar_source_dq"
+    assert summary["source_counts"] == {"no_source_dq_fast_skip": 3}
+    assert summary["status_counts"] == {"no_source_dq_fast_skip": 3}
+    assert summary["rows"] == []
+
+
 def test_resident_source_dq_execution_group_proves_streaming_route_without_cache():
     summary = build_resident_source_dq_summary(
         [

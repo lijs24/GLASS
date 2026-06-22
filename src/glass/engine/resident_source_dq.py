@@ -971,7 +971,10 @@ def build_resident_source_dq_summary(
     height: int,
     width: int,
     active_frame_count: int | None = None,
+    fast_skip_frame_count: int = 0,
+    fast_skip_reason: str | None = None,
 ) -> dict[str, Any]:
+    fast_skip_frame_count = max(0, int(fast_skip_frame_count))
     total_invalid = sum(int(row.get("invalid_samples") or 0) for row in rows)
     total_flagged = sum(int(row.get("flagged_samples") or 0) for row in rows)
     total_nonfinite = sum(int(row.get("nonfinite_samples") or 0) for row in rows)
@@ -1003,6 +1006,13 @@ def build_resident_source_dq_summary(
             sidecar_artifact_paths.add(str(artifact_path))
         for flag, count in dict(row.get("flag_counts") or {}).items():
             flag_counts[str(flag)] = int(flag_counts.get(str(flag), 0)) + int(count or 0)
+    if fast_skip_frame_count:
+        source_counts["no_source_dq_fast_skip"] = (
+            source_counts.get("no_source_dq_fast_skip", 0) + fast_skip_frame_count
+        )
+        status_counts["no_source_dq_fast_skip"] = (
+            status_counts.get("no_source_dq_fast_skip", 0) + fast_skip_frame_count
+        )
 
     effective_frame_count = int(frame_count if active_frame_count is None else active_frame_count)
     input_samples = int(effective_frame_count) * int(height) * int(width)
@@ -1035,6 +1045,8 @@ def build_resident_source_dq_summary(
         "applied_frame_count": int(sum(1 for row in rows if bool(row.get("applied")))),
         "unsupported_frame_count": len(unsupported),
         "native_missing_frame_count": len(native_missing),
+        "fast_skip_frame_count": fast_skip_frame_count,
+        "fast_skip_reason": fast_skip_reason if fast_skip_frame_count else None,
         "source_counts": dict(sorted(source_counts.items())),
         "status_counts": dict(sorted(status_counts.items())),
         "sidecar_source_counts": dict(sorted(sidecar_source_counts.items())),

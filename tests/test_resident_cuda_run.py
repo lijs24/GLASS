@@ -4625,12 +4625,22 @@ def test_cli_resident_cuda_records_native_u16_gpu_decode_backend(tmp_path: Path)
 
     artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
     io_pipeline = artifact["resident_io_pipeline"]
+    source_dq = artifact["source_dq_summary"]
 
     assert io_pipeline["fits_read_mode"] == "native_u16_gpu"
     assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
     assert io_pipeline["raw_gpu_decode_enabled"] is True
     assert io_pipeline["raw_gpu_h2d_bytes"] == 2 * 24 * 24 * 2
     assert io_pipeline["raw_gpu_float32_host_bytes_avoided"] == 2 * 24 * 24 * 4
+    assert io_pipeline["source_dq_fast_skip_enabled"] is True
+    assert io_pipeline["source_dq_fast_skipped_frame_count"] == 2
+    assert io_pipeline["source_dq_sidecar_frame_count"] == 0
+    assert source_dq["passed"] is True
+    assert source_dq["input_invalid_samples_before_rejection"] == 0
+    assert source_dq["fast_skip_frame_count"] == 2
+    assert source_dq["source_counts"] == {"no_source_dq_fast_skip": 2}
+    assert source_dq["status_counts"] == {"no_source_dq_fast_skip": 2}
+    assert source_dq["rows"] == []
     assert io_pipeline["calibration_batch_mode"] == "fits_u16be_bzero_gpu_decode_callback_release_batch"
     assert artifact["resident_frame_mask_contract"]["summary"]["unknown_zero_weight_frame_count"] == 0
 

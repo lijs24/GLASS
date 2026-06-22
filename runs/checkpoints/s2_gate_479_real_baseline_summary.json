@@ -1,0 +1,96 @@
+{
+  "artifact_type": "s2_gate_479_real_baseline_summary",
+  "delta_vs_gate478_baseline": {
+    "glass_elapsed_s": -0.13201649999246,
+    "light_loop_unaccounted_s": 0.1843289994285442,
+    "light_read_upload_calibrate_s": 0.2013141000061296,
+    "source_dq_row_count": -200,
+    "speedup_vs_wbpp": 0.1528093409653195
+  },
+  "estimated_peak_gib": 49.608429938554764,
+  "gate478_baseline": {
+    "glass_elapsed_s": 30.788683499966282,
+    "light_loop_unaccounted_s": 10.966251299949363,
+    "light_read_upload_calibrate_s": 13.956307400017977,
+    "source_dq_row_count": 200,
+    "speedup_vs_wbpp": 35.485148301361974
+  },
+  "gate479_vs_gate478_baseline_compare": {
+    "abs_diff_p50": 0.0,
+    "abs_diff_p99": 0.0,
+    "abs_diff_p999": 0.0,
+    "max_abs_diff": 0.0,
+    "path": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\gate479_vs_gate478_baseline.json",
+    "relative_rms_diff": 0.0,
+    "rms_diff": 0.0,
+    "shape_match": true
+  },
+  "glass_elapsed_s": 30.656666999973822,
+  "passed": true,
+  "resident_io_pipeline": {
+    "calibration_batch_count": 25,
+    "calibration_batch_mode": "fits_u16be_bzero_gpu_decode_callback_release_batch",
+    "fits_backend_counts": {
+      "native_u16be_raw": 200
+    },
+    "fits_read_mode_effective": "native_u16_gpu",
+    "prefetch_fill_call_count": 101,
+    "prefetch_fill_submit_count": 200,
+    "prefetch_release_refill_queued_execute_count": 100,
+    "raw_gpu_decode_enabled": true,
+    "raw_gpu_float32_host_bytes_avoided": 49320960000,
+    "raw_gpu_h2d_bytes": 24660480000,
+    "source_dq_fast_skip_enabled": true,
+    "source_dq_fast_skip_reason": "native_u16_gpu_integer_payload_without_inline_or_sidecar_source_dq",
+    "source_dq_fast_skipped_frame_count": 200,
+    "source_dq_sidecar_frame_count": 0
+  },
+  "run_root": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real",
+  "source_dq_row_count": 0,
+  "source_dq_summary": {
+    "fast_skip_frame_count": 200,
+    "fast_skip_reason": "native_u16_gpu_integer_payload_without_inline_or_sidecar_source_dq",
+    "frame_count": 200,
+    "input_invalid_samples_before_rejection": 0,
+    "input_samples": 12330240000,
+    "input_valid_samples_before_rejection": 12330240000,
+    "passed": true,
+    "sidecar_artifact_path_count": 0,
+    "sidecar_path_count": 0,
+    "source_counts": {
+      "no_source_dq_fast_skip": 200
+    },
+    "status_counts": {
+      "no_source_dq_fast_skip": 200
+    }
+  },
+  "speedup_vs_wbpp": 35.637957642327294,
+  "status": "passed",
+  "timing_s": {
+    "light_calibration_batch_stream_h2d_calibrate_store": 0.7145879020690917,
+    "light_fits_native_file_read": 20.4046346,
+    "light_h2d_calibrate_store": 0.7317987001151778,
+    "light_loop_unaccounted": 11.150580299377907,
+    "light_read_decode": 2.2702788005117327,
+    "light_read_decode_worker": 20.577456599159632,
+    "light_read_upload_calibrate": 14.157621500024106,
+    "master_build_or_load": 10.954196600010619,
+    "output_write": 2.311673399992287,
+    "resident_integration": 0.29482549999374896,
+    "resident_registration_component_accounted": 4.20485879978266,
+    "resident_registration_warp": 1.2546943992492743
+  },
+  "wbpp_compare": {
+    "abs_diff_p50": 7.299671415239573e-05,
+    "abs_diff_p99": 0.00042621337808668863,
+    "abs_diff_p999": 0.003845416396856427,
+    "coverage_fraction": 0.960532609259836,
+    "max_abs_diff": 0.5499989986419678,
+    "relative_rms_diff": 0.4144607930330431,
+    "rms_diff": 0.0017794216505176163,
+    "shape_match": true
+  },
+  "wbpp_elapsed_s": 1092.541,
+  "weighted_frame_count": 193,
+  "zero_weight_frame_count": 7
+}

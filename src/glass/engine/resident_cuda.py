@@ -4239,6 +4239,22 @@ def run_resident_calibration_integration(
                     f"{raw_u16_runtime_reason}; use --resident-runtime-preset throughput-v1 "
                     "on a build with the native raw-u16 GPU decode method"
                 )
+            source_dq_sidecar_records = [
+                _resident_source_dq_sidecar_record(frame, plan_root, calibration_dq_sidecars)
+                for frame in light_frames
+            ]
+            source_dq_sidecar_frame_count = sum(1 for record in source_dq_sidecar_records if record is not None)
+            source_dq_fast_skip_enabled = bool(
+                raw_u16_gpu_decode_enabled
+                and resident_inline_source_dq == "off"
+                and source_dq_sidecar_frame_count == 0
+            )
+            source_dq_fast_skip_reason = (
+                "native_u16_gpu_integer_payload_without_inline_or_sidecar_source_dq"
+                if source_dq_fast_skip_enabled
+                else ""
+            )
+            source_dq_fast_skipped_frame_count = len(light_frames) if source_dq_fast_skip_enabled else 0
             calibration_fetch_batch_frames = (
                 int(resident_calibration_batch_frames)
                 if calibration_callback_release_enabled
@@ -4362,28 +4378,29 @@ def run_resident_calibration_integration(
                         source_dq_pending_by_index: dict[
                             int, tuple[str, np.ndarray | None, dict[str, Any]]
                         ] = {}
-                        for item_index, frame, light, _exposure in batch_items:
-                            invalid_mask, mask_info = _resident_source_invalid_mask_from_frame(
-                                frame,
-                                light,
-                                height=height,
-                                width=width,
-                                plan_root=plan_root,
-                                calibration_dq_sidecars=calibration_dq_sidecars,
-                                resident_inline_source_dq=resident_inline_source_dq,
-                                resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
-                                resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
-                            )
-                            if (
-                                resident_inline_source_dq != "cosmetic_cuda"
-                                or str(mask_info.get("source_model") or "") != "none"
-                                or int(mask_info.get("invalid_samples") or 0) > 0
-                            ):
-                                source_dq_pending_by_index[int(item_index)] = (
-                                    str(frame["id"]),
-                                    invalid_mask,
-                                    mask_info,
+                        if not source_dq_fast_skip_enabled:
+                            for item_index, frame, light, _exposure in batch_items:
+                                invalid_mask, mask_info = _resident_source_invalid_mask_from_frame(
+                                    frame,
+                                    light,
+                                    height=height,
+                                    width=width,
+                                    plan_root=plan_root,
+                                    calibration_dq_sidecars=calibration_dq_sidecars,
+                                    resident_inline_source_dq=resident_inline_source_dq,
+                                    resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
+                                    resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                                 )
+                                if (
+                                    resident_inline_source_dq != "cosmetic_cuda"
+                                    or str(mask_info.get("source_model") or "") != "none"
+                                    or int(mask_info.get("invalid_samples") or 0) > 0
+                                ):
+                                    source_dq_pending_by_index[int(item_index)] = (
+                                        str(frame["id"]),
+                                        invalid_mask,
+                                        mask_info,
+                                    )
                         batch_light_exposures = [item[3] for item in batch_items]
                         batch_dark_exposures = [
                             np.nan if current_dark_exposure is None else float(current_dark_exposure)
@@ -4672,17 +4689,20 @@ def run_resident_calibration_integration(
                                 int(read_profile.get("fits_native_bytes_read", 0) or 0)
                             )
                         per_frame_read_s.append(read_wait_elapsed)
-                        invalid_mask, mask_info = _resident_source_invalid_mask_from_frame(
-                            frame,
-                            light,
-                            height=height,
-                            width=width,
-                            plan_root=plan_root,
-                            calibration_dq_sidecars=calibration_dq_sidecars,
-                            resident_inline_source_dq=resident_inline_source_dq,
-                            resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
-                            resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
-                        )
+                        invalid_mask = None
+                        mask_info: dict[str, Any] = {}
+                        if not source_dq_fast_skip_enabled:
+                            invalid_mask, mask_info = _resident_source_invalid_mask_from_frame(
+                                frame,
+                                light,
+                                height=height,
+                                width=width,
+                                plan_root=plan_root,
+                                calibration_dq_sidecars=calibration_dq_sidecars,
+                                resident_inline_source_dq=resident_inline_source_dq,
+                                resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
+                                resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
+                            )
                         calibrate_start = perf_counter()
                         try:
                             if resident_h2d_mode == "pinned_async":
@@ -4712,9 +4732,12 @@ def run_resident_calibration_integration(
                         finally:
                             light_prefetch.release(index)
                         if (
+                            not source_dq_fast_skip_enabled
+                            and (
                             resident_inline_source_dq != "cosmetic_cuda"
                             or str(mask_info.get("source_model") or "") != "none"
                             or int(mask_info.get("invalid_samples") or 0) > 0
+                            )
                         ):
                             source_dq_rows.append(
                                 apply_resident_source_invalid_mask(
@@ -8210,6 +8233,8 @@ def run_resident_calibration_integration(
                 frame_count=len(light_frames),
                 height=height,
                 width=width,
+                fast_skip_frame_count=source_dq_fast_skipped_frame_count,
+                fast_skip_reason=source_dq_fast_skip_reason,
             )
             group_source_dq_execution = build_resident_source_dq_execution_group(
                 source_dq_summary,
@@ -8666,6 +8691,10 @@ def run_resident_calibration_integration(
                 "raw_gpu_decode_enabled": raw_u16_gpu_decode_enabled,
                 "raw_gpu_h2d_bytes": int(calibration_raw_h2d_bytes),
                 "raw_gpu_float32_host_bytes_avoided": int(calibration_float32_host_bytes_avoided),
+                "source_dq_fast_skip_enabled": bool(source_dq_fast_skip_enabled),
+                "source_dq_fast_skipped_frame_count": int(source_dq_fast_skipped_frame_count),
+                "source_dq_fast_skip_reason": source_dq_fast_skip_reason,
+                "source_dq_sidecar_frame_count": int(source_dq_sidecar_frame_count),
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -8706,6 +8735,10 @@ def run_resident_calibration_integration(
                 "raw_gpu_decode_enabled": raw_u16_gpu_decode_enabled,
                 "raw_gpu_h2d_bytes": int(calibration_raw_h2d_bytes),
                 "raw_gpu_float32_host_bytes_avoided": int(calibration_float32_host_bytes_avoided),
+                "source_dq_fast_skip_enabled": bool(source_dq_fast_skip_enabled),
+                "source_dq_fast_skipped_frame_count": int(source_dq_fast_skipped_frame_count),
+                "source_dq_fast_skip_reason": source_dq_fast_skip_reason,
+                "source_dq_sidecar_frame_count": int(source_dq_sidecar_frame_count),
                 "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
                 "calibration_batch_requested_streams": int(resident_calibration_streams),
                 "calibration_wave_requested_frames": int(resident_calibration_wave_frames),
@@ -9009,6 +9042,10 @@ def run_resident_calibration_integration(
                         "raw_gpu_decode_enabled": raw_u16_gpu_decode_enabled,
                         "raw_gpu_h2d_bytes": int(calibration_raw_h2d_bytes),
                         "raw_gpu_float32_host_bytes_avoided": int(calibration_float32_host_bytes_avoided),
+                        "source_dq_fast_skip_enabled": bool(source_dq_fast_skip_enabled),
+                        "source_dq_fast_skipped_frame_count": int(source_dq_fast_skipped_frame_count),
+                        "source_dq_fast_skip_reason": source_dq_fast_skip_reason,
+                        "source_dq_sidecar_frame_count": int(source_dq_sidecar_frame_count),
                         "calibration_event_mode": calibration_event_mode,
                         "calibration_event_modes": unique_calibration_event_modes,
                         "calibration_event_reuse": bool(

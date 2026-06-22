@@ -1,0 +1,101 @@
+{
+  "artifact_type": "resident_ab_matrix_plan",
+  "comparison_policy": {
+    "benchmark_contract_profile": "resident_cuda_dq_v1",
+    "glass_offset": 0.0006274500691899127,
+    "glass_scale": 8.764434957115609e-06,
+    "min_coverage": 190.0,
+    "min_speedup": 2.0
+  },
+  "created_at": "2026-06-22T15:49:42+00:00",
+  "limitations": [
+    "This artifact plans commands only; it does not execute image processing.",
+    "GPU readiness is a point-in-time nvidia-smi sample and must be rechecked before execution.",
+    "The fused candidate intentionally changes interpolation to bilinear so it must pass compare and DQ checks before any promotion."
+  ],
+  "manifest": "C:\\gpwbpp_runs\\final_m38_h_200\\manifest.json",
+  "plan": "C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json",
+  "readiness": {
+    "disk": {
+      "free_gib": 53.614097595214844,
+      "min_free_gib": 8.0,
+      "path": "C:\\glass_runs",
+      "ready": true,
+      "status": "ready",
+      "total_gib": 1906.7373008728027
+    },
+    "gpu": {
+      "driver": "596.21",
+      "free_mib": 97062,
+      "max_utilization_percent": 20,
+      "min_free_mib": 65000,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "ready": true,
+      "reason": "GPU is below the clean benchmark utilization threshold and has enough free memory",
+      "status": "ready",
+      "total_mib": 97887,
+      "used_mib": 825,
+      "utilization_percent": 0
+    }
+  },
+  "ready_to_execute": true,
+  "recommendation": "execute_when_gpu_idle",
+  "reference": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf",
+  "root": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real",
+  "schema_version": 1,
+  "variant_count": 2,
+  "variants": [
+    {
+      "artifacts": {
+        "acceptance_json": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\acceptance\\throughput_v1_lanczos3_parity_acceptance.json",
+        "compare_reference_json": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.json",
+        "coverage_map": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_coverage_map_H.fits",
+        "master": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_master_H.fits",
+        "report_html": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\reports\\throughput_v1_lanczos3_parity_report.html",
+        "speedup_json": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\speedup\\throughput_v1_lanczos3_parity_speedup.json"
+      },
+      "commands": {
+        "acceptance_audit": "glass acceptance-audit --manifest C:\\gpwbpp_runs\\final_m38_h_200\\manifest.json --glass-run C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\acceptance\\throughput_v1_lanczos3_parity_acceptance.json --markdown C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\acceptance\\throughput_v1_lanczos3_parity_acceptance.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01 --benchmark-contract-profile resident_cuda_dq_v1",
+        "compare_reference": "glass compare --glass C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_master_H.fits --reference C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.html --glass-label \"GLASS throughput_v1_lanczos3_parity\" --reference-label \"WBPP FastIntegration black-box\" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --glass-coverage-map C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_coverage_map_H.fits --min-coverage 190.0",
+        "report": "glass report --run C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\reports\\throughput_v1_lanczos3_parity_report.html",
+        "run": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity --backend cuda --memory-mode resident --resident-runtime-preset throughput-v1 --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit --resident-integration-dispatch stack",
+        "speedup_summary": "python benchmarks\\summarize_wbpp_speedup.py --glass-run C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\speedup\\throughput_v1_lanczos3_parity_speedup.json --markdown C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\speedup\\throughput_v1_lanczos3_parity_speedup.md --min-speedup 2.0"
+      },
+      "integration_dispatch": "stack",
+      "purpose": "WBPP-like parity route with throughput-v1 scheduling and Lanczos3 matrix warp",
+      "role": "baseline",
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity",
+      "run_timing_exists": false,
+      "runtime_preset": "throughput-v1",
+      "variant_id": "throughput_v1_lanczos3_parity",
+      "warp_interpolation": "lanczos3"
+    },
+    {
+      "artifacts": {
+        "acceptance_json": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\acceptance\\throughput_v2_fused_bilinear_acceptance.json",
+        "compare_reference_json": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\throughput_v2_fused_bilinear_vs_wbpp.json",
+        "coverage_map": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear\\integration\\resident_coverage_map_H.fits",
+        "master": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear\\integration\\resident_master_H.fits",
+        "report_html": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\reports\\throughput_v2_fused_bilinear_report.html",
+        "speedup_json": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\speedup\\throughput_v2_fused_bilinear_speedup.json"
+      },
+      "commands": {
+        "acceptance_audit": "glass acceptance-audit --manifest C:\\gpwbpp_runs\\final_m38_h_200\\manifest.json --glass-run C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\throughput_v2_fused_bilinear_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\acceptance\\throughput_v2_fused_bilinear_acceptance.json --markdown C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\acceptance\\throughput_v2_fused_bilinear_acceptance.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01 --benchmark-contract-profile resident_cuda_dq_v1",
+        "compare_baseline": "glass compare --glass C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear\\integration\\resident_master_H.fits --reference C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_master_H.fits --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\throughput_v2_fused_bilinear_vs_throughput_v1_lanczos3_parity.html --glass-label \"GLASS throughput_v2_fused_bilinear\" --reference-label \"GLASS throughput_v1_lanczos3_parity\" --glass-coverage-map C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear\\integration\\resident_coverage_map_H.fits --min-coverage 190.0",
+        "compare_reference": "glass compare --glass C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear\\integration\\resident_master_H.fits --reference C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\throughput_v2_fused_bilinear_vs_wbpp.html --glass-label \"GLASS throughput_v2_fused_bilinear\" --reference-label \"WBPP FastIntegration black-box\" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --glass-coverage-map C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear\\integration\\resident_coverage_map_H.fits --min-coverage 190.0",
+        "report": "glass report --run C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\reports\\throughput_v2_fused_bilinear_report.html",
+        "run": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear --backend cuda --memory-mode resident --resident-runtime-preset throughput-v2-fused --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation bilinear --reference-frame-id LIGHT_H_0136 --resident-output-maps audit",
+        "speedup_summary": "python benchmarks\\summarize_wbpp_speedup.py --glass-run C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\compare\\throughput_v2_fused_bilinear_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\speedup\\throughput_v2_fused_bilinear_speedup.json --markdown C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\speedup\\throughput_v2_fused_bilinear_speedup.md --min-speedup 2.0"
+      },
+      "integration_dispatch": "auto",
+      "purpose": "fused resident matrix-integration candidate with throughput-v2 preset and bilinear warp sampling",
+      "role": "candidate",
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate479_source_dq_fastskip_ab_real\\runs\\throughput_v2_fused_bilinear",
+      "run_timing_exists": false,
+      "runtime_preset": "throughput-v2-fused",
+      "variant_id": "throughput_v2_fused_bilinear",
+      "warp_interpolation": "bilinear"
+    }
+  ],
+  "wbpp_result": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json"
+}
