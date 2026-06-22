@@ -75,7 +75,13 @@ from glass.io.fits_fast import (
     read_simple_fits_u16be_raw_timed,
     simple_fits_image_spec,
 )
-from glass.io.fits_io import FitsImageReader, fits_write_backend, read_fits_data, write_fits_data
+from glass.io.fits_io import (
+    FitsImageReader,
+    fits_write_backend,
+    fits_write_profile,
+    read_fits_data,
+    write_fits_data,
+)
 from glass.io.image_source import FitsImageSource
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
@@ -2570,6 +2576,7 @@ def _write_one_resident_output(spec: dict[str, Any]) -> tuple[str, float, dict[s
         "dtype": np.dtype(dtype).name,
         "estimated_data_bytes": _array_storage_bytes(data, dtype),
         "writer_backend": fits_write_backend(data, dtype),
+        "writer_profile": fits_write_profile(data, dtype),
     }
     return name, elapsed, storage
 

@@ -12,8 +12,15 @@ from glass.io.fits_fast import (
     read_simple_fits_u16be_raw_timed,
     simple_fits_image_spec,
 )
-from glass.io.fits_io import FitsImageReader, fits_write_backend, read_fits_data, write_fits_data
 from glass.engine.resident_cuda import _read_light_timed, _write_resident_outputs
+from glass.io.fits_io import (
+    FitsImageReader,
+    _iter_direct_fits_data_chunks,
+    fits_write_backend,
+    fits_write_profile,
+    read_fits_data,
+    write_fits_data,
+)
 from tests.conftest import cuda_module_or_skip
 
 
@@ -201,6 +208,32 @@ def test_write_fits_data_direct_simple_primary_roundtrips_float32(tmp_path):
         assert np.array_equal(hdul[0].data, data, equal_nan=True)
 
 
+def test_direct_fits_writer_chunks_big_endian_payload():
+    data = np.arange(30, dtype=np.float32).reshape(5, 6)
+    chunk_bytes = 2 * data.shape[1] * data.dtype.itemsize
+
+    chunks = [bytes(chunk) for chunk in _iter_direct_fits_data_chunks(data, np.float32, max_chunk_bytes=chunk_bytes)]
+    decoded = np.frombuffer(b"".join(chunks), dtype=">f4").reshape(data.shape)
+
+    assert len(chunks) == 3
+    assert max(len(chunk) for chunk in chunks) <= chunk_bytes
+    assert np.array_equal(decoded, data)
+
+
+def test_fits_write_profile_records_chunked_direct_strategy():
+    data = np.zeros((5, 6), dtype=np.float32)
+    chunk_bytes = 2 * data.shape[1] * data.dtype.itemsize
+
+    profile = fits_write_profile(data, np.float32, max_chunk_bytes=chunk_bytes)
+
+    assert profile["writer_backend"] == "direct_simple_primary"
+    assert profile["writer_strategy"] == "direct_simple_primary_chunked_big_endian"
+    assert profile["direct_streaming"] is True
+    assert profile["rows_per_chunk"] == 2
+    assert profile["chunk_count"] == 3
+    assert profile["estimated_data_bytes"] == data.nbytes
+
+
 def test_write_fits_data_falls_back_for_non_2d_primary(tmp_path):
     path = tmp_path / "cube.fits"
     data = np.zeros((2, 3, 4), dtype=np.float32)
@@ -240,8 +273,10 @@ def test_write_resident_outputs_parallel_records_storage_and_timings(tmp_path):
     assert set(breakdown) == {"master", "coverage"}
     assert storage["master"]["dtype"] == "float32"
     assert storage["master"]["writer_backend"] == "direct_simple_primary"
+    assert storage["master"]["writer_profile"]["writer_strategy"] == "direct_simple_primary_chunked_big_endian"
     assert storage["coverage"]["dtype"] == "int16"
     assert storage["coverage"]["writer_backend"] == "direct_simple_primary"
+    assert storage["coverage"]["writer_profile"]["writer_strategy"] == "direct_simple_primary_chunked_big_endian"
     assert storage["coverage"]["estimated_data_bytes"] == counts.size * np.dtype(np.int16).itemsize
     with fits.open(tmp_path / "coverage.fits", do_not_scale_image_data=True) as hdul:
         assert hdul[0].header["BITPIX"] == 16

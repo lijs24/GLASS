@@ -13,6 +13,7 @@ _DIRECT_FITS_DTYPES: dict[np.dtype, tuple[int, str]] = {
     np.dtype(np.float32): (-32, ">f4"),
     np.dtype(np.float64): (-64, ">f8"),
 }
+_DIRECT_FITS_WRITE_CHUNK_BYTES = 16 * 1024 * 1024
 
 
 def open_fits_image(path: str | Path, memmap: bool = True) -> fits.HDUList:
@@ -46,6 +47,73 @@ def fits_write_backend(data: np.ndarray, dtype: Any = np.float32) -> str:
     return "astropy_primary_hdu"
 
 
+def _direct_fits_rows_per_chunk(width: int, dtype: Any, max_chunk_bytes: int) -> int:
+    row_bytes = max(1, int(width) * np.dtype(dtype).itemsize)
+    return max(1, int(max_chunk_bytes) // row_bytes)
+
+
+def _direct_fits_chunk_count(height: int, rows_per_chunk: int) -> int:
+    if int(height) <= 0:
+        return 0
+    return (int(height) + int(rows_per_chunk) - 1) // int(rows_per_chunk)
+
+
+def fits_write_profile(
+    data: np.ndarray,
+    dtype: Any = np.float32,
+    *,
+    max_chunk_bytes: int = _DIRECT_FITS_WRITE_CHUNK_BYTES,
+) -> dict[str, Any]:
+    array = np.asarray(data)
+    target_dtype = np.dtype(dtype)
+    backend = fits_write_backend(array, target_dtype)
+    profile: dict[str, Any] = {
+        "writer_backend": backend,
+        "source_dtype": array.dtype.name,
+        "target_dtype": target_dtype.name,
+        "source_c_contiguous": bool(array.flags.c_contiguous),
+        "source_shape": [int(v) for v in array.shape],
+    }
+    if backend != "direct_simple_primary":
+        profile["writer_strategy"] = "astropy_primary_hdu"
+        return profile
+    rows_per_chunk = _direct_fits_rows_per_chunk(array.shape[1], target_dtype, max_chunk_bytes)
+    chunk_count = _direct_fits_chunk_count(array.shape[0], rows_per_chunk)
+    profile.update(
+        {
+            "writer_strategy": "direct_simple_primary_chunked_big_endian",
+            "direct_streaming": True,
+            "max_chunk_bytes": int(max_chunk_bytes),
+            "rows_per_chunk": int(rows_per_chunk),
+            "chunk_count": int(chunk_count),
+            "estimated_data_bytes": int(array.shape[0] * array.shape[1] * target_dtype.itemsize),
+        }
+    )
+    return profile
+
+
+def _iter_direct_fits_data_chunks(
+    data: np.ndarray,
+    dtype: Any,
+    *,
+    max_chunk_bytes: int = _DIRECT_FITS_WRITE_CHUNK_BYTES,
+):
+    target_dtype = np.dtype(dtype)
+    _, storage_dtype = _DIRECT_FITS_DTYPES[target_dtype]
+    array = np.asarray(data)
+    if array.ndim != 2:
+        raise ValueError("direct FITS writer supports only 2D primary images")
+    rows_per_chunk = _direct_fits_rows_per_chunk(array.shape[1], target_dtype, max_chunk_bytes)
+    big_endian_dtype = np.dtype(storage_dtype)
+    for y0 in range(0, array.shape[0], rows_per_chunk):
+        y1 = min(array.shape[0], y0 + rows_per_chunk)
+        slab = np.asarray(array[y0:y1], dtype=target_dtype, order="C")
+        stored = slab.astype(big_endian_dtype, copy=False)
+        if not stored.flags.c_contiguous:
+            stored = np.ascontiguousarray(stored)
+        yield memoryview(stored).cast("B")
+
+
 def _write_simple_fits_direct(
     path: Path,
     data: np.ndarray,
@@ -54,7 +122,7 @@ def _write_simple_fits_direct(
 ) -> None:
     target_dtype = np.dtype(dtype)
     bitpix, storage_dtype = _DIRECT_FITS_DTYPES[target_dtype]
-    array = np.ascontiguousarray(np.asarray(data, dtype=target_dtype))
+    array = np.asarray(data)
     if array.ndim != 2:
         raise ValueError("direct FITS writer supports only 2D primary images")
 
@@ -69,15 +137,15 @@ def _write_simple_fits_direct(
             if value is not None and len(str(key)) <= 8:
                 h[str(key)] = value
     header_bytes = h.tostring(endcard=True, padding=True).encode("ascii")
-    stored = array.astype(np.dtype(storage_dtype), copy=False)
-    data_bytes = int(stored.nbytes)
+    data_bytes = int(array.shape[0] * array.shape[1] * np.dtype(storage_dtype).itemsize)
     padding = (2880 - (data_bytes % 2880)) % 2880
     tmp = path.with_name(f"{path.name}.tmp")
     if tmp.exists():
         tmp.unlink()
     with tmp.open("wb") as f:
         f.write(header_bytes)
-        f.write(memoryview(stored).cast("B"))
+        for chunk in _iter_direct_fits_data_chunks(data, target_dtype):
+            f.write(chunk)
         if padding:
             f.write(b"\0" * padding)
     tmp.replace(path)

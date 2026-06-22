@@ -11666,6 +11666,53 @@ Completed in Gate446:
   - real A/B root:
     `C:\glass_runs\phase2_s2_gate503_descriptor_batch_ab_real\runs_20260623_052608`.
 
+### S2-Gate 504: Chunked Direct FITS Output Writer
+
+- Returned to the real 200-light A/B path after Gate503 showed the component
+  registration gain was hidden by output-write variance.
+- Completed:
+  - changed the direct simple-primary FITS writer from whole-image byte writes
+    to bounded big-endian row chunks;
+  - records `writer_profile` in resident output artifacts, including strategy,
+    chunk count, rows per chunk, source contiguity, target dtype, and estimated
+    payload bytes;
+  - keeps unsupported shapes/dtypes on the Astropy fallback path;
+  - added focused tests for chunk payload correctness and resident storage
+    profile reporting.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate504_chunked_fits_writer_ab_real\runs_20260623_053419`;
+  - Gate503 baseline:
+    `C:\glass_runs\phase2_s2_gate503_descriptor_batch_ab_real\runs_20260623_052608\default_descriptor_batch`;
+  - Gate503 total timings were `7.1556646000244655 s` and
+    `7.309961199993268 s`, with master output write timings
+    `0.6129282000474632 s` and `0.7726107999915257 s`;
+  - Gate504 totals were `6.634346000035293 s` and `6.615711500053294 s`;
+  - Gate504 master output writes were `0.08645619999151677 s` and
+    `0.08730260003358126 s`;
+  - the 246,604,800-byte master payload was written as `15` chunks with
+    `436` rows per chunk.
+- Numerical validation:
+  - both Gate504 masters are bitwise equal to the Gate503 baseline master;
+  - RMS/p99/max absolute differences are all `0.0`.
+- WBPP black-box comparison:
+  - compare report:
+    `C:\glass_runs\phase2_s2_gate504_chunked_fits_writer_ab_real\runs_20260623_053419\compare_vs_wbpp_fastintegration_scaled_coverage190.html`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - Gate504 repeat speedup: `165.1433863147144x`;
+  - coverage>=190 comparison keeps the established metrics:
+    RMS `0.0017794216505176163`, p99 absolute difference
+    `0.00042621337808668863`, coverage fraction `0.960532609259836`.
+- Interpretation:
+  - this is an output-stage performance and memory-pressure optimization, not a
+    science change;
+  - it materially reduces the output-write component and removes the previous
+    whole-image byte-copy peak, while preserving exact pixels.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_504_status.md`;
+  - real A/B root:
+    `C:\glass_runs\phase2_s2_gate504_chunked_fits_writer_ab_real\runs_20260623_053419`.
+
 ## Gate Rules
 
 Each gate requires:
