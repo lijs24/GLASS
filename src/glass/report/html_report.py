@@ -903,6 +903,7 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "flat": master_stats.get("flat_count"),
                 "registration": registration.get("mode"),
                 "warp": registration.get("warp_interpolation"),
+                "warp_batch_dispatch": registration.get("triangle_warp_batch_dispatch"),
                 "catalog_timing_model": registration.get("triangle_catalog_timing_model"),
                 "catalog_sort_mode": registration.get("triangle_catalog_sort_mode"),
                 "catalog_topk_mode": registration.get("triangle_catalog_topk_mode"),
@@ -970,7 +971,29 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "weighting": weighting.get("mode"),
                 "rejection": rejection.get("mode"),
                 "resident_base_gib": round(float(memory.get("resident_base_gib") or 0.0), 3),
+                "estimated_peak_without_chunked_warp_gib": round(
+                    float(memory.get("estimated_peak_without_chunked_warp_gib") or 0.0),
+                    3,
+                ),
+                "estimated_peak_includes_chunked_warp_workspace": memory.get(
+                    "estimated_peak_includes_chunked_warp_workspace"
+                ),
                 "estimated_peak_gib": round(float(memory.get("estimated_peak_gib") or 0.0), 3),
+                "chunked_warp_workspace_model": memory.get("chunked_warp_workspace_model"),
+                "chunked_warp_planned_capacity_frames": memory.get(
+                    "chunked_warp_planned_capacity_frames"
+                ),
+                "chunked_warp_observed_capacity_frames": memory.get(
+                    "chunked_warp_observed_capacity_frames"
+                ),
+                "chunked_warp_planned_workspace_mib": round(
+                    float(memory.get("chunked_warp_planned_workspace_bytes") or 0.0) / (1024.0**2),
+                    3,
+                ),
+                "chunked_warp_observed_workspace_mib": round(
+                    float(memory.get("chunked_warp_observed_workspace_bytes") or 0.0) / (1024.0**2),
+                    3,
+                ),
                 "warp_scratch_mib": round(float(item.get("resident_warp_scratch_bytes") or 0.0) / (1024.0**2), 3),
                 "warp_copy_mode": item.get("resident_warp_copy_mode"),
                 "light_calibrate_s": round(float(timing.get("light_read_upload_calibrate") or 0.0), 3),

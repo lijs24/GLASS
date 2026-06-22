@@ -1,0 +1,117 @@
+{
+  "gate": "S2-Gate 463",
+  "status": "passed",
+  "scope": "resident_chunked_warp_workspace_memory_planning",
+  "date_local": "2026-06-22",
+  "real_run": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_463_200\\chunked_workspace_contract_parity_r3_20260622",
+    "dataset": "M38_H_200light_20bias_20dark_20flat",
+    "backend": "cuda",
+    "memory_mode": "resident",
+    "resident_runtime_preset": "throughput-v1",
+    "resident_h2d_mode": "pinned_ring",
+    "resident_fits_read_mode": "auto",
+    "resident_inline_source_dq": "off",
+    "registration": "similarity_cuda_triangle",
+    "warp_interpolation": "lanczos3",
+    "warp_batch_dispatch": "chunked",
+    "local_normalization": "off",
+    "rejection": "winsorized_sigma",
+    "winsorized_mode": "fast_approx",
+    "weighting": "none",
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "zero_weight_frames": 7,
+    "quality_rejected_frames": 7
+  },
+  "timing_s": {
+    "internal_elapsed": 37.83031089999713,
+    "outer_elapsed": 38.2377834,
+    "wbpp_blackbox_elapsed": 1092.541,
+    "master_build_or_load": 12.934915999998339,
+    "light_read_upload_calibrate": 16.19376990001183,
+    "light_read_decode_worker": 20.459233400411904,
+    "light_read_wait_wall": 2.1832844997989014,
+    "resident_registration_warp": 3.5062924006488174,
+    "resident_registration_component_accounted": 11.026489599073782,
+    "resident_integration": 0.4023596000042744,
+    "output_write": 2.307585599948652
+  },
+  "memory": {
+    "estimated_peak_gib": 49.6084223985672,
+    "estimated_peak_without_chunked_warp_gib": 47.3117358982563,
+    "estimated_peak_includes_chunked_warp_workspace": true,
+    "chunked_warp_workspace_gib": 2.296686500310898,
+    "chunked_warp_planned_workspace_bytes": 2466048352,
+    "chunked_warp_observed_workspace_bytes": 2466048352,
+    "chunked_warp_planned_capacity_frames": 8,
+    "chunked_warp_observed_capacity_frames": 8,
+    "chunked_warp_workspace_model": "native_preferred_min_frame_count_8_with_halving_fallback"
+  },
+  "warp_batch": {
+    "dispatch": "chunked",
+    "enabled": true,
+    "mode": "native_matrix_lanczos3_frames",
+    "timing_model": "native_chunked_batch_warp_scatter_one_sync",
+    "frame_count": 192,
+    "fallback_frame_count": 0,
+    "chunk_frames": 8,
+    "chunk_count": 24,
+    "warp_kernel_launches": 24,
+    "coverage_reduce_kernel_launches": 24,
+    "scatter_kernel_launches": 24,
+    "workspace_bytes": 2466048352,
+    "inverse_upload_mode": "chunked_device_batch"
+  },
+  "compare": {
+    "json": "C:\\glass_runs\\phase2_s2_gate_463_200\\chunked_workspace_contract_parity_r3_20260622\\s2_gate_463_compare.json",
+    "html": "C:\\glass_runs\\phase2_s2_gate_463_200\\chunked_workspace_contract_parity_r3_20260622\\s2_gate_463_compare.html",
+    "shape_match": true,
+    "coverage_fraction": 0.9609334611491747,
+    "coverage_max": 193.0,
+    "coverage_median": 192.0,
+    "rms_diff": 0.0016886628886249584,
+    "abs_diff_p99": 0.00045946170575916767,
+    "compare_speedup_vs_reference": 28.572289051671337
+  },
+  "acceptance": {
+    "status": "passed",
+    "speedup_vs_wbpp": 28.880042854738548,
+    "passed_checks": 121,
+    "failed_checks": 0
+  },
+  "contracts": {
+    "resident_calibration_contract": "passed",
+    "resident_result_contract": "passed",
+    "pipeline_contract": "passed",
+    "stack_engine_contract": "passed",
+    "acceptance_audit": "passed"
+  },
+  "tests": {
+    "ruff": "passed",
+    "focused": "3 passed",
+    "full_pytest": "1093 passed in 53.22 s"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "driver": "596.21",
+    "doctor_json": "runs\\checkpoints\\s2_gate_463_doctor.json"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "notes": [
+      "Used GLASS code, GLASS fixtures, GLASS artifacts, and user-owned benchmark outputs.",
+      "Original image directories remained read-only.",
+      "No official PixInsight/WBPP/PJSR implementation source was read, copied, summarized, or modified."
+    ]
+  },
+  "known_limitations": [
+    "The memory model reports preferred and observed chunk capacity, but it does not yet make a pre-run admission/fallback decision against a user-provided VRAM budget.",
+    "The real regression remains local-normalization off and source-DQ off to preserve the current contract-parity benchmark path.",
+    "The low-level glass_cuda ResidentCalibratedStack wrapper still keeps dispatch='loop' as its direct API default for compatibility; high-level run/audit/engine default is chunked."
+  ],
+  "next_gate": "Use the new resident peak terms for a pre-run VRAM admission scheduler that can choose resident full-frame, reduced chunk capacity, or tiled fallback before allocation."
+}

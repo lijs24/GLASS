@@ -122,14 +122,108 @@ def _safe_filter_name(value: str | None) -> str:
     return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in text)
 
 
-def _memory_estimate(frame_count: int, height: int, width: int, master_count: int = 3) -> dict[str, Any]:
+_BATCH_WARP_PREFERRED_FRAMES = 8
+
+
+def _chunked_warp_workspace_estimate(
+    *,
+    frame_count: int,
+    height: int,
+    width: int,
+    enabled: bool,
+    planned_warp_frame_count: int | None = None,
+    observed_chunk_frames: int = 0,
+    observed_workspace_bytes: int = 0,
+    observed_output_bytes: int = 0,
+    observed_coverage_bytes: int = 0,
+    observed_inverse_bytes: int = 0,
+) -> dict[str, Any]:
+    pixels = int(height) * int(width)
+    frame_bytes = pixels * 4
+    planned_frames = max(0, int(planned_warp_frame_count if planned_warp_frame_count is not None else frame_count - 1))
+    planned_capacity = min(planned_frames, _BATCH_WARP_PREFERRED_FRAMES) if enabled else 0
+    planned_output_bytes = planned_capacity * frame_bytes
+    planned_coverage_bytes = planned_capacity * pixels
+    planned_inverse_bytes = planned_capacity * 9 * 4
+    planned_index_bytes = planned_capacity * 8
+    planned_workspace_bytes = (
+        planned_output_bytes
+        + planned_coverage_bytes
+        + planned_inverse_bytes
+        + planned_index_bytes
+    )
+    observed_workspace = int(observed_workspace_bytes)
+    if observed_workspace <= 0:
+        observed_workspace = (
+            int(observed_output_bytes)
+            + int(observed_coverage_bytes)
+            + int(observed_inverse_bytes)
+        )
+    return {
+        "chunked_warp_enabled": bool(enabled),
+        "chunked_warp_preferred_capacity_frames": _BATCH_WARP_PREFERRED_FRAMES,
+        "chunked_warp_planned_frame_count": planned_frames if enabled else 0,
+        "chunked_warp_planned_capacity_frames": planned_capacity,
+        "chunked_warp_planned_output_bytes": planned_output_bytes,
+        "chunked_warp_planned_coverage_bytes": planned_coverage_bytes,
+        "chunked_warp_planned_inverse_bytes": planned_inverse_bytes,
+        "chunked_warp_planned_index_bytes": planned_index_bytes,
+        "chunked_warp_planned_workspace_bytes": planned_workspace_bytes,
+        "chunked_warp_planned_workspace_gib": planned_workspace_bytes / (1024**3),
+        "chunked_warp_observed_capacity_frames": max(0, int(observed_chunk_frames)),
+        "chunked_warp_observed_workspace_bytes": observed_workspace,
+        "chunked_warp_observed_workspace_gib": observed_workspace / (1024**3),
+        "chunked_warp_observed_output_bytes": int(observed_output_bytes),
+        "chunked_warp_observed_coverage_bytes": int(observed_coverage_bytes),
+        "chunked_warp_observed_inverse_bytes": int(observed_inverse_bytes),
+        "chunked_warp_workspace_model": (
+            "native_preferred_min_frame_count_8_with_halving_fallback" if enabled else "off"
+        ),
+    }
+
+
+def _memory_estimate(
+    frame_count: int,
+    height: int,
+    width: int,
+    master_count: int = 3,
+    *,
+    resident_registration: str | None = None,
+    resident_warp_batch_dispatch: str = "loop",
+    chunked_warp_frame_count: int | None = None,
+    observed_chunked_warp_chunk_frames: int = 0,
+    observed_chunked_warp_workspace_bytes: int = 0,
+    observed_chunked_warp_output_bytes: int = 0,
+    observed_chunked_warp_coverage_bytes: int = 0,
+    observed_chunked_warp_inverse_bytes: int = 0,
+) -> dict[str, Any]:
     frame_bytes = int(height) * int(width) * 4
     calibrated_stack = frame_count * frame_bytes
     reusable_raw = frame_bytes
     masters = master_count * frame_bytes
     integration_outputs = 2 * frame_bytes
     weights = frame_count * 4
-    estimated_peak = calibrated_stack + reusable_raw + masters + integration_outputs + weights
+    base_peak = calibrated_stack + reusable_raw + masters + integration_outputs + weights
+    chunked_warp = _chunked_warp_workspace_estimate(
+        frame_count=frame_count,
+        height=height,
+        width=width,
+        enabled=bool(
+            resident_registration == "similarity_cuda_triangle"
+            and resident_warp_batch_dispatch == "chunked"
+        ),
+        planned_warp_frame_count=chunked_warp_frame_count,
+        observed_chunk_frames=observed_chunked_warp_chunk_frames,
+        observed_workspace_bytes=observed_chunked_warp_workspace_bytes,
+        observed_output_bytes=observed_chunked_warp_output_bytes,
+        observed_coverage_bytes=observed_chunked_warp_coverage_bytes,
+        observed_inverse_bytes=observed_chunked_warp_inverse_bytes,
+    )
+    chunked_workspace = max(
+        int(chunked_warp["chunked_warp_planned_workspace_bytes"]),
+        int(chunked_warp["chunked_warp_observed_workspace_bytes"]),
+    )
+    estimated_peak = base_peak + chunked_workspace
     return {
         "frame_bytes": frame_bytes,
         "frame_mib": frame_bytes / (1024**2),
@@ -139,6 +233,10 @@ def _memory_estimate(frame_count: int, height: int, width: int, master_count: in
         "resident_base_gib": (calibrated_stack + reusable_raw + masters) / (1024**3),
         "integration_temporary_bytes": integration_outputs + weights,
         "integration_temporary_gib": (integration_outputs + weights) / (1024**3),
+        "estimated_peak_without_chunked_warp_bytes": base_peak,
+        "estimated_peak_without_chunked_warp_gib": base_peak / (1024**3),
+        "estimated_peak_includes_chunked_warp_workspace": bool(chunked_workspace > 0),
+        **chunked_warp,
         "estimated_peak_bytes": estimated_peak,
         "estimated_peak_gib": estimated_peak / (1024**3),
     }
@@ -7896,7 +7994,31 @@ def run_resident_calibration_integration(
                 master_stats=master_stats,
             )
             resident_master_cache_groups.append(group_master_cache)
-            memory_estimate = _memory_estimate(len(light_frames), height, width)
+            memory_estimate = _memory_estimate(
+                len(light_frames),
+                height,
+                width,
+                resident_registration=resident_registration,
+                resident_warp_batch_dispatch=resident_warp_batch_dispatch,
+                chunked_warp_frame_count=triangle_warp_batch_frame_count
+                if resident_registration == "similarity_cuda_triangle"
+                else None,
+                observed_chunked_warp_chunk_frames=triangle_warp_batch_native_chunk_frames
+                if resident_registration == "similarity_cuda_triangle"
+                else 0,
+                observed_chunked_warp_workspace_bytes=triangle_warp_batch_native_workspace_bytes
+                if resident_registration == "similarity_cuda_triangle"
+                else 0,
+                observed_chunked_warp_output_bytes=triangle_warp_batch_native_output_bytes
+                if resident_registration == "similarity_cuda_triangle"
+                else 0,
+                observed_chunked_warp_coverage_bytes=triangle_warp_batch_native_coverage_bytes
+                if resident_registration == "similarity_cuda_triangle"
+                else 0,
+                observed_chunked_warp_inverse_bytes=triangle_warp_batch_native_inverse_batch_bytes
+                if resident_registration == "similarity_cuda_triangle"
+                else 0,
+            )
             read_timing = _timing_summary(per_frame_read_s)
             read_worker_timing = _timing_summary(per_frame_read_worker_s)
             fits_open_timing = _timing_summary(per_frame_fits_open_s)
@@ -8801,6 +8923,9 @@ def run_resident_calibration_integration(
                             and triangle_warp_batch_enabled
                         ),
                         "triangle_warp_batch_mode": triangle_warp_batch_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_warp_batch_dispatch": resident_warp_batch_dispatch
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_warp_batch_timing_model": triangle_warp_batch_timing_model

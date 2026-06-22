@@ -1315,11 +1315,24 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                     "filter": "H",
                     "frame_ids": ["F1", "F2"],
                     "master_stats": {"bias_count": 1, "dark_count": 1, "flat_count": 1},
-                    "memory_estimate": {"resident_base_gib": 1.25, "estimated_peak_gib": 1.75},
+                    "memory_estimate": {
+                        "resident_base_gib": 1.25,
+                        "estimated_peak_without_chunked_warp_gib": 1.75,
+                        "estimated_peak_includes_chunked_warp_workspace": True,
+                        "estimated_peak_gib": 2.5,
+                        "chunked_warp_workspace_model": (
+                            "native_preferred_min_frame_count_8_with_halving_fallback"
+                        ),
+                        "chunked_warp_planned_capacity_frames": 8,
+                        "chunked_warp_observed_capacity_frames": 4,
+                        "chunked_warp_planned_workspace_bytes": 1048576,
+                        "chunked_warp_observed_workspace_bytes": 524288,
+                    },
                     "resident_io_pipeline": {"prefetch_frames": 2, "prefetch_workers": 1},
                     "resident_registration": {
                         "mode": "similarity_cuda_triangle",
                         "warp_interpolation": "lanczos3",
+                        "triangle_warp_batch_dispatch": "chunked",
                         "warp_coverage": {
                             "available": True,
                             "active_frame_count": 2,
@@ -1733,6 +1746,12 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "cuda_resident_stack" in html
     assert "Test GPU" in html
     assert "estimated_peak_gib" in html
+    assert "estimated_peak_without_chunked_warp_gib" in html
+    assert "estimated_peak_includes_chunked_warp_workspace" in html
+    assert "chunked_warp_workspace_model" in html
+    assert "native_preferred_min_frame_count_8_with_halving_fallback" in html
+    assert "chunked_warp_planned_workspace_mib" in html
+    assert "chunked_warp_observed_workspace_mib" in html
     assert "prefetch_frames" in html
     assert "read_decode_s" in html
     assert "read_decode_worker_s" in html
@@ -1742,6 +1761,8 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "registration_orchestration_s" in html
     assert "similarity_cuda_triangle" in html
     assert "lanczos3" in html
+    assert "warp_batch_dispatch" in html
+    assert "chunked" in html
     assert "resident_grid_mean_std" in html
     assert "simple_snr" in html
     assert "winsorized_sigma" in html

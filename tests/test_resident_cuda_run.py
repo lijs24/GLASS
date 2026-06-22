@@ -16,6 +16,7 @@ from glass.engine.resident_cuda import (
     _load_frame_weight_proposal,
     _load_tile_local_policy_replay,
     _matches_any_token,
+    _memory_estimate,
     _resident_dq_coverage_provenance,
     _resident_dq_map,
     _resident_catalog_signature,
@@ -38,6 +39,33 @@ from glass.engine.resident_cuda import (
 )
 from glass.cpu.registration import translation_matrix
 from tests.conftest import cuda_module_or_skip
+
+
+def test_resident_memory_estimate_includes_chunked_warp_workspace() -> None:
+    frame_bytes = 72 * 80 * 4
+    base_peak_bytes = (2 + 1 + 3 + 2) * frame_bytes + 2 * 4
+    workspace_bytes = frame_bytes + (72 * 80) + 9 * 4 + 8
+
+    memory = _memory_estimate(
+        2,
+        72,
+        80,
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        chunked_warp_frame_count=1,
+        observed_chunked_warp_chunk_frames=1,
+        observed_chunked_warp_workspace_bytes=workspace_bytes,
+        observed_chunked_warp_output_bytes=frame_bytes,
+        observed_chunked_warp_coverage_bytes=72 * 80,
+        observed_chunked_warp_inverse_bytes=9 * 4,
+    )
+
+    assert memory["estimated_peak_without_chunked_warp_bytes"] == base_peak_bytes
+    assert memory["chunked_warp_planned_capacity_frames"] == 1
+    assert memory["chunked_warp_planned_workspace_bytes"] == workspace_bytes
+    assert memory["chunked_warp_observed_workspace_bytes"] == workspace_bytes
+    assert memory["estimated_peak_includes_chunked_warp_workspace"] is True
+    assert memory["estimated_peak_bytes"] == base_peak_bytes + workspace_bytes
 
 
 def _write_test_frame(path: Path, frame_type: str, data: np.ndarray, exposure: float = 60.0) -> None:
@@ -3020,10 +3048,28 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     resident = read_json(run / "resident_artifacts.json")
     moving = [item for item in registration["results"] if item["status"] != "reference"][0]
     resident_registration = resident["artifacts"][0]["resident_registration"]
+    memory_estimate = resident["artifacts"][0]["memory_estimate"]
+    frame_bytes = 72 * 80 * 4
+    base_peak_bytes = (2 + 1 + 3 + 2) * frame_bytes + 2 * 4
+    expected_chunked_workspace_bytes = frame_bytes + (72 * 80) + 9 * 4 + 8
 
     assert registration["transform_model"] == "similarity_cuda_triangle"
     assert integration["outputs"][0]["resident_registration"] == "similarity_cuda_triangle"
     assert resident_registration["mode"] == "similarity_cuda_triangle"
+    assert memory_estimate["chunked_warp_enabled"] is True
+    assert memory_estimate["chunked_warp_workspace_model"] == (
+        "native_preferred_min_frame_count_8_with_halving_fallback"
+    )
+    assert memory_estimate["chunked_warp_planned_frame_count"] == 1
+    assert memory_estimate["chunked_warp_planned_capacity_frames"] == 1
+    assert memory_estimate["chunked_warp_planned_workspace_bytes"] == expected_chunked_workspace_bytes
+    assert memory_estimate["chunked_warp_observed_workspace_bytes"] == expected_chunked_workspace_bytes
+    assert memory_estimate["estimated_peak_without_chunked_warp_bytes"] == base_peak_bytes
+    assert memory_estimate["estimated_peak_includes_chunked_warp_workspace"] is True
+    assert memory_estimate["estimated_peak_bytes"] == (
+        base_peak_bytes + expected_chunked_workspace_bytes
+    )
+    assert integration["outputs"][0]["estimated_peak_gib"] == memory_estimate["estimated_peak_gib"]
     assert resident_registration["triangle_descriptor_radius"] == 0.08
     assert resident_registration["triangle_neighbors"] == 5
     assert resident_registration["triangle_max_descriptors"] == 256
@@ -3071,6 +3117,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     )
     assert resident_registration["triangle_warp_batch"] is True
     assert resident_registration["triangle_warp_batch_mode"] == "native_matrix_bilinear_frames"
+    assert resident_registration["triangle_warp_batch_dispatch"] == "chunked"
     assert resident_registration["triangle_warp_batch_timing_model"] == (
         "native_chunked_batch_warp_scatter_one_sync"
     )

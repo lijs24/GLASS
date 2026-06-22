@@ -9467,6 +9467,58 @@ Completed in Gate446:
     chunked warp. The next gate should make the chunk capacity and fallback
     decision explicit in memory planning/reporting.
 
+### S2-Gate 463: Chunked Warp Workspace Memory Planning
+
+- Make the resident CUDA memory estimate account for default chunked matrix
+  warp temporary workspace instead of reporting only the calibrated-stack,
+  master-frame, and integration-output hot set.
+- Required work:
+  - mirror the native chunked warp preferred capacity rule
+    `min(warp_frame_count, 8)` in the Python resident memory planner;
+  - record planned and observed chunk capacity, workspace bytes, output bytes,
+    coverage bytes, and peak VRAM with and without chunked warp workspace;
+  - expose `triangle_warp_batch_dispatch` in resident registration artifacts
+    and the HTML resident summary;
+  - keep the real 200-light default command on the same science path and pass
+    compare, pipeline, StackEngine, and acceptance contracts.
+- Completed in S2-Gate463:
+  - added `chunked_warp_*` memory fields to resident artifacts and integration
+    outputs, including `estimated_peak_without_chunked_warp_gib` and
+    `estimated_peak_includes_chunked_warp_workspace`;
+  - added report columns for chunked warp dispatch, planned/observed chunk
+    capacity, planned/observed workspace MiB, and peak memory with and without
+    the chunked workspace;
+  - fixed the observed workspace accounting to use native
+    `batch_workspace_bytes` when available, because `inverse_batch_bytes` is a
+    cumulative upload-volume metric rather than a persistent workspace size;
+  - focused tests passed for the pure Python memory model, resident CUDA
+    triangle path, and HTML report rendering;
+  - real 200-light default run completed in `37.830311 s` internal timing
+    (`38.237783 s` outer PowerShell timing), integrated `193/200` frames, and
+    passed acceptance at `28.880043x` versus the WBPP black-box timing
+    `1092.541 s`;
+  - real resident artifact reports `triangle_warp_batch_dispatch=chunked`,
+    `triangle_warp_batch_frame_count=192`,
+    `triangle_warp_batch_native_chunk_frames=8`, `chunk_count=24`,
+    `chunked_warp_planned_workspace_bytes=2466048352`, and matching observed
+    workspace bytes;
+  - peak VRAM estimate increased from the old hot-set-only
+    `47.311736 GiB` to `49.608422 GiB`, explicitly including the
+    `2.296687 GiB` chunked warp workspace;
+  - comparison remained inside the 200-light contract: shape matched,
+    coverage fraction `0.960933`, RMS diff `0.00168866`, and P99 absolute
+    diff `0.000459462`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_463_200\chunked_workspace_contract_parity_r3_20260622`;
+  - `runs/checkpoints/s2_gate_463_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_463_status.md`.
+- Known limitation:
+  - this gate reports the preferred chunk capacity and observed native
+    fallback capacity, but it does not yet make a pre-run admission decision
+    against a user-provided VRAM budget. A later resident scheduler gate should
+    use these byte terms before allocation to choose resident, reduced chunk,
+    or tiled fallback mode.
+
 ## Gate Rules
 
 Each gate requires:
