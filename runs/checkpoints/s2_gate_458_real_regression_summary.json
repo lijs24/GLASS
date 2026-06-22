@@ -1,0 +1,84 @@
+{
+  "gate": "S2-Gate 458",
+  "status": "passed",
+  "scope": "resident_cuda_histogram_source_dq_threshold_reductions",
+  "date_local": "2026-06-22",
+  "default_path_changed": false,
+  "source_dq_mode_for_real_regression": "off",
+  "opt_in_threshold_source": "cuda_resident_histogram_median_mad_scalar",
+  "real_run": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_458_200\\contract_parity_audit_required_20260622",
+    "dataset": "M38_H_200light_20bias_20dark_20flat",
+    "internal_elapsed_s": 35.87699179997435,
+    "outer_elapsed_s": 36.2712312,
+    "backend": "cuda",
+    "memory_mode": "resident",
+    "resident_runtime_preset": "throughput-v1",
+    "resident_h2d_mode": "pinned_ring",
+    "resident_fits_read_mode": "auto",
+    "registration": "similarity_cuda_triangle",
+    "warp_interpolation": "lanczos3",
+    "local_normalization": "off",
+    "rejection": "winsorized_sigma",
+    "winsorized_mode": "fast_approx",
+    "weighting": "none",
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "zero_weight_frames": 7,
+    "quality_rejected_frames": 7
+  },
+  "wbpp_blackbox": {
+    "elapsed_s": 1092.541,
+    "result_path": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json",
+    "reference_master": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf"
+  },
+  "speedup": {
+    "acceptance_audit_speedup_vs_wbpp": 30.45241379464766,
+    "compare_timing_speedup_vs_wbpp": 30.121420306239834
+  },
+  "compare": {
+    "json": "C:\\glass_runs\\phase2_s2_gate_458_200\\contract_parity_audit_required_20260622\\s2_gate_458_compare.json",
+    "html": "C:\\glass_runs\\phase2_s2_gate_458_200\\contract_parity_audit_required_20260622\\s2_gate_458_compare.html",
+    "shape_match": true,
+    "coverage_fraction": 0.9606526555849684,
+    "coverage_max": 193.0,
+    "coverage_median": 192.0,
+    "rms_diff": 0.0016955712072399998,
+    "abs_diff_p99": 0.0004540283977985376
+  },
+  "contracts": {
+    "resident_calibration_contract": "passed",
+    "resident_result_contract": "passed",
+    "pipeline_contract": "passed",
+    "stack_engine_contract": "passed",
+    "acceptance_audit": "passed"
+  },
+  "tests": {
+    "focused_source_dq_cuda_cli": "12 passed",
+    "focused_ruff": "passed",
+    "resident_source_dq_regression": "116 passed",
+    "full_pytest": "1087 passed in 47.85 s",
+    "native_cuda_build": "passed"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "driver": "596.21",
+    "toolkit": "13.2"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "notes": [
+      "Used GLASS code, GLASS fixtures, GLASS artifacts, and user-owned benchmark outputs.",
+      "Original image directories remained read-only.",
+      "No official PixInsight/WBPP/PJSR implementation source was read, copied, summarized, or modified."
+    ]
+  },
+  "known_limitations": [
+    "cosmetic_cuda remains opt-in and default resident_inline_source_dq remains off.",
+    "Histogram thresholds are approximate and still scan compact histogram bins on the host.",
+    "The real 200-light default-path regression intentionally does not enable source-DQ because that changes sample admission."
+  ]
+}

@@ -110,27 +110,28 @@ def test_inline_cosmetic_thresholds_match_cpu_baseline_scalar_thresholds():
     assert threshold_info["high_threshold"] == pytest.approx(float(np.float32(median + 2.0 * sigma)))
 
 
-def test_inline_cosmetic_thresholds_from_resident_stack_records_sampled_native_stats():
+def test_inline_cosmetic_thresholds_from_resident_stack_records_histogram_native_stats():
     class FakeResidentStack:
-        def frame_sampled_robust_stats(
+        def frame_histogram_robust_stats(
             self,
             frame_index: int,
-            sample_limit: int,
+            bin_count: int,
             hot_sigma: float,
             cold_sigma: float,
         ) -> dict[str, object]:
             assert frame_index == 3
-            assert sample_limit == 65536
+            assert bin_count == 4096
             assert hot_sigma == pytest.approx(2.0)
             assert cold_sigma == pytest.approx(3.0)
             return {
-                "native_method": "ResidentCalibratedStack.frame_sampled_robust_stats",
-                "threshold_source": "cuda_resident_sampled_median_mad_scalar",
+                "native_method": "ResidentCalibratedStack.frame_histogram_robust_stats",
+                "threshold_source": "cuda_resident_histogram_median_mad_scalar",
                 "stats_domain": "resident_calibrated_frame",
-                "robust_stats_execution": "cuda_even_sample_then_host_median_mad_scalar",
+                "robust_stats_execution": "cuda_histogram_quantile_then_host_bin_scan_scalar",
                 "materializes_host_frame": False,
-                "sample_count": 128,
-                "sample_download_bytes": 512,
+                "bin_count": 4096,
+                "histogram_download_bytes": 65536,
+                "histogram_approximation": True,
                 "median": 100.0,
                 "mad": 2.0,
                 "sigma": 2.9652,
@@ -148,15 +149,16 @@ def test_inline_cosmetic_thresholds_from_resident_stack_records_sampled_native_s
     )
 
     assert threshold_info["supported"] is True
-    assert threshold_info["threshold_source"] == "cuda_resident_sampled_median_mad_scalar"
+    assert threshold_info["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
     assert threshold_info["threshold_stats_native_method"] == (
-        "ResidentCalibratedStack.frame_sampled_robust_stats"
+        "ResidentCalibratedStack.frame_histogram_robust_stats"
     )
     assert threshold_info["threshold_stats_domain"] == "resident_calibrated_frame"
-    assert threshold_info["threshold_stats_execution"] == "cuda_even_sample_then_host_median_mad_scalar"
+    assert threshold_info["threshold_stats_execution"] == "cuda_histogram_quantile_then_host_bin_scan_scalar"
     assert threshold_info["threshold_stats_materializes_host_frame"] is False
-    assert threshold_info["threshold_stats_sample_count"] == 128
-    assert threshold_info["threshold_stats_sample_download_bytes"] == 512
+    assert threshold_info["threshold_stats_bin_count"] == 4096
+    assert threshold_info["threshold_stats_histogram_download_bytes"] == 65536
+    assert threshold_info["threshold_stats_histogram_approximation"] is True
     assert threshold_info["low_threshold"] == pytest.approx(91.1044)
     assert threshold_info["high_threshold"] == pytest.approx(105.9304)
 

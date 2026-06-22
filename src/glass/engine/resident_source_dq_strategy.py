@@ -158,7 +158,7 @@ def build_resident_source_dq_strategy(
             else None
         ),
         "threshold_source": (
-            "cuda_resident_sampled_median_mad_scalar"
+            "cuda_resident_histogram_median_mad_scalar"
             if str(resident_inline_source_dq) == "cosmetic_cuda"
             else None
         ),

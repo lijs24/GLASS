@@ -249,6 +249,148 @@ void glass_sample_frame_even_f32_launch(
   glass_sample_frame_even_f32_kernel<<<blocks, threads>>>(frame, sample, n, sample_count);
 }
 
+__global__ void glass_frame_minmax_count_f32_kernel(
+    const float* frame,
+    float* partial_min,
+    float* partial_max,
+    unsigned long long* partial_count,
+    std::size_t n) {
+  constexpr int threads = 256;
+  __shared__ float s_min[threads];
+  __shared__ float s_max[threads];
+  __shared__ unsigned long long s_count[threads];
+
+  const int tid = threadIdx.x;
+  float local_min = 3.402823466e+38f;
+  float local_max = -3.402823466e+38f;
+  unsigned long long local_count = 0ULL;
+  const std::size_t stride = static_cast<std::size_t>(blockDim.x) * static_cast<std::size_t>(gridDim.x);
+  for (std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + tid); i < n; i += stride) {
+    const float value = frame[i];
+    if (isfinite(value)) {
+      local_min = fminf(local_min, value);
+      local_max = fmaxf(local_max, value);
+      ++local_count;
+    }
+  }
+  s_min[tid] = local_min;
+  s_max[tid] = local_max;
+  s_count[tid] = local_count;
+  __syncthreads();
+
+  for (int offset = threads / 2; offset > 0; offset >>= 1) {
+    if (tid < offset) {
+      s_min[tid] = fminf(s_min[tid], s_min[tid + offset]);
+      s_max[tid] = fmaxf(s_max[tid], s_max[tid + offset]);
+      s_count[tid] += s_count[tid + offset];
+    }
+    __syncthreads();
+  }
+  if (tid == 0) {
+    partial_min[blockIdx.x] = s_min[0];
+    partial_max[blockIdx.x] = s_max[0];
+    partial_count[blockIdx.x] = s_count[0];
+  }
+}
+
+void glass_frame_minmax_count_f32_launch(
+    const float* frame,
+    float* partial_min,
+    float* partial_max,
+    unsigned long long* partial_count,
+    std::size_t n,
+    int blocks) {
+  constexpr int threads = 256;
+  glass_frame_minmax_count_f32_kernel<<<blocks, threads>>>(
+      frame,
+      partial_min,
+      partial_max,
+      partial_count,
+      n);
+}
+
+__global__ void glass_frame_histogram_f32_kernel(
+    const float* frame,
+    unsigned long long* histogram,
+    std::size_t n,
+    float min_value,
+    float inv_bin_width,
+    int bin_count) {
+  const std::size_t stride = static_cast<std::size_t>(blockDim.x) * static_cast<std::size_t>(gridDim.x);
+  for (std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x); i < n; i += stride) {
+    const float value = frame[i];
+    if (!isfinite(value)) {
+      continue;
+    }
+    int bin = static_cast<int>((value - min_value) * inv_bin_width);
+    if (bin < 0) {
+      bin = 0;
+    } else if (bin >= bin_count) {
+      bin = bin_count - 1;
+    }
+    atomicAdd(&histogram[bin], 1ULL);
+  }
+}
+
+void glass_frame_histogram_f32_launch(
+    const float* frame,
+    unsigned long long* histogram,
+    std::size_t n,
+    float min_value,
+    float inv_bin_width,
+    int bin_count,
+    int blocks) {
+  constexpr int threads = 256;
+  glass_frame_histogram_f32_kernel<<<blocks, threads>>>(
+      frame,
+      histogram,
+      n,
+      min_value,
+      inv_bin_width,
+      bin_count);
+}
+
+__global__ void glass_frame_absdev_histogram_f32_kernel(
+    const float* frame,
+    unsigned long long* histogram,
+    std::size_t n,
+    float center,
+    float inv_bin_width,
+    int bin_count) {
+  const std::size_t stride = static_cast<std::size_t>(blockDim.x) * static_cast<std::size_t>(gridDim.x);
+  for (std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x); i < n; i += stride) {
+    const float value = frame[i];
+    if (!isfinite(value)) {
+      continue;
+    }
+    int bin = static_cast<int>(fabsf(value - center) * inv_bin_width);
+    if (bin < 0) {
+      bin = 0;
+    } else if (bin >= bin_count) {
+      bin = bin_count - 1;
+    }
+    atomicAdd(&histogram[bin], 1ULL);
+  }
+}
+
+void glass_frame_absdev_histogram_f32_launch(
+    const float* frame,
+    unsigned long long* histogram,
+    std::size_t n,
+    float center,
+    float inv_bin_width,
+    int bin_count,
+    int blocks) {
+  constexpr int threads = 256;
+  glass_frame_absdev_histogram_f32_kernel<<<blocks, threads>>>(
+      frame,
+      histogram,
+      n,
+      center,
+      inv_bin_width,
+      bin_count);
+}
+
 __global__ void glass_integrate_resident_weighted_mean_f32_kernel(
     const float* stack,
     const float* weights,

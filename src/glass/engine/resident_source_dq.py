@@ -223,14 +223,33 @@ def inline_cosmetic_thresholds_from_resident_stack(
     hot_sigma: float = 8.0,
     cold_sigma: float = 8.0,
     sample_limit: int = 65536,
+    histogram_bins: int = 4096,
 ) -> dict[str, Any]:
     """Compute cosmetic thresholds from an already resident calibrated frame."""
 
     shape = (int(height), int(width))
-    if not hasattr(stack, "frame_sampled_robust_stats"):
+    if hasattr(stack, "frame_histogram_robust_stats"):
+        stats = dict(
+            stack.frame_histogram_robust_stats(
+                int(frame_index),
+                int(histogram_bins),
+                float(hot_sigma),
+                float(cold_sigma),
+            )
+        )
+    elif hasattr(stack, "frame_sampled_robust_stats"):
+        stats = dict(
+            stack.frame_sampled_robust_stats(
+                int(frame_index),
+                int(sample_limit),
+                float(hot_sigma),
+                float(cold_sigma),
+            )
+        )
+    else:
         return {
             "supported": False,
-            "reason": "resident_cuda_sampled_robust_stats_unavailable",
+            "reason": "resident_cuda_robust_threshold_stats_unavailable",
             "shape": list(shape),
             "invalid_samples": 0,
             "flag_counts": {},
@@ -238,13 +257,10 @@ def inline_cosmetic_thresholds_from_resident_stack(
             "threshold_source": "unavailable",
         }
 
-    stats = dict(
-        stack.frame_sampled_robust_stats(
-            int(frame_index),
-            int(sample_limit),
-            float(hot_sigma),
-            float(cold_sigma),
-        )
+    fallback_threshold_source = (
+        "cuda_resident_histogram_median_mad_scalar"
+        if hasattr(stack, "frame_histogram_robust_stats")
+        else "cuda_resident_sampled_median_mad_scalar"
     )
     return {
         "supported": True,
@@ -260,18 +276,21 @@ def inline_cosmetic_thresholds_from_resident_stack(
         "inline_source_dq_detector": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
         "inline_source_dq_applies_replacement": False,
         "detector_execution": "cuda_threshold_apply",
-        "threshold_source": str(stats.get("threshold_source") or "cuda_resident_sampled_median_mad_scalar"),
+        "threshold_source": str(stats.get("threshold_source") or fallback_threshold_source),
         "threshold_stats": stats,
         "threshold_stats_native_method": str(
-            stats.get("native_method") or "ResidentCalibratedStack.frame_sampled_robust_stats"
+            stats.get("native_method") or "ResidentCalibratedStack.frame_histogram_robust_stats"
         ),
         "threshold_stats_domain": str(stats.get("stats_domain") or "resident_calibrated_frame"),
         "threshold_stats_execution": str(
-            stats.get("robust_stats_execution") or "cuda_even_sample_then_host_median_mad_scalar"
+            stats.get("robust_stats_execution") or "cuda_histogram_quantile_then_host_bin_scan_scalar"
         ),
         "threshold_stats_materializes_host_frame": bool(stats.get("materializes_host_frame", False)),
         "threshold_stats_sample_count": int(stats.get("sample_count") or 0),
         "threshold_stats_sample_download_bytes": int(stats.get("sample_download_bytes") or 0),
+        "threshold_stats_bin_count": int(stats.get("bin_count") or 0),
+        "threshold_stats_histogram_download_bytes": int(stats.get("histogram_download_bytes") or 0),
+        "threshold_stats_histogram_approximation": stats.get("histogram_approximation"),
         "hot_sigma": float(hot_sigma),
         "cold_sigma": float(cold_sigma),
         "low_threshold": float(stats.get("low_threshold", float("-inf"))),
@@ -419,6 +438,13 @@ def combine_source_invalid_masks(
                 "threshold_stats_sample_download_bytes": info.get(
                     "threshold_stats_sample_download_bytes"
                 ),
+                "threshold_stats_bin_count": info.get("threshold_stats_bin_count"),
+                "threshold_stats_histogram_download_bytes": info.get(
+                    "threshold_stats_histogram_download_bytes"
+                ),
+                "threshold_stats_histogram_approximation": info.get(
+                    "threshold_stats_histogram_approximation"
+                ),
                 "detector_execution": info.get("detector_execution"),
                 "cosmetic_metrics": info.get("cosmetic_metrics"),
             }
@@ -518,6 +544,9 @@ def apply_resident_source_invalid_mask(
         "threshold_stats_materializes_host_frame",
         "threshold_stats_sample_count",
         "threshold_stats_sample_download_bytes",
+        "threshold_stats_bin_count",
+        "threshold_stats_histogram_download_bytes",
+        "threshold_stats_histogram_approximation",
         "detector_execution",
         "low_threshold",
         "high_threshold",
@@ -595,6 +624,13 @@ def apply_resident_inline_cosmetic_thresholds(
         "threshold_stats_materializes_host_frame": threshold_info.get("threshold_stats_materializes_host_frame"),
         "threshold_stats_sample_count": threshold_info.get("threshold_stats_sample_count"),
         "threshold_stats_sample_download_bytes": threshold_info.get("threshold_stats_sample_download_bytes"),
+        "threshold_stats_bin_count": threshold_info.get("threshold_stats_bin_count"),
+        "threshold_stats_histogram_download_bytes": threshold_info.get(
+            "threshold_stats_histogram_download_bytes"
+        ),
+        "threshold_stats_histogram_approximation": threshold_info.get(
+            "threshold_stats_histogram_approximation"
+        ),
         "detector_execution": str(threshold_info.get("detector_execution") or "cuda_threshold_apply"),
         "hot_sigma": float(threshold_info.get("hot_sigma") or 0.0),
         "cold_sigma": float(threshold_info.get("cold_sigma") or 0.0),
@@ -682,6 +718,13 @@ def apply_resident_inline_cosmetic_thresholds(
                     "threshold_stats_sample_count": row["threshold_stats_sample_count"],
                     "threshold_stats_sample_download_bytes": row[
                         "threshold_stats_sample_download_bytes"
+                    ],
+                    "threshold_stats_bin_count": row["threshold_stats_bin_count"],
+                    "threshold_stats_histogram_download_bytes": row[
+                        "threshold_stats_histogram_download_bytes"
+                    ],
+                    "threshold_stats_histogram_approximation": row[
+                        "threshold_stats_histogram_approximation"
                     ],
                     "detector_execution": row["detector_execution"],
                     "cosmetic_metrics": metrics,

@@ -8091,7 +8091,7 @@ def run_resident_calibration_integration(
                             else None
                         ),
                         "resident_inline_source_dq_threshold_source": (
-                            "cuda_resident_sampled_median_mad_scalar"
+                            "cuda_resident_histogram_median_mad_scalar"
                             if resident_inline_source_dq == "cosmetic_cuda"
                             else None
                         ),

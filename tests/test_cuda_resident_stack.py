@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from glass.cpu.calibration import calibrate_light
 from glass.cpu.integration import weighted_integrate_stack
@@ -835,6 +836,48 @@ def test_resident_stack_sampled_robust_stats_matches_cpu_when_all_pixels_sampled
     assert np.isclose(stats["sigma"], sigma)
     assert np.isclose(stats["low_threshold"], float(np.float32(median - 3.0 * sigma)))
     assert np.isclose(stats["high_threshold"], float(np.float32(median + 2.0 * sigma)))
+
+
+def test_resident_stack_histogram_robust_stats_approximates_cpu_thresholds():
+    module = cuda_module_or_skip()
+    frame = np.array(
+        [
+            [10.0, 11.0, 12.0, 13.0, 999.0],
+            [9.0, 10.0, 11.0, 12.0, 13.0],
+            [8.0, 9.0, np.nan, 11.0, 12.0],
+            [-200.0, 8.0, 9.0, 10.0, np.inf],
+        ],
+        dtype=np.float32,
+    )
+    finite = frame[np.isfinite(frame)]
+    median = float(np.median(finite))
+    mad = float(np.median(np.abs(finite - np.float32(median))))
+    sigma = 1.4826 * mad
+
+    stack = module.ResidentCalibratedStack(1, frame.shape[0], frame.shape[1])
+    stack.upload_calibrated_frame(0, frame)
+    stats = stack.frame_histogram_robust_stats(0, 4096, 2.0, 3.0)
+
+    assert stats["native_method"] == "ResidentCalibratedStack.frame_histogram_robust_stats"
+    assert stats["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
+    assert stats["stats_domain"] == "resident_calibrated_frame"
+    assert stats["robust_stats_execution"] == "cuda_histogram_quantile_then_host_bin_scan_scalar"
+    assert stats["histogram_approximation"] is True
+    assert stats["materializes_host_frame"] is False
+    assert stats["bin_count"] == 4096
+    assert stats["valid_pixels"] == int(finite.size)
+    assert stats["nonfinite_pixels"] == 2
+    assert stats["histogram_download_bytes"] == 4096 * 8 * 2
+    assert stats["minmax_partial_download_bytes"] > 0
+    assert stats["finite_min"] == pytest.approx(float(np.min(finite)))
+    assert stats["finite_max"] == pytest.approx(float(np.max(finite)))
+    value_tol = stats["value_bin_width"] * 1.5
+    mad_tol = max(stats["absdev_bin_width"] * 1.5, value_tol)
+    assert stats["median"] == pytest.approx(median, abs=value_tol)
+    assert stats["mad"] == pytest.approx(mad, abs=mad_tol)
+    assert stats["sigma"] == pytest.approx(sigma, abs=1.4826 * mad_tol)
+    assert stats["low_threshold"] == pytest.approx(median - 3.0 * sigma, abs=4.0 * mad_tol)
+    assert stats["high_threshold"] == pytest.approx(median + 2.0 * sigma, abs=4.0 * mad_tol)
 
 
 def test_resident_stack_global_normalization_matches_reference_stats():

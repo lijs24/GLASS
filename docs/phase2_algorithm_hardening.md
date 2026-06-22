@@ -9237,6 +9237,52 @@ Completed in Gate446:
     later gate should add all-GPU robust quantile/histogram reductions and
     batch threshold application across frames.
 
+### S2-Gate 458: Resident CUDA Histogram Source-DQ Threshold Reductions
+
+- Replace Gate457's bounded-sample resident threshold statistics with a
+  resident CUDA histogram path for opt-in `cosmetic_cuda` source-DQ.
+- Required work:
+  - add resident CUDA min/max/count and histogram kernels over calibrated
+    resident frames;
+  - expose a native `ResidentCalibratedStack.frame_histogram_robust_stats`
+    method that computes approximate median/MAD thresholds from GPU-built
+    histograms without materializing the full frame on the host;
+  - switch `--resident-inline-source-dq cosmetic_cuda` to prefer
+    `cuda_resident_histogram_median_mad_scalar`, falling back to the Gate457
+    sampled method only when the native histogram API is unavailable;
+  - record histogram bin count, histogram download bytes, approximation
+    status, finite/nonfinite counts, and timing in resident source-DQ rows;
+  - preserve the default real 200-light contract-parity route with
+    `resident_inline_source_dq=off`.
+- Completed in S2-Gate458:
+  - added CUDA launchers for resident frame min/max/count, value histograms,
+    and absolute-deviation histograms;
+  - added native `frame_histogram_robust_stats` and Python wrapper support,
+    returning `materializes_host_frame=false`,
+    `threshold_source=cuda_resident_histogram_median_mad_scalar`, and
+    `robust_stats_execution=cuda_histogram_quantile_then_host_bin_scan_scalar`;
+  - made `cosmetic_cuda` threshold preparation prefer resident histogram
+    statistics while preserving the sampled fallback;
+  - focused resident/source-DQ pytest passed with `116 passed`;
+  - full pytest passed with `1087 passed`;
+  - real 200-light contract-token audit-map run completed in `35.876992 s`
+    internal run timing (`36.271231 s` outer PowerShell timing), integrated
+    `193/200` frames, and passed acceptance at `30.452414x` versus the WBPP
+    black-box timing `1092.541 s`;
+  - comparison remained inside the 200-light contract: shape matched,
+    coverage fraction `0.960653`, RMS diff `0.00169557`, and P99 absolute
+    diff `0.000454028`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_458_200\contract_parity_audit_required_20260622`;
+  - `runs/checkpoints/s2_gate_458_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_458_status.md`.
+- Known limitation:
+  - the histograms are device-built but quantile bin scanning is still host
+    scalar over compact histogram arrays. The result is a bounded-bin
+    approximation rather than exact device-side selection. A later gate should
+    batch threshold extraction across frames and keep the final quantile scan
+    device-side when opt-in source-DQ is enabled on large real stacks.
+
 ## Gate Rules
 
 Each gate requires:
