@@ -6601,7 +6601,9 @@ def run_resident_calibration_integration(
                 triangle_catalog_native_centroid_refine_s = 0.0
                 triangle_catalog_native_total_s = 0.0
                 triangle_catalog_batch_size = 0
+                triangle_catalog_stream_count = 0
                 triangle_catalog_batch_sync_count = 0
+                triangle_catalog_sync_phase_count = 0
                 triangle_catalog_download_mode = "off"
                 triangle_catalog_sort_mode = "off"
                 triangle_catalog_topk_mode = "off"
@@ -6838,7 +6840,9 @@ def run_resident_calibration_integration(
                     nonlocal triangle_catalog_native_sync_s
                     nonlocal triangle_catalog_native_total_s
                     nonlocal triangle_catalog_batch_size
+                    nonlocal triangle_catalog_stream_count
                     nonlocal triangle_catalog_batch_sync_count
+                    nonlocal triangle_catalog_sync_phase_count
                     nonlocal triangle_catalog_download_mode
                     nonlocal triangle_catalog_sort_mode
                     nonlocal triangle_catalog_topk_mode
@@ -6902,8 +6906,16 @@ def run_resident_calibration_integration(
                                     int(item.get("catalog_batch_size", 0) or 0)
                                     for item in batch_results
                                 )
+                                triangle_catalog_stream_count = max(
+                                    int(item.get("catalog_stream_count", 0) or 0)
+                                    for item in batch_results
+                                )
                                 triangle_catalog_batch_sync_count = max(
                                     int(item.get("catalog_batch_sync_count", 0) or 0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_sync_phase_count = max(
+                                    int(item.get("catalog_sync_phase_count", 0) or 0)
                                     for item in batch_results
                                 )
                                 triangle_catalog_download_mode = str(
@@ -7989,7 +8001,9 @@ def run_resident_calibration_integration(
                                         f"triangle_catalog_batch={triangle_catalog_batch_mode}",
                                         f"triangle_catalog_timing_model={triangle_catalog_timing_model}",
                                         f"triangle_catalog_batch_size={triangle_catalog_batch_size}",
+                                        f"triangle_catalog_stream_count={triangle_catalog_stream_count}",
                                         f"triangle_catalog_batch_sync_count={triangle_catalog_batch_sync_count}",
+                                        f"triangle_catalog_sync_phase_count={triangle_catalog_sync_phase_count}",
                                         f"triangle_catalog_download_mode={triangle_catalog_download_mode}",
                                         f"triangle_catalog_sort_mode={triangle_catalog_sort_mode}",
                                         f"triangle_catalog_topk_mode={triangle_catalog_topk_mode}",
@@ -10036,7 +10050,13 @@ def run_resident_calibration_integration(
                         "triangle_catalog_batch_size": int(triangle_catalog_batch_size)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
+                        "triangle_catalog_stream_count": int(triangle_catalog_stream_count)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
                         "triangle_catalog_batch_sync_count": int(triangle_catalog_batch_sync_count)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_catalog_sync_phase_count": int(triangle_catalog_sync_phase_count)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
                         "triangle_catalog_download_mode": triangle_catalog_download_mode

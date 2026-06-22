@@ -871,6 +871,78 @@ void glass_star_top_nms_candidates_f32_launch(
       min_separation_px);
 }
 
+void glass_star_grid_top_nms_candidates_f32_launch_stream(
+    const float* input,
+    float* grid_xs,
+    float* grid_ys,
+    float* grid_fluxes,
+    float* out_xs,
+    float* out_ys,
+    float* out_fluxes,
+    int* count,
+    int* locks,
+    int* cell_counts,
+    int* stored_count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell,
+    int max_output_candidates,
+    float min_separation_px,
+    cudaStream_t stream) {
+  cudaMemsetAsync(count, 0, sizeof(int), stream);
+  cudaMemsetAsync(stored_count, 0, sizeof(int), stream);
+  const int cell_count = grid_cols * grid_rows;
+  const int grid_capacity = cell_count * candidates_per_cell;
+  constexpr int init_threads = 256;
+  const int grid_init_blocks = (grid_capacity + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<grid_init_blocks, init_threads, 0, stream>>>(
+      grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  const int out_init_blocks = (max_output_candidates + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<out_init_blocks, init_threads, 0, stream>>>(
+      out_xs, out_ys, out_fluxes, max_output_candidates);
+  cudaMemsetAsync(locks, 0, static_cast<std::size_t>(cell_count) * sizeof(int), stream);
+  cudaMemsetAsync(cell_counts, 0, static_cast<std::size_t>(cell_count) * sizeof(int), stream);
+  const dim3 block(16, 16);
+  const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+  star_candidate_grid_topk_kernel<<<grid, block, 0, stream>>>(
+      input,
+      grid_xs,
+      grid_ys,
+      grid_fluxes,
+      locks,
+      cell_counts,
+      count,
+      width,
+      height,
+      threshold,
+      grid_cols,
+      grid_rows,
+      candidates_per_cell);
+  const int sort_count = next_power_of_two_int(grid_capacity);
+  if (sort_count <= 4096) {
+    constexpr int sort_threads = 256;
+    const std::size_t shared_bytes = static_cast<std::size_t>(sort_count) * 3 * sizeof(float);
+    star_catalog_sort_desc_shared_kernel<<<1, sort_threads, shared_bytes, stream>>>(
+        grid_xs, grid_ys, grid_fluxes, grid_capacity, sort_count);
+  } else {
+    star_catalog_sort_desc_kernel<<<1, 1, 0, stream>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  }
+  star_catalog_nms_kernel<<<1, 1, 0, stream>>>(
+      grid_xs,
+      grid_ys,
+      grid_fluxes,
+      out_xs,
+      out_ys,
+      out_fluxes,
+      stored_count,
+      grid_capacity,
+      max_output_candidates,
+      min_separation_px);
+}
+
 void glass_star_grid_top_nms_candidates_f32_launch(
     const float* input,
     float* grid_xs,
@@ -891,43 +963,100 @@ void glass_star_grid_top_nms_candidates_f32_launch(
     int candidates_per_cell,
     int max_output_candidates,
     float min_separation_px) {
-  cudaMemset(count, 0, sizeof(int));
-  cudaMemset(stored_count, 0, sizeof(int));
-  const int cell_count = grid_cols * grid_rows;
-  const int grid_capacity = cell_count * candidates_per_cell;
-  constexpr int init_threads = 256;
-  const int grid_init_blocks = (grid_capacity + init_threads - 1) / init_threads;
-  star_catalog_init_kernel<<<grid_init_blocks, init_threads>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
-  const int out_init_blocks = (max_output_candidates + init_threads - 1) / init_threads;
-  star_catalog_init_kernel<<<out_init_blocks, init_threads>>>(out_xs, out_ys, out_fluxes, max_output_candidates);
-  cudaMemset(locks, 0, static_cast<std::size_t>(cell_count) * sizeof(int));
-  cudaMemset(cell_counts, 0, static_cast<std::size_t>(cell_count) * sizeof(int));
-  const dim3 block(16, 16);
-  const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-  star_candidate_grid_topk_kernel<<<grid, block>>>(
+  glass_star_grid_top_nms_candidates_f32_launch_stream(
       input,
       grid_xs,
       grid_ys,
       grid_fluxes,
+      out_xs,
+      out_ys,
+      out_fluxes,
+      count,
       locks,
       cell_counts,
-      count,
+      stored_count,
       width,
       height,
       threshold,
       grid_cols,
       grid_rows,
-      candidates_per_cell);
+      candidates_per_cell,
+      max_output_candidates,
+      min_separation_px,
+      0);
+}
+
+void glass_star_grid_top_nms_candidates_deterministic_f32_launch_stream(
+    const float* input,
+    float* grid_xs,
+    float* grid_ys,
+    float* grid_fluxes,
+    float* out_xs,
+    float* out_ys,
+    float* out_fluxes,
+    int* count,
+    int* stored_count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell,
+    int max_output_candidates,
+    float min_separation_px,
+    cudaStream_t stream) {
+  cudaMemsetAsync(count, 0, sizeof(int), stream);
+  cudaMemsetAsync(stored_count, 0, sizeof(int), stream);
+  const int cell_count = grid_cols * grid_rows;
+  const int grid_capacity = cell_count * candidates_per_cell;
+  constexpr int init_threads = 256;
+  const int grid_init_blocks = (grid_capacity + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<grid_init_blocks, init_threads, 0, stream>>>(
+      grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  const int out_init_blocks = (max_output_candidates + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<out_init_blocks, init_threads, 0, stream>>>(
+      out_xs, out_ys, out_fluxes, max_output_candidates);
+  if (candidates_per_cell <= 16) {
+    constexpr int cell_threads = 128;
+    const std::size_t shared_bytes =
+        static_cast<std::size_t>(cell_threads) * static_cast<std::size_t>(candidates_per_cell) * 3 * sizeof(float);
+    star_candidate_grid_topk_deterministic_block_kernel<<<cell_count, cell_threads, shared_bytes, stream>>>(
+        input,
+        grid_xs,
+        grid_ys,
+        grid_fluxes,
+        count,
+        width,
+        height,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell);
+  } else {
+    const int cell_blocks = (cell_count + init_threads - 1) / init_threads;
+    star_candidate_grid_topk_deterministic_cell_kernel<<<cell_blocks, init_threads, 0, stream>>>(
+        input,
+        grid_xs,
+        grid_ys,
+        grid_fluxes,
+        count,
+        width,
+        height,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell);
+  }
   const int sort_count = next_power_of_two_int(grid_capacity);
   if (sort_count <= 4096) {
     constexpr int sort_threads = 256;
     const std::size_t shared_bytes = static_cast<std::size_t>(sort_count) * 3 * sizeof(float);
-    star_catalog_sort_desc_shared_kernel<<<1, sort_threads, shared_bytes>>>(
+    star_catalog_sort_desc_shared_kernel<<<1, sort_threads, shared_bytes, stream>>>(
         grid_xs, grid_ys, grid_fluxes, grid_capacity, sort_count);
   } else {
-    star_catalog_sort_desc_kernel<<<1, 1>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
+    star_catalog_sort_desc_kernel<<<1, 1, 0, stream>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
   }
-  star_catalog_nms_kernel<<<1, 1>>>(
+  star_catalog_nms_kernel<<<1, 1, 0, stream>>>(
       grid_xs,
       grid_ys,
       grid_fluxes,
@@ -958,66 +1087,49 @@ void glass_star_grid_top_nms_candidates_deterministic_f32_launch(
     int candidates_per_cell,
     int max_output_candidates,
     float min_separation_px) {
-  cudaMemset(count, 0, sizeof(int));
-  cudaMemset(stored_count, 0, sizeof(int));
-  const int cell_count = grid_cols * grid_rows;
-  const int grid_capacity = cell_count * candidates_per_cell;
-  constexpr int init_threads = 256;
-  const int grid_init_blocks = (grid_capacity + init_threads - 1) / init_threads;
-  star_catalog_init_kernel<<<grid_init_blocks, init_threads>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
-  const int out_init_blocks = (max_output_candidates + init_threads - 1) / init_threads;
-  star_catalog_init_kernel<<<out_init_blocks, init_threads>>>(out_xs, out_ys, out_fluxes, max_output_candidates);
-  if (candidates_per_cell <= 16) {
-    constexpr int cell_threads = 128;
-    const std::size_t shared_bytes =
-        static_cast<std::size_t>(cell_threads) * static_cast<std::size_t>(candidates_per_cell) * 3 * sizeof(float);
-    star_candidate_grid_topk_deterministic_block_kernel<<<cell_count, cell_threads, shared_bytes>>>(
-        input,
-        grid_xs,
-        grid_ys,
-        grid_fluxes,
-        count,
-        width,
-        height,
-        threshold,
-        grid_cols,
-        grid_rows,
-        candidates_per_cell);
-  } else {
-    const int cell_blocks = (cell_count + init_threads - 1) / init_threads;
-    star_candidate_grid_topk_deterministic_cell_kernel<<<cell_blocks, init_threads>>>(
-        input,
-        grid_xs,
-        grid_ys,
-        grid_fluxes,
-        count,
-        width,
-        height,
-        threshold,
-        grid_cols,
-        grid_rows,
-        candidates_per_cell);
-  }
-  const int sort_count = next_power_of_two_int(grid_capacity);
-  if (sort_count <= 4096) {
-    constexpr int sort_threads = 256;
-    const std::size_t shared_bytes = static_cast<std::size_t>(sort_count) * 3 * sizeof(float);
-    star_catalog_sort_desc_shared_kernel<<<1, sort_threads, shared_bytes>>>(
-        grid_xs, grid_ys, grid_fluxes, grid_capacity, sort_count);
-  } else {
-    star_catalog_sort_desc_kernel<<<1, 1>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
-  }
-  star_catalog_nms_kernel<<<1, 1>>>(
+  glass_star_grid_top_nms_candidates_deterministic_f32_launch_stream(
+      input,
       grid_xs,
       grid_ys,
       grid_fluxes,
       out_xs,
       out_ys,
       out_fluxes,
+      count,
       stored_count,
-      grid_capacity,
+      width,
+      height,
+      threshold,
+      grid_cols,
+      grid_rows,
+      candidates_per_cell,
       max_output_candidates,
-      min_separation_px);
+      min_separation_px,
+      0);
+}
+
+void glass_star_refine_centroids_f32_launch_stream(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    unsigned char* statuses,
+    int count,
+    int width,
+    int height,
+    int radius,
+    float background_override,
+    cudaStream_t stream) {
+  if (count <= 0 || radius <= 0) {
+    return;
+  }
+  if (statuses != nullptr) {
+    cudaMemsetAsync(statuses, 0, static_cast<std::size_t>(count) * sizeof(unsigned char), stream);
+  }
+  constexpr int threads = 128;
+  const int blocks = (count + threads - 1) / threads;
+  star_refine_centroids_kernel<<<blocks, threads, 0, stream>>>(
+      input, xs, ys, fluxes, statuses, count, width, height, radius, background_override);
 }
 
 void glass_star_refine_centroids_f32_launch(
@@ -1031,16 +1143,22 @@ void glass_star_refine_centroids_f32_launch(
     int height,
     int radius,
     float background_override) {
-  if (count <= 0 || radius <= 0) {
+  glass_star_refine_centroids_f32_launch_stream(
+      input, xs, ys, fluxes, statuses, count, width, height, radius, background_override, 0);
+}
+
+void glass_frame_sum_f32_launch_stream(
+    const float* input,
+    double* partial_sums,
+    unsigned int* partial_counts,
+    std::size_t n,
+    int blocks,
+    cudaStream_t stream) {
+  if (n == 0 || blocks <= 0) {
     return;
   }
-  if (statuses != nullptr) {
-    cudaMemset(statuses, 0, static_cast<std::size_t>(count) * sizeof(unsigned char));
-  }
-  constexpr int threads = 128;
-  const int blocks = (count + threads - 1) / threads;
-  star_refine_centroids_kernel<<<blocks, threads>>>(
-      input, xs, ys, fluxes, statuses, count, width, height, radius, background_override);
+  constexpr int threads = 256;
+  frame_sum_f32_kernel<<<blocks, threads, 0, stream>>>(input, partial_sums, partial_counts, n);
 }
 
 void glass_frame_sum_f32_launch(
@@ -1049,11 +1167,7 @@ void glass_frame_sum_f32_launch(
     unsigned int* partial_counts,
     std::size_t n,
     int blocks) {
-  if (n == 0 || blocks <= 0) {
-    return;
-  }
-  constexpr int threads = 256;
-  frame_sum_f32_kernel<<<blocks, threads>>>(input, partial_sums, partial_counts, n);
+  glass_frame_sum_f32_launch_stream(input, partial_sums, partial_counts, n, blocks, 0);
 }
 
 void glass_star_grid_candidates_f32_launch(

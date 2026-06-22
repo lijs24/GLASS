@@ -10725,6 +10725,88 @@ Completed in Gate446:
   - report:
     `C:\glass_runs\phase2_s2_gate487_catalog_bulk_sync_ab_real\reports\warm_report.html`.
 
+### S2-Gate 488: Resident Grid Catalog Multi-Stream Batch
+
+- Follow Gate487's result: bulk count/catalog downloads proved useful, but the
+  grid catalog kernels still serialized moving-frame work on one stream. The
+  next substantive target is independent per-frame catalog scratch running
+  across multiple CUDA streams while keeping the resident registration output
+  numerically identical.
+- Required work:
+  - keep catalog thresholding, NMS ranking, centroid refinement, descriptor
+    generation, transform estimation, Lanczos3 warp, winsorized rejection, DQ,
+    and integration math unchanged;
+  - add stream-aware native launch wrappers for the existing grid catalog,
+    deterministic grid catalog, global frame-sum, and centroid-refine kernels;
+  - dispatch the resident moving-frame catalog batch over a bounded stream pool
+    and record stream count, sync phase count, batch size, sync count, download
+    mode, and native timings in resident artifacts;
+  - rerun focused CUDA/resident tests and the real 200-light warm A/B.
+- Completed:
+  - native catalog batch dispatch now creates up to four CUDA streams and maps
+    independent frame scratch to streams by batch index;
+  - grid catalog, optional global-mean centroid background, and centroid refine
+    phases synchronize by stream instead of by device-wide per-frame launch;
+  - Python wrappers, resident artifacts, warnings, and HTML report rows expose
+    `triangle_catalog_stream_count` and
+    `triangle_catalog_sync_phase_count` alongside the existing batch timing
+    fields;
+  - exception cleanup now synchronizes/destroys streams before releasing batch
+    scratch buffers.
+- Real 200-light warm A/B:
+  - output root:
+    `C:\glass_runs\phase2_s2_gate488_catalog_multistream_ab_real`;
+  - Gate487 baseline root:
+    `C:\glass_runs\phase2_s2_gate487_catalog_bulk_sync_ab_real`;
+  - warm total: `19.822146899998188 s`;
+  - Gate487 warm total: `21.647297300049104 s`;
+  - warm `light_read_upload_calibrate`: `3.5301597000216134 s`
+    versus Gate487 `3.511927100014873 s`;
+  - warm `resident_registration_component_accounted`:
+    `2.1136693994931077 s` versus Gate487 `4.169362299743524 s`;
+  - warm `resident_registration_warp`: `0.5559999998076819 s`
+    versus Gate487 `1.2312209998490289 s`;
+  - warm `resident_integration`: `0.2864339000079781 s`;
+  - warm `output_write`: `2.5641272999928333 s`
+    versus Gate487 `3.694475699972827 s`;
+  - catalog timing model changed from
+    `batch_launch_one_sync_bulk_download_centroid_one_sync` to
+    `batch_multistream_bulk_download_centroid_multistream`;
+  - catalog batch size: `199`;
+  - catalog stream count: `4`;
+  - catalog batch sync count: `4`;
+  - catalog sync phase count: `3`;
+  - catalog native sync: `0.6357767 s` -> `0.2153649 s`;
+  - catalog native total: `0.9438554 s` -> `0.2573601 s`;
+  - warm-vs-Gate487 GLASS master difference: RMS/p99/max all `0.0`;
+  - warm-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`, coverage fraction
+    `0.960532609259836`;
+  - warm GLASS vs WBPP speedup: `55.11718813869248x`;
+  - threshold acceptance audit passed with the same 200-light, calibration,
+    frame-count, speedup, coverage, RMS, and p99 thresholds as Gate487.
+- Interpretation:
+  - this is the first recent catalog-scheduling gate that produced both local
+    native improvement and end-to-end warm-run improvement;
+  - the numerical master remained bitwise/metric identical to Gate487 in the
+    coverage-masked compare, supporting the claim that this is scheduling-only;
+  - the remaining dominant wall-clock bucket is still FITS read/materialize
+    worker time, mostly hidden by overlap but visible as the throughput floor;
+  - next gates should continue on resident path substance: DQ/mask contract,
+    StackEngine default path, or deeper I/O/upload overlap, rather than
+    release/report-only evidence wiring.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate488_catalog_multistream_ab_real\gate488_real_ab_summary.json`;
+  - threshold acceptance:
+    `C:\glass_runs\phase2_s2_gate488_catalog_multistream_ab_real\acceptance\warm_threshold_acceptance_audit.json`;
+  - speedup summary:
+    `C:\glass_runs\phase2_s2_gate488_catalog_multistream_ab_real\speedup\warm_vs_wbpp_speedup_with_compare.json`;
+  - baseline compare:
+    `C:\glass_runs\phase2_s2_gate488_catalog_multistream_ab_real\compare\warm_vs_gate487_master.json`;
+  - report:
+    `C:\glass_runs\phase2_s2_gate488_catalog_multistream_ab_real\reports\warm_report.html`.
+
 ## Gate Rules
 
 Each gate requires:
