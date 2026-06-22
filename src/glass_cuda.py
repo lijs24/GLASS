@@ -2814,19 +2814,31 @@ class ResidentCalibratedStack:
         matrices: Any,
         fill: float = np.nan,
         dispatch: str = "loop",
+        max_chunk_capacity_frames: int | None = None,
     ) -> dict[str, Any]:
         method_name = "apply_matrix_bilinear_frames"
         if dispatch == "loop" and hasattr(self._impl, "apply_matrix_bilinear_frames_loop"):
             method_name = "apply_matrix_bilinear_frames_loop"
         if dispatch not in {"loop", "chunked"}:
             raise ValueError("matrix bilinear batch dispatch must be loop or chunked")
+        if max_chunk_capacity_frames is not None and int(max_chunk_capacity_frames) <= 0:
+            raise ValueError("max_chunk_capacity_frames must be positive when provided")
         if not hasattr(self._impl, method_name):
             raise RuntimeError(f"native ResidentCalibratedStack.{method_name} is not available")
-        result = getattr(self._impl, method_name)(
-            np.asarray(indices, dtype=np.int64),
-            np.asarray(matrices, dtype=np.float32),
-            float(fill),
-        )
+        method = getattr(self._impl, method_name)
+        if dispatch == "chunked" and max_chunk_capacity_frames is not None:
+            result = method(
+                np.asarray(indices, dtype=np.int64),
+                np.asarray(matrices, dtype=np.float32),
+                float(fill),
+                int(max_chunk_capacity_frames),
+            )
+        else:
+            result = method(
+                np.asarray(indices, dtype=np.int64),
+                np.asarray(matrices, dtype=np.float32),
+                float(fill),
+            )
         return dict(result)
 
     def apply_matrix_lanczos3_frame(
@@ -2852,20 +2864,33 @@ class ResidentCalibratedStack:
         fill: float = np.nan,
         clamping_threshold: float = -1.0,
         dispatch: str = "loop",
+        max_chunk_capacity_frames: int | None = None,
     ) -> dict[str, Any]:
         method_name = "apply_matrix_lanczos3_frames"
         if dispatch == "loop" and hasattr(self._impl, "apply_matrix_lanczos3_frames_loop"):
             method_name = "apply_matrix_lanczos3_frames_loop"
         if dispatch not in {"loop", "chunked"}:
             raise ValueError("matrix Lanczos3 batch dispatch must be loop or chunked")
+        if max_chunk_capacity_frames is not None and int(max_chunk_capacity_frames) <= 0:
+            raise ValueError("max_chunk_capacity_frames must be positive when provided")
         if not hasattr(self._impl, method_name):
             raise RuntimeError(f"native ResidentCalibratedStack.{method_name} is not available")
-        result = getattr(self._impl, method_name)(
-            np.asarray(indices, dtype=np.int64),
-            np.asarray(matrices, dtype=np.float32),
-            float(fill),
-            float(clamping_threshold),
-        )
+        method = getattr(self._impl, method_name)
+        if dispatch == "chunked" and max_chunk_capacity_frames is not None:
+            result = method(
+                np.asarray(indices, dtype=np.int64),
+                np.asarray(matrices, dtype=np.float32),
+                float(fill),
+                float(clamping_threshold),
+                int(max_chunk_capacity_frames),
+            )
+        else:
+            result = method(
+                np.asarray(indices, dtype=np.int64),
+                np.asarray(matrices, dtype=np.float32),
+                float(fill),
+                float(clamping_threshold),
+            )
         return dict(result)
 
     def matrix_alignment_metrics_to_reference(

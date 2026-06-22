@@ -4642,7 +4642,14 @@ class ResidentCalibratedStack {
     return result;
   }
 
-  py::dict apply_matrix_bilinear_frames(py::object indices_obj, py::object matrices_obj, float fill) {
+  py::dict apply_matrix_bilinear_frames(
+      py::object indices_obj,
+      py::object matrices_obj,
+      float fill,
+      int max_chunk_capacity_frames = 0) {
+    if (max_chunk_capacity_frames < 0) {
+      throw std::invalid_argument("max_chunk_capacity_frames must be non-negative");
+    }
     const auto indices = parse_index_sequence(indices_obj, "indices");
     const auto matrices = parse_matrix_stack(matrices_obj);
     if (indices.size() != matrices.size()) {
@@ -4657,6 +4664,10 @@ class ResidentCalibratedStack {
       result["inverse_upload_mode"] = "chunked_device_batch";
       result["batch_chunk_frames"] = 0;
       result["batch_chunk_count"] = 0;
+      result["batch_max_chunk_capacity_frames"] = static_cast<unsigned long long>(
+          std::max(0, max_chunk_capacity_frames));
+      result["batch_capacity_source"] =
+          max_chunk_capacity_frames > 0 ? "explicit_max_chunk_capacity" : "native_preferred";
       result["batch_workspace_bytes"] = 0;
       result["batch_output_bytes"] = 0;
       result["batch_coverage_bytes"] = 0;
@@ -4681,7 +4692,9 @@ class ResidentCalibratedStack {
     }
     const auto total_start = Clock::now();
     allocate_warp_coverage_if_needed();
-    auto workspace = allocate_batch_warp_workspace(indices.size());
+    auto workspace = allocate_batch_warp_workspace(
+        indices.size(),
+        static_cast<std::size_t>(std::max(0, max_chunk_capacity_frames)));
     std::vector<unsigned long long> index_host(workspace.capacity_frames, 0ULL);
     std::vector<float> inverse_host(workspace.capacity_frames * 9, 0.0f);
     double inverse_prepare_s = 0.0;
@@ -4770,6 +4783,10 @@ class ResidentCalibratedStack {
     result["inverse_upload_mode"] = "chunked_device_batch";
     result["batch_chunk_frames"] = static_cast<unsigned long long>(workspace.capacity_frames);
     result["batch_chunk_count"] = static_cast<unsigned long long>(chunk_count);
+    result["batch_max_chunk_capacity_frames"] = static_cast<unsigned long long>(
+        std::max(0, max_chunk_capacity_frames));
+    result["batch_capacity_source"] =
+        max_chunk_capacity_frames > 0 ? "explicit_max_chunk_capacity" : "native_preferred";
     result["batch_workspace_bytes"] = static_cast<unsigned long long>(
         workspace.output_bytes + workspace.coverage_bytes + workspace.inverse_bytes + workspace.index_bytes);
     result["batch_output_bytes"] = static_cast<unsigned long long>(workspace.output_bytes);
@@ -4795,7 +4812,11 @@ class ResidentCalibratedStack {
       py::object indices_obj,
       py::object matrices_obj,
       float fill,
-      float clamping_threshold) {
+      float clamping_threshold,
+      int max_chunk_capacity_frames = 0) {
+    if (max_chunk_capacity_frames < 0) {
+      throw std::invalid_argument("max_chunk_capacity_frames must be non-negative");
+    }
     const auto indices = parse_index_sequence(indices_obj, "indices");
     const auto matrices = parse_matrix_stack(matrices_obj);
     if (indices.size() != matrices.size()) {
@@ -4810,6 +4831,10 @@ class ResidentCalibratedStack {
       result["inverse_upload_mode"] = "chunked_device_batch";
       result["batch_chunk_frames"] = 0;
       result["batch_chunk_count"] = 0;
+      result["batch_max_chunk_capacity_frames"] = static_cast<unsigned long long>(
+          std::max(0, max_chunk_capacity_frames));
+      result["batch_capacity_source"] =
+          max_chunk_capacity_frames > 0 ? "explicit_max_chunk_capacity" : "native_preferred";
       result["batch_workspace_bytes"] = 0;
       result["batch_output_bytes"] = 0;
       result["batch_coverage_bytes"] = 0;
@@ -4834,7 +4859,9 @@ class ResidentCalibratedStack {
     }
     const auto total_start = Clock::now();
     allocate_warp_coverage_if_needed();
-    auto workspace = allocate_batch_warp_workspace(indices.size());
+    auto workspace = allocate_batch_warp_workspace(
+        indices.size(),
+        static_cast<std::size_t>(std::max(0, max_chunk_capacity_frames)));
     std::vector<unsigned long long> index_host(workspace.capacity_frames, 0ULL);
     std::vector<float> inverse_host(workspace.capacity_frames * 9, 0.0f);
     double inverse_prepare_s = 0.0;
@@ -4924,6 +4951,10 @@ class ResidentCalibratedStack {
     result["inverse_upload_mode"] = "chunked_device_batch";
     result["batch_chunk_frames"] = static_cast<unsigned long long>(workspace.capacity_frames);
     result["batch_chunk_count"] = static_cast<unsigned long long>(chunk_count);
+    result["batch_max_chunk_capacity_frames"] = static_cast<unsigned long long>(
+        std::max(0, max_chunk_capacity_frames));
+    result["batch_capacity_source"] =
+        max_chunk_capacity_frames > 0 ? "explicit_max_chunk_capacity" : "native_preferred";
     result["batch_workspace_bytes"] = static_cast<unsigned long long>(
         workspace.output_bytes + workspace.coverage_bytes + workspace.inverse_bytes + workspace.index_bytes);
     result["batch_output_bytes"] = static_cast<unsigned long long>(workspace.output_bytes);
@@ -8975,12 +9006,18 @@ class ResidentCalibratedStack {
     double allocation_s = 0.0;
   };
 
-  BatchWarpWorkspace allocate_batch_warp_workspace(std::size_t requested_frames) {
+  BatchWarpWorkspace allocate_batch_warp_workspace(
+      std::size_t requested_frames,
+      std::size_t max_capacity_frames = 0) {
     if (requested_frames == 0) {
       throw std::invalid_argument("batch warp workspace requires at least one frame");
     }
     constexpr std::size_t preferred_frames = 8;
-    std::size_t capacity = std::min(requested_frames, preferred_frames);
+    std::size_t capacity_limit = preferred_frames;
+    if (max_capacity_frames > 0) {
+      capacity_limit = std::min(capacity_limit, max_capacity_frames);
+    }
+    std::size_t capacity = std::min(requested_frames, capacity_limit);
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
     cudaError_t last_error = cudaSuccess;
     const auto alloc_start = Clock::now();
@@ -13186,7 +13223,8 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           &ResidentCalibratedStack::apply_matrix_bilinear_frames,
           py::arg("indices"),
           py::arg("matrices"),
-          py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
+          py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
+          py::arg("max_chunk_capacity_frames") = 0)
       .def(
           "apply_matrix_bilinear_frames_loop",
           &ResidentCalibratedStack::apply_matrix_bilinear_frames_loop,
@@ -13199,7 +13237,8 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("indices"),
           py::arg("matrices"),
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
-          py::arg("clamping_threshold") = -1.0f)
+          py::arg("clamping_threshold") = -1.0f,
+          py::arg("max_chunk_capacity_frames") = 0)
       .def(
           "apply_matrix_lanczos3_frames_loop",
           &ResidentCalibratedStack::apply_matrix_lanczos3_frames_loop,

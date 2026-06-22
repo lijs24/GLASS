@@ -9656,6 +9656,63 @@ Completed in Gate446:
     max-chunk-capacity argument so reduced-capacity execution can remain a
     single native dispatch where possible.
 
+### S2-Gate 466: Native Chunk-Capacity Warp Dispatch
+
+- Close the Gate465 reduced-capacity execution limitation by moving the
+  max-chunk-capacity control into the native resident CUDA matrix-warp
+  bindings.
+- Required work:
+  - add an optional native `max_chunk_capacity_frames` argument to chunked
+    resident bilinear and Lanczos3 matrix batch warp paths;
+  - keep default full-capacity runs on the native preferred allocator path;
+  - preserve a single Python/native call for reduced-capacity execution, with
+    the native allocator honoring the selected maximum chunk capacity;
+  - expose capacity source and explicit max-capacity evidence in native timing
+    metadata;
+  - verify both bilinear and Lanczos3 CUDA outputs against CPU references on
+    small synthetic resident stacks.
+- Completed in S2-Gate466:
+  - added `max_chunk_capacity_frames` to
+    `ResidentCalibratedStack.apply_matrix_bilinear_frames` and
+    `ResidentCalibratedStack.apply_matrix_lanczos3_frames`;
+  - updated the C++ native chunked batch warp allocator so explicit positive
+    max capacity clamps the initial workspace capacity before the existing OOM
+    fallback logic;
+  - recorded `batch_max_chunk_capacity_frames` and
+    `batch_capacity_source=explicit_max_chunk_capacity` in native timing
+    payloads when a reduced capacity is supplied;
+  - changed resident execution so admission-selected reduced capacity is
+    passed to native once instead of splitting the batch in Python;
+  - kept full-capacity/default resident execution with no forced max capacity,
+    preserving Gate465's `native_preferred` one-call path;
+  - focused CUDA tests prove both bilinear and Lanczos3 chunked native paths
+    honor `max_chunk_capacity_frames=2`, allocate only two-frame output/map
+    workspace, launch three chunks for five frames, and match CPU reference
+    images;
+  - resident engine tests prove the reduced-capacity handoff now makes one
+    stack call for all frame indices and records native explicit-capacity
+    evidence;
+  - broader CUDA/resident/CLI regression passed with `157 passed`;
+  - full pytest passed with `1101 passed in 48.05 s`.
+- Performance and regression note:
+  - the Gate465 real 200-light default path remains the governing real-data
+    baseline for this scheduler/backend change:
+    `36.103794 s` internal timing, `30.261113x` versus WBPP black-box timing,
+    `native_chunked_batch_warp_scatter_one_sync`, chunk frames `8`, chunk
+    count `24`, and compare RMS `0.00170058`;
+  - a new 200-light run was not launched for this gate because C: had only
+    about `0.404 GiB` free during validation. The changed code path affects
+    reduced-capacity admission, while the default real-data path remains
+    unforced and is covered by Gate465's accepted artifact.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_466_native_capacity_summary.json`;
+  - `runs/checkpoints/s2_gate_466_status.md`.
+- Known limitation:
+  - native reduced-capacity dispatch now avoids Python-level splitting, but it
+    still executes chunked warp/coverage/scatter kernels serially inside one
+    native call. Future performance work should batch more registration/warp
+    orchestration state on device and reduce per-chunk launch overhead.
+
 ## Gate Rules
 
 Each gate requires:

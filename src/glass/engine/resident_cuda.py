@@ -1718,49 +1718,29 @@ def _apply_resident_registration_matrix_batch(
         "fallback_frame_count": len(items) - len(matrix_positions),
     }
     if matrix_positions:
-        chunk_size = len(matrix_positions)
+        batch_kwargs: dict[str, Any] = {"dispatch": batch_dispatch}
         if batch_dispatch == "chunked" and chunk_capacity_frames is not None:
-            chunk_size = max(1, min(chunk_size, int(chunk_capacity_frames)))
+            batch_kwargs["max_chunk_capacity_frames"] = int(chunk_capacity_frames)
         if interpolation == "lanczos3" and matrix_batch_available:
-            batch_timings = []
-            for start in range(0, len(matrix_indices), chunk_size):
-                stop = min(len(matrix_indices), start + chunk_size)
-                batch_timings.append(
-                    dict(
-                        stack.apply_matrix_lanczos3_frames(
-                            matrix_indices[start:stop],
-                            np.asarray(matrix_values[start:stop], dtype=np.float32),
-                            np.nan,
-                            float(clamping_threshold),
-                            dispatch=batch_dispatch,
-                        )
-                    )
+            timing = dict(
+                stack.apply_matrix_lanczos3_frames(
+                    matrix_indices,
+                    np.asarray(matrix_values, dtype=np.float32),
+                    np.nan,
+                    float(clamping_threshold),
+                    **batch_kwargs,
                 )
-            timing = _combine_resident_matrix_batch_timings(
-                batch_timings,
-                total_items=len(items),
-                chunk_capacity_frames=chunk_capacity_frames,
             )
             for position in matrix_positions:
                 models[position] = "matrix_lanczos3_batch"
         elif interpolation == "bilinear" and matrix_batch_available:
-            batch_timings = []
-            for start in range(0, len(matrix_indices), chunk_size):
-                stop = min(len(matrix_indices), start + chunk_size)
-                batch_timings.append(
-                    dict(
-                        stack.apply_matrix_bilinear_frames(
-                            matrix_indices[start:stop],
-                            np.asarray(matrix_values[start:stop], dtype=np.float32),
-                            np.nan,
-                            dispatch=batch_dispatch,
-                        )
-                    )
+            timing = dict(
+                stack.apply_matrix_bilinear_frames(
+                    matrix_indices,
+                    np.asarray(matrix_values, dtype=np.float32),
+                    np.nan,
+                    **batch_kwargs,
                 )
-            timing = _combine_resident_matrix_batch_timings(
-                batch_timings,
-                total_items=len(items),
-                chunk_capacity_frames=chunk_capacity_frames,
             )
             for position in matrix_positions:
                 models[position] = "matrix_bilinear_batch"

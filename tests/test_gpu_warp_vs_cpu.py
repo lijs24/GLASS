@@ -329,6 +329,59 @@ def test_resident_stack_matrix_bilinear_batch_default_dispatch_is_loop():
     assert timing["frame_count"] == 1
 
 
+def test_resident_stack_matrix_bilinear_batch_respects_max_chunk_capacity():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_matrix_bilinear_frames"):
+        raise AssertionError("ResidentCalibratedStack.apply_matrix_bilinear_frames is missing")
+
+    base = np.arange(64, dtype=np.float32).reshape(8, 8)
+    frames = [(base + np.float32(index * 7)).astype(np.float32) for index in range(5)]
+    matrices = np.asarray(
+        [
+            [[1.0, 0.0, 0.10 * index], [0.0, 1.0, -0.05 * index], [0.0, 0.0, 1.0]]
+            for index in range(5)
+        ],
+        dtype=np.float32,
+    )
+    stack = module.ResidentCalibratedStack(len(frames), frames[0].shape[0], frames[0].shape[1])
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    timing = stack.apply_matrix_bilinear_frames(
+        list(range(len(frames))),
+        matrices,
+        np.nan,
+        dispatch="chunked",
+        max_chunk_capacity_frames=2,
+    )
+    warped, weight_map = stack.integrate_mean()
+    expected_sum = np.zeros_like(frames[0], dtype=np.float32)
+    expected_weight = np.zeros_like(frames[0], dtype=np.float32)
+    for frame, matrix in zip(frames, matrices, strict=True):
+        warped_frame, coverage = _warp_matrix_bilinear_cpu(frame, matrix, np.nan)
+        expected_sum += np.where(coverage > 0, warped_frame, 0.0)
+        expected_weight += coverage
+    expected = np.divide(
+        expected_sum,
+        expected_weight,
+        out=np.zeros_like(expected_sum, dtype=np.float32),
+        where=expected_weight > 0,
+    )
+
+    assert timing["timing_model"] == "native_chunked_batch_warp_scatter_one_sync"
+    assert timing["batch_capacity_source"] == "explicit_max_chunk_capacity"
+    assert timing["batch_max_chunk_capacity_frames"] == 2
+    assert timing["batch_chunk_frames"] == 2
+    assert timing["batch_chunk_count"] == 3
+    assert timing["warp_kernel_launches"] == 3
+    assert timing["coverage_reduce_kernel_launches"] == 3
+    assert timing["scatter_kernel_launches"] == 3
+    assert timing["batch_output_bytes"] == 2 * frames[0].size * 4
+    assert timing["batch_coverage_bytes"] == 2 * frames[0].size
+    assert np.allclose(warped, expected, atol=1.0e-5)
+    assert np.array_equal(weight_map, expected_weight)
+
+
 def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_matrix_lanczos3_frames"):
@@ -398,6 +451,65 @@ def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
     assert timing["device_copy_enqueue_s"] >= 0.0
     assert timing["sync_s"] >= 0.0
     assert timing["total_s"] >= timing["kernel_enqueue_s"]
+    assert np.allclose(warped, expected, atol=3.0e-5)
+    assert np.array_equal(weight_map, expected_weight)
+
+
+def test_resident_stack_matrix_lanczos3_batch_respects_max_chunk_capacity():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_matrix_lanczos3_frames"):
+        raise AssertionError("ResidentCalibratedStack.apply_matrix_lanczos3_frames is missing")
+
+    yy, xx = np.indices((10, 11), dtype=np.float32)
+    frames = [
+        (np.sin(xx * (0.11 + index * 0.01)) + np.cos(yy * 0.13) + index).astype(
+            np.float32
+        )
+        for index in range(5)
+    ]
+    matrices = np.asarray(
+        [
+            [[1.0, 0.0, 0.04 * index], [0.0, 1.0, -0.03 * index], [0.0, 0.0, 1.0]]
+            for index in range(5)
+        ],
+        dtype=np.float32,
+    )
+    stack = module.ResidentCalibratedStack(len(frames), frames[0].shape[0], frames[0].shape[1])
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    timing = stack.apply_matrix_lanczos3_frames(
+        list(range(len(frames))),
+        matrices,
+        np.nan,
+        0.30,
+        dispatch="chunked",
+        max_chunk_capacity_frames=2,
+    )
+    warped, weight_map = stack.integrate_mean()
+    expected_sum = np.zeros_like(frames[0], dtype=np.float32)
+    expected_weight = np.zeros_like(frames[0], dtype=np.float32)
+    for frame, matrix in zip(frames, matrices, strict=True):
+        warped_frame, coverage = _warp_matrix_lanczos3_cpu(frame, matrix, np.nan, 0.30)
+        expected_sum += np.where(coverage > 0, warped_frame, 0.0)
+        expected_weight += coverage
+    expected = np.divide(
+        expected_sum,
+        expected_weight,
+        out=np.zeros_like(expected_sum, dtype=np.float32),
+        where=expected_weight > 0,
+    )
+
+    assert timing["timing_model"] == "native_chunked_batch_warp_scatter_one_sync"
+    assert timing["batch_capacity_source"] == "explicit_max_chunk_capacity"
+    assert timing["batch_max_chunk_capacity_frames"] == 2
+    assert timing["batch_chunk_frames"] == 2
+    assert timing["batch_chunk_count"] == 3
+    assert timing["warp_kernel_launches"] == 3
+    assert timing["coverage_reduce_kernel_launches"] == 3
+    assert timing["scatter_kernel_launches"] == 3
+    assert timing["batch_output_bytes"] == 2 * frames[0].size * 4
+    assert timing["batch_coverage_bytes"] == 2 * frames[0].size
     assert np.allclose(warped, expected, atol=3.0e-5)
     assert np.array_equal(weight_map, expected_weight)
 
