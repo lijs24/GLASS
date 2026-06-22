@@ -157,7 +157,7 @@ def inline_cosmetic_thresholds_from_array(
             "expected_shape": list(shape),
             "invalid_samples": 0,
             "flag_counts": {},
-            "source_model": "inline_cosmetic_cuda_thresholds",
+            "source_model": "inline_structure_cosmetic_cuda_thresholds",
         }
     if not np.issubdtype(array.dtype, np.number):
         return {
@@ -167,7 +167,7 @@ def inline_cosmetic_thresholds_from_array(
             "dtype": str(array.dtype),
             "invalid_samples": 0,
             "flag_counts": {},
-            "source_model": "inline_cosmetic_cuda_thresholds",
+            "source_model": "inline_structure_cosmetic_cuda_thresholds",
         }
 
     image = np.asarray(array, dtype=np.float32)
@@ -195,21 +195,29 @@ def inline_cosmetic_thresholds_from_array(
         "flagged_samples": 0,
         "nonfinite_samples": 0,
         "flag_counts": {},
-        "source_model": "inline_cosmetic_cuda_thresholds",
+        "source_model": "inline_structure_cosmetic_cuda_thresholds",
         "inline_source_dq": True,
-        "inline_source_dq_detector": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
+        "inline_source_dq_detector": "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame",
         "inline_source_dq_applies_replacement": False,
-        "detector_execution": "cuda_threshold_apply",
+        "detector_execution": "cuda_isolated_threshold_apply",
         "threshold_source": "cpu_median_mad_scalar",
         "hot_sigma": float(hot_sigma),
         "cold_sigma": float(cold_sigma),
         "low_threshold": low_threshold,
         "high_threshold": high_threshold,
+        "structure_sigma": 1.5,
+        "min_neighbor_support": 2,
         "cosmetic_metrics": {
             "median": median,
             "sigma": float(sigma),
             "hot_pixels": None,
             "cold_pixels": None,
+            "candidate_hot_pixels": None,
+            "candidate_cold_pixels": None,
+            "protected_hot_pixels": None,
+            "protected_cold_pixels": None,
+            "structure_sigma": 1.5,
+            "min_neighbor_support": 2,
         },
     }
 
@@ -234,11 +242,11 @@ def _inline_cosmetic_threshold_info_from_stats(
         "flagged_samples": 0,
         "nonfinite_samples": 0,
         "flag_counts": {},
-        "source_model": "inline_cosmetic_cuda_thresholds",
+        "source_model": "inline_structure_cosmetic_cuda_thresholds",
         "inline_source_dq": True,
-        "inline_source_dq_detector": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
+        "inline_source_dq_detector": "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame",
         "inline_source_dq_applies_replacement": False,
-        "detector_execution": "cuda_threshold_apply",
+        "detector_execution": "cuda_isolated_threshold_apply",
         "threshold_source": str(stats.get("threshold_source") or fallback_threshold_source),
         "threshold_stats": stats,
         "threshold_stats_native_method": str(stats.get("native_method") or fallback_native_method),
@@ -257,12 +265,20 @@ def _inline_cosmetic_threshold_info_from_stats(
         "cold_sigma": float(cold_sigma),
         "low_threshold": float(stats.get("low_threshold", float("-inf"))),
         "high_threshold": float(stats.get("high_threshold", float("inf"))),
+        "structure_sigma": 1.5,
+        "min_neighbor_support": 2,
         "cosmetic_metrics": {
             "median": float(stats.get("median", 0.0)),
             "sigma": float(stats.get("sigma", 0.0)),
             "mad": float(stats.get("mad", 0.0)),
             "hot_pixels": None,
             "cold_pixels": None,
+            "candidate_hot_pixels": None,
+            "candidate_cold_pixels": None,
+            "protected_hot_pixels": None,
+            "protected_cold_pixels": None,
+            "structure_sigma": 1.5,
+            "min_neighbor_support": 2,
         },
     }
     if batch_summary:
@@ -325,7 +341,7 @@ def inline_cosmetic_thresholds_from_resident_stack(
             "shape": list(shape),
             "invalid_samples": 0,
             "flag_counts": {},
-            "source_model": "inline_cosmetic_cuda_thresholds",
+            "source_model": "inline_structure_cosmetic_cuda_thresholds",
             "threshold_source": "unavailable",
         }
 
@@ -752,11 +768,11 @@ def apply_resident_inline_cosmetic_thresholds(
         "flagged_samples": 0,
         "nonfinite_samples": 0,
         "flag_counts": {},
-        "source_model": str(threshold_info.get("source_model") or "inline_cosmetic_cuda_thresholds"),
+        "source_model": str(threshold_info.get("source_model") or "inline_structure_cosmetic_cuda_thresholds"),
         "inline_source_dq": bool(threshold_info.get("inline_source_dq")),
         "inline_source_dq_detector": str(
             threshold_info.get("inline_source_dq_detector")
-            or "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+            or "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
         ),
         "inline_source_dq_applies_replacement": bool(
             threshold_info.get("inline_source_dq_applies_replacement")
@@ -793,12 +809,14 @@ def apply_resident_inline_cosmetic_thresholds(
         "threshold_stats_batch_reuses_device_work_buffers": threshold_info.get(
             "threshold_stats_batch_reuses_device_work_buffers"
         ),
-        "detector_execution": str(threshold_info.get("detector_execution") or "cuda_threshold_apply"),
+        "detector_execution": str(threshold_info.get("detector_execution") or "cuda_isolated_threshold_apply"),
         "hot_sigma": float(threshold_info.get("hot_sigma") or 0.0),
         "cold_sigma": float(threshold_info.get("cold_sigma") or 0.0),
         "low_threshold": float(threshold_info.get("low_threshold", float("-inf"))),
         "high_threshold": float(threshold_info.get("high_threshold", float("inf"))),
         "cosmetic_metrics": dict(threshold_info.get("cosmetic_metrics") or {}),
+        "structure_sigma": float(threshold_info.get("structure_sigma", 1.5)),
+        "min_neighbor_support": int(threshold_info.get("min_neighbor_support", 2)),
         "applied": False,
         "native_method": None,
     }
@@ -806,17 +824,33 @@ def apply_resident_inline_cosmetic_thresholds(
         row["status"] = "unsupported_no_invalid_samples"
         return row
 
+    metrics_for_params = dict(row["cosmetic_metrics"])
+    stats_for_params = dict(row["threshold_stats"])
+    threshold_median = float(metrics_for_params.get("median", stats_for_params.get("median", 0.0)) or 0.0)
+    threshold_sigma = float(metrics_for_params.get("sigma", stats_for_params.get("sigma", 0.0)) or 0.0)
+    use_isolated_detector = "isolated" in str(row["inline_source_dq_detector"])
     guard_enabled = max_invalid_fraction is not None and float(max_invalid_fraction) > 0.0
-    if guard_enabled and native_count_result is None and hasattr(
-        stack, "count_cosmetic_threshold_mask_frame"
-    ):
-        native_count_result = dict(
-            stack.count_cosmetic_threshold_mask_frame(
-                int(frame_index),
-                float(row["low_threshold"]),
-                float(row["high_threshold"]),
+    if guard_enabled and native_count_result is None:
+        if use_isolated_detector and hasattr(stack, "count_isolated_cosmetic_threshold_mask_frame"):
+            native_count_result = dict(
+                stack.count_isolated_cosmetic_threshold_mask_frame(
+                    int(frame_index),
+                    float(row["low_threshold"]),
+                    float(row["high_threshold"]),
+                    threshold_median,
+                    threshold_sigma,
+                    float(row["structure_sigma"]),
+                    int(row["min_neighbor_support"]),
+                )
             )
-        )
+        elif hasattr(stack, "count_cosmetic_threshold_mask_frame"):
+            native_count_result = dict(
+                stack.count_cosmetic_threshold_mask_frame(
+                    int(frame_index),
+                    float(row["low_threshold"]),
+                    float(row["high_threshold"]),
+                )
+            )
     if native_count_result is not None:
         count_native = dict(native_count_result)
         count_hot = int(count_native.get("hot_samples") or 0)
@@ -899,6 +933,8 @@ def apply_resident_inline_cosmetic_thresholds(
                             "high_threshold": row["high_threshold"],
                             "threshold_source": row["threshold_source"],
                             "threshold_stats": row["threshold_stats"],
+                            "structure_sigma": row["structure_sigma"],
+                            "min_neighbor_support": row["min_neighbor_support"],
                             "detector_execution": row["detector_execution"],
                             "cosmetic_metrics": metrics,
                         }
@@ -906,26 +942,42 @@ def apply_resident_inline_cosmetic_thresholds(
                 }
             )
             return row
-    if native_result is None and not hasattr(stack, "apply_cosmetic_threshold_mask_frame"):
+    required_apply_method = (
+        "apply_isolated_cosmetic_threshold_mask_frame"
+        if use_isolated_detector
+        else "apply_cosmetic_threshold_mask_frame"
+    )
+    if native_result is None and not hasattr(stack, required_apply_method):
         row["status"] = "native_method_unavailable"
         if require_native:
             raise RuntimeError(
-                "resident CUDA backend must expose apply_cosmetic_threshold_mask_frame "
+                f"resident CUDA backend must expose {required_apply_method} "
                 f"to consume inline cosmetic source-DQ samples for {frame_id}"
             )
         return row
 
-    native = (
-        dict(native_result)
-        if native_result is not None
-        else dict(
+    if native_result is not None:
+        native = dict(native_result)
+    elif use_isolated_detector:
+        native = dict(
+            stack.apply_isolated_cosmetic_threshold_mask_frame(
+                int(frame_index),
+                float(row["low_threshold"]),
+                float(row["high_threshold"]),
+                threshold_median,
+                threshold_sigma,
+                float(row["structure_sigma"]),
+                int(row["min_neighbor_support"]),
+            )
+        )
+    else:
+        native = dict(
             stack.apply_cosmetic_threshold_mask_frame(
                 int(frame_index),
                 float(row["low_threshold"]),
                 float(row["high_threshold"]),
             )
         )
-    )
     hot = int(native.get("hot_samples") or 0)
     cold = int(native.get("cold_samples") or 0)
     nonfinite = int(native.get("nonfinite_samples") or 0)
@@ -945,6 +997,10 @@ def apply_resident_inline_cosmetic_thresholds(
     metrics = dict(row["cosmetic_metrics"])
     metrics["hot_pixels"] = hot
     metrics["cold_pixels"] = cold
+    metrics["candidate_hot_pixels"] = int(native.get("candidate_hot_samples") or hot)
+    metrics["candidate_cold_pixels"] = int(native.get("candidate_cold_samples") or cold)
+    metrics["protected_hot_pixels"] = int(native.get("protected_hot_samples") or 0)
+    metrics["protected_cold_pixels"] = int(native.get("protected_cold_samples") or 0)
     row.update(
         {
             "status": "applied" if invalid > 0 else "no_invalid_samples",
@@ -1015,6 +1071,8 @@ def apply_resident_inline_cosmetic_thresholds(
                     "threshold_stats_batch_reuses_device_work_buffers": row[
                         "threshold_stats_batch_reuses_device_work_buffers"
                     ],
+                    "structure_sigma": row["structure_sigma"],
+                    "min_neighbor_support": row["min_neighbor_support"],
                     "detector_execution": row["detector_execution"],
                     "cosmetic_metrics": metrics,
                 }
@@ -1034,7 +1092,21 @@ def apply_resident_inline_cosmetic_thresholds_batch(
 ) -> list[dict[str, Any]]:
     if not items:
         return []
-    if not hasattr(stack, "apply_cosmetic_threshold_mask_frames"):
+    use_isolated_detector = all(
+        "isolated" in str(dict(item["threshold_info"]).get("inline_source_dq_detector") or "")
+        for item in items
+    )
+    batch_apply_method = (
+        "apply_isolated_cosmetic_threshold_mask_frames"
+        if use_isolated_detector
+        else "apply_cosmetic_threshold_mask_frames"
+    )
+    batch_count_method = (
+        "count_isolated_cosmetic_threshold_mask_frames"
+        if use_isolated_detector
+        else "count_cosmetic_threshold_mask_frames"
+    )
+    if not hasattr(stack, batch_apply_method):
         return [
             apply_resident_inline_cosmetic_thresholds(
                 stack,
@@ -1051,11 +1123,44 @@ def apply_resident_inline_cosmetic_thresholds_batch(
     indices = [int(item["frame_index"]) for item in items]
     low_thresholds = [float(dict(item["threshold_info"])["low_threshold"]) for item in items]
     high_thresholds = [float(dict(item["threshold_info"])["high_threshold"]) for item in items]
+    medians = [
+        float(
+            dict(dict(item["threshold_info"]).get("cosmetic_metrics") or {}).get(
+                "median",
+                dict(dict(item["threshold_info"]).get("threshold_stats") or {}).get("median", 0.0),
+            )
+            or 0.0
+        )
+        for item in items
+    ]
+    sigmas = [
+        float(
+            dict(dict(item["threshold_info"]).get("cosmetic_metrics") or {}).get(
+                "sigma",
+                dict(dict(item["threshold_info"]).get("threshold_stats") or {}).get("sigma", 0.0),
+            )
+            or 0.0
+        )
+        for item in items
+    ]
+    structure_sigma = float(dict(items[0]["threshold_info"]).get("structure_sigma", 1.5))
+    min_neighbor_support = int(dict(items[0]["threshold_info"]).get("min_neighbor_support", 2))
     native_count_by_index: dict[int, dict[str, Any]] = {}
     guard_enabled = max_invalid_fraction is not None and float(max_invalid_fraction) > 0.0
-    if guard_enabled and hasattr(stack, "count_cosmetic_threshold_mask_frames"):
+    if guard_enabled and hasattr(stack, batch_count_method):
+        count_fn = getattr(stack, batch_count_method)
         native_count_batch = dict(
-            stack.count_cosmetic_threshold_mask_frames(indices, low_thresholds, high_thresholds)
+            count_fn(
+                indices,
+                low_thresholds,
+                high_thresholds,
+                medians,
+                sigmas,
+                structure_sigma,
+                min_neighbor_support,
+            )
+            if use_isolated_detector
+            else count_fn(indices, low_thresholds, high_thresholds)
         )
         native_count_by_index = {
             int(frame_result.get("frame_index")): dict(frame_result)
@@ -1100,14 +1205,42 @@ def apply_resident_inline_cosmetic_thresholds_batch(
 
     native_batch = (
         dict(
-            stack.apply_cosmetic_threshold_mask_frames(
+            getattr(stack, batch_apply_method)(
+                [int(item["frame_index"]) for item in apply_items],
+                [float(dict(item["threshold_info"])["low_threshold"]) for item in apply_items],
+                [float(dict(item["threshold_info"])["high_threshold"]) for item in apply_items],
+                [
+                    float(
+                        dict(dict(item["threshold_info"]).get("cosmetic_metrics") or {}).get(
+                            "median",
+                            dict(dict(item["threshold_info"]).get("threshold_stats") or {}).get("median", 0.0),
+                        )
+                        or 0.0
+                    )
+                    for item in apply_items
+                ],
+                [
+                    float(
+                        dict(dict(item["threshold_info"]).get("cosmetic_metrics") or {}).get(
+                            "sigma",
+                            dict(dict(item["threshold_info"]).get("threshold_stats") or {}).get("sigma", 0.0),
+                        )
+                        or 0.0
+                    )
+                    for item in apply_items
+                ],
+                structure_sigma,
+                min_neighbor_support,
+            )
+            if use_isolated_detector
+            else getattr(stack, batch_apply_method)(
                 [int(item["frame_index"]) for item in apply_items],
                 [float(dict(item["threshold_info"])["low_threshold"]) for item in apply_items],
                 [float(dict(item["threshold_info"])["high_threshold"]) for item in apply_items],
             )
         )
         if apply_items
-        else {"frames": [], "native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"}
+        else {"frames": [], "native_method": f"ResidentCalibratedStack.{batch_apply_method}"}
     )
     native_by_index = {
         int(frame_result.get("frame_index")): dict(frame_result)

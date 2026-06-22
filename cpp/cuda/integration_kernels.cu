@@ -366,6 +366,509 @@ void glass_count_cosmetic_threshold_mask_frames_f32_launch(
       counts);
 }
 
+__device__ float glass_median_finite_small(float* values, int count) {
+  if (count <= 0) {
+    return 0.0f;
+  }
+  for (int i = 1; i < count; ++i) {
+    const float key = values[i];
+    int j = i - 1;
+    while (j >= 0 && values[j] > key) {
+      values[j + 1] = values[j];
+      --j;
+    }
+    values[j + 1] = key;
+  }
+  if ((count & 1) != 0) {
+    return values[count / 2];
+  }
+  return 0.5f * (values[count / 2 - 1] + values[count / 2]);
+}
+
+__device__ void glass_isolated_cosmetic_classify_f32(
+    const float* frame,
+    std::size_t width,
+    std::size_t height,
+    std::size_t i,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float structure_sigma,
+    float sigma,
+    int min_neighbor_support,
+    bool* is_hot,
+    bool* is_cold,
+    bool* is_nonfinite,
+    bool* is_hot_candidate,
+    bool* is_cold_candidate,
+    bool* is_hot_protected,
+    bool* is_cold_protected) {
+  *is_hot = false;
+  *is_cold = false;
+  *is_nonfinite = false;
+  *is_hot_candidate = false;
+  *is_cold_candidate = false;
+  *is_hot_protected = false;
+  *is_cold_protected = false;
+
+  const float value = frame[i];
+  if (!isfinite(value)) {
+    *is_nonfinite = true;
+    return;
+  }
+
+  const std::size_t y = i / width;
+  const std::size_t x = i - y * width;
+  float neighbors[8];
+  int neighbor_count = 0;
+  int hot_support = 0;
+  int cold_support = 0;
+  const float support_sigma = fmaxf(0.0f, structure_sigma);
+  const float support_high = median + support_sigma * sigma;
+  const float support_low = median - support_sigma * sigma;
+  for (int dy = -1; dy <= 1; ++dy) {
+    for (int dx = -1; dx <= 1; ++dx) {
+      if (dx == 0 && dy == 0) {
+        continue;
+      }
+      int yy = static_cast<int>(y) + dy;
+      int xx = static_cast<int>(x) + dx;
+      yy = max(0, min(static_cast<int>(height) - 1, yy));
+      xx = max(0, min(static_cast<int>(width) - 1, xx));
+      const float neighbor = frame[static_cast<std::size_t>(yy) * width + static_cast<std::size_t>(xx)];
+      if (isfinite(neighbor)) {
+        neighbors[neighbor_count++] = neighbor;
+        if (neighbor > support_high) {
+          ++hot_support;
+        }
+        if (neighbor < support_low) {
+          ++cold_support;
+        }
+      }
+    }
+  }
+  const float local_median = neighbor_count > 0
+      ? glass_median_finite_small(neighbors, neighbor_count)
+      : median;
+  const float hot_delta = fmaxf(0.0f, high_threshold - median);
+  const float cold_delta = fmaxf(0.0f, median - low_threshold);
+  const bool hot_candidate = value > high_threshold && (value - local_median) > hot_delta;
+  const bool cold_candidate = value < low_threshold && (local_median - value) > cold_delta;
+  *is_hot_candidate = hot_candidate;
+  *is_cold_candidate = cold_candidate;
+  const int support_required = max(0, min_neighbor_support);
+  if (hot_candidate && hot_support < support_required) {
+    *is_hot = true;
+  } else if (hot_candidate) {
+    *is_hot_protected = true;
+  }
+  if (cold_candidate && cold_support < support_required) {
+    *is_cold = true;
+  } else if (cold_candidate) {
+    *is_cold_protected = true;
+  }
+}
+
+__global__ void glass_apply_isolated_cosmetic_threshold_mask_f32_kernel(
+    float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts) {
+  const std::size_t n = width * height;
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= n) {
+    return;
+  }
+  bool hot;
+  bool cold;
+  bool nonfinite;
+  bool hot_candidate;
+  bool cold_candidate;
+  bool hot_protected;
+  bool cold_protected;
+  glass_isolated_cosmetic_classify_f32(
+      frame,
+      width,
+      height,
+      i,
+      low_threshold,
+      high_threshold,
+      median,
+      structure_sigma,
+      sigma,
+      min_neighbor_support,
+      &hot,
+      &cold,
+      &nonfinite,
+      &hot_candidate,
+      &cold_candidate,
+      &hot_protected,
+      &cold_protected);
+  if (hot_candidate) {
+    atomicAdd(&counts[3], 1ULL);
+  }
+  if (cold_candidate) {
+    atomicAdd(&counts[4], 1ULL);
+  }
+  if (hot_protected) {
+    atomicAdd(&counts[5], 1ULL);
+  }
+  if (cold_protected) {
+    atomicAdd(&counts[6], 1ULL);
+  }
+  if (nonfinite) {
+    atomicAdd(&counts[2], 1ULL);
+    frame[i] = nanf("");
+    return;
+  }
+  if (hot) {
+    atomicAdd(&counts[0], 1ULL);
+    frame[i] = nanf("");
+    return;
+  }
+  if (cold) {
+    atomicAdd(&counts[1], 1ULL);
+    frame[i] = nanf("");
+  }
+}
+
+__global__ void glass_count_isolated_cosmetic_threshold_mask_f32_kernel(
+    const float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts) {
+  const std::size_t n = width * height;
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= n) {
+    return;
+  }
+  bool hot;
+  bool cold;
+  bool nonfinite;
+  bool hot_candidate;
+  bool cold_candidate;
+  bool hot_protected;
+  bool cold_protected;
+  glass_isolated_cosmetic_classify_f32(
+      frame,
+      width,
+      height,
+      i,
+      low_threshold,
+      high_threshold,
+      median,
+      structure_sigma,
+      sigma,
+      min_neighbor_support,
+      &hot,
+      &cold,
+      &nonfinite,
+      &hot_candidate,
+      &cold_candidate,
+      &hot_protected,
+      &cold_protected);
+  if (hot_candidate) {
+    atomicAdd(&counts[3], 1ULL);
+  }
+  if (cold_candidate) {
+    atomicAdd(&counts[4], 1ULL);
+  }
+  if (hot_protected) {
+    atomicAdd(&counts[5], 1ULL);
+  }
+  if (cold_protected) {
+    atomicAdd(&counts[6], 1ULL);
+  }
+  if (nonfinite) {
+    atomicAdd(&counts[2], 1ULL);
+    return;
+  }
+  if (hot) {
+    atomicAdd(&counts[0], 1ULL);
+    return;
+  }
+  if (cold) {
+    atomicAdd(&counts[1], 1ULL);
+  }
+}
+
+void glass_apply_isolated_cosmetic_threshold_mask_f32_launch(
+    float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts) {
+  constexpr int threads = 256;
+  const std::size_t n = width * height;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  glass_apply_isolated_cosmetic_threshold_mask_f32_kernel<<<blocks, threads>>>(
+      frame,
+      width,
+      height,
+      low_threshold,
+      high_threshold,
+      median,
+      sigma,
+      structure_sigma,
+      min_neighbor_support,
+      counts);
+}
+
+void glass_count_isolated_cosmetic_threshold_mask_f32_launch(
+    const float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts) {
+  constexpr int threads = 256;
+  const std::size_t n = width * height;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  glass_count_isolated_cosmetic_threshold_mask_f32_kernel<<<blocks, threads>>>(
+      frame,
+      width,
+      height,
+      low_threshold,
+      high_threshold,
+      median,
+      sigma,
+      structure_sigma,
+      min_neighbor_support,
+      counts);
+}
+
+__global__ void glass_apply_isolated_cosmetic_threshold_mask_frames_f32_kernel(
+    float* stack,
+    std::size_t width,
+    std::size_t height,
+    const unsigned long long* frame_indices,
+    const float* low_thresholds,
+    const float* high_thresholds,
+    const float* medians,
+    const float* sigmas,
+    std::size_t frame_count,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts) {
+  const std::size_t frame_pos = static_cast<std::size_t>(blockIdx.y);
+  const std::size_t n = width * height;
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (frame_pos >= frame_count || i >= n) {
+    return;
+  }
+  const std::size_t frame_index = static_cast<std::size_t>(frame_indices[frame_pos]);
+  float* frame = stack + frame_index * n;
+  unsigned long long* frame_counts = counts + frame_pos * 7ULL;
+  bool hot;
+  bool cold;
+  bool nonfinite;
+  bool hot_candidate;
+  bool cold_candidate;
+  bool hot_protected;
+  bool cold_protected;
+  glass_isolated_cosmetic_classify_f32(
+      frame,
+      width,
+      height,
+      i,
+      low_thresholds[frame_pos],
+      high_thresholds[frame_pos],
+      medians[frame_pos],
+      structure_sigma,
+      sigmas[frame_pos],
+      min_neighbor_support,
+      &hot,
+      &cold,
+      &nonfinite,
+      &hot_candidate,
+      &cold_candidate,
+      &hot_protected,
+      &cold_protected);
+  if (hot_candidate) {
+    atomicAdd(&frame_counts[3], 1ULL);
+  }
+  if (cold_candidate) {
+    atomicAdd(&frame_counts[4], 1ULL);
+  }
+  if (hot_protected) {
+    atomicAdd(&frame_counts[5], 1ULL);
+  }
+  if (cold_protected) {
+    atomicAdd(&frame_counts[6], 1ULL);
+  }
+  if (nonfinite) {
+    atomicAdd(&frame_counts[2], 1ULL);
+    frame[i] = nanf("");
+    return;
+  }
+  if (hot) {
+    atomicAdd(&frame_counts[0], 1ULL);
+    frame[i] = nanf("");
+    return;
+  }
+  if (cold) {
+    atomicAdd(&frame_counts[1], 1ULL);
+    frame[i] = nanf("");
+  }
+}
+
+__global__ void glass_count_isolated_cosmetic_threshold_mask_frames_f32_kernel(
+    const float* stack,
+    std::size_t width,
+    std::size_t height,
+    const unsigned long long* frame_indices,
+    const float* low_thresholds,
+    const float* high_thresholds,
+    const float* medians,
+    const float* sigmas,
+    std::size_t frame_count,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts) {
+  const std::size_t frame_pos = static_cast<std::size_t>(blockIdx.y);
+  const std::size_t n = width * height;
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (frame_pos >= frame_count || i >= n) {
+    return;
+  }
+  const std::size_t frame_index = static_cast<std::size_t>(frame_indices[frame_pos]);
+  const float* frame = stack + frame_index * n;
+  unsigned long long* frame_counts = counts + frame_pos * 7ULL;
+  bool hot;
+  bool cold;
+  bool nonfinite;
+  bool hot_candidate;
+  bool cold_candidate;
+  bool hot_protected;
+  bool cold_protected;
+  glass_isolated_cosmetic_classify_f32(
+      frame,
+      width,
+      height,
+      i,
+      low_thresholds[frame_pos],
+      high_thresholds[frame_pos],
+      medians[frame_pos],
+      structure_sigma,
+      sigmas[frame_pos],
+      min_neighbor_support,
+      &hot,
+      &cold,
+      &nonfinite,
+      &hot_candidate,
+      &cold_candidate,
+      &hot_protected,
+      &cold_protected);
+  if (hot_candidate) {
+    atomicAdd(&frame_counts[3], 1ULL);
+  }
+  if (cold_candidate) {
+    atomicAdd(&frame_counts[4], 1ULL);
+  }
+  if (hot_protected) {
+    atomicAdd(&frame_counts[5], 1ULL);
+  }
+  if (cold_protected) {
+    atomicAdd(&frame_counts[6], 1ULL);
+  }
+  if (nonfinite) {
+    atomicAdd(&frame_counts[2], 1ULL);
+    return;
+  }
+  if (hot) {
+    atomicAdd(&frame_counts[0], 1ULL);
+    return;
+  }
+  if (cold) {
+    atomicAdd(&frame_counts[1], 1ULL);
+  }
+}
+
+void glass_apply_isolated_cosmetic_threshold_mask_frames_f32_launch(
+    float* stack,
+    std::size_t width,
+    std::size_t height,
+    const unsigned long long* frame_indices,
+    const float* low_thresholds,
+    const float* high_thresholds,
+    const float* medians,
+    const float* sigmas,
+    std::size_t frame_count,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts) {
+  constexpr int threads = 256;
+  const std::size_t n = width * height;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  const dim3 grid(blocks, static_cast<unsigned int>(frame_count));
+  glass_apply_isolated_cosmetic_threshold_mask_frames_f32_kernel<<<grid, threads>>>(
+      stack,
+      width,
+      height,
+      frame_indices,
+      low_thresholds,
+      high_thresholds,
+      medians,
+      sigmas,
+      frame_count,
+      structure_sigma,
+      min_neighbor_support,
+      counts);
+}
+
+void glass_count_isolated_cosmetic_threshold_mask_frames_f32_launch(
+    const float* stack,
+    std::size_t width,
+    std::size_t height,
+    const unsigned long long* frame_indices,
+    const float* low_thresholds,
+    const float* high_thresholds,
+    const float* medians,
+    const float* sigmas,
+    std::size_t frame_count,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts) {
+  constexpr int threads = 256;
+  const std::size_t n = width * height;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  const dim3 grid(blocks, static_cast<unsigned int>(frame_count));
+  glass_count_isolated_cosmetic_threshold_mask_frames_f32_kernel<<<grid, threads>>>(
+      stack,
+      width,
+      height,
+      frame_indices,
+      low_thresholds,
+      high_thresholds,
+      medians,
+      sigmas,
+      frame_count,
+      structure_sigma,
+      min_neighbor_support,
+      counts);
+}
+
 __global__ void glass_sample_frame_even_f32_kernel(
     const float* frame,
     float* sample,

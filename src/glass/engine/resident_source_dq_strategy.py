@@ -152,7 +152,7 @@ def build_resident_source_dq_strategy(
         "mode": str(resident_inline_source_dq),
         "enabled": str(resident_inline_source_dq) != "off",
         "detector": (
-            "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+            "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
             if str(resident_inline_source_dq) == "cosmetic_cuda"
             else "glass.cpu.cosmetic.detect_isolated_cosmetic_defects"
             if str(resident_inline_source_dq) == "cosmetic"
@@ -164,7 +164,7 @@ def build_resident_source_dq_strategy(
             else None
         ),
         "detector_execution": (
-            "cuda_threshold_apply" if str(resident_inline_source_dq) == "cosmetic_cuda" else None
+            "cuda_isolated_threshold_apply" if str(resident_inline_source_dq) == "cosmetic_cuda" else None
         ),
         "hot_sigma": float(resident_inline_source_dq_hot_sigma),
         "cold_sigma": float(resident_inline_source_dq_cold_sigma),

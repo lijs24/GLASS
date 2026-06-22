@@ -428,6 +428,54 @@ void glass_count_cosmetic_threshold_mask_frames_f32_launch(
     const float* high_thresholds,
     std::size_t frame_count,
     unsigned long long* counts);
+void glass_apply_isolated_cosmetic_threshold_mask_f32_launch(
+    float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts);
+void glass_count_isolated_cosmetic_threshold_mask_f32_launch(
+    const float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts);
+void glass_apply_isolated_cosmetic_threshold_mask_frames_f32_launch(
+    float* stack,
+    std::size_t width,
+    std::size_t height,
+    const unsigned long long* frame_indices,
+    const float* low_thresholds,
+    const float* high_thresholds,
+    const float* medians,
+    const float* sigmas,
+    std::size_t frame_count,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts);
+void glass_count_isolated_cosmetic_threshold_mask_frames_f32_launch(
+    const float* stack,
+    std::size_t width,
+    std::size_t height,
+    const unsigned long long* frame_indices,
+    const float* low_thresholds,
+    const float* high_thresholds,
+    const float* medians,
+    const float* sigmas,
+    std::size_t frame_count,
+    float structure_sigma,
+    int min_neighbor_support,
+    unsigned long long* counts);
 void glass_sample_frame_even_f32_launch(
     const float* frame,
     float* sample,
@@ -2377,6 +2425,230 @@ class ResidentCalibratedStack {
     return result;
   }
 
+  void validate_isolated_cosmetic_thresholds(
+      float low_threshold,
+      float high_threshold,
+      float median,
+      float sigma) const {
+    if (std::isnan(low_threshold) || std::isnan(high_threshold) || low_threshold > high_threshold) {
+      throw std::invalid_argument("isolated cosmetic thresholds must be finite-or-infinite values with low <= high");
+    }
+    if (!std::isfinite(median) || std::isnan(sigma) || sigma < 0.0f) {
+      throw std::invalid_argument("isolated cosmetic median must be finite and sigma must be non-negative");
+    }
+  }
+
+  py::dict isolated_cosmetic_result_dict(
+      const std::array<unsigned long long, 7>& counts,
+      const char* native_method,
+      std::size_t index,
+      float low_threshold,
+      float high_threshold,
+      float median,
+      float sigma,
+      float structure_sigma,
+      int min_neighbor_support,
+      bool applied_mode) const {
+    const unsigned long long hot_count = counts[0];
+    const unsigned long long cold_count = counts[1];
+    const unsigned long long nonfinite_count = counts[2];
+    const unsigned long long candidate_hot_count = counts[3];
+    const unsigned long long candidate_cold_count = counts[4];
+    const unsigned long long protected_hot_count = counts[5];
+    const unsigned long long protected_cold_count = counts[6];
+    const unsigned long long cosmetic_count = hot_count + cold_count;
+    const unsigned long long invalid_count = cosmetic_count + nonfinite_count;
+
+    py::dict result;
+    result["schema_version"] = 1;
+    result["native_method"] = native_method;
+    result["frame_index"] = static_cast<unsigned long long>(index);
+    result["total_pixels"] = static_cast<unsigned long long>(pixels_per_frame_);
+    result["low_threshold"] = low_threshold;
+    result["high_threshold"] = high_threshold;
+    result["median"] = median;
+    result["sigma"] = sigma;
+    result["structure_sigma"] = structure_sigma;
+    result["min_neighbor_support"] = min_neighbor_support;
+    result["hot_samples"] = hot_count;
+    result["cold_samples"] = cold_count;
+    result["nonfinite_samples"] = nonfinite_count;
+    result["candidate_hot_samples"] = candidate_hot_count;
+    result["candidate_cold_samples"] = candidate_cold_count;
+    result["protected_hot_samples"] = protected_hot_count;
+    result["protected_cold_samples"] = protected_cold_count;
+    result["cosmetic_corrected_samples"] = cosmetic_count;
+    result["invalid_samples"] = invalid_count;
+    result["applied"] = applied_mode && invalid_count > 0ULL;
+    return result;
+  }
+
+  py::dict apply_isolated_cosmetic_threshold_mask_frame(
+      std::size_t index,
+      float low_threshold,
+      float high_threshold,
+      float median,
+      float sigma,
+      float structure_sigma,
+      int min_neighbor_support) {
+    require_loaded(index, "resident isolated source DQ cosmetic threshold application");
+    validate_isolated_cosmetic_thresholds(low_threshold, high_threshold, median, sigma);
+
+    const auto total_start = Clock::now();
+    unsigned long long* d_counts = nullptr;
+    std::array<unsigned long long, 7> host_counts{0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL};
+    double kernel_s = 0.0;
+    double sync_s = 0.0;
+    double counts_download_s = 0.0;
+    try {
+      check_cuda(
+          cudaMalloc(&d_counts, host_counts.size() * sizeof(unsigned long long)),
+          "cudaMalloc(resident isolated cosmetic threshold counts)");
+      check_cuda(
+          cudaMemset(d_counts, 0, host_counts.size() * sizeof(unsigned long long)),
+          "cudaMemset(resident isolated cosmetic threshold counts)");
+
+      const auto kernel_start = Clock::now();
+      glass_apply_isolated_cosmetic_threshold_mask_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          width_,
+          height_,
+          low_threshold,
+          high_threshold,
+          median,
+          sigma,
+          structure_sigma,
+          min_neighbor_support,
+          d_counts);
+      check_cuda(
+          cudaGetLastError(),
+          "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame kernel launch");
+      kernel_s = seconds_since(kernel_start);
+
+      const auto sync_start = Clock::now();
+      check_cuda(
+          cudaDeviceSynchronize(),
+          "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame synchronize");
+      sync_s = seconds_since(sync_start);
+
+      const auto download_start = Clock::now();
+      check_cuda(
+          cudaMemcpy(
+              host_counts.data(),
+              d_counts,
+              host_counts.size() * sizeof(unsigned long long),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident isolated cosmetic threshold counts)");
+      counts_download_s = seconds_since(download_start);
+    } catch (...) {
+      cudaFree(d_counts);
+      throw;
+    }
+    cudaFree(d_counts);
+
+    py::dict result = isolated_cosmetic_result_dict(
+        host_counts,
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame",
+        index,
+        low_threshold,
+        high_threshold,
+        median,
+        sigma,
+        structure_sigma,
+        min_neighbor_support,
+        true);
+    result["mask_upload_s"] = 0.0;
+    result["kernel_enqueue_s"] = kernel_s;
+    result["sync_s"] = sync_s;
+    result["device_counts_download_s"] = counts_download_s;
+    result["total_s"] = seconds_since(total_start);
+    result["detector_execution"] = "cuda_isolated_threshold_apply";
+    return result;
+  }
+
+  py::dict count_isolated_cosmetic_threshold_mask_frame(
+      std::size_t index,
+      float low_threshold,
+      float high_threshold,
+      float median,
+      float sigma,
+      float structure_sigma,
+      int min_neighbor_support) const {
+    require_loaded(index, "resident isolated source DQ cosmetic threshold count");
+    validate_isolated_cosmetic_thresholds(low_threshold, high_threshold, median, sigma);
+
+    const auto total_start = Clock::now();
+    unsigned long long* d_counts = nullptr;
+    std::array<unsigned long long, 7> host_counts{0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL};
+    double kernel_s = 0.0;
+    double sync_s = 0.0;
+    double counts_download_s = 0.0;
+    try {
+      check_cuda(
+          cudaMalloc(&d_counts, host_counts.size() * sizeof(unsigned long long)),
+          "cudaMalloc(resident isolated cosmetic threshold count-only counts)");
+      check_cuda(
+          cudaMemset(d_counts, 0, host_counts.size() * sizeof(unsigned long long)),
+          "cudaMemset(resident isolated cosmetic threshold count-only counts)");
+
+      const auto kernel_start = Clock::now();
+      glass_count_isolated_cosmetic_threshold_mask_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          width_,
+          height_,
+          low_threshold,
+          high_threshold,
+          median,
+          sigma,
+          structure_sigma,
+          min_neighbor_support,
+          d_counts);
+      check_cuda(
+          cudaGetLastError(),
+          "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frame kernel launch");
+      kernel_s = seconds_since(kernel_start);
+
+      const auto sync_start = Clock::now();
+      check_cuda(
+          cudaDeviceSynchronize(),
+          "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frame synchronize");
+      sync_s = seconds_since(sync_start);
+
+      const auto download_start = Clock::now();
+      check_cuda(
+          cudaMemcpy(
+              host_counts.data(),
+              d_counts,
+              host_counts.size() * sizeof(unsigned long long),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident isolated cosmetic threshold count-only counts)");
+      counts_download_s = seconds_since(download_start);
+    } catch (...) {
+      cudaFree(d_counts);
+      throw;
+    }
+    cudaFree(d_counts);
+
+    py::dict result = isolated_cosmetic_result_dict(
+        host_counts,
+        "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frame",
+        index,
+        low_threshold,
+        high_threshold,
+        median,
+        sigma,
+        structure_sigma,
+        min_neighbor_support,
+        false);
+    result["mask_upload_s"] = 0.0;
+    result["kernel_enqueue_s"] = kernel_s;
+    result["sync_s"] = sync_s;
+    result["device_counts_download_s"] = counts_download_s;
+    result["total_s"] = seconds_since(total_start);
+    result["detector_execution"] = "cuda_isolated_threshold_count";
+    return result;
+  }
+
   py::dict apply_cosmetic_threshold_mask_frames(
       py::iterable indices_obj,
       py::iterable low_thresholds_obj,
@@ -2771,6 +3043,370 @@ class ResidentCalibratedStack {
     result["total_s"] = seconds_since(total_start);
     result["frames"] = frames;
     return result;
+  }
+
+  void validate_isolated_batch_payload(
+      const std::vector<unsigned long long>& frame_indices,
+      const std::vector<float>& low_thresholds,
+      const std::vector<float>& high_thresholds,
+      const std::vector<float>& medians,
+      const std::vector<float>& sigmas) const {
+    if (frame_indices.size() != low_thresholds.size() ||
+        frame_indices.size() != high_thresholds.size() ||
+        frame_indices.size() != medians.size() ||
+        frame_indices.size() != sigmas.size()) {
+      throw std::invalid_argument("indices, thresholds, medians, and sigmas must have the same length");
+    }
+    if (frame_indices.size() > 65535ULL) {
+      throw std::invalid_argument("batch isolated cosmetic threshold processing supports at most 65535 frames per launch");
+    }
+    for (std::size_t i = 0; i < frame_indices.size(); ++i) {
+      validate_isolated_cosmetic_thresholds(low_thresholds[i], high_thresholds[i], medians[i], sigmas[i]);
+    }
+  }
+
+  void allocate_isolated_batch_buffers(
+      const std::vector<unsigned long long>& frame_indices,
+      const std::vector<float>& low_thresholds,
+      const std::vector<float>& high_thresholds,
+      const std::vector<float>& medians,
+      const std::vector<float>& sigmas,
+      unsigned long long** d_indices,
+      float** d_low_thresholds,
+      float** d_high_thresholds,
+      float** d_medians,
+      float** d_sigmas,
+      unsigned long long** d_counts,
+      double& upload_s,
+      double& memset_s,
+      std::size_t count_slots,
+      const char* label) const {
+    (void)label;
+    check_cuda(
+        cudaMalloc(d_indices, frame_indices.size() * sizeof(unsigned long long)),
+        "cudaMalloc(resident batch isolated cosmetic indices)");
+    check_cuda(
+        cudaMalloc(d_low_thresholds, low_thresholds.size() * sizeof(float)),
+        "cudaMalloc(resident batch isolated cosmetic low thresholds)");
+    check_cuda(
+        cudaMalloc(d_high_thresholds, high_thresholds.size() * sizeof(float)),
+        "cudaMalloc(resident batch isolated cosmetic high thresholds)");
+    check_cuda(
+        cudaMalloc(d_medians, medians.size() * sizeof(float)),
+        "cudaMalloc(resident batch isolated cosmetic medians)");
+    check_cuda(
+        cudaMalloc(d_sigmas, sigmas.size() * sizeof(float)),
+        "cudaMalloc(resident batch isolated cosmetic sigmas)");
+    check_cuda(
+        cudaMalloc(d_counts, count_slots * sizeof(unsigned long long)),
+        "cudaMalloc(resident batch isolated cosmetic counts)");
+
+    const auto upload_start = Clock::now();
+    check_cuda(
+        cudaMemcpy(*d_indices, frame_indices.data(), frame_indices.size() * sizeof(unsigned long long), cudaMemcpyHostToDevice),
+        "cudaMemcpy(resident batch isolated cosmetic indices)");
+    check_cuda(
+        cudaMemcpy(*d_low_thresholds, low_thresholds.data(), low_thresholds.size() * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(resident batch isolated cosmetic low thresholds)");
+    check_cuda(
+        cudaMemcpy(*d_high_thresholds, high_thresholds.data(), high_thresholds.size() * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(resident batch isolated cosmetic high thresholds)");
+    check_cuda(
+        cudaMemcpy(*d_medians, medians.data(), medians.size() * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(resident batch isolated cosmetic medians)");
+    check_cuda(
+        cudaMemcpy(*d_sigmas, sigmas.data(), sigmas.size() * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(resident batch isolated cosmetic sigmas)");
+    upload_s = seconds_since(upload_start);
+
+    const auto memset_start = Clock::now();
+    check_cuda(
+        cudaMemset(*d_counts, 0, count_slots * sizeof(unsigned long long)),
+        "cudaMemset(resident batch isolated cosmetic counts)");
+    memset_s = seconds_since(memset_start);
+  }
+
+  py::dict isolated_cosmetic_batch_result_dict(
+      const std::vector<unsigned long long>& host_counts,
+      const std::vector<unsigned long long>& frame_indices,
+      const std::vector<float>& low_thresholds,
+      const std::vector<float>& high_thresholds,
+      const std::vector<float>& medians,
+      const std::vector<float>& sigmas,
+      float structure_sigma,
+      int min_neighbor_support,
+      const char* native_method,
+      const char* per_frame_native_method,
+      const char* detector_execution,
+      bool applied_mode,
+      double upload_s,
+      double memset_s,
+      double kernel_s,
+      double sync_s,
+      double counts_download_s,
+      double total_s) const {
+    py::list frames;
+    unsigned long long total_hot = 0ULL;
+    unsigned long long total_cold = 0ULL;
+    unsigned long long total_nonfinite = 0ULL;
+    unsigned long long total_candidate_hot = 0ULL;
+    unsigned long long total_candidate_cold = 0ULL;
+    unsigned long long total_protected_hot = 0ULL;
+    unsigned long long total_protected_cold = 0ULL;
+    for (std::size_t i = 0; i < frame_indices.size(); ++i) {
+      std::array<unsigned long long, 7> counts{
+          host_counts[i * 7ULL + 0ULL],
+          host_counts[i * 7ULL + 1ULL],
+          host_counts[i * 7ULL + 2ULL],
+          host_counts[i * 7ULL + 3ULL],
+          host_counts[i * 7ULL + 4ULL],
+          host_counts[i * 7ULL + 5ULL],
+          host_counts[i * 7ULL + 6ULL]};
+      total_hot += counts[0];
+      total_cold += counts[1];
+      total_nonfinite += counts[2];
+      total_candidate_hot += counts[3];
+      total_candidate_cold += counts[4];
+      total_protected_hot += counts[5];
+      total_protected_cold += counts[6];
+      py::dict frame_result = isolated_cosmetic_result_dict(
+          counts,
+          native_method,
+          static_cast<std::size_t>(frame_indices[i]),
+          low_thresholds[i],
+          high_thresholds[i],
+          medians[i],
+          sigmas[i],
+          structure_sigma,
+          min_neighbor_support,
+          applied_mode);
+      frame_result["per_frame_native_method"] = per_frame_native_method;
+      frame_result["batch_position"] = static_cast<unsigned long long>(i);
+      frame_result["mask_upload_s"] = 0.0;
+      frame_result["threshold_upload_s"] = upload_s;
+      frame_result["counts_memset_s"] = memset_s;
+      frame_result["kernel_enqueue_s"] = kernel_s;
+      frame_result["sync_s"] = sync_s;
+      frame_result["device_counts_download_s"] = counts_download_s;
+      frame_result["batch_single_kernel_launch"] = true;
+      frame_result["batch_single_sync"] = true;
+      frame_result["batch_frame_count"] = static_cast<unsigned long long>(frame_indices.size());
+      frame_result["total_s"] = total_s;
+      frame_result["detector_execution"] = detector_execution;
+      frames.append(frame_result);
+    }
+
+    const unsigned long long total_cosmetic = total_hot + total_cold;
+    const unsigned long long total_invalid = total_cosmetic + total_nonfinite;
+    py::dict result;
+    result["schema_version"] = 1;
+    result["native_method"] = native_method;
+    result["frame_count"] = static_cast<unsigned long long>(frame_indices.size());
+    result["total_pixels_per_frame"] = static_cast<unsigned long long>(pixels_per_frame_);
+    result["hot_samples"] = total_hot;
+    result["cold_samples"] = total_cold;
+    result["nonfinite_samples"] = total_nonfinite;
+    result["candidate_hot_samples"] = total_candidate_hot;
+    result["candidate_cold_samples"] = total_candidate_cold;
+    result["protected_hot_samples"] = total_protected_hot;
+    result["protected_cold_samples"] = total_protected_cold;
+    result["cosmetic_corrected_samples"] = total_cosmetic;
+    result["invalid_samples"] = total_invalid;
+    result["applied"] = applied_mode && total_invalid > 0ULL;
+    result["mask_upload_s"] = 0.0;
+    result["threshold_upload_s"] = upload_s;
+    result["counts_memset_s"] = memset_s;
+    result["kernel_enqueue_s"] = kernel_s;
+    result["sync_s"] = sync_s;
+    result["device_counts_download_s"] = counts_download_s;
+    result["batch_single_kernel_launch"] = true;
+    result["batch_single_sync"] = true;
+    result["detector_execution"] = detector_execution;
+    result["total_s"] = total_s;
+    result["structure_sigma"] = structure_sigma;
+    result["min_neighbor_support"] = min_neighbor_support;
+    result["frames"] = frames;
+    return result;
+  }
+
+  py::dict apply_isolated_cosmetic_threshold_mask_frames(
+      py::iterable indices_obj,
+      py::iterable low_thresholds_obj,
+      py::iterable high_thresholds_obj,
+      py::iterable medians_obj,
+      py::iterable sigmas_obj,
+      float structure_sigma,
+      int min_neighbor_support) {
+    std::vector<unsigned long long> frame_indices;
+    std::vector<float> low_thresholds;
+    std::vector<float> high_thresholds;
+    std::vector<float> medians;
+    std::vector<float> sigmas;
+    for (py::handle item : indices_obj) {
+      const auto index = py::cast<std::size_t>(item);
+      require_loaded(index, "resident source DQ batch isolated cosmetic threshold application");
+      frame_indices.push_back(static_cast<unsigned long long>(index));
+    }
+    for (py::handle item : low_thresholds_obj) {
+      low_thresholds.push_back(py::cast<float>(item));
+    }
+    for (py::handle item : high_thresholds_obj) {
+      high_thresholds.push_back(py::cast<float>(item));
+    }
+    for (py::handle item : medians_obj) {
+      medians.push_back(py::cast<float>(item));
+    }
+    for (py::handle item : sigmas_obj) {
+      sigmas.push_back(py::cast<float>(item));
+    }
+    validate_isolated_batch_payload(frame_indices, low_thresholds, high_thresholds, medians, sigmas);
+
+    const auto total_start = Clock::now();
+    unsigned long long* d_indices = nullptr;
+    float* d_low_thresholds = nullptr;
+    float* d_high_thresholds = nullptr;
+    float* d_medians = nullptr;
+    float* d_sigmas = nullptr;
+    unsigned long long* d_counts = nullptr;
+    std::vector<unsigned long long> host_counts(frame_indices.size() * 7ULL, 0ULL);
+    double upload_s = 0.0;
+    double memset_s = 0.0;
+    double kernel_s = 0.0;
+    double sync_s = 0.0;
+    double counts_download_s = 0.0;
+    if (!frame_indices.empty()) {
+      try {
+        allocate_isolated_batch_buffers(
+            frame_indices, low_thresholds, high_thresholds, medians, sigmas,
+            &d_indices, &d_low_thresholds, &d_high_thresholds, &d_medians, &d_sigmas,
+            &d_counts, upload_s, memset_s, host_counts.size(), "application");
+        const auto kernel_start = Clock::now();
+        glass_apply_isolated_cosmetic_threshold_mask_frames_f32_launch(
+            d_stack_, width_, height_, d_indices, d_low_thresholds, d_high_thresholds,
+            d_medians, d_sigmas, frame_indices.size(), structure_sigma, min_neighbor_support, d_counts);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames kernel launch");
+        kernel_s = seconds_since(kernel_start);
+        const auto sync_start = Clock::now();
+        check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames synchronize");
+        sync_s = seconds_since(sync_start);
+        const auto download_start = Clock::now();
+        check_cuda(
+            cudaMemcpy(host_counts.data(), d_counts, host_counts.size() * sizeof(unsigned long long), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch isolated cosmetic threshold counts)");
+        counts_download_s = seconds_since(download_start);
+      } catch (...) {
+        cudaFree(d_indices);
+        cudaFree(d_low_thresholds);
+        cudaFree(d_high_thresholds);
+        cudaFree(d_medians);
+        cudaFree(d_sigmas);
+        cudaFree(d_counts);
+        throw;
+      }
+    }
+    cudaFree(d_indices);
+    cudaFree(d_low_thresholds);
+    cudaFree(d_high_thresholds);
+    cudaFree(d_medians);
+    cudaFree(d_sigmas);
+    cudaFree(d_counts);
+    return isolated_cosmetic_batch_result_dict(
+        host_counts, frame_indices, low_thresholds, high_thresholds, medians, sigmas,
+        structure_sigma, min_neighbor_support,
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames",
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame",
+        "cuda_isolated_threshold_apply_batch", true, upload_s, memset_s, kernel_s, sync_s,
+        counts_download_s, seconds_since(total_start));
+  }
+
+  py::dict count_isolated_cosmetic_threshold_mask_frames(
+      py::iterable indices_obj,
+      py::iterable low_thresholds_obj,
+      py::iterable high_thresholds_obj,
+      py::iterable medians_obj,
+      py::iterable sigmas_obj,
+      float structure_sigma,
+      int min_neighbor_support) const {
+    std::vector<unsigned long long> frame_indices;
+    std::vector<float> low_thresholds;
+    std::vector<float> high_thresholds;
+    std::vector<float> medians;
+    std::vector<float> sigmas;
+    for (py::handle item : indices_obj) {
+      const auto index = py::cast<std::size_t>(item);
+      require_loaded(index, "resident source DQ batch isolated cosmetic threshold count");
+      frame_indices.push_back(static_cast<unsigned long long>(index));
+    }
+    for (py::handle item : low_thresholds_obj) {
+      low_thresholds.push_back(py::cast<float>(item));
+    }
+    for (py::handle item : high_thresholds_obj) {
+      high_thresholds.push_back(py::cast<float>(item));
+    }
+    for (py::handle item : medians_obj) {
+      medians.push_back(py::cast<float>(item));
+    }
+    for (py::handle item : sigmas_obj) {
+      sigmas.push_back(py::cast<float>(item));
+    }
+    validate_isolated_batch_payload(frame_indices, low_thresholds, high_thresholds, medians, sigmas);
+
+    const auto total_start = Clock::now();
+    unsigned long long* d_indices = nullptr;
+    float* d_low_thresholds = nullptr;
+    float* d_high_thresholds = nullptr;
+    float* d_medians = nullptr;
+    float* d_sigmas = nullptr;
+    unsigned long long* d_counts = nullptr;
+    std::vector<unsigned long long> host_counts(frame_indices.size() * 7ULL, 0ULL);
+    double upload_s = 0.0;
+    double memset_s = 0.0;
+    double kernel_s = 0.0;
+    double sync_s = 0.0;
+    double counts_download_s = 0.0;
+    if (!frame_indices.empty()) {
+      try {
+        allocate_isolated_batch_buffers(
+            frame_indices, low_thresholds, high_thresholds, medians, sigmas,
+            &d_indices, &d_low_thresholds, &d_high_thresholds, &d_medians, &d_sigmas,
+            &d_counts, upload_s, memset_s, host_counts.size(), "count");
+        const auto kernel_start = Clock::now();
+        glass_count_isolated_cosmetic_threshold_mask_frames_f32_launch(
+            d_stack_, width_, height_, d_indices, d_low_thresholds, d_high_thresholds,
+            d_medians, d_sigmas, frame_indices.size(), structure_sigma, min_neighbor_support, d_counts);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frames kernel launch");
+        kernel_s = seconds_since(kernel_start);
+        const auto sync_start = Clock::now();
+        check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frames synchronize");
+        sync_s = seconds_since(sync_start);
+        const auto download_start = Clock::now();
+        check_cuda(
+            cudaMemcpy(host_counts.data(), d_counts, host_counts.size() * sizeof(unsigned long long), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch isolated cosmetic threshold count counts)");
+        counts_download_s = seconds_since(download_start);
+      } catch (...) {
+        cudaFree(d_indices);
+        cudaFree(d_low_thresholds);
+        cudaFree(d_high_thresholds);
+        cudaFree(d_medians);
+        cudaFree(d_sigmas);
+        cudaFree(d_counts);
+        throw;
+      }
+    }
+    cudaFree(d_indices);
+    cudaFree(d_low_thresholds);
+    cudaFree(d_high_thresholds);
+    cudaFree(d_medians);
+    cudaFree(d_sigmas);
+    cudaFree(d_counts);
+    return isolated_cosmetic_batch_result_dict(
+        host_counts, frame_indices, low_thresholds, high_thresholds, medians, sigmas,
+        structure_sigma, min_neighbor_support,
+        "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frames",
+        "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frame",
+        "cuda_isolated_threshold_count_batch", false, upload_s, memset_s, kernel_s, sync_s,
+        counts_download_s, seconds_since(total_start));
   }
 
   py::dict frame_histogram_robust_stats(
@@ -13623,6 +14259,46 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("indices"),
           py::arg("low_thresholds"),
           py::arg("high_thresholds"))
+      .def(
+          "apply_isolated_cosmetic_threshold_mask_frame",
+          &ResidentCalibratedStack::apply_isolated_cosmetic_threshold_mask_frame,
+          py::arg("index"),
+          py::arg("low_threshold"),
+          py::arg("high_threshold"),
+          py::arg("median"),
+          py::arg("sigma"),
+          py::arg("structure_sigma") = 1.5f,
+          py::arg("min_neighbor_support") = 2)
+      .def(
+          "count_isolated_cosmetic_threshold_mask_frame",
+          &ResidentCalibratedStack::count_isolated_cosmetic_threshold_mask_frame,
+          py::arg("index"),
+          py::arg("low_threshold"),
+          py::arg("high_threshold"),
+          py::arg("median"),
+          py::arg("sigma"),
+          py::arg("structure_sigma") = 1.5f,
+          py::arg("min_neighbor_support") = 2)
+      .def(
+          "apply_isolated_cosmetic_threshold_mask_frames",
+          &ResidentCalibratedStack::apply_isolated_cosmetic_threshold_mask_frames,
+          py::arg("indices"),
+          py::arg("low_thresholds"),
+          py::arg("high_thresholds"),
+          py::arg("medians"),
+          py::arg("sigmas"),
+          py::arg("structure_sigma") = 1.5f,
+          py::arg("min_neighbor_support") = 2)
+      .def(
+          "count_isolated_cosmetic_threshold_mask_frames",
+          &ResidentCalibratedStack::count_isolated_cosmetic_threshold_mask_frames,
+          py::arg("indices"),
+          py::arg("low_thresholds"),
+          py::arg("high_thresholds"),
+          py::arg("medians"),
+          py::arg("sigmas"),
+          py::arg("structure_sigma") = 1.5f,
+          py::arg("min_neighbor_support") = 2)
       .def(
           "frame_sampled_robust_stats",
           &ResidentCalibratedStack::frame_sampled_robust_stats,

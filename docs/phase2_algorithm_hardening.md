@@ -11186,6 +11186,78 @@ Completed in Gate446:
   - default vs Gate493 compare:
     `C:\glass_runs\phase2_s2_gate494_structure_cosmetic_ab_real\compare\ab_current_vs_gate493_master.json`.
 
+### S2-Gate 495: Structure-Aware Resident CUDA Cosmetic Source-DQ
+
+- Port the Gate494 isolated-defect source-DQ model to resident CUDA for the
+  opt-in `cosmetic_cuda` path. The goal is to keep threshold statistics and
+  destructive source-DQ application resident on the GPU while protecting
+  compact star-like structure from the old scalar global-threshold mask.
+- Completed:
+  - added resident CUDA isolated cosmetic count/apply kernels for a single
+    frame and for frame batches;
+  - exposed native APIs:
+    `ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame`,
+    `ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frame`,
+    `ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames`,
+    and `ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frames`;
+  - routed `--resident-inline-source-dq cosmetic_cuda` threshold artifacts and
+    batch application through the isolated CUDA detector while keeping the old
+    scalar threshold APIs available for compatibility;
+  - recorded candidate/protected hot/cold counts, structure sigma, neighbor
+    support, and isolated native method names in source-DQ rows and component
+    summaries;
+  - fixed the high-fraction guard path so frames below the guard threshold
+    continue into the destructive apply step instead of returning a partial
+    count-only row.
+- Focused validation:
+  - CUDA synthetic tests prove count-only detection matches the CPU isolated
+    baseline without modifying pixels;
+  - CUDA synthetic apply tests prove isolated hot/cold/nonfinite samples are
+    excluded while a star-like core remains integrated;
+  - batch CUDA tests prove the isolated route uses one batched native dispatch
+    and records per-frame evidence;
+  - resident source-DQ and CLI tests prove `cosmetic_cuda` artifacts now name
+    `cuda_isolated_threshold_apply` and the isolated resident native APIs;
+  - focused pytest: `8 passed`.
+- Real 200-light default regression:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate495_isolated_cuda_ab_real\runs\default_runtime_stack_ab_current`;
+  - total runtime: `17.566973500011954 s`;
+  - previous Gate494 runtime: `17.611496199970134 s`;
+  - active frames: `193 / 200`;
+  - GLASS-vs-Gate494 master difference: RMS/p99/max all `0.0`;
+  - GLASS-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`, coverage fraction
+    `0.960532609259836`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - GLASS speedup versus WBPP: `62.192898509197185x`;
+  - pixel-verifying pipeline contract, StackEngine contract, speedup summary,
+    acceptance audit, and HTML report passed.
+- Interpretation:
+  - the default production route remains source-DQ off and is pixel-identical
+    to Gate494;
+  - the opt-in GPU `cosmetic_cuda` route now has the same structure-aware
+    isolated-defect semantics as the CPU baseline, with resident count/apply
+    kernels and guard preflight;
+  - the model is still a conservative first-pass source-DQ detector, not a
+    full bad-pixel-map replacement or star-aware learned classifier.
+- Artifacts:
+  - default pipeline contract:
+    `C:\glass_runs\phase2_s2_gate495_isolated_cuda_ab_real\runs\default_runtime_stack_ab_current\contracts\ab_current_pipeline_contract.json`;
+  - default StackEngine contract:
+    `C:\glass_runs\phase2_s2_gate495_isolated_cuda_ab_real\runs\default_runtime_stack_ab_current\contracts\ab_current_stack_engine_contract.json`;
+  - default vs Gate494 compare:
+    `C:\glass_runs\phase2_s2_gate495_isolated_cuda_ab_real\runs\default_runtime_stack_ab_current\compare\ab_current_vs_gate494_master.json`;
+  - WBPP compare:
+    `C:\glass_runs\phase2_s2_gate495_isolated_cuda_ab_real\compare\ab_current_vs_wbpp_scaled_coverage190.json`;
+  - speedup summary:
+    `C:\glass_runs\phase2_s2_gate495_isolated_cuda_ab_real\speedup\ab_current_vs_wbpp_speedup_with_compare.json`;
+  - acceptance audit:
+    `C:\glass_runs\phase2_s2_gate495_isolated_cuda_ab_real\acceptance\ab_current_acceptance_audit.json`;
+  - HTML report:
+    `C:\glass_runs\phase2_s2_gate495_isolated_cuda_ab_real\reports\ab_current_report.html`.
+
 ## Gate Rules
 
 Each gate requires:

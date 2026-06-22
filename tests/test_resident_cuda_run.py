@@ -2097,11 +2097,13 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert source_dq["passed"] is True
     assert source_dq["input_invalid_samples_before_rejection"] == 1
     assert source_dq["source_dq_flag_counts"] == {"cosmetic_corrected": 1, "hot_pixel": 1}
-    assert source_dq["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"
-    assert source_dq["native_methods"] == ["ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"]
+    assert source_dq["native_method"] == "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames"
+    assert source_dq["native_methods"] == [
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames"
+    ]
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq"] == "cosmetic_cuda"
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector"] == (
-        "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
     )
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_threshold_source"] == (
         "cuda_resident_histogram_median_mad_scalar"
@@ -2109,11 +2111,15 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_threshold_stats_domain"] == (
         "resident_calibrated_frame"
     )
-    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector_execution"] == "cuda_threshold_apply"
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector_execution"] == (
+        "cuda_isolated_threshold_apply"
+    )
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_max_invalid_fraction"] == pytest.approx(0.01)
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_high_fraction_guard_enabled"] is True
     assert strategy["inline_source_dq"]["mode"] == "cosmetic_cuda"
-    assert strategy["inline_source_dq"]["detector"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+    assert strategy["inline_source_dq"]["detector"] == (
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+    )
     assert strategy["inline_source_dq"]["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
     assert strategy["inline_source_dq"]["max_invalid_fraction"] == pytest.approx(0.01)
     assert strategy["inline_source_dq"]["high_fraction_guard_enabled"] is True
@@ -2122,11 +2128,13 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert not (run / "resident_source_dq_cache_route.json").exists()
     applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
     assert len(applied_rows) == 1
-    assert applied_rows[0]["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"
+    assert applied_rows[0]["native_method"] == (
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames"
+    )
     assert applied_rows[0]["native"]["mask_upload_s"] == 0.0
     assert applied_rows[0]["native"]["batch_single_kernel_launch"] is True
     assert applied_rows[0]["native"]["batch_single_sync"] is True
-    assert applied_rows[0]["detector_execution"] == "cuda_threshold_apply_batch"
+    assert applied_rows[0]["detector_execution"] == "cuda_isolated_threshold_apply_batch"
     assert applied_rows[0]["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
     assert applied_rows[0]["threshold_stats_native_method"] == (
         "ResidentCalibratedStack.frames_histogram_robust_stats"
@@ -2145,7 +2153,12 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert applied_rows[0]["threshold_stats_batch_frame_count"] == 2
     assert applied_rows[0]["threshold_stats_batch_reuses_device_work_buffers"] is True
     assert applied_rows[0]["threshold_stats_batch_histogram_download_bytes"] == 2 * 4096 * 8 * 2
-    assert applied_rows[0]["component_summaries"][0]["source_model"] == "inline_cosmetic_cuda_thresholds"
+    assert applied_rows[0]["component_summaries"][0]["source_model"] == (
+        "inline_structure_cosmetic_cuda_thresholds"
+    )
+    assert applied_rows[0]["component_summaries"][0]["inline_source_dq_detector"] == (
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+    )
     assert applied_rows[0]["component_summaries"][0]["threshold_stats_batch_reuses_device_work_buffers"] is True
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_application_order"] == (
         "calibration_pre_registration"
@@ -2228,7 +2241,9 @@ def test_cli_resident_cuda_run_skips_inline_cosmetic_cuda_high_fraction_guard(tm
     assert skipped_rows[0]["would_invalid_samples"] == 1
     assert skipped_rows[0]["would_invalid_fraction"] == pytest.approx(1.0 / 256.0)
     assert skipped_rows[0]["threshold_guard"]["max_invalid_fraction"] == pytest.approx(0.0001)
-    assert skipped_rows[0]["native_method"] == "ResidentCalibratedStack.count_cosmetic_threshold_mask_frames"
+    assert skipped_rows[0]["native_method"] == (
+        "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frames"
+    )
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_max_invalid_fraction"] == pytest.approx(0.0001)
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_high_fraction_guard_enabled"] is True
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_high_fraction_skipped_frame_count"] == 1
@@ -2345,11 +2360,18 @@ def test_cli_resident_cuda_run_defers_inline_cosmetic_cuda_source_dq_until_after
     assert pipeline["resident_inline_source_dq_application_order"] == "post_registration_pre_warp"
     assert pipeline["resident_inline_source_dq_deferred_until_stage"] == "resident_registration_complete"
     assert pipeline["resident_inline_source_dq_deferred_frame_count"] == 2
-    assert pipeline["resident_inline_source_dq_deferred_applied_frame_count"] == 2
+    assert pipeline["resident_inline_source_dq_deferred_applied_frame_count"] == 0
     assert pipeline["resident_inline_source_dq_deferred_pending_frame_count"] == 0
+    assert source_dq["input_invalid_samples_before_rejection"] == 0
+    assert source_dq["status_counts"]["no_invalid_samples"] == 2
     assert rows
     assert {row["application_order"] for row in rows} == {"post_registration_pre_warp"}
     assert {row["deferred_until_stage"] for row in rows} == {"resident_registration_complete"}
+    assert {row["status"] for row in rows} == {"no_invalid_samples"}
+    assert {row["native_method"] for row in rows} == {
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames"
+    }
+    assert {row["detector_execution"] for row in rows} == {"cuda_isolated_threshold_apply_batch"}
     assert all(str(row["source"]).startswith("resident_post_registration_pre_warp") for row in rows)
 
 

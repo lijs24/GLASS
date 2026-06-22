@@ -129,13 +129,15 @@ def test_inline_cosmetic_thresholds_match_cpu_baseline_scalar_thresholds():
 
     median = float(cpu_info["cosmetic_metrics"]["median"])
     sigma = float(cpu_info["cosmetic_metrics"]["sigma"])
-    assert threshold_info["source_model"] == "inline_cosmetic_cuda_thresholds"
+    assert threshold_info["source_model"] == "inline_structure_cosmetic_cuda_thresholds"
     assert threshold_info["inline_source_dq_detector"] == (
-        "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
     )
     assert threshold_info["threshold_source"] == "cpu_median_mad_scalar"
-    assert threshold_info["detector_execution"] == "cuda_threshold_apply"
+    assert threshold_info["detector_execution"] == "cuda_isolated_threshold_apply"
     assert threshold_info["inline_source_dq_applies_replacement"] is False
+    assert threshold_info["structure_sigma"] == pytest.approx(1.5)
+    assert threshold_info["min_neighbor_support"] == 2
     assert threshold_info["low_threshold"] == pytest.approx(float(np.float32(median - 2.0 * sigma)))
     assert threshold_info["high_threshold"] == pytest.approx(float(np.float32(median + 2.0 * sigma)))
 
@@ -292,49 +294,69 @@ def test_inline_cosmetic_thresholds_batch_from_resident_stack_records_batch_hist
 
 def test_apply_resident_inline_cosmetic_thresholds_batch_records_batch_native_route():
     class FakeResidentStack:
-        def apply_cosmetic_threshold_mask_frames(
+        def apply_isolated_cosmetic_threshold_mask_frames(
             self,
             indices: list[int],
             low_thresholds: list[float],
             high_thresholds: list[float],
+            medians: list[float],
+            sigmas: list[float],
+            structure_sigma: float,
+            min_neighbor_support: int,
         ) -> dict[str, object]:
             assert indices == [3, 5]
             assert low_thresholds == [1.0, 2.0]
             assert high_thresholds == [10.0, 20.0]
+            assert medians == [100.0, 120.0]
+            assert sigmas == [1.5, 2.5]
+            assert structure_sigma == pytest.approx(1.5)
+            assert min_neighbor_support == 2
             return {
-                "native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames",
+                "native_method": "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames",
                 "frame_count": 2,
                 "total_s": 0.02,
                 "frames": [
                     {
-                        "native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames",
-                        "per_frame_native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
+                        "native_method": "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames",
+                        "per_frame_native_method": (
+                            "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+                        ),
                         "frame_index": 3,
                         "hot_samples": 2,
                         "cold_samples": 1,
                         "nonfinite_samples": 0,
+                        "candidate_hot_samples": 3,
+                        "candidate_cold_samples": 1,
+                        "protected_hot_samples": 1,
+                        "protected_cold_samples": 0,
                         "cosmetic_corrected_samples": 3,
                         "invalid_samples": 3,
                         "applied": True,
                         "mask_upload_s": 0.0,
                         "batch_single_kernel_launch": True,
                         "batch_single_sync": True,
-                        "detector_execution": "cuda_threshold_apply_batch",
+                        "detector_execution": "cuda_isolated_threshold_apply_batch",
                     },
                     {
-                        "native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames",
-                        "per_frame_native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
+                        "native_method": "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames",
+                        "per_frame_native_method": (
+                            "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+                        ),
                         "frame_index": 5,
                         "hot_samples": 0,
                         "cold_samples": 0,
                         "nonfinite_samples": 0,
+                        "candidate_hot_samples": 0,
+                        "candidate_cold_samples": 0,
+                        "protected_hot_samples": 0,
+                        "protected_cold_samples": 0,
                         "cosmetic_corrected_samples": 0,
                         "invalid_samples": 0,
                         "applied": False,
                         "mask_upload_s": 0.0,
                         "batch_single_kernel_launch": True,
                         "batch_single_sync": True,
-                        "detector_execution": "cuda_threshold_apply_batch",
+                        "detector_execution": "cuda_isolated_threshold_apply_batch",
                     },
                 ],
             }
@@ -348,12 +370,19 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_records_batch_native_ro
                 "threshold_info": {
                     "supported": True,
                     "inline_source_dq": True,
+                    "source_model": "inline_structure_cosmetic_cuda_thresholds",
+                    "inline_source_dq_detector": (
+                        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+                    ),
+                    "detector_execution": "cuda_isolated_threshold_apply",
                     "threshold_source": "cuda_resident_histogram_median_mad_scalar",
                     "low_threshold": 1.0,
                     "high_threshold": 10.0,
                     "hot_sigma": 2.0,
                     "cold_sigma": 3.0,
-                    "cosmetic_metrics": {},
+                    "cosmetic_metrics": {"median": 100.0, "sigma": 1.5},
+                    "structure_sigma": 1.5,
+                    "min_neighbor_support": 2,
                 },
             },
             {
@@ -362,12 +391,19 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_records_batch_native_ro
                 "threshold_info": {
                     "supported": True,
                     "inline_source_dq": True,
+                    "source_model": "inline_structure_cosmetic_cuda_thresholds",
+                    "inline_source_dq_detector": (
+                        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+                    ),
+                    "detector_execution": "cuda_isolated_threshold_apply",
                     "threshold_source": "cuda_resident_histogram_median_mad_scalar",
                     "low_threshold": 2.0,
                     "high_threshold": 20.0,
                     "hot_sigma": 2.0,
                     "cold_sigma": 3.0,
-                    "cosmetic_metrics": {},
+                    "cosmetic_metrics": {"median": 120.0, "sigma": 2.5},
+                    "structure_sigma": 1.5,
+                    "min_neighbor_support": 2,
                 },
             },
         ],
@@ -376,32 +412,46 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_records_batch_native_ro
 
     assert [row["frame_id"] for row in rows] == ["F3", "F5"]
     assert rows[0]["status"] == "applied"
-    assert rows[0]["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"
-    assert rows[0]["detector_execution"] == "cuda_threshold_apply_batch"
+    assert rows[0]["native_method"] == "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames"
+    assert rows[0]["detector_execution"] == "cuda_isolated_threshold_apply_batch"
     assert rows[0]["native"]["batch_single_kernel_launch"] is True
     assert rows[0]["flag_counts"] == {"hot_pixel": 2, "cold_pixel": 1, "cosmetic_corrected": 3}
+    assert rows[0]["cosmetic_metrics"]["candidate_hot_pixels"] == 3
+    assert rows[0]["cosmetic_metrics"]["protected_hot_pixels"] == 1
     assert rows[1]["status"] == "no_invalid_samples"
-    assert rows[1]["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames"
+    assert rows[1]["native_method"] == "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames"
     assert rows[1]["native"]["batch_frame_count"] == 2
 
 
 def test_apply_resident_inline_cosmetic_thresholds_batch_skips_high_invalid_fraction():
     class FakeResidentStack:
-        def count_cosmetic_threshold_mask_frames(
+        def count_isolated_cosmetic_threshold_mask_frames(
             self,
             indices: list[int],
             low_thresholds: list[float],
             high_thresholds: list[float],
+            medians: list[float],
+            sigmas: list[float],
+            structure_sigma: float,
+            min_neighbor_support: int,
         ) -> dict[str, object]:
             assert indices == [3, 5]
+            assert low_thresholds == [1.0, 2.0]
+            assert high_thresholds == [10.0, 20.0]
+            assert medians == [100.0, 120.0]
+            assert sigmas == [1.5, 2.5]
+            assert structure_sigma == pytest.approx(1.5)
+            assert min_neighbor_support == 2
             return {
-                "native_method": "ResidentCalibratedStack.count_cosmetic_threshold_mask_frames",
+                "native_method": "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frames",
                 "frame_count": 2,
                 "total_s": 0.01,
                 "frames": [
                     {
-                        "native_method": "ResidentCalibratedStack.count_cosmetic_threshold_mask_frames",
-                        "per_frame_native_method": "ResidentCalibratedStack.count_cosmetic_threshold_mask_frame",
+                        "native_method": "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frames",
+                        "per_frame_native_method": (
+                            "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frame"
+                        ),
                         "frame_index": 3,
                         "total_pixels": 1000,
                         "hot_samples": 50,
@@ -410,11 +460,13 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_skips_high_invalid_frac
                         "cosmetic_corrected_samples": 50,
                         "invalid_samples": 50,
                         "applied": False,
-                        "detector_execution": "cuda_threshold_count_batch",
+                        "detector_execution": "cuda_isolated_threshold_count_batch",
                     },
                     {
-                        "native_method": "ResidentCalibratedStack.count_cosmetic_threshold_mask_frames",
-                        "per_frame_native_method": "ResidentCalibratedStack.count_cosmetic_threshold_mask_frame",
+                        "native_method": "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frames",
+                        "per_frame_native_method": (
+                            "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frame"
+                        ),
                         "frame_index": 5,
                         "total_pixels": 1000,
                         "hot_samples": 1,
@@ -423,26 +475,36 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_skips_high_invalid_frac
                         "cosmetic_corrected_samples": 1,
                         "invalid_samples": 1,
                         "applied": False,
-                        "detector_execution": "cuda_threshold_count_batch",
+                        "detector_execution": "cuda_isolated_threshold_count_batch",
                     },
                 ],
             }
 
-        def apply_cosmetic_threshold_mask_frames(
+        def apply_isolated_cosmetic_threshold_mask_frames(
             self,
             indices: list[int],
             low_thresholds: list[float],
             high_thresholds: list[float],
+            medians: list[float],
+            sigmas: list[float],
+            structure_sigma: float,
+            min_neighbor_support: int,
         ) -> dict[str, object]:
             assert indices == [5]
+            assert low_thresholds == [2.0]
+            assert high_thresholds == [20.0]
+            assert medians == [120.0]
+            assert sigmas == [2.5]
             return {
-                "native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames",
+                "native_method": "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames",
                 "frame_count": 1,
                 "total_s": 0.02,
                 "frames": [
                     {
-                        "native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frames",
-                        "per_frame_native_method": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
+                        "native_method": "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frames",
+                        "per_frame_native_method": (
+                            "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+                        ),
                         "frame_index": 5,
                         "hot_samples": 1,
                         "cold_samples": 0,
@@ -451,7 +513,7 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_skips_high_invalid_frac
                         "invalid_samples": 1,
                         "applied": True,
                         "mask_upload_s": 0.0,
-                        "detector_execution": "cuda_threshold_apply_batch",
+                        "detector_execution": "cuda_isolated_threshold_apply_batch",
                     }
                 ],
             }
@@ -460,31 +522,45 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_skips_high_invalid_frac
         {
             "frame_index": 3,
             "frame_id": "F3",
-            "threshold_info": {
-                "supported": True,
-                "inline_source_dq": True,
-                "threshold_source": "cuda_resident_histogram_median_mad_scalar",
-                "low_threshold": 1.0,
-                "high_threshold": 10.0,
-                "hot_sigma": 2.0,
-                "cold_sigma": 3.0,
-                "cosmetic_metrics": {},
+                "threshold_info": {
+                    "supported": True,
+                    "inline_source_dq": True,
+                    "source_model": "inline_structure_cosmetic_cuda_thresholds",
+                    "inline_source_dq_detector": (
+                        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+                    ),
+                    "detector_execution": "cuda_isolated_threshold_apply",
+                    "threshold_source": "cuda_resident_histogram_median_mad_scalar",
+                    "low_threshold": 1.0,
+                    "high_threshold": 10.0,
+                    "hot_sigma": 2.0,
+                    "cold_sigma": 3.0,
+                    "cosmetic_metrics": {"median": 100.0, "sigma": 1.5},
+                    "structure_sigma": 1.5,
+                    "min_neighbor_support": 2,
+                },
             },
-        },
-        {
+            {
             "frame_index": 5,
             "frame_id": "F5",
-            "threshold_info": {
-                "supported": True,
-                "inline_source_dq": True,
-                "threshold_source": "cuda_resident_histogram_median_mad_scalar",
-                "low_threshold": 2.0,
-                "high_threshold": 20.0,
-                "hot_sigma": 2.0,
-                "cold_sigma": 3.0,
-                "cosmetic_metrics": {},
+                "threshold_info": {
+                    "supported": True,
+                    "inline_source_dq": True,
+                    "source_model": "inline_structure_cosmetic_cuda_thresholds",
+                    "inline_source_dq_detector": (
+                        "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+                    ),
+                    "detector_execution": "cuda_isolated_threshold_apply",
+                    "threshold_source": "cuda_resident_histogram_median_mad_scalar",
+                    "low_threshold": 2.0,
+                    "high_threshold": 20.0,
+                    "hot_sigma": 2.0,
+                    "cold_sigma": 3.0,
+                    "cosmetic_metrics": {"median": 120.0, "sigma": 2.5},
+                    "structure_sigma": 1.5,
+                    "min_neighbor_support": 2,
+                },
             },
-        },
     ]
 
     rows = apply_resident_inline_cosmetic_thresholds_batch(
@@ -501,7 +577,7 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_skips_high_invalid_frac
     assert rows[0]["would_invalid_samples"] == 50
     assert rows[0]["would_invalid_fraction"] == pytest.approx(0.05)
     assert rows[0]["threshold_guard"]["max_invalid_fraction"] == pytest.approx(0.002)
-    assert rows[0]["native_method"] == "ResidentCalibratedStack.count_cosmetic_threshold_mask_frames"
+    assert rows[0]["native_method"] == "ResidentCalibratedStack.count_isolated_cosmetic_threshold_mask_frames"
     assert rows[1]["status"] == "applied"
     assert rows[1]["invalid_samples"] == 1
     assert rows[1]["threshold_guard"]["would_invalid_fraction"] == pytest.approx(0.001)

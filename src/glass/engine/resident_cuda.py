@@ -9753,7 +9753,7 @@ def run_resident_calibration_integration(
                         "resident_fits_auto_selection": resident_fits_auto_selection,
                         "resident_inline_source_dq": resident_inline_source_dq,
                         "resident_inline_source_dq_detector": (
-                            "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
+                            "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
                             if resident_inline_source_dq == "cosmetic_cuda"
                             else "glass.cpu.cosmetic.detect_isolated_cosmetic_defects"
                             if resident_inline_source_dq == "cosmetic"
@@ -9768,7 +9768,7 @@ def run_resident_calibration_integration(
                             "resident_calibrated_frame" if resident_inline_source_dq == "cosmetic_cuda" else None
                         ),
                         "resident_inline_source_dq_detector_execution": (
-                            "cuda_threshold_apply" if resident_inline_source_dq == "cosmetic_cuda" else None
+                            "cuda_isolated_threshold_apply" if resident_inline_source_dq == "cosmetic_cuda" else None
                         ),
                         "resident_inline_source_dq_application_order": (
                             "post_registration_pre_warp"
