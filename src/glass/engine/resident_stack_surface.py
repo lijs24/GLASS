@@ -43,6 +43,23 @@ def _finite_stats(value: Any) -> dict[str, Any]:
     }
 
 
+def _stats_for_map(
+    name: str,
+    value: Any,
+    precomputed_map_stats: dict[str, Any],
+) -> dict[str, Any]:
+    stats = precomputed_map_stats.get(name)
+    if isinstance(stats, dict):
+        payload = dict(stats)
+        payload.setdefault("present", value is not None)
+        payload.setdefault("shape", None if _shape(value) is None else list(_shape(value) or ()))
+        if value is not None and "dtype" not in payload:
+            payload["dtype"] = str(np.asarray(value).dtype)
+        payload.setdefault("stats_source", "precomputed")
+        return payload
+    return _finite_stats(value)
+
+
 def _int_value(value: Any) -> int | None:
     if value is None:
         return None
@@ -58,6 +75,11 @@ def _int_value(value: Any) -> int | None:
 def _summary_count(summary: dict[str, Any], key: str) -> int:
     value = _int_value(summary.get(key))
     return 0 if value is None else value
+
+
+def _optional_count(stats: dict[str, Any], key: str) -> int | None:
+    value = _int_value(stats.get(key))
+    return value
 
 
 def _map_required(output_policy: dict[str, Any] | None, map_name: str, *, fallback_present: bool) -> bool:
@@ -153,6 +175,8 @@ def build_resident_integration_stack_surface_contract(
     grouping_key: str | None = None,
     dispatch: str | None = None,
     map_paths: dict[str, str | None] | None = None,
+    precomputed_map_stats: dict[str, Any] | None = None,
+    trust_precomputed_dq_summary: bool = False,
 ) -> dict[str, Any]:
     """Build a StackRequest/StackResult-shaped contract for resident integration.
 
@@ -202,8 +226,12 @@ def build_resident_integration_stack_surface_contract(
 
     master_shape = _shape(master)
     map_paths = map_paths or {}
+    stats_by_map: dict[str, dict[str, Any]] = {}
+    precomputed_map_stats = precomputed_map_stats or {}
     map_rows = []
     for name, value in maps.items():
+        stats = _stats_for_map(name, value, precomputed_map_stats)
+        stats_by_map[name] = stats
         map_rows.append(
             {
                 "map": name,
@@ -211,7 +239,7 @@ def build_resident_integration_stack_surface_contract(
                 "present": value is not None,
                 "shape": None if _shape(value) is None else list(_shape(value) or ()),
                 "path": map_paths.get(name),
-                "stats": _finite_stats(value),
+                "stats": stats,
             }
         )
 
@@ -223,6 +251,9 @@ def build_resident_integration_stack_surface_contract(
         for row in map_rows
         if row["present"] and tuple(row["shape"] or ()) != master_shape
     }
+    master_nonfinite = _optional_count(stats_by_map.get("master", {}), "nonfinite_pixels")
+    if master_nonfinite is None:
+        master_nonfinite = int(np.count_nonzero(~np.isfinite(np.asarray(master, dtype=np.float32))))
     checks = [
         _check("request_has_frame_ids", bool(frame_id_list), {"frame_count": len(frame_id_list)}),
         _check(
@@ -234,31 +265,58 @@ def build_resident_integration_stack_surface_contract(
         _check("maps_match_master_shape", not bad_shapes, {"master_shape": master_shape, "bad_shapes": bad_shapes}),
         _check(
             "master_is_finite",
-            bool(np.all(np.isfinite(np.asarray(master, dtype=np.float32)))),
-            {"nonfinite_pixels": int(np.count_nonzero(~np.isfinite(np.asarray(master, dtype=np.float32))))},
+            master_nonfinite == 0,
+            {
+                "nonfinite_pixels": master_nonfinite,
+                "source": stats_by_map.get("master", {}).get("stats_source", "array_scan"),
+            },
         ),
     ]
 
-    actual_dq_summary = _dq_summary_from_map(dq_map)
     if dq_map is not None:
-        mismatches = {
-            key: {
-                "actual": _summary_count(actual_dq_summary, key),
-                "expected": _summary_count(dq_summary_payload, key),
+        if trust_precomputed_dq_summary:
+            actual_dq_summary = dict(dq_summary_payload)
+            checks.append(
+                _check(
+                    "dq_summary_matches_dq_map",
+                    True,
+                    {
+                        "mismatches": {},
+                        "source": "trusted_precomputed_dq_summary",
+                    },
+                    note=(
+                        "DQ summary was produced when the resident DQ map was built; "
+                        "the resident result-contract pixel verifier remains the full disk-backed audit."
+                    ),
+                )
+            )
+        else:
+            actual_dq_summary = _dq_summary_from_map(dq_map)
+            mismatches = {
+                key: {
+                    "actual": _summary_count(actual_dq_summary, key),
+                    "expected": _summary_count(dq_summary_payload, key),
+                }
+                for key in sorted(set(actual_dq_summary) | {str(item) for item in dq_summary_payload})
+                if _summary_count(actual_dq_summary, key) != _summary_count(dq_summary_payload, key)
             }
-            for key in sorted(set(actual_dq_summary) | {str(item) for item in dq_summary_payload})
-            if _summary_count(actual_dq_summary, key) != _summary_count(dq_summary_payload, key)
-        }
-        checks.append(_check("dq_summary_matches_dq_map", not mismatches, {"mismatches": mismatches}))
+            checks.append(_check("dq_summary_matches_dq_map", not mismatches, {"mismatches": mismatches}))
 
     if coverage_map is not None:
-        coverage = np.asarray(coverage_map, dtype=np.float32)
-        coverage_zero = int(np.count_nonzero((~np.isfinite(coverage)) | (coverage <= 0.0)))
-        valid_samples = int(round(float(np.nansum(coverage, dtype=np.float64))))
+        coverage_stats = stats_by_map.get("coverage", {})
+        coverage_zero = _optional_count(coverage_stats, "zero_or_less_pixels")
+        valid_samples = _optional_count(coverage_stats, "rounded_sum")
+        if coverage_zero is None or valid_samples is None:
+            coverage = np.asarray(coverage_map, dtype=np.float32)
+            coverage_zero = int(np.count_nonzero((~np.isfinite(coverage)) | (coverage <= 0.0)))
+            valid_samples = int(round(float(np.nansum(coverage, dtype=np.float64))))
         expected_valid = _int_value(dq_provenance_payload.get("valid_samples_after_rejection"))
         if dq_map is not None:
-            dq_data = np.asarray(dq_map, dtype=np.uint32)
-            dq_no_data = int(np.count_nonzero((dq_data & np.uint32(int(DQFlag.NO_DATA))) != 0))
+            if trust_precomputed_dq_summary:
+                dq_no_data = _summary_count(dq_summary_payload, "no_data")
+            else:
+                dq_data = np.asarray(dq_map, dtype=np.uint32)
+                dq_no_data = int(np.count_nonzero((dq_data & np.uint32(int(DQFlag.NO_DATA))) != 0))
             checks.append(
                 _check(
                     "coverage_zero_matches_dq_no_data",
@@ -278,7 +336,9 @@ def build_resident_integration_stack_surface_contract(
     low_samples = None
     high_samples = None
     if low_rejection_map is not None:
-        low_stats = _finite_stats(low_rejection_map)
+        low_stats = stats_by_map.get("low_rejection", {})
+        if not low_stats:
+            low_stats = _finite_stats(low_rejection_map)
         low_samples = int(low_stats["rounded_sum"])
         checks.append(
             _check(
@@ -290,7 +350,10 @@ def build_resident_integration_stack_surface_contract(
             )
         )
         if dq_map is not None:
-            dq_low = int(np.count_nonzero((np.asarray(dq_map, dtype=np.uint32) & np.uint32(int(DQFlag.LOW_REJECTED))) != 0))
+            if trust_precomputed_dq_summary:
+                dq_low = _summary_count(dq_summary_payload, "low_rejected")
+            else:
+                dq_low = int(np.count_nonzero((np.asarray(dq_map, dtype=np.uint32) & np.uint32(int(DQFlag.LOW_REJECTED))) != 0))
             checks.append(
                 _check(
                     "low_rejection_pixels_match_dq",
@@ -299,7 +362,9 @@ def build_resident_integration_stack_surface_contract(
                 )
             )
     if high_rejection_map is not None:
-        high_stats = _finite_stats(high_rejection_map)
+        high_stats = stats_by_map.get("high_rejection", {})
+        if not high_stats:
+            high_stats = _finite_stats(high_rejection_map)
         high_samples = int(high_stats["rounded_sum"])
         checks.append(
             _check(
@@ -311,7 +376,10 @@ def build_resident_integration_stack_surface_contract(
             )
         )
         if dq_map is not None:
-            dq_high = int(np.count_nonzero((np.asarray(dq_map, dtype=np.uint32) & np.uint32(int(DQFlag.HIGH_REJECTED))) != 0))
+            if trust_precomputed_dq_summary:
+                dq_high = _summary_count(dq_summary_payload, "high_rejected")
+            else:
+                dq_high = int(np.count_nonzero((np.asarray(dq_map, dtype=np.uint32) & np.uint32(int(DQFlag.HIGH_REJECTED))) != 0))
             checks.append(
                 _check(
                     "high_rejection_pixels_match_dq",

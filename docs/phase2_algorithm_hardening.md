@@ -839,6 +839,104 @@ Decision:
 - Keep `run` as the explicit isolation option for one-off fully self-contained
   output directories.
 
+### S2-Gate 516: Resident Surface Contract Stats Reuse
+
+Gate 516 returns to the Phase 2 mainline performance target after Gate515.
+A cProfile warm-cache 200-light run showed that the largest remaining
+unaccounted Python cost was not registration, but repeated full-frame map scans
+inside `build_resident_integration_stack_surface_contract`. Those scans rebuilt
+statistics that the resident pipeline had already produced as output
+diagnostics, DQ provenance, DQ summaries, or count-map evidence.
+
+Implementation:
+
+- `src/glass/engine/resident_stack_surface.py` now accepts optional
+  `precomputed_map_stats` and `trust_precomputed_dq_summary` parameters.
+  Without those parameters it keeps the old full-scan behavior.
+- `src/glass/engine/resident_cuda.py` provides resident surface-contract stats
+  from existing run evidence:
+  - master stats from output diagnostics;
+  - weight-map counts from output diagnostics;
+  - coverage stats from resident DQ coverage provenance;
+  - low/high rejection stats from one resident count-map pass;
+  - DQ-map counts from the DQ summary created when the DQ map was built.
+- The separate `glass resident-result-contract --pixel-verify` path remains the
+  disk-backed full FITS map audit, so the fast surface contract does not remove
+  the independent verification step.
+- `tests/test_resident_stack_surface.py` proves the precomputed path does not
+  call the full `_finite_stats` scan while preserving the old default path.
+
+Real 200-light validation:
+
+- Pre-change current-default run root:
+  `C:\glass_runs\phase2_s2_gate516_current_default_ab\runs_20260623_072959`
+- Optimized run root:
+  `C:\glass_runs\phase2_s2_gate516_surface_contract_stats_reuse\runs_20260623_073659`
+- Cold optimized audit run:
+  - internal elapsed: `15.793169700016733 s`;
+  - shell elapsed: `16.184504 s`;
+  - cache: `0` hits, `1` miss.
+- Warm optimized audit run:
+  - internal elapsed: `11.345701600017492 s`;
+  - shell elapsed: `11.712763 s`;
+  - cache: `1` hit, `0` misses;
+  - master build/load: `0.4150375999743119 s`;
+  - light read/upload/calibrate wall: `2.5498815999599174 s`;
+  - resident registration component account: `1.9595927005411453 s`;
+  - resident registration warp: `0.47263460024259984 s`;
+  - resident integration: `0.3089101000223309 s`;
+  - output write: `0.2958422999945469 s`.
+- Warm optimized vs pre-change current default:
+  - pre-change warm internal elapsed: `16.68259979999857 s`;
+  - optimized warm internal speedup: `1.4703894380558054x`.
+- Warm optimized vs Gate515:
+  - Gate515 warm internal elapsed: `16.721956100023817 s`;
+  - optimized warm internal speedup: `1.4738582671694835x`.
+- Warm vs cold master: bitwise equal, `RMS=0`, `max_abs=0`, `p99_abs=0`.
+- Warm vs WBPP:
+  - WBPP black-box elapsed: `1092.541 s`;
+  - speedup: `96.29558739657982x` by GLASS internal timing and
+    `93.27782010102995x` by conservative shell timing;
+  - RMS diff: `0.0017794216505176163`;
+  - p99 absolute diff: `0.00042621337808668863`;
+  - coverage fraction: `0.960532609259836`.
+
+Contract status:
+
+- resident calibration contract: passed;
+- resident result contract with pixel verification: passed;
+- pipeline contract with pixel verification: passed;
+- StackEngine contract: passed and default-promotion ready;
+- acceptance audit: passed.
+
+Validation commands:
+
+- `python -m ruff check src\glass\engine\resident_stack_surface.py
+  src\glass\engine\resident_cuda.py tests\test_resident_stack_surface.py`
+- `python -m pytest -q tests/test_resident_stack_surface.py`
+- `python -m pytest -q tests/test_resident_cuda_run.py
+  tests/test_resident_stack_surface.py tests/test_stack_engine_contract.py
+  tests/test_pipeline_contract.py::test_pipeline_contract_passes_resident_result_contract
+  tests/test_pipeline_contract.py::test_pipeline_contract_pixel_verification_reports_resident_rejection_sample_accounting
+  tests/test_acceptance_audit.py::test_acceptance_audit_applies_dq_provenance_contract`
+- optimized real 200-light cold/warm `glass run` commands under the same
+  parent, followed by cold/warm FITS bitwise comparison and WBPP compare.
+- `glass resident-calibration-contract ... --fail-on-failed`
+- `glass resident-result-contract ... --pixel-verify --fail-on-failed`
+- `glass pipeline-contract ... --pixel-verify`
+- `glass stack-engine-contract ... --expected-integration-engine
+  cuda_resident_stack --require-default-ready`
+- `glass acceptance-audit ... --benchmark-contract
+  benchmarks/phase2_m38_h_200_audit_maps_contract.json`
+
+Decision:
+
+- Keep the precomputed resident surface-contract path as the default resident
+  run behavior because it improves the real 200-light audit route without
+  changing pixels or weakening the independent pixel-verification contract.
+- The next substantive optimization should target light read/upload/calibration
+  overlap and resident registration/warp residency.
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

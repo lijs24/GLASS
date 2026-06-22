@@ -2092,12 +2092,144 @@ def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:
     }
 
 
+def _resident_count_map_array_stats(data: np.ndarray | None) -> dict[str, Any]:
+    if data is None:
+        return {"present": False}
+    values = np.asarray(data, dtype=np.float32)
+    finite = np.isfinite(values)
+    finite_count = int(np.count_nonzero(finite))
+    rounded = np.rint(np.nan_to_num(values, nan=0.0, posinf=0.0, neginf=0.0))
+    positive = finite & (values > 0.0)
+    return {
+        "present": True,
+        "shape": list(values.shape),
+        "dtype": str(values.dtype),
+        "finite_pixels": finite_count,
+        "nonfinite_pixels": int(values.size - finite_count),
+        "min": None if finite_count == 0 else float(np.nanmin(values)),
+        "max": None if finite_count == 0 else float(np.nanmax(values)),
+        "mean": None if finite_count == 0 else float(np.nanmean(values)),
+        "rounded_sum": int(round(float(np.sum(np.maximum(rounded, 0.0), dtype=np.float64)))),
+        "positive_pixels": int(np.count_nonzero(positive)),
+        "zero_or_less_pixels": int(values.size - np.count_nonzero(positive)),
+        "negative_pixels": int(np.count_nonzero(finite & (values < 0.0))),
+        "fractional_pixels": int(np.count_nonzero(finite & (np.abs(values - np.rint(values)) > 1.0e-3))),
+        "stats_source": "resident_precomputed_count_map",
+    }
+
+
+def _resident_surface_contract_map_stats(
+    *,
+    master: np.ndarray,
+    weight_map: np.ndarray | None,
+    coverage_map: np.ndarray | None,
+    low_rejection_map: np.ndarray | None,
+    high_rejection_map: np.ndarray | None,
+    dq_map: np.ndarray | None,
+    output_diagnostics: dict[str, Any],
+    dq_coverage_provenance: dict[str, Any],
+    dq_summary: dict[str, Any] | None,
+    rejection_map_stats: dict[str, Any],
+) -> dict[str, Any]:
+    master_shape = list(np.asarray(master).shape)
+    total_pixels = int(np.asarray(master).size)
+    output_stats = (
+        output_diagnostics.get("statistics")
+        if isinstance(output_diagnostics.get("statistics"), dict)
+        else {}
+    )
+    clipping = (
+        output_diagnostics.get("clipping_probe")
+        if isinstance(output_diagnostics.get("clipping_probe"), dict)
+        else {}
+    )
+    stats: dict[str, Any] = {
+        "master": {
+            "present": True,
+            "shape": master_shape,
+            "dtype": str(np.asarray(master).dtype),
+            "finite_pixels": int(output_diagnostics.get("finite_pixels") or 0),
+            "nonfinite_pixels": int(output_diagnostics.get("nonfinite_pixels") or 0),
+            "min": output_stats.get("min"),
+            "max": output_stats.get("max"),
+            "mean": output_stats.get("mean"),
+            "stats_source": "resident_output_diagnostics",
+        },
+    }
+    if weight_map is not None:
+        positive_weight = clipping.get("positive_weight_pixels")
+        zero_weight = clipping.get("zero_weight_pixels")
+        stats["weight"] = {
+            "present": True,
+            "shape": list(np.asarray(weight_map).shape),
+            "dtype": str(np.asarray(weight_map).dtype),
+            "finite_pixels": int(np.asarray(weight_map).size),
+            "nonfinite_pixels": 0,
+            "positive_pixels": None if positive_weight is None else int(positive_weight),
+            "zero_or_less_pixels": None if zero_weight is None else int(zero_weight),
+            "stats_source": "resident_output_diagnostics",
+        }
+    coverage_stats = dq_coverage_provenance.get("post_rejection_coverage")
+    if coverage_map is not None and isinstance(coverage_stats, dict):
+        finite_pixels = int(coverage_stats.get("finite_pixels") or 0)
+        zero_pixels = int(dq_coverage_provenance.get("post_rejection_zero_pixels") or 0)
+        stats["coverage"] = {
+            **coverage_stats,
+            "present": True,
+            "shape": list(np.asarray(coverage_map).shape),
+            "dtype": str(np.asarray(coverage_map).dtype),
+            "nonfinite_pixels": int(total_pixels - finite_pixels),
+            "positive_pixels": int(finite_pixels - zero_pixels),
+            "zero_or_less_pixels": zero_pixels,
+            "negative_pixels": 0,
+            "fractional_pixels": 0,
+            "stats_source": "resident_dq_coverage_provenance",
+        }
+    for key, value in (
+        ("low_rejection", low_rejection_map),
+        ("high_rejection", high_rejection_map),
+    ):
+        map_stats = rejection_map_stats.get(key)
+        if value is not None and isinstance(map_stats, dict):
+            stats[key] = dict(map_stats)
+    if dq_map is not None:
+        dq_payload = dq_summary if isinstance(dq_summary, dict) else {}
+        valid_pixels = int(dq_payload.get("valid") or 0)
+        stats["dq"] = {
+            "present": True,
+            "shape": list(np.asarray(dq_map).shape),
+            "dtype": str(np.asarray(dq_map).dtype),
+            "finite_pixels": int(np.asarray(dq_map).size),
+            "nonfinite_pixels": 0,
+            "positive_pixels": int(total_pixels - valid_pixels),
+            "zero_or_less_pixels": valid_pixels,
+            "negative_pixels": 0,
+            "fractional_pixels": 0,
+            "stats_source": "resident_dq_summary",
+        }
+    return stats
+
+
 def _resident_rejection_map_sample_count(
     low_rejection_map: np.ndarray | None,
     high_rejection_map: np.ndarray | None,
+    *,
+    rejection_map_stats: dict[str, Any] | None = None,
 ) -> int | None:
     if low_rejection_map is None and high_rejection_map is None:
         return None
+    if isinstance(rejection_map_stats, dict):
+        total_from_stats = 0
+        found = False
+        for key in ("low_rejection", "high_rejection"):
+            stats = rejection_map_stats.get(key)
+            if isinstance(stats, dict) and stats.get("present") is not False:
+                value = stats.get("rounded_sum")
+                if value is not None:
+                    total_from_stats += int(round(float(value)))
+                    found = True
+        if found:
+            return total_from_stats
     total = 0
     for rejection_map in (low_rejection_map, high_rejection_map):
         if rejection_map is None:
@@ -2356,6 +2488,7 @@ def _resident_dq_coverage_provenance(
     geometric_warp_coverage_map: np.ndarray | None = None,
     geometric_warp_coverage_frame_count: int | None = None,
     source_dq_summary: dict[str, Any] | None = None,
+    rejection_map_stats: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     active_count = max(0, int(active_frame_count))
     source_dq_fields = _resident_source_dq_provenance_fields(source_dq_summary)
@@ -2434,7 +2567,11 @@ def _resident_dq_coverage_provenance(
     rejection_reduced = finite_pre & finite_post & (post_rejection < finite_pre_rejection - 0.5)
     rejected_samples = finite_pre_rejection - post_rejection
     np.maximum(rejected_samples, 0.0, out=rejected_samples)
-    rejection_map_sample_count = _resident_rejection_map_sample_count(low_rejection_map, high_rejection_map)
+    rejection_map_sample_count = _resident_rejection_map_sample_count(
+        low_rejection_map,
+        high_rejection_map,
+        rejection_map_stats=rejection_map_stats,
+    )
     if rejection_map_sample_count is None:
         rejected_sample_count = float(np.nansum(rejected_samples))
         rejected_sample_count_source = "coverage_difference"
@@ -9460,6 +9597,14 @@ def run_resident_calibration_integration(
                     geometric_warp_coverage_map=geometric_warp_coverage_map,
                     active_frame_count=active_frame_count,
                 )
+            rejection_map_stats = {
+                "low_rejection": _resident_count_map_array_stats(low_rejection_map)
+                if low_rejection_map is not None
+                else {"present": False},
+                "high_rejection": _resident_count_map_array_stats(high_rejection_map)
+                if high_rejection_map is not None
+                else {"present": False},
+            }
             dq_coverage_provenance = _resident_dq_coverage_provenance(
                 coverage_map,
                 low_rejection_map,
@@ -9468,6 +9613,7 @@ def run_resident_calibration_integration(
                 geometric_warp_coverage_map=geometric_warp_coverage_map,
                 geometric_warp_coverage_frame_count=geometric_warp_coverage_frame_count,
                 source_dq_summary=source_dq_summary,
+                rejection_map_stats=rejection_map_stats,
             )
             dq_provenance_summary = dq_provenance_summary_from_resident(
                 dq_coverage_provenance,
@@ -9860,6 +10006,18 @@ def run_resident_calibration_integration(
                     )
                 ),
             }
+            surface_map_stats = _resident_surface_contract_map_stats(
+                master=master,
+                weight_map=weight_map,
+                coverage_map=coverage_map,
+                low_rejection_map=low_rejection_map,
+                high_rejection_map=high_rejection_map,
+                dq_map=dq_map,
+                output_diagnostics=output_diagnostics,
+                dq_coverage_provenance=dq_coverage_provenance,
+                dq_summary=dq_summary,
+                rejection_map_stats=rejection_map_stats,
+            )
             stack_surface_contract = build_resident_integration_stack_surface_contract(
                 filter_name=filter_name,
                 frame_ids=[str(frame["id"]) for frame in light_frames],
@@ -9886,6 +10044,8 @@ def run_resident_calibration_integration(
                     "high_rejection": None if high_rejection_path is None else str(high_rejection_path),
                     "dq": None if dq_path is None else str(dq_path),
                 },
+                precomputed_map_stats=surface_map_stats,
+                trust_precomputed_dq_summary=True,
             )
             group_registration_quality_decisions = [
                 registration_quality_decisions_by_frame[str(frame["id"])]
