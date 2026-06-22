@@ -245,6 +245,12 @@ from glass.report.candidate_runtime_sweep_execute import (
     build_candidate_runtime_sweep_execution,
     write_candidate_runtime_sweep_execution,
 )
+from glass.report.resident_ab_matrix_plan import (
+    build_resident_ab_matrix_execution,
+    build_resident_ab_matrix_plan,
+    write_resident_ab_matrix_execution,
+    write_resident_ab_matrix_plan,
+)
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
@@ -2233,6 +2239,72 @@ def cmd_candidate_runtime_sweep_plan(args: argparse.Namespace) -> int:
             "markdown": args.markdown,
         }
     )
+    return 0
+
+
+def cmd_resident_ab_matrix_plan(args: argparse.Namespace) -> int:
+    payload = build_resident_ab_matrix_plan(
+        root=args.root,
+        plan=args.plan,
+        manifest=args.manifest,
+        wbpp_result=args.wbpp_result,
+        reference=args.reference,
+        glass_scale=args.glass_scale,
+        glass_offset=args.glass_offset,
+        min_coverage=args.min_coverage,
+        min_speedup=args.min_speedup,
+        reference_frame_id=args.reference_frame_id,
+        output_maps=args.resident_output_maps,
+        min_gpu_free_mib=args.min_gpu_free_mib,
+        max_gpu_utilization=args.max_gpu_utilization,
+        min_disk_free_gib=args.min_disk_free_gib,
+        benchmark_contract_profile=args.benchmark_contract_profile,
+        probe_gpu=not args.skip_gpu_probe,
+    )
+    write_resident_ab_matrix_plan(args.out, payload, markdown=args.markdown)
+    readiness = payload.get("readiness") if isinstance(payload.get("readiness"), dict) else {}
+    gpu = readiness.get("gpu") if isinstance(readiness.get("gpu"), dict) else {}
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "variant_count": payload.get("variant_count"),
+            "ready_to_execute": payload.get("ready_to_execute"),
+            "recommendation": payload.get("recommendation"),
+            "gpu_status": gpu.get("status"),
+            "gpu_utilization": gpu.get("utilization_percent"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_resident_ab_matrix_execute(args: argparse.Namespace) -> int:
+    payload = build_resident_ab_matrix_execution(
+        args.plan,
+        dry_run=args.dry_run,
+        skip_existing=args.skip_existing,
+        variants=args.variant,
+        ignore_readiness=args.ignore_readiness,
+        glass_executable=args.glass_executable,
+        cwd=args.cwd,
+    )
+    write_resident_ab_matrix_execution(args.out, payload)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": summary.get("status"),
+            "blocked": summary.get("blocked"),
+            "failed": summary.get("failed"),
+            "recorded_variant_count": summary.get("recorded_variant_count"),
+            "out": args.out,
+        }
+    )
+    if args.fail_on_failed and summary.get("failed"):
+        return 2
+    if args.fail_on_blocked and summary.get("blocked"):
+        return 3
     return 0
 
 
@@ -6007,6 +6079,86 @@ def build_parser() -> argparse.ArgumentParser:
         help="resident prefetch worker count for a generated matrix variant; may be repeated",
     )
     candidate_runtime_sweep_plan.set_defaults(func=cmd_candidate_runtime_sweep_plan)
+
+    resident_ab_matrix_plan = sub.add_parser(
+        "resident-ab-matrix-plan",
+        help="plan the real 200-light resident throughput-v1 versus throughput-v2-fused A/B matrix",
+    )
+    resident_ab_matrix_plan.add_argument("--root", required=True, help="root directory for planned A/B artifacts")
+    resident_ab_matrix_plan.add_argument("--plan", required=True, help="processing_plan.json for the real dataset")
+    resident_ab_matrix_plan.add_argument("--manifest", required=True, help="manifest.json for acceptance-audit")
+    resident_ab_matrix_plan.add_argument("--wbpp-result", required=True, help="user-generated WBPP black-box result JSON")
+    resident_ab_matrix_plan.add_argument("--reference", required=True, help="WBPP reference master image")
+    resident_ab_matrix_plan.add_argument("--out", required=True, help="output A/B matrix plan JSON")
+    resident_ab_matrix_plan.add_argument("--markdown", help="optional output Markdown plan")
+    resident_ab_matrix_plan.add_argument("--glass-scale", type=float)
+    resident_ab_matrix_plan.add_argument("--glass-offset", type=float)
+    resident_ab_matrix_plan.add_argument("--min-coverage", type=float, default=190.0)
+    resident_ab_matrix_plan.add_argument("--min-speedup", type=float, default=2.0)
+    resident_ab_matrix_plan.add_argument("--reference-frame-id", default="LIGHT_H_0136")
+    resident_ab_matrix_plan.add_argument(
+        "--resident-output-maps",
+        choices=["minimal", "science", "audit"],
+        default="audit",
+        help="output-map policy for planned validation runs",
+    )
+    resident_ab_matrix_plan.add_argument("--min-gpu-free-mib", type=int, default=65000)
+    resident_ab_matrix_plan.add_argument("--max-gpu-utilization", type=int, default=20)
+    resident_ab_matrix_plan.add_argument("--min-disk-free-gib", type=float, default=8.0)
+    resident_ab_matrix_plan.add_argument(
+        "--benchmark-contract-profile",
+        choices=[RESIDENT_CUDA_DQ_PROFILE_NAME],
+        default=RESIDENT_CUDA_DQ_PROFILE_NAME,
+    )
+    resident_ab_matrix_plan.add_argument(
+        "--skip-gpu-probe",
+        action="store_true",
+        help="record GPU readiness as unknown instead of invoking nvidia-smi",
+    )
+    resident_ab_matrix_plan.set_defaults(func=cmd_resident_ab_matrix_plan)
+
+    resident_ab_matrix_execute = sub.add_parser(
+        "resident-ab-matrix-execute",
+        help="execute or dry-run a resident 200-light A/B matrix plan",
+    )
+    resident_ab_matrix_execute.add_argument("--plan", required=True, help="resident A/B matrix plan JSON")
+    resident_ab_matrix_execute.add_argument("--out", required=True, help="output execution audit JSON")
+    resident_ab_matrix_execute.add_argument(
+        "--variant",
+        action="append",
+        help="variant id to execute; may be repeated, defaults to every variant in the plan",
+    )
+    resident_ab_matrix_execute.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="record planned subprocesses without executing them",
+    )
+    resident_ab_matrix_execute.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="skip variants whose acceptance JSON already exists",
+    )
+    resident_ab_matrix_execute.add_argument(
+        "--ignore-readiness",
+        action="store_true",
+        help="allow non-dry-run execution even when the plan readiness sample is not ready",
+    )
+    resident_ab_matrix_execute.add_argument(
+        "--glass-executable",
+        help="replace leading 'glass' commands with this executable path",
+    )
+    resident_ab_matrix_execute.add_argument("--cwd", help="working directory for subprocess execution")
+    resident_ab_matrix_execute.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 when any executed step fails",
+    )
+    resident_ab_matrix_execute.add_argument(
+        "--fail-on-blocked",
+        action="store_true",
+        help="return exit code 3 when non-dry-run execution is blocked by readiness",
+    )
+    resident_ab_matrix_execute.set_defaults(func=cmd_resident_ab_matrix_execute)
 
     candidate_runtime_sweep_execute = sub.add_parser(
         "candidate-runtime-sweep-execute",

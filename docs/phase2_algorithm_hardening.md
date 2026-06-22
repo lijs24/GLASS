@@ -10080,6 +10080,58 @@ Completed in Gate446:
     admission so memory is not undercounted before the engine raises the
     corresponding runtime validation error.
 
+### S2-Gate 474: Resident 200-Light A/B Matrix Runner
+
+- Formalize the next real 200-light A/B as an executable, readiness-guarded
+  matrix instead of another hand-assembled command list.
+- Required work:
+  - generate a two-variant A/B plan for the real M38 H-alpha 200-light data:
+    `throughput-v1` + Lanczos3 + registered-stack parity baseline, and
+    `throughput-v2-fused` + bilinear + fused resident candidate;
+  - include commands for run, WBPP-reference compare, baseline-vs-candidate
+    compare, acceptance audit, speedup summary, and HTML report;
+  - record point-in-time GPU and disk readiness so a busy GPU cannot silently
+    become a polluted benchmark;
+  - provide a dry-run executor that can later run the exact planned command
+    chain, skip already accepted variants, and block non-dry-run execution when
+    the readiness sample is not clean.
+- Completed in S2-Gate474:
+  - added `src/glass/report/resident_ab_matrix_plan.py` with the real A/B plan
+    builder, GPU/disk readiness probe, and dry-run/non-dry-run executor;
+  - added `glass resident-ab-matrix-plan` and
+    `glass resident-ab-matrix-execute`;
+  - generated `runs/checkpoints/s2_gate_474_ab_matrix_plan.json`,
+    `runs/checkpoints/s2_gate_474_ab_matrix_plan.md`, and
+    `runs/checkpoints/s2_gate_474_ab_matrix_execution_dry_run.json`;
+  - added focused tests for command construction, busy-GPU blocking, dry-run
+    execution records, and CLI output.
+- Real readiness sample:
+  - GPU: `NVIDIA RTX PRO 6000 Blackwell Workstation Edition`;
+  - driver: `596.21`;
+  - free VRAM: `78987 MiB`;
+  - utilization: `100%`;
+  - disk target: `C:\glass_runs`, free space `65.19125747680664 GiB`;
+  - result: plan is waiting because the GPU was still busy, while disk space
+    was sufficient for the next controlled run.
+- Performance and regression note:
+  - this gate intentionally did not launch the heavy 200-light run while the
+    GPU was at `100%` utilization;
+  - it directly supports the next substantive gate by making the clean A/B
+    reproducible: the baseline and fused candidate will run from the same
+    plan, with the same WBPP reference master, scale/offset, coverage minimum,
+    frame minimum, speedup threshold, DQ profile, and report steps;
+  - no calibration, registration, interpolation, rejection, DQ, or integration
+    pixel math changed.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_474_ab_matrix_plan.json`;
+  - `runs/checkpoints/s2_gate_474_ab_matrix_plan.md`;
+  - `runs/checkpoints/s2_gate_474_ab_matrix_execution_dry_run.json`;
+  - `runs/checkpoints/s2_gate_474_status.md`.
+- Known limitation:
+  - the plan records a point-in-time readiness sample. Before non-dry-run
+    execution, the next gate must regenerate or revalidate readiness, then run
+    the planned matrix only in a clean GPU window.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1,0 +1,140 @@
+{
+  "artifact_type": "resident_ab_matrix_execution",
+  "created_at": "2026-06-22T14:59:01+00:00",
+  "dry_run": true,
+  "ignore_readiness": false,
+  "limitations": [
+    "This executor runs only commands recorded in a resident A/B matrix plan.",
+    "Non-dry-run execution is blocked by plan readiness unless ignore_readiness is set.",
+    "Dry-run mode records intended commands without executing subprocesses."
+  ],
+  "plan": "runs\\checkpoints\\s2_gate_474_ab_matrix_plan.json",
+  "readiness": {
+    "disk": {
+      "free_gib": 65.19125747680664,
+      "min_free_gib": 8.0,
+      "path": "C:\\glass_runs",
+      "ready": true,
+      "status": "ready",
+      "total_gib": 1906.7373008728027
+    },
+    "gpu": {
+      "driver": "596.21",
+      "free_mib": 78987,
+      "max_utilization_percent": 20,
+      "min_free_mib": 65000,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "ready": false,
+      "reason": "GPU utilization is 100%, above the clean benchmark threshold",
+      "status": "busy",
+      "total_mib": 97887,
+      "used_mib": 18900,
+      "utilization_percent": 100
+    }
+  },
+  "schema_version": 1,
+  "selected_variant_count": 2,
+  "skip_existing": false,
+  "summary": {
+    "blocked": false,
+    "completed_variant_count": 0,
+    "failed": false,
+    "planned_variant_count": 2,
+    "recorded_variant_count": 2,
+    "skipped_existing_count": 0,
+    "status": "planned"
+  },
+  "variants": [
+    {
+      "acceptance_exists": false,
+      "status": "planned",
+      "steps": [
+        {
+          "command": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v1_lanczos3_parity --backend cuda --memory-mode resident --resident-runtime-preset throughput-v1 --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit --resident-integration-dispatch stack",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "run"
+        },
+        {
+          "command": "glass compare --glass C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_master_H.fits --reference C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.html --glass-label \"GLASS throughput_v1_lanczos3_parity\" --reference-label \"WBPP FastIntegration black-box\" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --glass-coverage-map C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_coverage_map_H.fits --min-coverage 190.0",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "compare_reference"
+        },
+        {
+          "command": "glass acceptance-audit --manifest C:\\gpwbpp_runs\\final_m38_h_200\\manifest.json --glass-run C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v1_lanczos3_parity --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\acceptance\\throughput_v1_lanczos3_parity_acceptance.json --markdown C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\acceptance\\throughput_v1_lanczos3_parity_acceptance.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01 --benchmark-contract-profile resident_cuda_dq_v1",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "acceptance_audit"
+        },
+        {
+          "command": "python benchmarks\\summarize_wbpp_speedup.py --glass-run C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v1_lanczos3_parity --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\speedup\\throughput_v1_lanczos3_parity_speedup.json --markdown C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\speedup\\throughput_v1_lanczos3_parity_speedup.md --min-speedup 2.0",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "speedup_summary"
+        },
+        {
+          "command": "glass report --run C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v1_lanczos3_parity --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\reports\\throughput_v1_lanczos3_parity_report.html",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "report"
+        }
+      ],
+      "variant_id": "throughput_v1_lanczos3_parity"
+    },
+    {
+      "acceptance_exists": false,
+      "status": "planned",
+      "steps": [
+        {
+          "command": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v2_fused_bilinear --backend cuda --memory-mode resident --resident-runtime-preset throughput-v2-fused --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation bilinear --reference-frame-id LIGHT_H_0136 --resident-output-maps audit",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "run"
+        },
+        {
+          "command": "glass compare --glass C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v2_fused_bilinear\\integration\\resident_master_H.fits --reference C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\compare\\throughput_v2_fused_bilinear_vs_wbpp.html --glass-label \"GLASS throughput_v2_fused_bilinear\" --reference-label \"WBPP FastIntegration black-box\" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --glass-coverage-map C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v2_fused_bilinear\\integration\\resident_coverage_map_H.fits --min-coverage 190.0",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "compare_reference"
+        },
+        {
+          "command": "glass compare --glass C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v2_fused_bilinear\\integration\\resident_master_H.fits --reference C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_master_H.fits --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\compare\\throughput_v2_fused_bilinear_vs_throughput_v1_lanczos3_parity.html --glass-label \"GLASS throughput_v2_fused_bilinear\" --reference-label \"GLASS throughput_v1_lanczos3_parity\" --glass-coverage-map C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v2_fused_bilinear\\integration\\resident_coverage_map_H.fits --min-coverage 190.0",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "compare_baseline"
+        },
+        {
+          "command": "glass acceptance-audit --manifest C:\\gpwbpp_runs\\final_m38_h_200\\manifest.json --glass-run C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v2_fused_bilinear --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\compare\\throughput_v2_fused_bilinear_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\acceptance\\throughput_v2_fused_bilinear_acceptance.json --markdown C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\acceptance\\throughput_v2_fused_bilinear_acceptance.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01 --benchmark-contract-profile resident_cuda_dq_v1",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "acceptance_audit"
+        },
+        {
+          "command": "python benchmarks\\summarize_wbpp_speedup.py --glass-run C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v2_fused_bilinear --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\compare\\throughput_v2_fused_bilinear_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\speedup\\throughput_v2_fused_bilinear_speedup.json --markdown C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\speedup\\throughput_v2_fused_bilinear_speedup.md --min-speedup 2.0",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "speedup_summary"
+        },
+        {
+          "command": "glass report --run C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\runs\\throughput_v2_fused_bilinear --out C:\\glass_runs\\phase2_s2_gate474_ab_matrix_plan\\reports\\throughput_v2_fused_bilinear_report.html",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "report"
+        }
+      ],
+      "variant_id": "throughput_v2_fused_bilinear"
+    }
+  ]
+}

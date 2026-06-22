@@ -723,6 +723,8 @@ def test_cli_help_commands():
         "candidate-comparison-sweep",
         "candidate-runtime-sweep-plan",
         "candidate-runtime-sweep-execute",
+        "resident-ab-matrix-plan",
+        "resident-ab-matrix-execute",
         "tile-local-policy-replay",
         "tile-local-policy-subset",
         "tile-local-apply-experiment",
