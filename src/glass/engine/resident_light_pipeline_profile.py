@@ -31,12 +31,15 @@ def build_resident_light_pipeline_profile(
 
     wall = _float_value(timing_s, "light_read_upload_calibrate")
     read_wait = _float_value(timing_s, "light_read_wait_wall")
+    master_build_or_load = _float_value(timing_s, "light_master_build_or_load_in_loop")
     native = _float_value(timing_s, "light_calibration_batch_native_total")
     calibrate_store = _float_value(timing_s, "light_calibrate_store")
     sync = _float_value(timing_s, "light_calibration_batch_sync")
     unaccounted = _float_value(timing_s, "light_loop_unaccounted")
+    unaccounted_without_master = _float_value(timing_s, "light_loop_unaccounted_without_master")
     overlap_saved = _float_value(timing_s, "light_read_overlap_saved")
     components = {
+        "master_build_or_load": master_build_or_load,
         "consumer_read_wait": read_wait,
         "native_h2d_calibrate_store": native,
         "native_calibrate_store": calibrate_store,
@@ -56,10 +59,13 @@ def build_resident_light_pipeline_profile(
         reverse=True,
     )
     dominant = ranked[0]["component"] if ranked else "unknown"
+    master_fraction = _fraction(master_build_or_load, wall)
     read_wait_fraction = _fraction(read_wait, wall)
     native_fraction = _fraction(native, wall)
     unaccounted_fraction = _fraction(unaccounted, wall)
-    if read_wait_fraction >= 0.45 and native_fraction < 0.40:
+    if master_fraction >= 0.45:
+        recommendation = "reuse_or_prebuild_master_calibration_cache"
+    elif read_wait_fraction >= 0.45 and native_fraction < 0.40:
         recommendation = "increase_prefetch_supply_or_reduce_decode_cost"
     elif read_wait_fraction >= 0.30 and native_fraction >= 0.30:
         recommendation = "balance_prefetch_supply_against_native_contention"
@@ -79,9 +85,14 @@ def build_resident_light_pipeline_profile(
         "components_s": components,
         "components_ranked": ranked,
         "fractions": {
+            "master_build_or_load": master_fraction,
             "consumer_read_wait": read_wait_fraction,
             "native_h2d_calibrate_store": native_fraction,
             "python_orchestration_unaccounted": unaccounted_fraction,
+            "python_orchestration_unaccounted_without_master": _fraction(
+                unaccounted_without_master,
+                wall,
+            ),
         },
         "overlap": {
             "saved_s": overlap_saved,
@@ -123,7 +134,8 @@ def build_resident_light_pipeline_profile(
         },
         "semantics": (
             "This profile decomposes resident light loading into consumer "
-            "read/decode wait, native H2D+calibration/store time, and remaining "
+            "read/decode wait, master calibration build/load performed inside "
+            "the light loop, native H2D+calibration/store time, and remaining "
             "Python orchestration. It is diagnostic only and does not change "
             "image math or scheduling by itself."
         ),

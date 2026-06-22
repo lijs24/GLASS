@@ -54,3 +54,24 @@ def test_light_pipeline_profile_detects_balanced_prefetch_contention() -> None:
 
     assert profile["dominant_component"] == "native_h2d_calibrate_store"
     assert profile["recommendation"] == "balance_prefetch_supply_against_native_contention"
+
+
+def test_light_pipeline_profile_accounts_master_load_inside_light_loop() -> None:
+    profile = build_resident_light_pipeline_profile(
+        timing_s={
+            "light_read_upload_calibrate": 14.0,
+            "light_master_build_or_load_in_loop": 10.5,
+            "light_read_wait_wall": 2.0,
+            "light_calibration_batch_native_total": 0.8,
+            "light_loop_unaccounted": 0.2,
+            "light_loop_unaccounted_without_master": 10.7,
+        },
+        resident_io_pipeline={},
+        resident_io_overlap={},
+    )
+
+    assert profile["dominant_component"] == "master_build_or_load"
+    assert profile["recommendation"] == "reuse_or_prebuild_master_calibration_cache"
+    assert profile["components_s"]["master_build_or_load"] == 10.5
+    assert profile["components_s"]["python_orchestration_unaccounted"] == 0.2
+    assert profile["fractions"]["python_orchestration_unaccounted_without_master"] == 10.7 / 14.0

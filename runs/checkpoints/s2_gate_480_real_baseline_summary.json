@@ -1,0 +1,83 @@
+{
+  "artifact_type": "s2_gate_480_real_baseline_summary",
+  "delta_vs_gate479_baseline": {
+    "glass_elapsed_s": 0.0739680000115186,
+    "light_loop_unaccounted_s": -10.950990499404725,
+    "light_loop_unaccounted_without_master_s": -0.12040269939461723,
+    "speedup_vs_wbpp": -0.08577982366129078
+  },
+  "fine_timing_seconds": {
+    "light_loop_accounted": 13.850358700030483,
+    "light_loop_accounted_without_master": 3.019770900020376,
+    "light_loop_total": 14.049948500003666,
+    "light_loop_unaccounted": 0.19958979997318238,
+    "light_loop_unaccounted_without_master": 11.03017759998329,
+    "light_master_build_or_load_in_loop": 10.830587800010107
+  },
+  "gate479_baseline": {
+    "glass_elapsed_s": 30.656666999973822,
+    "light_loop_unaccounted_s": 11.150580299377907,
+    "light_loop_unaccounted_without_master_s": 11.150580299377907,
+    "speedup_vs_wbpp": 35.637957642327294
+  },
+  "gate480_vs_gate479_baseline_compare": {
+    "abs_diff_p50": 0.0,
+    "abs_diff_p99": 0.0,
+    "abs_diff_p999": 0.0,
+    "max_abs_diff": 0.0,
+    "path": "C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\compare\\gate480_vs_gate479_baseline.json",
+    "relative_rms_diff": 0.0,
+    "rms_diff": 0.0,
+    "shape_match": true
+  },
+  "glass_elapsed_s": 30.73063499998534,
+  "passed": true,
+  "resident_io_pipeline": {
+    "calibration_batch_count": 25,
+    "calibration_batch_mode": "fits_u16be_bzero_gpu_decode_callback_release_batch",
+    "fits_read_mode_effective": "native_u16_gpu",
+    "raw_gpu_decode_enabled": true,
+    "source_dq_fast_skip_enabled": true,
+    "source_dq_fast_skipped_frame_count": 200
+  },
+  "resident_light_pipeline_profile": {
+    "components_s": {
+      "consumer_read_wait": 2.2852272999007255,
+      "master_build_or_load": 10.830587800010107,
+      "native_calibrate_store": 0.7124597110748291,
+      "native_h2d_calibrate_store": 0.7229763000000001,
+      "native_sync": 0.014113100000000002,
+      "python_orchestration_unaccounted": 0.19958979997318238
+    },
+    "dominant_component": "master_build_or_load",
+    "fractions": {
+      "consumer_read_wait": 0.16265022607735033,
+      "master_build_or_load": 0.7708631672213804,
+      "native_h2d_calibrate_store": 0.051457576517082,
+      "python_orchestration_unaccounted": 0.014205731784221864,
+      "python_orchestration_unaccounted_without_master": 0.7850688990056022
+    },
+    "recommendation": "reuse_or_prebuild_master_calibration_cache"
+  },
+  "run_root": "C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real",
+  "speedup_vs_wbpp": 35.552177818666,
+  "status": "passed",
+  "timing_s": {
+    "light_fits_native_file_read": 20.4505658,
+    "light_h2d_calibrate_store": 0.7294739001081325,
+    "light_loop_accounted": 13.850358700030483,
+    "light_loop_accounted_without_master": 3.019770900020376,
+    "light_loop_unaccounted": 0.19958979997318238,
+    "light_loop_unaccounted_without_master": 11.03017759998329,
+    "light_master_build_or_load_in_loop": 10.830587800010107,
+    "light_read_decode": 2.2852272999007255,
+    "light_read_upload_calibrate": 14.049948500003666,
+    "master_build_or_load": 10.830587800010107,
+    "output_write": 2.481540600012522,
+    "resident_integration": 0.30036359996302053,
+    "resident_registration_component_accounted": 4.202244599912153
+  },
+  "wbpp_elapsed_s": 1092.541,
+  "weighted_frame_count": 193,
+  "zero_weight_frame_count": 7
+}

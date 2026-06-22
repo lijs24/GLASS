@@ -8700,20 +8700,28 @@ def run_resident_calibration_integration(
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
                 ),
             }
-            light_loop_accounted = (
+            light_loop_accounted_without_master = (
                 read_wait_total
                 + calibrate_timing["total"]
                 + registration_during_load_elapsed
                 + gc_elapsed
             )
+            light_master_build_or_load_in_loop = float(master_elapsed)
+            light_loop_accounted = light_loop_accounted_without_master + light_master_build_or_load_in_loop
             light_loop_unaccounted = max(0.0, load_calibrate_elapsed - light_loop_accounted)
+            light_loop_unaccounted_without_master = max(
+                0.0,
+                load_calibrate_elapsed - light_loop_accounted_without_master,
+            )
             light_pipeline_timing = {
                 "light_read_upload_calibrate": load_calibrate_elapsed,
                 "light_read_wait_wall": read_wait_total,
+                "light_master_build_or_load_in_loop": light_master_build_or_load_in_loop,
                 "light_calibration_batch_native_total": float(calibration_batch_native_total_s),
                 "light_calibrate_store": calibrate_store_timing["total"],
                 "light_calibration_batch_sync": float(calibration_batch_sync_s),
                 "light_loop_unaccounted": light_loop_unaccounted,
+                "light_loop_unaccounted_without_master": light_loop_unaccounted_without_master,
                 "light_read_overlap_saved": read_overlap_saved,
             }
             light_pipeline_io = {
@@ -8765,6 +8773,7 @@ def run_resident_calibration_integration(
                     "light_fits_native_decode_total": fits_native_decode_timing["total"],
                     "light_fits_native_total": fits_native_total_timing["total"],
                     "light_read_overlap_saved": read_overlap_saved,
+                    "light_master_build_or_load_in_loop": light_master_build_or_load_in_loop,
                     "light_host_copy_to_pinned_total": host_copy_timing["total"],
                     "light_h2d_total": h2d_timing["total"],
                     "light_calibrate_store_total": calibrate_store_timing["total"],
@@ -8776,8 +8785,10 @@ def run_resident_calibration_integration(
                     "resident_registration_warp_during_load_total": registration_during_load_elapsed,
                     "resident_registration_warp_deferred_total": registration_deferred_elapsed,
                     "gc_total": gc_elapsed,
+                    "light_loop_accounted_without_master": light_loop_accounted_without_master,
                     "light_loop_accounted": light_loop_accounted,
                     "light_loop_unaccounted": light_loop_unaccounted,
+                    "light_loop_unaccounted_without_master": light_loop_unaccounted_without_master,
                 },
                 "per_frame_seconds": {
                     "total": _timing_summary(per_frame_s),
@@ -8954,6 +8965,7 @@ def run_resident_calibration_integration(
                         "light_fits_native_decode": fits_native_decode_timing["total"],
                         "light_fits_native_total": fits_native_total_timing["total"],
                         "light_read_overlap_saved": read_overlap_saved,
+                        "light_master_build_or_load_in_loop": light_master_build_or_load_in_loop,
                         "light_host_copy_to_pinned": host_copy_timing["total"],
                         "light_h2d": h2d_timing["total"],
                         "light_calibrate_store": calibrate_store_timing["total"],
@@ -8967,7 +8979,10 @@ def run_resident_calibration_integration(
                         "resident_registration_component_accounted": registration_component_total,
                         "resident_registration_orchestration": registration_orchestration_elapsed,
                         "gc": gc_elapsed,
+                        "light_loop_accounted_without_master": light_loop_accounted_without_master,
+                        "light_loop_accounted": light_loop_accounted,
                         "light_loop_unaccounted": light_loop_unaccounted,
+                        "light_loop_unaccounted_without_master": light_loop_unaccounted_without_master,
                         "resident_weighting": weighting_elapsed,
                         "resident_local_normalization": local_norm_elapsed,
                         "resident_integration": integrate_elapsed,

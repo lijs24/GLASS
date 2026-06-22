@@ -1625,8 +1625,10 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert timing["light_h2d"] >= 0.0
     assert timing["light_calibrate_store"] >= 0.0
     assert timing["light_h2d_calibrate_store"] >= 0.0
+    assert timing["light_master_build_or_load_in_loop"] == timing["master_build_or_load"]
     assert timing["resident_registration_warp"] >= 0.0
     assert timing["light_loop_unaccounted"] >= 0.0
+    assert timing["light_loop_unaccounted_without_master"] >= timing["light_loop_unaccounted"]
     assert fine_timing["seconds"]["light_read_decode_total"] == timing["light_read_decode"]
     assert fine_timing["seconds"]["light_read_decode_worker_total"] == timing["light_read_decode_worker"]
     assert fine_timing["seconds"]["light_read_overlap_saved"] == timing["light_read_overlap_saved"]
@@ -1636,6 +1638,15 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert fine_timing["seconds"]["light_h2d_total"] == timing["light_h2d"]
     assert fine_timing["seconds"]["light_calibrate_store_total"] == timing["light_calibrate_store"]
     assert fine_timing["seconds"]["light_h2d_calibrate_store_total"] == timing["light_h2d_calibrate_store"]
+    assert fine_timing["seconds"]["light_master_build_or_load_in_loop"] == timing[
+        "light_master_build_or_load_in_loop"
+    ]
+    assert fine_timing["seconds"]["light_loop_accounted"] >= fine_timing["seconds"][
+        "light_loop_accounted_without_master"
+    ]
+    assert fine_timing["seconds"]["light_loop_unaccounted_without_master"] >= fine_timing["seconds"][
+        "light_loop_unaccounted"
+    ]
     assert fine_timing["seconds"]["resident_registration_warp_total"] == timing["resident_registration_warp"]
     assert io_overlap["schema_version"] == 1
     assert io_overlap["prefetch_enabled"] is True
@@ -2802,6 +2813,7 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
         == artifact["resident_io_pipeline"]["prefetch_frames"]
     )
     assert output["resident_light_pipeline_profile"]["dominant_component"] in {
+        "master_build_or_load",
         "consumer_read_wait",
         "native_h2d_calibrate_store",
         "native_calibrate_store",

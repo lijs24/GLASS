@@ -1,0 +1,159 @@
+{
+  "artifact_type": "resident_ab_matrix_execution",
+  "created_at": "2026-06-22T16:00:21+00:00",
+  "dry_run": false,
+  "execution_readiness": {
+    "disk": {
+      "free_gib": 51.99209213256836,
+      "min_free_gib": 8.0,
+      "path": "C:\\glass_runs",
+      "ready": true,
+      "status": "ready",
+      "total_gib": 1906.7373008728027
+    },
+    "gpu": {
+      "driver": "596.21",
+      "free_mib": 97062,
+      "max_utilization_percent": 20,
+      "min_free_mib": 65000,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "ready": true,
+      "reason": "GPU is below the clean benchmark utilization threshold and has enough free memory",
+      "status": "ready",
+      "total_mib": 97887,
+      "used_mib": 825,
+      "utilization_percent": 0
+    },
+    "ready": true,
+    "source": "live_recheck",
+    "wait_ready_consecutive_observed": 3,
+    "wait_ready_consecutive_required": 3,
+    "wait_ready_satisfied": true
+  },
+  "ignore_readiness": false,
+  "limitations": [
+    "This executor runs only commands recorded in a resident A/B matrix plan.",
+    "Non-dry-run execution is blocked by live readiness unless ignore_readiness is set.",
+    "Optional wait-ready mode samples readiness until the timeout before deciding whether to execute.",
+    "Dry-run mode records intended commands without executing subprocesses."
+  ],
+  "plan": "runs\\checkpoints\\s2_gate_480_ab_matrix_plan.json",
+  "readiness": {
+    "disk": {
+      "free_gib": 51.992252349853516,
+      "min_free_gib": 8.0,
+      "path": "C:\\glass_runs",
+      "ready": true,
+      "status": "ready",
+      "total_gib": 1906.7373008728027
+    },
+    "gpu": {
+      "driver": "596.21",
+      "free_mib": 97062,
+      "max_utilization_percent": 20,
+      "min_free_mib": 65000,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "ready": true,
+      "reason": "GPU is below the clean benchmark utilization threshold and has enough free memory",
+      "status": "ready",
+      "total_mib": 97887,
+      "used_mib": 825,
+      "utilization_percent": 0
+    }
+  },
+  "readiness_attempts": [
+    {
+      "attempt": 0,
+      "consecutive_ready": 1,
+      "disk_free_gib": 51.99216079711914,
+      "disk_status": "ready",
+      "elapsed_s": 0.035356299951672554,
+      "gpu_free_mib": 97062,
+      "gpu_status": "ready",
+      "gpu_utilization_percent": 0,
+      "ready": true
+    },
+    {
+      "attempt": 1,
+      "consecutive_ready": 2,
+      "disk_free_gib": 51.99216079711914,
+      "disk_status": "ready",
+      "elapsed_s": 5.0669731999514624,
+      "gpu_free_mib": 97062,
+      "gpu_status": "ready",
+      "gpu_utilization_percent": 0,
+      "ready": true
+    },
+    {
+      "attempt": 2,
+      "consecutive_ready": 3,
+      "disk_free_gib": 51.99209213256836,
+      "disk_status": "ready",
+      "elapsed_s": 10.105022599978838,
+      "gpu_free_mib": 97062,
+      "gpu_status": "ready",
+      "gpu_utilization_percent": 0,
+      "ready": true
+    }
+  ],
+  "recheck_readiness": true,
+  "schema_version": 1,
+  "selected_variant_count": 1,
+  "skip_existing": false,
+  "summary": {
+    "blocked": false,
+    "completed_variant_count": 1,
+    "failed": false,
+    "planned_variant_count": 0,
+    "recorded_variant_count": 1,
+    "skipped_existing_count": 0,
+    "status": "completed"
+  },
+  "variants": [
+    {
+      "acceptance_exists": true,
+      "status": "completed",
+      "steps": [
+        {
+          "command": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\runs\\throughput_v1_lanczos3_parity --backend cuda --memory-mode resident --resident-runtime-preset throughput-v1 --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit --resident-integration-dispatch stack",
+          "elapsed_s": 31.071144399989862,
+          "returncode": 0,
+          "status": "completed",
+          "step": "run"
+        },
+        {
+          "command": "glass compare --glass C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_master_H.fits --reference C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.html --glass-label \"GLASS throughput_v1_lanczos3_parity\" --reference-label \"WBPP FastIntegration black-box\" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --glass-coverage-map C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_coverage_map_H.fits --min-coverage 190.0",
+          "elapsed_s": 17.880500999977812,
+          "returncode": 0,
+          "status": "completed",
+          "step": "compare_reference"
+        },
+        {
+          "command": "glass acceptance-audit --manifest C:\\gpwbpp_runs\\final_m38_h_200\\manifest.json --glass-run C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\runs\\throughput_v1_lanczos3_parity --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\acceptance\\throughput_v1_lanczos3_parity_acceptance.json --markdown C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\acceptance\\throughput_v1_lanczos3_parity_acceptance.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01 --benchmark-contract-profile resident_cuda_dq_v1",
+          "elapsed_s": 1.9081582000362687,
+          "returncode": 0,
+          "status": "completed",
+          "step": "acceptance_audit"
+        },
+        {
+          "command": "python benchmarks\\summarize_wbpp_speedup.py --glass-run C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\runs\\throughput_v1_lanczos3_parity --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.json --out C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\speedup\\throughput_v1_lanczos3_parity_speedup.json --markdown C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\speedup\\throughput_v1_lanczos3_parity_speedup.md --min-speedup 2.0",
+          "elapsed_s": 0.19558659999165684,
+          "returncode": 0,
+          "status": "completed",
+          "step": "speedup_summary"
+        },
+        {
+          "command": "glass report --run C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\runs\\throughput_v1_lanczos3_parity --out C:\\glass_runs\\phase2_s2_gate480_lightloop_accounting_ab_real\\reports\\throughput_v1_lanczos3_parity_report.html",
+          "elapsed_s": 0.3035266000078991,
+          "returncode": 0,
+          "status": "completed",
+          "step": "report"
+        }
+      ],
+      "variant_id": "throughput_v1_lanczos3_parity"
+    }
+  ],
+  "wait_ready_consecutive_samples": 3,
+  "wait_ready_interval_s": 5.0,
+  "wait_ready_timeout_s": 180.0
+}
