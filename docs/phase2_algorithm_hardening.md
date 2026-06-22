@@ -484,6 +484,80 @@ Validation commands:
   `--resident-registration similarity_cuda_triangle`,
   `--resident-warp-interpolation lanczos3`, and `--resident-output-maps minimal`.
 
+### S2-Gate 511: Throughput v3 I/O Prefetch Retune
+
+Gate 511 returns to the resident I/O/upload/calibration bottleneck identified
+after Gate510. The 200-light repeat run showed that worker FITS reads were
+mostly overlapped, but the main thread still waited about one second for
+prefetch delivery. A focused same-cache probe showed that increasing the
+resident `throughput-v3-io` prefetch queue from `32/12` frames/workers to
+`48/16` reduced read wait without changing pixels, while a larger `64/16`
+queue lowered read wait slightly more but regressed end-to-end time. Increasing
+the calibration batch to 24 also regressed on this system. Gate511 therefore
+retunes only the default prefetch depth/workers and keeps the existing
+calibration batch/window at `16/4/4`.
+
+Implementation:
+
+- `src/glass/cli.py` changes the `throughput-v3-io` preset to
+  `resident_prefetch_frames=48` and `resident_prefetch_workers=16`.
+- `src/glass/report/benchmark_contract.py` updates runtime-preset artifact
+  matching so acceptance audits require the new default preset signature.
+- Focused CLI and acceptance-audit tests were updated to prove the default
+  route and artifact inference agree on the new values.
+
+Probe evidence:
+
+- Probe root:
+  `C:\glass_runs\phase2_s2_gate511_probe_io_registration\runs_20260623_064702`
+- `prefetch48_workers16`: total `6.59302689996548 s`, read wait
+  `0.5751616001361981 s`.
+- `calbatch24_streams4`: total `6.7247856999747455 s`, read wait
+  `1.1384011003538035 s`.
+- `prefetch48_calbatch24`: total `6.577672699990217 s`, read wait
+  `0.601900500478223 s`.
+- `prefetch64_workers16`: total `6.802674999984447 s`, read wait
+  `0.5411046000663191 s`.
+- Decision: promote `48/16` prefetch only; do not promote 64-slot prefetch or
+  batch-24 calibration.
+
+Real 200-light default-path evidence:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate511_v3_io_prefetch48_default_ab_real\runs_20260623_064914`
+- Default run runtime: `6.5765664000064135 s`.
+- Gate510 repeat baseline: `6.658429500006605 s`.
+- Delta versus Gate510: `-0.08186310000019148 s`.
+- Speedup versus Gate510: `1.0124476961108628x`.
+- `run_timing.json` records `resident_runtime_preset=throughput-v3-io` and
+  applied values:
+  - `resident_prefetch_frames=48`;
+  - `resident_prefetch_workers=16`;
+  - `resident_calibration_batch_frames=16`;
+  - `resident_calibration_streams=4`;
+  - `resident_calibration_wave_frames=4`.
+- `resident_io_pipeline` records read wait `0.5706713998806663 s`, compared
+  with Gate510 repeat read wait `0.9934065002016723 s`.
+- The Gate511 default master is bitwise identical to the Gate510 repeat master
+  (`RMS=0`, `max_abs=0`, full-frame finite pixels `61651200`).
+- StackEngine contract audit with `--require-default-ready` passed.
+- WBPP speed evidence using the same black-box time `1092.541 s`:
+  `166.1263543235775x`.
+- WBPP image-difference metrics are inherited from Gate509 because the Gate511
+  default master is bitwise identical to the Gate510 and Gate509 repeat masters:
+  `RMS=0.0017794216505176163`, `p99_abs=0.00042621337808668863`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\cli.py
+  src\glass\report\benchmark_contract.py tests\test_cli_smoke.py
+  tests\test_acceptance_audit.py`
+- `python -m pytest -q
+  tests/test_cli_smoke.py::test_resident_runtime_preset_throughput_v3_io_applies_probe_values
+  tests/test_cli_smoke.py::test_resident_runtime_preset_defaults_to_throughput_v3_io
+  tests/test_acceptance_audit.py::test_acceptance_audit_accepts_io_runtime_preset_from_artifact`
+- real 200-light default `glass run` without explicit prefetch overrides.
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

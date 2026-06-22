@@ -114,8 +114,8 @@ def test_resident_runtime_preset_throughput_v3_io_applies_probe_values() -> None
 
     _apply_resident_runtime_preset(args)
 
-    assert args.resident_prefetch_frames == 32
-    assert args.resident_prefetch_workers == 12
+    assert args.resident_prefetch_frames == 48
+    assert args.resident_prefetch_workers == 16
     assert args.resident_prefetch_refill_mode == "queued"
     assert args.resident_h2d_mode == "pinned_ring"
     assert args.resident_calibration_batch_frames == 16
@@ -132,8 +132,8 @@ def test_resident_runtime_preset_defaults_to_throughput_v3_io() -> None:
     _apply_resident_runtime_preset(args)
 
     assert args.resident_runtime_preset == "throughput-v3-io"
-    assert args.resident_prefetch_frames == 32
-    assert args.resident_prefetch_workers == 12
+    assert args.resident_prefetch_frames == 48
+    assert args.resident_prefetch_workers == 16
     assert args.resident_h2d_mode == "pinned_ring"
     assert args.resident_calibration_batch_frames == 16
     assert args.resident_calibration_wave_frames == 4
