@@ -10424,6 +10424,82 @@ Completed in Gate446:
   - report:
     `C:\glass_runs\phase2_s2_gate483_stackengine_fast_mean_ab_real\reports\warm_report.html`.
 
+### S2-Gate 484: StackEngine Full-Frame Finite-Only Master Mean Fast Path
+
+- Continue the Gate483 finding that the remaining first-run regression is
+  StackEngine resident master-cache construction overhead.
+- Required work:
+  - keep resident master cache inside `CPUStackEngine`;
+  - optimize only the finite-only mean/no-rejection/no-map resident master-cache
+    case;
+  - preserve generic tile/out-of-core StackEngine behavior unless the caller
+    explicitly requests the full-frame path;
+  - rerun the real 200-light cold/warm A/B and compare against Gate483 and the
+    WBPP black-box reference.
+- Completed:
+  - added an internal `CPUStackEngine` full-frame execution path for
+    mean/weighted-mean requests with rejection disabled and output maps
+    disabled;
+  - the path is gated by `request.metadata["full_frame_fast_path"]`;
+  - resident master-cache FITS sources now declare `mask_from_finite_only=True`,
+    allowing the full-frame path to derive validity from `np.isfinite` without
+    issuing separate mask tile reads;
+  - resident master-cache metadata records
+    `resident_stack_engine_full_frame_mean_master_cache_v1` and
+    `execution_path=full_frame_mean_no_rejection`;
+  - focused tests prove the full-frame path avoids tile iteration for explicit
+    finite-only requests and preserves the StackEngine result contract.
+- Real 200-light A/B:
+  - output root:
+    `C:\glass_runs\phase2_s2_gate484_finite_full_frame_mean_ab_real`;
+  - cold full-frame total: `35.3481062000501 s`;
+  - cold `master_build_or_load`: `15.344373799976893 s`;
+  - cold `light_read_upload_calibrate`: `18.54588489996968 s`;
+  - warm full-frame total: `20.491344500042032 s`;
+  - warm `master_build_or_load`: `0.30085249996045604 s`;
+  - warm `light_read_upload_calibrate`: `3.5095235999906436 s`;
+  - Gate483 cold total comparison: `52.42856379994191 s` ->
+    `35.3481062000501 s` (`1.4832071484459783x`);
+  - Gate483 cold master-build comparison: `32.28885949996766 s` ->
+    `15.344373799976893 s` (`2.1042800391122043x`);
+  - warm-vs-cold master difference: RMS/p99/max all `0.0`;
+  - warm-vs-Gate483 warm master difference: RMS/p99/max all `0.0`;
+  - warm-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`;
+  - warm GLASS vs WBPP speedup: `53.31719448656768x`;
+  - threshold acceptance audit passed with the same 200-light, calibration,
+    frame-count, speedup, coverage, RMS, and p99 thresholds as Gate483.
+- Disk-space note:
+  - at the end of the gate, C: had about `34.92 GiB` free;
+  - the repository itself was about `2.338 GiB`;
+  - reusable/generated run outputs dominated C: usage:
+    `C:\glass_runs` about `219.346 GiB` and
+    `C:\gpwbpp_runs` about `351.769 GiB`;
+  - current Gate484 artifacts and `C:\gpwbpp_runs\final_m38_h_200` should be
+    kept for the active 200-light evidence chain, but old `C:\glass_runs`
+    gate directories are the preferred cleanup candidates if C: fills again.
+- Interpretation:
+  - this recovers much of the StackEngine cold-cache regression while keeping
+    the resident master-cache under StackEngine/DQ provenance;
+  - hot-cache production performance remains near Gate481/Gate483 and output is
+    pixel-identical to Gate483;
+  - the path intentionally trades CPU RAM for lower Python/tile overhead and is
+    not the general StackEngine default;
+  - Gate481's older helper cold master build/load remains faster at
+    `10.911685600003693 s`, so a native/CUDA resident master mean builder is
+    still the next performance target;
+  - robust resident master rejection remains deferred until it can be optimized
+    enough for full-size calibration frames.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate484_finite_full_frame_mean_ab_real\gate484_real_ab_summary.json`;
+  - threshold acceptance:
+    `C:\glass_runs\phase2_s2_gate484_finite_full_frame_mean_ab_real\acceptance\warm_threshold_acceptance_audit.json`;
+  - speedup summary:
+    `C:\glass_runs\phase2_s2_gate484_finite_full_frame_mean_ab_real\speedup\warm_vs_wbpp_speedup_with_compare.json`;
+  - report:
+    `C:\glass_runs\phase2_s2_gate484_finite_full_frame_mean_ab_real\reports\warm_report.html`.
+
 ## Gate Rules
 
 Each gate requires:

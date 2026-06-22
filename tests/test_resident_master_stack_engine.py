@@ -91,7 +91,7 @@ def test_resident_matching_master_cache_uses_stack_engine_contract(tmp_path: Pat
     )
 
     assert stats["cache_hit"] is False
-    assert stats["cache_builder"] == "resident_stack_engine_mean_master_cache_v1"
+    assert stats["cache_builder"] == "resident_stack_engine_full_frame_mean_master_cache_v1"
     assert stats["tile_stack_mode"] == "stack_engine_cpu"
     assert stats["stack_engine_enabled"] is True
     assert stats["master_rejection_requested"] == "minmax"
@@ -102,6 +102,7 @@ def test_resident_matching_master_cache_uses_stack_engine_contract(tmp_path: Pat
     assert np.allclose(dark, -155.25)
     assert np.allclose(flat, 1.0)
     assert stats["stack_engine_metrics"]["bias"]["rejection"] == "none"
+    assert stats["stack_engine_metrics"]["bias"]["execution_path"] == "full_frame_mean_no_rejection"
     assert stats["stack_engine_metrics"]["bias"]["master_rejection_requested"] == "minmax"
     assert stats["stack_engine_metrics"]["bias"]["result_contract_passed"] is True
     assert stats["dq_provenance_summary"]["bias"]["source_schema"] == "stack_engine_dq_provenance"

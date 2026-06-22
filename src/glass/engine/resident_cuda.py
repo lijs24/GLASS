@@ -89,7 +89,7 @@ _RESIDENT_WINSORIZED_MODES = {
 }
 _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE = False
 _RESIDENT_MASTER_STACK_TILE_SIZE = 512
-_RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_mean_master_cache_v1"
+_RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_full_frame_mean_master_cache_v1"
 
 
 def _cuda_module_required():
@@ -3489,6 +3489,7 @@ def _cached_master_files_complete(paths: dict[str, Path], stats: dict[str, Any])
 
 class _ResidentMasterFitsImageSource(FitsImageSource):
     __slots__ = ("_last_tile", "_last_window_key")
+    mask_from_finite_only = True
 
     def __enter__(self) -> "_ResidentMasterFitsImageSource":
         super().__enter__()
@@ -3557,7 +3558,11 @@ def _stack_resident_master_array_with_engine(
                 high_rejection=False,
                 dq=False,
             ),
-            metadata={"stage": "resident_master_cache", "source_kind": source_kind},
+            metadata={
+                "stage": "resident_master_cache",
+                "source_kind": source_kind,
+                "full_frame_fast_path": True,
+            },
         )
         result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
     metrics: dict[str, Any] = dict(result.metrics)

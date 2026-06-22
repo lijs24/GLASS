@@ -16,6 +16,7 @@ from glass.engine.contracts import (
     StackRequest,
     TileWindow,
 )
+import glass.engine.stack_engine as stack_engine_module
 from glass.engine.stack_engine import CPUStackEngine
 
 
@@ -100,6 +101,53 @@ def test_cpu_stack_engine_mean_no_rejection_fast_path_avoids_np_stack(monkeypatc
     assert np.all(result.coverage_map == 3)
     assert result.metrics["execution_path"] == "streaming_mean_no_rejection"
     assert result.dq_provenance["execution_path"] == "streaming_mean_no_rejection"
+    assert result.dq_provenance["result_contract"]["passed"] is True
+
+
+def test_cpu_stack_engine_full_frame_mean_hint_avoids_tile_iterator(monkeypatch):
+    @dataclass(slots=True)
+    class FiniteOnlySource(ArrayImageSource):
+        mask_from_finite_only: bool = True
+
+        def read_mask_tile(self, window: TileWindow) -> DQMask:
+            raise AssertionError("finite-only full-frame source should not allocate a DQ mask")
+
+    frames = [
+        np.ones((3, 4), dtype=np.float32),
+        np.ones((3, 4), dtype=np.float32) * 5.0,
+    ]
+    sources = {f"f{i}": FiniteOnlySource(frame) for i, frame in enumerate(frames)}
+
+    def fail_iter_tiles(*args, **kwargs):
+        raise AssertionError("full-frame mean hint should not use tiled iteration")
+
+    monkeypatch.setattr(stack_engine_module, "iter_tiles", fail_iter_tiles)
+    request = StackRequest(
+        frame_ids=("f0", "f1"),
+        source_kind="bias",
+        combine=CombinePolicy(method="mean", accumulator_dtype="float64"),
+        rejection=RejectionPolicy(method="none", iterations=0, min_samples=1),
+        output_maps=OutputMapPolicy(
+            coverage=False,
+            weight=False,
+            variance=False,
+            low_rejection=False,
+            high_rejection=False,
+            dq=False,
+        ),
+        metadata={"full_frame_fast_path": True},
+    )
+
+    result = CPUStackEngine(tile_size=1).stack(request, sources)
+
+    assert np.allclose(result.master, 3.0)
+    assert result.coverage_map is None
+    assert result.weight_map is None
+    assert result.dq_mask is None
+    assert result.metrics["execution_path"] == "full_frame_mean_no_rejection"
+    assert result.dq_provenance["execution_path"] == "full_frame_mean_no_rejection"
+    assert result.dq_provenance["input_samples"] == 24
+    assert result.dq_provenance["input_valid_samples_before_rejection"] == 24
     assert result.dq_provenance["result_contract"]["passed"] is True
 
 
