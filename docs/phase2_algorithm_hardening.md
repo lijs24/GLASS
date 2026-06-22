@@ -9869,6 +9869,58 @@ Completed in Gate446:
     kernel per chunk. Further optimization likely needs CUDA Graph capture,
     stream batching, or a fused matrix-warped integration path.
 
+### S2-Gate 470: Resident Fused Matrix Dispatch Benchmark
+
+- Solidify the next substantive Phase 2 optimization target with a repeatable
+  CUDA resident benchmark that compares:
+  - chunked matrix warp into the resident stack followed by resident weighted
+    mean integration;
+  - fused matrix-warped integration that samples calibrated resident frames
+    through the matrices without writing registered intermediates back to the
+    stack.
+- Required work:
+  - add a synthetic resident CUDA benchmark script that keeps host frame upload
+    outside the timed comparison and records stack dispatch time, fused dispatch
+    time, native timing payloads, throughput, and output differences;
+  - add a CUDA smoke test for the benchmark on small synthetic data;
+  - run a larger synthetic benchmark that is meaningful enough to avoid pure
+    launch-noise conclusions while staying safe under the current low C: free
+    space;
+  - keep the benchmark clean-room: project-defined synthetic data, GLASS-owned
+    kernels, no external implementation source, and no input directory writes;
+  - use the result to decide whether the next production gate should promote or
+    harden fused matrix integration for the 200-light route once disk space is
+    available.
+- Completed in S2-Gate470:
+  - added `benchmarks/bench_resident_fused_matrix_dispatch.py`;
+  - the benchmark generates deterministic synthetic mono frames and translation
+    matrices, runs the chunked stack path and fused matrix path on identical
+    resident data, and writes JSON with timing and numerical agreement;
+  - added a CUDA benchmark smoke test that verifies timing models and exact
+    master/weight agreement on a small stack;
+  - synthetic 32-frame 512x512 bilinear benchmark recorded a median stack path
+    of `0.0053785 s`, median fused path of `0.0013046 s`,
+    `4.1227x` stack-over-fused speedup, and zero master/weight difference;
+  - focused benchmark pytest passed;
+  - full pytest passed with `1103 passed`.
+- Performance and regression note:
+  - this gate does not change runtime defaults or image math; it creates a
+    repeatable resident CUDA performance contract for the already implemented
+    fused matrix route;
+  - the result confirms the fused path is a plausible next production
+    optimization for bilinear matrix registration, especially when local
+    normalization is off and intermediate registered frames need not be saved;
+  - a new 200-light benchmark was not launched because C: had about `0.143 GiB`
+    free. The next real-data gate should rerun the 200-light benchmark after
+    freeing output space and compare stack, auto, and explicit fused routes.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_470_fused_matrix_dispatch_benchmark.json`;
+  - `runs/checkpoints/s2_gate_470_status.md`.
+- Known limitation:
+  - the benchmark covers resident dispatch/integration after frames are already
+    uploaded. It does not include FITS read, H2D upload, calibration, star
+    detection, descriptor fit, or real 200-light I/O pressure.
+
 ## Gate Rules
 
 Each gate requires:

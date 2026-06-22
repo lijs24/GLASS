@@ -1,0 +1,109 @@
+{
+  "backend": "cuda_resident_stack",
+  "benchmark": "resident_fused_matrix_dispatch",
+  "device": {
+    "available_to_glass": true,
+    "compute_capability": "12.0",
+    "device_id": 0,
+    "memory_total_mib": 97886,
+    "multi_processor_count": 188,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "native_backend": true
+  },
+  "download_mode": "master_weight",
+  "frame_count": 32,
+  "fused_matrix_dispatch_wall_s": {
+    "max": 0.001319300034083426,
+    "mean": 0.0012620333582162857,
+    "median": 0.0013046000385656953,
+    "min": 0.0011622000019997358
+  },
+  "fused_native_timing_s": {
+    "avoids_stack_scatter": true,
+    "device_alloc_s": 9.93e-05,
+    "diagnostic_maps_downloaded": false,
+    "download_mode": "master_weight",
+    "download_s": 0.0004335,
+    "frame_count": 32,
+    "interpolation": "bilinear",
+    "inverse_batch_bytes": 1152,
+    "inverse_prepare_s": 1.75e-05,
+    "inverse_upload_s": 4.6e-06,
+    "kernel_enqueue_s": 2.36e-05,
+    "modifies_resident_stack": false,
+    "output_bytes": 2097152,
+    "rejection": "none",
+    "schema_version": 1,
+    "sync_s": 0.0004072,
+    "timing_model": "native_fused_matrix_warp_weighted_mean_one_sync",
+    "total_s": 0.0011777,
+    "weights_bytes": 128,
+    "weights_upload_s": 1.54e-05
+  },
+  "image_shape": [
+    512,
+    512
+  ],
+  "interpolation": "bilinear",
+  "max_chunk_capacity_frames": 8,
+  "notes": [
+    "Stack dispatch measures chunked matrix warp into the resident stack plus resident weighted mean.",
+    "Fused dispatch samples resident calibrated frames through the matrices during integration.",
+    "Host frame upload is intentionally outside the timed comparison."
+  ],
+  "numerical_agreement": {
+    "master_max_abs": 0.0,
+    "master_rms": 0.0,
+    "passed": true,
+    "weight_max_abs": 0.0,
+    "weight_rms": 0.0
+  },
+  "repeats": 3,
+  "speedup_stack_over_fused_median": 4.122719467548494,
+  "stack_dispatch_wall_s": {
+    "max": 0.005395699990913272,
+    "mean": 0.0046335666556842625,
+    "median": 0.005378499976359308,
+    "min": 0.003126499999780208
+  },
+  "stack_native_timing_s": {
+    "batch_capacity_source": "explicit_max_chunk_capacity",
+    "batch_chunk_count": 4,
+    "batch_chunk_frames": 8,
+    "batch_coverage_bytes": 2097152,
+    "batch_max_chunk_capacity_frames": 8,
+    "batch_output_bytes": 8388608,
+    "batch_workspace_bytes": 10487168,
+    "chunk_metadata_upload_mode": "single_device_batch_reused_by_chunks",
+    "coverage_reduce_enqueue_s": 0.0,
+    "coverage_reduce_kernel_launches": 0,
+    "device_copy_enqueue_s": 2.34e-05,
+    "frame_count": 32,
+    "index_upload_count": 1,
+    "index_upload_s": 7.9e-06,
+    "interpolation": "bilinear",
+    "inverse_batch_alloc_s": 9.49e-05,
+    "inverse_batch_bytes": 1152,
+    "inverse_prepare_s": 1.41e-05,
+    "inverse_upload_count": 1,
+    "inverse_upload_mode": "chunked_device_batch",
+    "inverse_upload_s": 4.5e-06,
+    "kernel_enqueue_s": 4.6e-05,
+    "postprocess_enqueue_s": 2.34e-05,
+    "postprocess_kernel_launches": 4,
+    "postprocess_mode": "fused_scatter_reduce",
+    "scatter_enqueue_s": 0.0,
+    "scatter_kernel_launches": 0,
+    "schema_version": 1,
+    "sync_s": 0.0022749,
+    "timing_model": "native_chunked_batch_warp_scatter_one_sync",
+    "total_s": 0.0025072,
+    "warp_kernel_launches": 4
+  },
+  "throughput_mpix_s": {
+    "fused_matrix_dispatch_median": 6430.022805474245,
+    "stack_dispatch_median": 1559.655672933223
+  },
+  "total_pixels": 8388608,
+  "warmup": 1
+}

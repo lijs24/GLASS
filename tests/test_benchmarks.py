@@ -167,6 +167,44 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
     assert payload["resident_matrix_device_speedup_vs_astroalign_apply_transform"] is not None
 
 
+def test_bench_resident_fused_matrix_dispatch_outputs_agreement(tmp_path: Path):
+    cuda_module_or_skip()
+    out = tmp_path / "resident_fused_matrix_dispatch.json"
+
+    _run(
+        "benchmarks/bench_resident_fused_matrix_dispatch.py",
+        "--out",
+        str(out),
+        "--frames",
+        "4",
+        "--width",
+        "48",
+        "--height",
+        "40",
+        "--repeats",
+        "1",
+        "--warmup",
+        "0",
+        "--max-chunk-capacity-frames",
+        "2",
+        timeout_s=45.0,
+        skip_on_timeout=True,
+    )
+
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["benchmark"] == "resident_fused_matrix_dispatch"
+    assert payload["backend"] == "cuda_resident_stack"
+    assert payload["frame_count"] == 4
+    assert payload["image_shape"] == [40, 48]
+    assert payload["stack_native_timing_s"]["timing_model"] == "native_chunked_batch_warp_scatter_one_sync"
+    assert payload["fused_native_timing_s"]["timing_model"] == "native_fused_matrix_warp_weighted_mean_one_sync"
+    assert payload["fused_native_timing_s"]["download_mode"] == "master_weight"
+    assert payload["numerical_agreement"]["passed"] is True
+    assert payload["numerical_agreement"]["master_max_abs"] <= 1.0e-4
+    assert payload["numerical_agreement"]["weight_max_abs"] <= 1.0e-5
+    assert payload["speedup_stack_over_fused_median"] is None or payload["speedup_stack_over_fused_median"] > 0.0
+
+
 def test_star_guarded_seed_selection_prefers_star_supported_seed():
     pytest.importorskip("glass_cuda")
     spec = importlib.util.spec_from_file_location(
