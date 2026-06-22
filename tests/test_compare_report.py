@@ -56,6 +56,22 @@ def test_compare_cli_writes_timing_json(tmp_path: Path):
     assert payload["timing"]["speedup_vs_reference"] == 3.0
 
 
+def test_compare_cli_json_out_writes_json_and_sibling_html(tmp_path: Path):
+    gp = tmp_path / "gp.fits"
+    ref = tmp_path / "ref.fits"
+    out = tmp_path / "compare.json"
+    _write(gp, 2.0)
+    _write(ref, 2.0)
+
+    assert main(["compare", "--glass", str(gp), "--reference", str(ref), "--out", str(out)]) == 0
+
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["shape_match"] is True
+    html = out.with_suffix(".html")
+    assert html.exists()
+    assert html.read_text(encoding="utf-8").startswith("<!doctype html>")
+
+
 def test_compare_cli_records_candidate_transform(tmp_path: Path):
     gp = tmp_path / "gp.fits"
     ref = tmp_path / "ref.fits"

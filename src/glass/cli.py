@@ -1687,6 +1687,13 @@ def cmd_resume(args: argparse.Namespace) -> int:
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
+    out_path = Path(args.out)
+    if out_path.suffix.lower() == ".json":
+        json_path = out_path
+        html_path = out_path.with_suffix(".html")
+    else:
+        json_path = out_path.with_suffix(".json")
+        html_path = out_path
     comparison = compare_fits(
         args.glass,
         args.reference,
@@ -1705,9 +1712,9 @@ def cmd_compare(args: argparse.Namespace) -> int:
         glass_coverage_map=args.glass_coverage_map,
         min_coverage=args.min_coverage,
     )
-    write_json(Path(args.out).with_suffix(".json"), comparison)
-    write_compare_report(args.out, comparison)
-    console.print(f"Wrote compare report: {args.out}")
+    write_json(json_path, comparison)
+    write_compare_report(html_path, comparison)
+    console.print(f"Wrote compare report: {html_path}")
     return 0
 
 
