@@ -137,6 +137,36 @@ def test_resident_memory_admission_recommends_reduced_chunk_capacity() -> None:
     assert not any("allocator-driven" in limitation for limitation in admission["limitations"])
 
 
+def test_resident_memory_admission_accepts_explicit_chunk_capacity() -> None:
+    frames = [
+        {"id": f"L{index:03d}", "frame_type": "light", "filter": "H", "height": 72, "width": 80}
+        for index in range(20)
+    ]
+
+    admission = build_resident_memory_admission(
+        {"frames": frames},
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        resident_warp_chunk_capacity_frames=16,
+        vram_budget_gb=1.0,
+    )
+
+    assert admission["passed"] is True
+    assert admission["blocking"] is False
+    assert admission["recommended_action"] == "resident_full_frame"
+    assert admission["selected_chunk_capacity_frames"] == 16
+    assert admission["selected_chunk_capacity_source"] == "explicit"
+    assert admission["selected_warp_batch_dispatch"] == "chunked"
+    assert admission["peak_group"]["planned_warp_frame_count"] == 19
+    assert admission["peak_group"]["preferred_chunk_capacity_frames"] == 16
+    assert admission["peak_group"]["preferred_chunk_capacity_source"] == "explicit"
+    assert admission["peak_group"]["requested_chunk_capacity_frames"] == 16
+    assert [
+        item["chunked_warp_capacity_frames"]
+        for item in admission["peak_group"]["capacity_options"]
+    ] == [16, 8, 4, 2, 1, 0]
+
+
 def test_resident_memory_admission_counts_stem_excludes() -> None:
     frames = [
         {

@@ -675,12 +675,16 @@ def _apply_resident_memory_admission_selection(
     if selected_dispatch in {"loop", "chunked"}:
         args.resident_warp_batch_dispatch = selected_dispatch
     selected_capacity = admission.get("selected_chunk_capacity_frames")
+    selected_capacity_source = str(admission.get("selected_chunk_capacity_source") or "")
     capacity_value: int | None = None
     try:
         if (
             selected_capacity is not None
             and selected_dispatch == "chunked"
-            and admission.get("recommended_action") == "resident_reduced_chunk_capacity"
+            and (
+                admission.get("recommended_action") == "resident_reduced_chunk_capacity"
+                or selected_capacity_source == "explicit"
+            )
         ):
             parsed = int(selected_capacity)
             if parsed > 0:
@@ -705,6 +709,7 @@ def _write_resident_memory_admission(
         cuda_module=glass_cuda,
         resident_registration=getattr(args, "resident_registration", "off"),
         resident_warp_batch_dispatch=getattr(args, "resident_warp_batch_dispatch", "chunked"),
+        resident_warp_chunk_capacity_frames=getattr(args, "resident_warp_chunk_capacity_frames", None),
         resident_integration_dispatch=getattr(args, "resident_integration_dispatch", "stack"),
         resident_warp_interpolation=getattr(args, "resident_warp_interpolation", "bilinear"),
         local_normalization=getattr(args, "local_normalization", "auto"),
@@ -4889,6 +4894,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="resident matrix batch warp dispatch mode",
     )
     run.add_argument(
+        "--resident-warp-chunk-capacity-frames",
+        type=int,
+        default=None,
+        help=(
+            "explicit maximum frame count per resident matrix-warp chunk; "
+            "by default GLASS uses the admission-selected native preferred capacity"
+        ),
+    )
+    run.add_argument(
         "--resident-integration-dispatch",
         choices=["stack", "fused_matrix", "auto"],
         default="stack",
@@ -5328,6 +5342,15 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["loop", "chunked"],
         default="chunked",
         help="resident matrix batch warp dispatch mode",
+    )
+    audit.add_argument(
+        "--resident-warp-chunk-capacity-frames",
+        type=int,
+        default=None,
+        help=(
+            "explicit maximum frame count per resident matrix-warp chunk; "
+            "by default GLASS uses the admission-selected native preferred capacity"
+        ),
     )
     audit.add_argument(
         "--resident-integration-dispatch",

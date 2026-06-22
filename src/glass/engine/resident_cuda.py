@@ -435,6 +435,7 @@ def build_resident_memory_admission(
     cuda_module: Any | None = None,
     resident_registration: str = "off",
     resident_warp_batch_dispatch: str = "chunked",
+    resident_warp_chunk_capacity_frames: int | None = None,
     resident_integration_dispatch: str = "stack",
     resident_warp_interpolation: str = "bilinear",
     local_normalization: str = "auto",
@@ -470,6 +471,17 @@ def build_resident_memory_admission(
         and resident_warp_batch_dispatch == "chunked"
         and not integration_dispatch["fused_matrix_admission"]
     )
+    explicit_chunk_capacity: int | None = None
+    try:
+        parsed_chunk_capacity = (
+            int(resident_warp_chunk_capacity_frames)
+            if resident_warp_chunk_capacity_frames is not None
+            else 0
+        )
+    except (TypeError, ValueError):
+        parsed_chunk_capacity = 0
+    if parsed_chunk_capacity > 0:
+        explicit_chunk_capacity = parsed_chunk_capacity
     group_rows: list[dict[str, Any]] = []
     peak_row: dict[str, Any] | None = None
     for group in _resident_memory_light_groups(payload):
@@ -477,7 +489,18 @@ def build_resident_memory_admission(
         frame_count = len(frames)
         active_count = _resident_planned_active_frame_count(frames, exclude_frame_ids=exclude_frame_ids)
         warp_frame_count = max(0, active_count - 1) if chunked_enabled else 0
-        preferred_capacity = min(warp_frame_count, _BATCH_WARP_PREFERRED_FRAMES) if chunked_enabled else 0
+        preferred_capacity = (
+            min(warp_frame_count, explicit_chunk_capacity or _BATCH_WARP_PREFERRED_FRAMES)
+            if chunked_enabled
+            else 0
+        )
+        preferred_capacity_source = (
+            "explicit"
+            if chunked_enabled and explicit_chunk_capacity is not None
+            else "native_preferred"
+            if chunked_enabled
+            else "off"
+        )
         preferred_estimate = _memory_estimate(
             frame_count,
             int(group["height"]),
@@ -516,6 +539,8 @@ def build_resident_memory_admission(
             "planned_active_frame_count": active_count,
             "planned_warp_frame_count": warp_frame_count,
             "preferred_chunk_capacity_frames": preferred_capacity,
+            "preferred_chunk_capacity_source": preferred_capacity_source,
+            "requested_chunk_capacity_frames": explicit_chunk_capacity,
             "estimated_peak_bytes": preferred_estimate["estimated_peak_bytes"],
             "estimated_peak_gib": preferred_estimate["estimated_peak_gib"],
             "estimated_peak_without_chunked_warp_bytes": preferred_estimate[
@@ -537,6 +562,9 @@ def build_resident_memory_admission(
     estimated_peak_bytes = int(peak_row["estimated_peak_bytes"]) if peak_row is not None else 0
     preferred_fits_budget = budget_bytes is None or estimated_peak_bytes <= int(budget_bytes)
     selected_capacity = peak_row.get("preferred_chunk_capacity_frames") if isinstance(peak_row, dict) else 0
+    selected_capacity_source = (
+        str(peak_row.get("preferred_chunk_capacity_source", "off")) if isinstance(peak_row, dict) else "off"
+    )
     selected_option = (
         _resident_capacity_option_for(peak_row.get("capacity_options", []), int(selected_capacity))
         if isinstance(peak_row, dict)
@@ -557,10 +585,12 @@ def build_resident_memory_admission(
         recommended_action = "resident_reduced_chunk_capacity"
         status = "passed_reduced_chunk"
         selected_capacity = reduced_capacity
+        selected_capacity_source = "reduced_for_budget"
     elif reduced_capacity == 0:
         recommended_action = "resident_loop_dispatch_or_tile_fallback"
         status = "passed_without_chunked_workspace"
         selected_capacity = 0
+        selected_capacity_source = "disabled_for_budget"
     else:
         recommended_action = "tile_fallback"
         status = "failed"
@@ -612,6 +642,7 @@ def build_resident_memory_admission(
         "recommended_action": recommended_action,
         "recommended_chunk_capacity_frames": selected_capacity,
         "selected_chunk_capacity_frames": selected_capacity,
+        "selected_chunk_capacity_source": selected_capacity_source,
         "selected_warp_batch_dispatch": selected_dispatch,
         "selected_estimated_peak_bytes": selected_estimated_peak_bytes,
         "selected_estimated_peak_gib": selected_estimated_peak_bytes / (1024**3),

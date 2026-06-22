@@ -11582,6 +11582,46 @@ Completed in Gate446:
   - WBPP compare:
     `C:\glass_runs\phase2_s2_gate501_direct_fits_writer_ab_real\compare\gate501_default_direct_vs_wbpp.json`.
 
+### S2-Gate 502: Explicit Resident Warp Chunk Capacity
+
+- Continued the Phase 2 resident registration/warp optimization path by making
+  resident matrix-warp chunk capacity a public, admitted runtime control rather
+  than an implicit native constant.
+- Completed:
+  - added `--resident-warp-chunk-capacity-frames` to `glass run` and
+    `glass audit`;
+  - threaded the requested capacity through resident memory admission;
+  - records `requested_chunk_capacity_frames`,
+    `preferred_chunk_capacity_source`, and `selected_chunk_capacity_source` in
+    `resident_memory_admission.json`;
+  - only passes the capacity to resident execution when admission selects it,
+    preserving reduced-capacity budget fallback behavior;
+  - added tests for explicit-capacity admission and CLI-to-runtime propagation.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate502_warp_chunk_capacity_ab_real\runs_20260623_051320`;
+  - default chunk8 run timing: `7.12994339998113 s`;
+  - chunk16 run timing: `7.12517720006872 s`;
+  - chunk32 run timing: `7.1467631999985315 s`;
+  - chunk64 run timing: `7.218323500012048 s`;
+  - shell wall values were `7.482222 s`, `7.487104 s`, `7.502273 s`, and
+    `7.573115 s` respectively;
+  - all chunk16/chunk32/chunk64 masters were bitwise equal to the default
+    chunk8 master, with RMS/p99/max all `0.0`;
+  - the Gate502 default master was also bitwise equal to Gate501.
+- Interpretation:
+  - larger chunk capacity is numerically safe for this data and GPU, but it is
+    not a material speed win on the 200-light benchmark;
+  - chunk64 increased estimated peak VRAM to about `65.685233 GiB` and
+    regressed wall-clock slightly;
+  - default promotion is intentionally rejected for now;
+  - the next practical optimization target is not chunk count, but native warp
+    kernel/sync time plus catalog/descriptor residency and batching.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_502_status.md`;
+  - real A/B root:
+    `C:\glass_runs\phase2_s2_gate502_warp_chunk_capacity_ab_real\runs_20260623_051320`.
+
 ## Gate Rules
 
 Each gate requires:

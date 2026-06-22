@@ -720,6 +720,81 @@ def test_cli_resident_run_passes_reduced_chunk_capacity_from_admission(
     assert captured["kwargs"]["resident_warp_chunk_capacity_frames"] == 4
 
 
+def test_cli_resident_run_passes_explicit_chunk_capacity_from_admission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    frames = [
+        {
+            "id": f"L{index:03d}",
+            "path": str(tmp_path / f"light_{index:03d}.fits"),
+            "frame_type": "light",
+            "filter": "H",
+            "height": 72,
+            "width": 80,
+        }
+        for index in range(20)
+    ]
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_explicit_chunk"
+    write_json(
+        plan,
+        {
+            "frames": frames,
+            "light_plans": [
+                {
+                    "filter": "H",
+                    "frames": [str(frame["id"]) for frame in frames],
+                    "calibration_status": "ready",
+                }
+            ],
+            "executable": True,
+        },
+    )
+    captured: dict[str, object] = {}
+
+    def fake_resident_compute(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return initialize_run(kwargs.get("out_dir") or args[1])
+
+    monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
+    monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fake_resident_compute)
+
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--backend",
+                "cuda",
+                "--memory-mode",
+                "resident",
+                "--resident-registration",
+                "similarity_cuda_triangle",
+                "--resident-warp-batch-dispatch",
+                "chunked",
+                "--resident-warp-chunk-capacity-frames",
+                "16",
+                "--vram-budget-gb",
+                "1.0",
+            ]
+        )
+        == 0
+    )
+
+    admission = read_json(run / "resident_memory_admission.json")
+    assert admission["blocking"] is False
+    assert admission["recommended_action"] == "resident_full_frame"
+    assert admission["selected_chunk_capacity_frames"] == 16
+    assert admission["selected_chunk_capacity_source"] == "explicit"
+    assert captured["kwargs"]["resident_warp_batch_dispatch"] == "chunked"
+    assert captured["kwargs"]["resident_warp_chunk_capacity_frames"] == 16
+
+
 def test_cli_help_commands():
     for command in [
         "doctor",
