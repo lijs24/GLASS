@@ -156,6 +156,65 @@ Validation commands:
   tests/test_resident_cuda_run.py::test_cli_resident_cuda_auto_dispatch_keeps_lanczos_rejection_on_stack`
 - `python -m pytest -q` (`1152 passed`)
 
+### S2-Gate 506: Minimal Sigma Map Workspace Skip
+
+Gate 506 returns to the Phase 2 mainline after the Gate505 timing review. A
+short resident scheduling probe confirmed that changing prefetch/worker/batch
+sizes did not beat the current `throughput-v3-io` default on the 200-light
+benchmark, so no scheduling preset was promoted. The accepted change instead
+targets the current real path directly: stack/native sigma or winsorized-sigma
+integration with `--resident-output-maps minimal`.
+
+Implementation:
+
+- `cpp/cuda/integration_kernels.cu` allows nullable weight, coverage, low
+  rejection, and high rejection map pointers in the resident sigma integration
+  kernel.
+- `cpp/src/native_bindings.cpp` allocates resident sigma map device buffers only
+  for maps that will actually be downloaded: weight map for non-`master_only`
+  modes and diagnostic maps only for `full`.
+- `src/glass/engine/resident_cuda.py` records
+  `native_map_workspace_mode=master_only_no_weight_or_diagnostic_device_maps`
+  in resident integration dispatch and output-map policy artifacts when this
+  path is active.
+- `tests/test_cuda_resident_stack.py` proves `download_mode=master_only`
+  produces the same master as `download_mode=full` while returning no maps.
+- `tests/test_resident_cuda_run.py` asserts the CLI artifact contract for both
+  stack/native and fused minimal-output paths.
+
+Real 200-light evidence:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate506_sigma_master_only_maps_ab_real\runs_20260623_060330`
+- Candidate runtime: `6.635181299992837 s`
+- Repeat runtime: `6.644183400028851 s`
+- Gate505 repeat runtime: `6.707604100054596 s`
+- Candidate, repeat, and Gate505 repeat masters are bitwise identical
+  (`RMS=0`, `p99=0`, `max_abs=0`).
+- Candidate artifact records
+  `native_map_workspace_mode=master_only_no_weight_or_diagnostic_device_maps`,
+  `weight_map_downloaded=false`, and `diagnostic_maps_downloaded=false`.
+- Repeat artifact records the same map workspace mode and download flags.
+- Repeat `resident_integration` component timing is
+  `0.16351149999536574 s`, versus Gate505 repeat's approximate
+  `0.1783 s`; the end-to-end runtime remains dominated by overlapped FITS
+  read/decode/upload and resident registration.
+- WBPP fastIntegration comparison report:
+  `C:\glass_runs\phase2_s2_gate506_sigma_master_only_maps_ab_real\runs_20260623_060330\compare_vs_wbpp_fastintegration_scaled_coverage190.html`
+- Gate506 repeat versus external reference:
+  `speedup=164.43570777941738x`, `RMS=0.0017794216505176163`,
+  `p99_abs=0.00042621337808668863`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\engine\resident_cuda.py
+  tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py`
+- `python -m pytest -q
+  tests/test_cuda_resident_stack.py::test_resident_stack_winsorized_sigma_master_only_matches_full_master
+  tests/test_cuda_resident_stack.py::test_resident_stack_winsorized_sigma_matches_mean_std_reference
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_fused_minimal_output_maps_skip_diagnostic_downloads`
+- `python -m pytest -q` (`1153 passed`)
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

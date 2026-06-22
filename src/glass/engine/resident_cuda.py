@@ -9152,6 +9152,23 @@ def run_resident_calibration_integration(
             hardened_winsorized_timing: dict[str, Any] = {}
             fused_matrix_download_mode = "master_only" if resident_output_maps == "minimal" else "full"
             stack_integration_download_mode = "master_only" if resident_output_maps == "minimal" else "full"
+            if fused_matrix_integration_used:
+                stack_integration_native_map_workspace_mode = "not_applicable_fused_matrix_dispatch"
+            elif tile_local_apply_enabled:
+                stack_integration_native_map_workspace_mode = "not_applicable_tile_local_dispatch"
+            elif rejection_mode == "none":
+                stack_integration_native_map_workspace_mode = "not_applicable_mean_integration"
+            elif (
+                rejection_mode == "winsorized_sigma"
+                and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+            ):
+                stack_integration_native_map_workspace_mode = "standard_hardened_winsorized_workspace"
+            elif stack_integration_download_mode == "master_only":
+                stack_integration_native_map_workspace_mode = (
+                    "master_only_no_weight_or_diagnostic_device_maps"
+                )
+            else:
+                stack_integration_native_map_workspace_mode = "full_weight_and_diagnostic_device_maps"
             if (
                 resident_warp_coverage_supported
                 and not fused_matrix_integration_used
@@ -9718,6 +9735,7 @@ def run_resident_calibration_integration(
                     if fused_matrix_integration_used
                     else stack_integration_download_mode
                 ),
+                "native_map_workspace_mode": stack_integration_native_map_workspace_mode,
                 "weight_map_downloaded": bool(weight_map is not None),
                 "diagnostic_maps_downloaded": bool(
                     any(
@@ -10989,6 +11007,7 @@ def run_resident_calibration_integration(
                             if fused_matrix_integration_used
                             else stack_integration_download_mode
                         ),
+                        "native_map_workspace_mode": stack_integration_native_map_workspace_mode,
                         "diagnostic_maps_downloaded": bool(
                             fused_matrix_integration_timing.get(
                                 "diagnostic_maps_downloaded",

@@ -1208,10 +1208,18 @@ __global__ void glass_integrate_resident_sigma_clip_f32_kernel(
   }
   if (count <= 0.0f) {
     master[pixel] = 0.0f;
-    weight_map[pixel] = 0.0f;
-    coverage_map[pixel] = 0.0f;
-    low_rejection_map[pixel] = 0.0f;
-    high_rejection_map[pixel] = 0.0f;
+    if (weight_map != nullptr) {
+      weight_map[pixel] = 0.0f;
+    }
+    if (coverage_map != nullptr) {
+      coverage_map[pixel] = 0.0f;
+    }
+    if (low_rejection_map != nullptr) {
+      low_rejection_map[pixel] = 0.0f;
+    }
+    if (high_rejection_map != nullptr) {
+      high_rejection_map[pixel] = 0.0f;
+    }
     return;
   }
   mean /= count;
@@ -1293,10 +1301,14 @@ __global__ void glass_integrate_resident_sigma_clip_f32_kernel(
     }
     bool rejected = false;
     if (value < low_threshold) {
-      low_reject += 1.0f;
+      if (low_rejection_map != nullptr) {
+        low_reject += 1.0f;
+      }
       rejected = true;
     } else if (value > high_threshold) {
-      high_reject += 1.0f;
+      if (high_rejection_map != nullptr) {
+        high_reject += 1.0f;
+      }
       rejected = true;
     }
     if (rejected) {
@@ -1304,14 +1316,24 @@ __global__ void glass_integrate_resident_sigma_clip_f32_kernel(
     }
     sum += value * weight;
     weight_sum += weight;
-    coverage += 1.0f;
+    if (coverage_map != nullptr) {
+      coverage += 1.0f;
+    }
   }
 
   master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
-  weight_map[pixel] = weight_sum;
-  coverage_map[pixel] = coverage;
-  low_rejection_map[pixel] = low_reject;
-  high_rejection_map[pixel] = high_reject;
+  if (weight_map != nullptr) {
+    weight_map[pixel] = weight_sum;
+  }
+  if (coverage_map != nullptr) {
+    coverage_map[pixel] = coverage;
+  }
+  if (low_rejection_map != nullptr) {
+    low_rejection_map[pixel] = low_reject;
+  }
+  if (high_rejection_map != nullptr) {
+    high_rejection_map[pixel] = high_reject;
+  }
 }
 
 void glass_integrate_resident_sigma_clip_f32_launch(

@@ -1994,6 +1994,51 @@ def test_resident_stack_winsorized_sigma_matches_mean_std_reference():
     assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)
 
 
+def test_resident_stack_winsorized_sigma_master_only_matches_full_master():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_sigma_clip"
+    ):
+        raise AssertionError("ResidentCalibratedStack.integrate_sigma_clip is missing from glass_cuda")
+
+    frames = [
+        np.array([[1, 5, 9], [2, 6, 10]], dtype=np.float32),
+        np.array([[1, 6, 9], [2, 7, 10]], dtype=np.float32),
+        np.array([[1, 7, 9], [2, 8, 10]], dtype=np.float32),
+        np.array([[80, 8, 9], [2, -40, 10]], dtype=np.float32),
+    ]
+    full_stack = module.ResidentCalibratedStack(len(frames), 2, 3)
+    master_only_stack = module.ResidentCalibratedStack(len(frames), 2, 3)
+    for index, frame in enumerate(frames):
+        full_stack.upload_calibrated_frame(index, frame)
+        master_only_stack.upload_calibrated_frame(index, frame)
+
+    full_master, full_weight, full_coverage, full_low, full_high = full_stack.integrate_sigma_clip(
+        None,
+        1.0,
+        1.0,
+        True,
+        download_mode="full",
+    )
+    master_only, weight_map, coverage, low_reject, high_reject = master_only_stack.integrate_sigma_clip(
+        None,
+        1.0,
+        1.0,
+        True,
+        download_mode="master_only",
+    )
+
+    assert np.allclose(master_only, full_master, rtol=1e-5, atol=1e-5)
+    assert full_weight is not None
+    assert full_coverage is not None
+    assert full_low is not None
+    assert full_high is not None
+    assert weight_map is None
+    assert coverage is None
+    assert low_reject is None
+    assert high_reject is None
+
+
 def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(

@@ -9017,18 +9017,22 @@ class ResidentCalibratedStack {
     try {
       check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(resident sigma weights)");
       check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident sigma master)");
-      check_cuda(
-          cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)),
-          "cudaMalloc(resident sigma weight map)");
-      check_cuda(
-          cudaMalloc(&d_coverage_map, pixels_per_frame_ * sizeof(float)),
-          "cudaMalloc(resident sigma coverage map)");
-      check_cuda(
-          cudaMalloc(&d_low_rejection_map, pixels_per_frame_ * sizeof(float)),
-          "cudaMalloc(resident sigma low rejection map)");
-      check_cuda(
-          cudaMalloc(&d_high_rejection_map, pixels_per_frame_ * sizeof(float)),
-          "cudaMalloc(resident sigma high rejection map)");
+      if (download_weight_map) {
+        check_cuda(
+            cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(resident sigma weight map)");
+      }
+      if (download_diagnostics) {
+        check_cuda(
+            cudaMalloc(&d_coverage_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(resident sigma coverage map)");
+        check_cuda(
+            cudaMalloc(&d_low_rejection_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(resident sigma low rejection map)");
+        check_cuda(
+            cudaMalloc(&d_high_rejection_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(resident sigma high rejection map)");
+      }
       check_cuda(
           cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident sigma weights)");

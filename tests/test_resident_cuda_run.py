@@ -3237,9 +3237,17 @@ def test_cli_resident_cuda_fused_minimal_output_maps_skip_diagnostic_downloads(t
     assert stack_output["geometric_warp_coverage"]["available"] is False
     assert stack_dispatch["mode"] == "stack"
     assert stack_dispatch["download_mode"] == "master_only"
+    assert (
+        stack_dispatch["native_map_workspace_mode"]
+        == "master_only_no_weight_or_diagnostic_device_maps"
+    )
     assert stack_dispatch["diagnostic_maps_downloaded"] is False
     assert stack_dispatch["weight_map_downloaded"] is False
     assert stack_output["output_map_policy"]["download_mode"] == "master_only"
+    assert (
+        stack_output["output_map_policy"]["native_map_workspace_mode"]
+        == "master_only_no_weight_or_diagnostic_device_maps"
+    )
     assert stack_output["output_map_policy"]["weight_map_downloaded"] is False
     assert stack_output["output_map_policy"]["available"] == ["master"]
     assert output["output_map_policy"]["mode"] == "minimal"
@@ -3254,9 +3262,14 @@ def test_cli_resident_cuda_fused_minimal_output_maps_skip_diagnostic_downloads(t
     assert output["geometric_warp_coverage"]["available"] is False
     assert dispatch["mode"] == "fused_matrix"
     assert dispatch["download_mode"] == "master_only"
+    assert dispatch["native_map_workspace_mode"] == "not_applicable_fused_matrix_dispatch"
     assert dispatch["diagnostic_maps_downloaded"] is False
     assert dispatch["weight_map_downloaded"] is False
     assert output["output_map_policy"]["download_mode"] == "master_only"
+    assert (
+        output["output_map_policy"]["native_map_workspace_mode"]
+        == "not_applicable_fused_matrix_dispatch"
+    )
     assert output["output_map_policy"]["weight_map_downloaded"] is False
     assert output["output_map_policy"]["available"] == ["master"]
     assert timing["download_mode"] == "master_only"
