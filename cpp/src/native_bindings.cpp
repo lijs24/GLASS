@@ -6772,7 +6772,14 @@ class ResidentCalibratedStack {
 
     const int cell_count = grid_cols * grid_rows;
     const int grid_capacity = cell_count * candidates_per_cell;
+    const std::size_t batch_count = indices.size();
     py::list results;
+    if (batch_count == 0) {
+      return results;
+    }
+
+    const std::size_t grid_stride = static_cast<std::size_t>(grid_capacity);
+    const std::size_t out_stride = static_cast<std::size_t>(max_output_candidates);
     float* d_grid_xs = nullptr;
     float* d_grid_ys = nullptr;
     float* d_grid_fluxes = nullptr;
@@ -6784,61 +6791,62 @@ class ResidentCalibratedStack {
     int* d_cell_counts = nullptr;
     int* d_stored_count = nullptr;
     unsigned char* d_refine_status = nullptr;
+    double* d_mean_sums = nullptr;
+    unsigned int* d_mean_counts = nullptr;
     try {
       check_cuda(
-          cudaMalloc(&d_grid_xs, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
+          cudaMalloc(&d_grid_xs, batch_count * grid_stride * sizeof(float)),
           "cudaMalloc(resident batch grid top nms grid xs)");
       check_cuda(
-          cudaMalloc(&d_grid_ys, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
+          cudaMalloc(&d_grid_ys, batch_count * grid_stride * sizeof(float)),
           "cudaMalloc(resident batch grid top nms grid ys)");
       check_cuda(
-          cudaMalloc(&d_grid_fluxes, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
+          cudaMalloc(&d_grid_fluxes, batch_count * grid_stride * sizeof(float)),
           "cudaMalloc(resident batch grid top nms grid fluxes)");
       check_cuda(
-          cudaMalloc(&d_xs, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+          cudaMalloc(&d_xs, batch_count * out_stride * sizeof(float)),
           "cudaMalloc(resident batch grid top nms star xs)");
       check_cuda(
-          cudaMalloc(&d_ys, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+          cudaMalloc(&d_ys, batch_count * out_stride * sizeof(float)),
           "cudaMalloc(resident batch grid top nms star ys)");
       check_cuda(
-          cudaMalloc(&d_fluxes, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+          cudaMalloc(&d_fluxes, batch_count * out_stride * sizeof(float)),
           "cudaMalloc(resident batch grid top nms star fluxes)");
-      check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(resident batch grid top nms star count)");
       check_cuda(
-          cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)),
+          cudaMalloc(&d_count, batch_count * sizeof(int)),
+          "cudaMalloc(resident batch grid top nms star count)");
+      check_cuda(
+          cudaMalloc(&d_locks, batch_count * static_cast<std::size_t>(cell_count) * sizeof(int)),
           "cudaMalloc(resident batch grid top nms locks)");
       check_cuda(
-          cudaMalloc(&d_cell_counts, static_cast<std::size_t>(cell_count) * sizeof(int)),
+          cudaMalloc(&d_cell_counts, batch_count * static_cast<std::size_t>(cell_count) * sizeof(int)),
           "cudaMalloc(resident batch grid top nms cell counts)");
-      check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(resident batch grid top nms stored count)");
+      check_cuda(
+          cudaMalloc(&d_stored_count, batch_count * sizeof(int)),
+          "cudaMalloc(resident batch grid top nms stored count)");
       if (centroid_radius > 0) {
         check_cuda(
-            cudaMalloc(&d_refine_status, static_cast<std::size_t>(max_output_candidates) * sizeof(unsigned char)),
+            cudaMalloc(&d_refine_status, batch_count * out_stride * sizeof(unsigned char)),
             "cudaMalloc(resident batch grid top nms centroid status)");
       }
 
-      for (const std::size_t index : indices) {
-        py::array_t<float> xs({max_output_candidates});
-        py::array_t<float> ys({max_output_candidates});
-        py::array_t<float> fluxes({max_output_candidates});
-        const py::buffer_info xs_info = xs.request();
-        const py::buffer_info ys_info = ys.request();
-        const py::buffer_info flux_info = fluxes.request();
-        int total_count = 0;
-        int stored_count = 0;
-
-        const auto enqueue_start = std::chrono::steady_clock::now();
+      const auto enqueue_start = std::chrono::steady_clock::now();
+      for (std::size_t batch_pos = 0; batch_pos < batch_count; ++batch_pos) {
+        const std::size_t index = indices[batch_pos];
+        const std::size_t grid_offset = batch_pos * grid_stride;
+        const std::size_t out_offset = batch_pos * out_stride;
+        const std::size_t cell_offset = batch_pos * static_cast<std::size_t>(cell_count);
         if (deterministic) {
           glass_star_grid_top_nms_candidates_deterministic_f32_launch(
               d_stack_ + index * pixels_per_frame_,
-              d_grid_xs,
-              d_grid_ys,
-              d_grid_fluxes,
-              d_xs,
-              d_ys,
-              d_fluxes,
-              d_count,
-              d_stored_count,
+              d_grid_xs + grid_offset,
+              d_grid_ys + grid_offset,
+              d_grid_fluxes + grid_offset,
+              d_xs + out_offset,
+              d_ys + out_offset,
+              d_fluxes + out_offset,
+              d_count + batch_pos,
+              d_stored_count + batch_pos,
               static_cast<int>(width_),
               static_cast<int>(height_),
               threshold,
@@ -6850,16 +6858,16 @@ class ResidentCalibratedStack {
         } else {
           glass_star_grid_top_nms_candidates_f32_launch(
               d_stack_ + index * pixels_per_frame_,
-              d_grid_xs,
-              d_grid_ys,
-              d_grid_fluxes,
-              d_xs,
-              d_ys,
-              d_fluxes,
-              d_count,
-              d_locks,
-              d_cell_counts,
-              d_stored_count,
+              d_grid_xs + grid_offset,
+              d_grid_ys + grid_offset,
+              d_grid_fluxes + grid_offset,
+              d_xs + out_offset,
+              d_ys + out_offset,
+              d_fluxes + out_offset,
+              d_count + batch_pos,
+              d_locks + cell_offset,
+              d_cell_counts + cell_offset,
+              d_stored_count + batch_pos,
               static_cast<int>(width_),
               static_cast<int>(height_),
               threshold,
@@ -6869,107 +6877,207 @@ class ResidentCalibratedStack {
               max_output_candidates,
               min_separation_px);
         }
-        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch kernel launch");
-        const auto enqueue_end = std::chrono::steady_clock::now();
-        check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch synchronize");
-        const auto sync_end = std::chrono::steady_clock::now();
+      }
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch kernel launch");
+      const auto enqueue_end = std::chrono::steady_clock::now();
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch synchronize");
+      const auto sync_end = std::chrono::steady_clock::now();
+
+      std::vector<int> total_counts(batch_count);
+      std::vector<int> stored_counts(batch_count);
+      check_cuda(
+          cudaMemcpy(total_counts.data(), d_count, batch_count * sizeof(int), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident batch grid top nms counts)");
+      check_cuda(
+          cudaMemcpy(stored_counts.data(), d_stored_count, batch_count * sizeof(int), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident batch grid top nms stored counts)");
+      const auto count_download_end = std::chrono::steady_clock::now();
+
+      std::vector<float> centroid_before_xs;
+      std::vector<float> centroid_before_ys;
+      std::vector<unsigned char> centroid_statuses;
+      std::vector<float> centroid_backgrounds(batch_count, std::numeric_limits<float>::quiet_NaN());
+      const char* centroid_background_mode = "local_median";
+      double centroid_refine_s = 0.0;
+      if (centroid_radius > 0) {
+        const auto centroid_start = std::chrono::steady_clock::now();
+        centroid_before_xs.resize(batch_count * out_stride);
+        centroid_before_ys.resize(batch_count * out_stride);
+        centroid_statuses.resize(batch_count * out_stride);
         check_cuda(
-            cudaMemcpy(&total_count, d_count, sizeof(int), cudaMemcpyDeviceToHost),
-            "cudaMemcpy(resident batch grid top nms count)");
+            cudaMemcpy(
+                centroid_before_xs.data(),
+                d_xs,
+                batch_count * out_stride * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid top nms centroid original xs)");
         check_cuda(
-            cudaMemcpy(&stored_count, d_stored_count, sizeof(int), cudaMemcpyDeviceToHost),
-            "cudaMemcpy(resident batch grid top nms stored count)");
-        const auto count_download_end = std::chrono::steady_clock::now();
-        double centroid_refine_s = 0.0;
-        std::vector<float> centroid_before_xs;
-        std::vector<float> centroid_before_ys;
-        std::vector<unsigned char> centroid_statuses;
-        float centroid_background = std::numeric_limits<float>::quiet_NaN();
-        const char* centroid_background_mode = "local_median";
-        if (centroid_radius > 0 && stored_count > 0) {
-          if (centroid_global_mean_background) {
-            centroid_background = device_frame_mean_f32(
+            cudaMemcpy(
+                centroid_before_ys.data(),
+                d_ys,
+                batch_count * out_stride * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid top nms centroid original ys)");
+        if (centroid_global_mean_background) {
+          centroid_background_mode = "global_mean";
+          constexpr int mean_threads = 256;
+          const int mean_blocks = static_cast<int>(
+              std::min<std::size_t>(
+                  4096,
+                  std::max<std::size_t>(
+                      1,
+                      (pixels_per_frame_ + static_cast<std::size_t>(mean_threads) - 1) /
+                          static_cast<std::size_t>(mean_threads))));
+          check_cuda(
+              cudaMalloc(&d_mean_sums, batch_count * static_cast<std::size_t>(mean_blocks) * sizeof(double)),
+              "cudaMalloc(resident batch grid top nms centroid mean sums)");
+          check_cuda(
+              cudaMalloc(
+                  &d_mean_counts,
+                  batch_count * static_cast<std::size_t>(mean_blocks) * sizeof(unsigned int)),
+              "cudaMalloc(resident batch grid top nms centroid mean counts)");
+          for (std::size_t batch_pos = 0; batch_pos < batch_count; ++batch_pos) {
+            const std::size_t index = indices[batch_pos];
+            glass_frame_sum_f32_launch(
                 d_stack_ + index * pixels_per_frame_,
+                d_mean_sums + batch_pos * static_cast<std::size_t>(mean_blocks),
+                d_mean_counts + batch_pos * static_cast<std::size_t>(mean_blocks),
                 pixels_per_frame_,
-                "cudaMalloc(resident batch grid top nms centroid background)");
-            centroid_background_mode = "global_mean";
+                mean_blocks);
           }
-          centroid_before_xs.resize(static_cast<std::size_t>(stored_count));
-          centroid_before_ys.resize(static_cast<std::size_t>(stored_count));
-          centroid_statuses.resize(static_cast<std::size_t>(stored_count));
+          check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid mean kernel launch");
+          check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid mean synchronize");
+          std::vector<double> mean_sums(batch_count * static_cast<std::size_t>(mean_blocks));
+          std::vector<unsigned int> mean_counts(batch_count * static_cast<std::size_t>(mean_blocks));
           check_cuda(
               cudaMemcpy(
-                  centroid_before_xs.data(),
-                  d_xs,
-                  static_cast<std::size_t>(stored_count) * sizeof(float),
+                  mean_sums.data(),
+                  d_mean_sums,
+                  mean_sums.size() * sizeof(double),
                   cudaMemcpyDeviceToHost),
-              "cudaMemcpy(resident batch grid top nms centroid original xs)");
+              "cudaMemcpy(resident batch grid top nms centroid mean sums)");
           check_cuda(
               cudaMemcpy(
-                  centroid_before_ys.data(),
-                  d_ys,
-                  static_cast<std::size_t>(stored_count) * sizeof(float),
+                  mean_counts.data(),
+                  d_mean_counts,
+                  mean_counts.size() * sizeof(unsigned int),
                   cudaMemcpyDeviceToHost),
-              "cudaMemcpy(resident batch grid top nms centroid original ys)");
-          const auto centroid_start = std::chrono::steady_clock::now();
+              "cudaMemcpy(resident batch grid top nms centroid mean counts)");
+          for (std::size_t batch_pos = 0; batch_pos < batch_count; ++batch_pos) {
+            double sum = 0.0;
+            std::size_t count = 0;
+            for (int block = 0; block < mean_blocks; ++block) {
+              const std::size_t offset =
+                  batch_pos * static_cast<std::size_t>(mean_blocks) + static_cast<std::size_t>(block);
+              sum += mean_sums[offset];
+              count += static_cast<std::size_t>(mean_counts[offset]);
+            }
+            if (count > 0) {
+              centroid_backgrounds[batch_pos] = static_cast<float>(sum / static_cast<double>(count));
+            }
+          }
+        }
+        for (std::size_t batch_pos = 0; batch_pos < batch_count; ++batch_pos) {
+          const int stored_count = std::max(0, std::min(stored_counts[batch_pos], max_output_candidates));
+          if (stored_count <= 0) {
+            continue;
+          }
+          const std::size_t index = indices[batch_pos];
+          const std::size_t out_offset = batch_pos * out_stride;
           glass_star_refine_centroids_f32_launch(
               d_stack_ + index * pixels_per_frame_,
-              d_xs,
-              d_ys,
-              d_fluxes,
-              d_refine_status,
+              d_xs + out_offset,
+              d_ys + out_offset,
+              d_fluxes + out_offset,
+              d_refine_status + out_offset,
               stored_count,
               static_cast<int>(width_),
               static_cast<int>(height_),
               centroid_radius,
-              centroid_background);
-          check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid refine kernel launch");
-          check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid refine synchronize");
-          check_cuda(
-              cudaMemcpy(
-                  centroid_statuses.data(),
-                  d_refine_status,
-                  static_cast<std::size_t>(stored_count) * sizeof(unsigned char),
-                  cudaMemcpyDeviceToHost),
-              "cudaMemcpy(resident batch grid top nms centroid status)");
-          centroid_refine_s = std::chrono::duration<double>(
-              std::chrono::steady_clock::now() - centroid_start).count();
+              centroid_backgrounds[batch_pos]);
         }
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid refine kernel launch");
+        check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch centroid refine synchronize");
         check_cuda(
             cudaMemcpy(
-                xs_info.ptr,
-                d_xs,
-                static_cast<std::size_t>(stored_count) * sizeof(float),
+                centroid_statuses.data(),
+                d_refine_status,
+                batch_count * out_stride * sizeof(unsigned char),
                 cudaMemcpyDeviceToHost),
-            "cudaMemcpy(resident batch grid top nms star xs)");
-        check_cuda(
-            cudaMemcpy(
-                ys_info.ptr,
-                d_ys,
-                static_cast<std::size_t>(stored_count) * sizeof(float),
-                cudaMemcpyDeviceToHost),
-            "cudaMemcpy(resident batch grid top nms star ys)");
-        check_cuda(
-            cudaMemcpy(
-                flux_info.ptr,
-                d_fluxes,
-                static_cast<std::size_t>(stored_count) * sizeof(float),
-                cudaMemcpyDeviceToHost),
-            "cudaMemcpy(resident batch grid top nms star fluxes)");
-        const auto catalog_download_end = std::chrono::steady_clock::now();
+            "cudaMemcpy(resident batch grid top nms centroid statuses)");
+        centroid_refine_s = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - centroid_start).count();
+      }
 
-        const double enqueue_s = std::chrono::duration<double>(enqueue_end - enqueue_start).count();
-        const double sync_s = std::chrono::duration<double>(sync_end - enqueue_end).count();
-        const double count_download_s =
-            std::chrono::duration<double>(count_download_end - sync_end).count();
-        const double catalog_download_s =
-            std::chrono::duration<double>(catalog_download_end - count_download_end).count();
-        const double native_s =
-            std::chrono::duration<double>(catalog_download_end - enqueue_start).count();
+      std::vector<float> host_xs(batch_count * out_stride);
+      std::vector<float> host_ys(batch_count * out_stride);
+      std::vector<float> host_fluxes(batch_count * out_stride);
+      check_cuda(
+          cudaMemcpy(host_xs.data(), d_xs, batch_count * out_stride * sizeof(float), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident batch grid top nms star xs)");
+      check_cuda(
+          cudaMemcpy(host_ys.data(), d_ys, batch_count * out_stride * sizeof(float), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident batch grid top nms star ys)");
+      check_cuda(
+          cudaMemcpy(
+              host_fluxes.data(),
+              d_fluxes,
+              batch_count * out_stride * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident batch grid top nms star fluxes)");
+      const auto catalog_download_end = std::chrono::steady_clock::now();
+
+      const double enqueue_s = std::chrono::duration<double>(enqueue_end - enqueue_start).count();
+      const double sync_s = std::chrono::duration<double>(sync_end - enqueue_end).count();
+      const double count_download_s =
+          std::chrono::duration<double>(count_download_end - sync_end).count();
+      const double catalog_download_s =
+          std::chrono::duration<double>(catalog_download_end - count_download_end).count();
+      const double native_s =
+          std::chrono::duration<double>(catalog_download_end - enqueue_start).count();
+      const double inv_batch = 1.0 / static_cast<double>(batch_count);
+
+      for (std::size_t batch_pos = 0; batch_pos < batch_count; ++batch_pos) {
+        const int stored_count = std::max(0, std::min(stored_counts[batch_pos], max_output_candidates));
+        const std::size_t out_offset = batch_pos * out_stride;
+        py::array_t<float> xs({stored_count});
+        py::array_t<float> ys({stored_count});
+        py::array_t<float> fluxes({stored_count});
+        const py::buffer_info xs_info = xs.request();
+        const py::buffer_info ys_info = ys.request();
+        const py::buffer_info flux_info = fluxes.request();
+        if (stored_count > 0) {
+          std::memcpy(
+              xs_info.ptr,
+              host_xs.data() + out_offset,
+              static_cast<std::size_t>(stored_count) * sizeof(float));
+          std::memcpy(
+              ys_info.ptr,
+              host_ys.data() + out_offset,
+              static_cast<std::size_t>(stored_count) * sizeof(float));
+          std::memcpy(
+              flux_info.ptr,
+              host_fluxes.data() + out_offset,
+              static_cast<std::size_t>(stored_count) * sizeof(float));
+        }
+        std::vector<float> per_frame_centroid_before_xs;
+        std::vector<float> per_frame_centroid_before_ys;
+        std::vector<unsigned char> per_frame_centroid_statuses;
+        if (centroid_radius > 0 && stored_count > 0) {
+          per_frame_centroid_before_xs.assign(
+              centroid_before_xs.begin() + static_cast<std::ptrdiff_t>(out_offset),
+              centroid_before_xs.begin() + static_cast<std::ptrdiff_t>(out_offset + static_cast<std::size_t>(stored_count)));
+          per_frame_centroid_before_ys.assign(
+              centroid_before_ys.begin() + static_cast<std::ptrdiff_t>(out_offset),
+              centroid_before_ys.begin() + static_cast<std::ptrdiff_t>(out_offset + static_cast<std::size_t>(stored_count)));
+          per_frame_centroid_statuses.assign(
+              centroid_statuses.begin() + static_cast<std::ptrdiff_t>(out_offset),
+              centroid_statuses.begin() + static_cast<std::ptrdiff_t>(out_offset + static_cast<std::size_t>(stored_count)));
+        }
 
         py::dict result;
-        result["frame_index"] = index;
-        result["count"] = total_count;
+        result["frame_index"] = indices[batch_pos];
+        result["count"] = total_counts[batch_pos];
         result["stored_count"] = stored_count;
         result["grid_cols"] = grid_cols;
         result["grid_rows"] = grid_rows;
@@ -6978,27 +7086,32 @@ class ResidentCalibratedStack {
         result["min_separation_px"] = min_separation_px;
         result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
         result["catalog_topk_mode"] = grid_catalog_topk_mode(deterministic, candidates_per_cell);
-        result["catalog_timing_model"] = "per_frame_launch_sync_download";
-        result["catalog_enqueue_s"] = enqueue_s;
-        result["catalog_sync_s"] = sync_s;
-        result["catalog_count_download_s"] = count_download_s;
-        result["catalog_centroid_refine_s"] = centroid_refine_s;
-        result["catalog_output_download_s"] = catalog_download_s;
-        result["catalog_native_s"] = native_s;
+        result["catalog_timing_model"] = centroid_radius > 0
+            ? "batch_launch_one_sync_bulk_download_centroid_one_sync"
+            : "batch_launch_one_sync_bulk_download";
+        result["catalog_batch_size"] = static_cast<int>(batch_count);
+        result["catalog_batch_sync_count"] = 1;
+        result["catalog_download_mode"] = "bulk_full_capacity";
+        result["catalog_enqueue_s"] = enqueue_s * inv_batch;
+        result["catalog_sync_s"] = sync_s * inv_batch;
+        result["catalog_count_download_s"] = count_download_s * inv_batch;
+        result["catalog_centroid_refine_s"] = centroid_refine_s * inv_batch;
+        result["catalog_output_download_s"] = catalog_download_s * inv_batch;
+        result["catalog_native_s"] = native_s * inv_batch;
         py::dict centroid_refine = centroid_refine_summary(
             centroid_radius,
             stored_count,
-            centroid_before_xs,
-            centroid_before_ys,
+            per_frame_centroid_before_xs,
+            per_frame_centroid_before_ys,
             static_cast<const float*>(xs_info.ptr),
             static_cast<const float*>(ys_info.ptr),
-            centroid_statuses);
+            per_frame_centroid_statuses);
         centroid_refine["background_mode"] = centroid_radius > 0 ? centroid_background_mode : "off";
         centroid_refine["mode"] = centroid_radius > 0
             ? (centroid_global_mean_background ? "resident_gpu_global_mean_centroid" : "resident_gpu_window_centroid")
             : "off";
-        if (std::isfinite(centroid_background)) {
-          centroid_refine["background"] = centroid_background;
+        if (centroid_radius > 0 && std::isfinite(centroid_backgrounds[batch_pos])) {
+          centroid_refine["background"] = centroid_backgrounds[batch_pos];
         } else {
           centroid_refine["background"] = py::none();
         }
@@ -7020,6 +7133,8 @@ class ResidentCalibratedStack {
       cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
       cudaFree(d_refine_status);
+      cudaFree(d_mean_sums);
+      cudaFree(d_mean_counts);
       return results;
     } catch (...) {
       cudaFree(d_grid_xs);
@@ -7033,6 +7148,8 @@ class ResidentCalibratedStack {
       cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
       cudaFree(d_refine_status);
+      cudaFree(d_mean_sums);
+      cudaFree(d_mean_counts);
       throw;
     }
   }

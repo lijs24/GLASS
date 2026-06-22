@@ -10645,6 +10645,86 @@ Completed in Gate446:
   - report:
     `C:\glass_runs\phase2_s2_gate486_master_raw_u16_ab_real\reports\warm_report.html`.
 
+### S2-Gate 487: Resident Grid Catalog Bulk One-Sync Batch
+
+- Follow the Gate486/487 timing profile where the largest remaining resident
+  compute-side bucket is registration orchestration/catalog work rather than
+  integration math.
+- Required work:
+  - keep the resident triangle registration math, catalog selection, centroid
+    formula, descriptor fit, warp, rejection, and integration outputs
+    unchanged;
+  - replace the resident grid-top-NMS moving-catalog batch implementation's
+    per-frame synchronize/download shape with an auditable batch-owned scratch
+    and one-sync/bulk-download path;
+  - surface timing model, batch size, sync count, download mode, and centroid
+    timing in resident artifacts and warnings;
+  - run focused CUDA/resident tests and the real 200-light warm A/B.
+- Completed:
+  - `ResidentCalibratedStack.star_grid_top_nms_candidates_batch*` now allocates
+    per-frame grid/output/count scratch for the requested batch, enqueues all
+    grid catalog kernels, performs one CUDA synchronization, downloads count and
+    compact catalog buffers in bulk, and builds the same Python catalog results;
+  - centroid-enabled batch routes now copy pre-refine coordinates in bulk,
+    compute global-mean backgrounds in a batched reduction when requested,
+    launch all centroid refine kernels before one synchronization, and download
+    statuses in bulk;
+  - resident artifacts now record
+    `triangle_catalog_timing_model=batch_launch_one_sync_bulk_download_centroid_one_sync`,
+    `triangle_catalog_batch_size`, `triangle_catalog_batch_sync_count`,
+    `triangle_catalog_download_mode`, and
+    `triangle_catalog_native_centroid_refine_s`;
+  - Python wrappers expose the new batch timing fields while preserving the old
+    catalog coordinate/flux arrays and CPU/CUDA fallback behavior.
+- Real 200-light warm A/B:
+  - output root:
+    `C:\glass_runs\phase2_s2_gate487_catalog_bulk_sync_ab_real`;
+  - previous warm baseline root:
+    `C:\glass_runs\phase2_s2_gate487_current_head_ab_real`;
+  - warm total: `21.647297300049104 s`;
+  - previous warm total: `20.36849359999178 s`;
+  - warm `light_read_upload_calibrate`: `3.511927100014873 s`
+    versus previous `3.5714122999925166 s`;
+  - warm `resident_registration_component_accounted`:
+    `4.169362299743524 s` versus previous `4.203437800650955 s`;
+  - warm `resident_registration_warp`: `1.2312209998490289 s`
+    versus previous `1.258692299888935 s`;
+  - warm `output_write`: `3.694475699972827 s`
+    versus previous `2.2861240999773145 s`;
+  - catalog timing model changed from `per_frame_launch_sync_download` to
+    `batch_launch_one_sync_bulk_download_centroid_one_sync`;
+  - catalog batch size: `199`;
+  - catalog batch sync count: `1`;
+  - catalog native sync: `0.8971051 s` -> `0.6357767 s`;
+  - catalog native total: `0.9703687 s` -> `0.9438554 s`;
+  - warm-vs-previous-GLASS master difference: RMS/p99/max all `0.0`;
+  - warm-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`;
+  - warm GLASS vs WBPP speedup: `50.47008801405992x`;
+  - threshold acceptance audit passed with the same 200-light, calibration,
+    frame-count, speedup, coverage, RMS, and p99 thresholds as Gate486.
+- Interpretation:
+  - the local catalog synchronization target improved, proving the old
+    per-frame sync/download shape was real;
+  - the full warm run did not beat the previous total because output FITS/map
+    writing was about `1.41 s` slower in this sample;
+  - this gate is accepted as a scheduling/diagnostic improvement, not as an
+    end-to-end speed win;
+  - the next performance gate should either batch the catalog kernels more
+    deeply across frames/streams or reduce the output-map write tail that now
+    masks smaller compute-side gains.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate487_catalog_bulk_sync_ab_real\gate487_real_ab_summary.json`;
+  - threshold acceptance:
+    `C:\glass_runs\phase2_s2_gate487_catalog_bulk_sync_ab_real\acceptance\warm_threshold_acceptance_audit.json`;
+  - speedup summary:
+    `C:\glass_runs\phase2_s2_gate487_catalog_bulk_sync_ab_real\speedup\warm_vs_wbpp_speedup_with_compare.json`;
+  - baseline compare:
+    `C:\glass_runs\phase2_s2_gate487_catalog_bulk_sync_ab_real\compare\warm_vs_gate486_head_master.json`;
+  - report:
+    `C:\glass_runs\phase2_s2_gate487_catalog_bulk_sync_ab_real\reports\warm_report.html`.
+
 ## Gate Rules
 
 Each gate requires:

@@ -3703,10 +3703,20 @@ class ResidentCalibratedStack:
                     "catalog_timing_model": str(
                         result.get("catalog_timing_model", "unavailable")
                     ),
+                    "catalog_batch_size": int(result.get("catalog_batch_size", 1) or 1),
+                    "catalog_batch_sync_count": int(
+                        result.get("catalog_batch_sync_count", 1) or 1
+                    ),
+                    "catalog_download_mode": str(
+                        result.get("catalog_download_mode", "per_frame")
+                    ),
                     "catalog_enqueue_s": float(result.get("catalog_enqueue_s", 0.0) or 0.0),
                     "catalog_sync_s": float(result.get("catalog_sync_s", 0.0) or 0.0),
                     "catalog_count_download_s": float(
                         result.get("catalog_count_download_s", 0.0) or 0.0
+                    ),
+                    "catalog_centroid_refine_s": float(
+                        result.get("catalog_centroid_refine_s", 0.0) or 0.0
                     ),
                     "catalog_output_download_s": float(
                         result.get("catalog_output_download_s", 0.0) or 0.0
@@ -3791,6 +3801,9 @@ class ResidentCalibratedStack:
             "catalog_sort_mode": str(result.get("catalog_sort_mode", "unavailable")),
             "catalog_topk_mode": str(result.get("catalog_topk_mode", "unavailable")),
             "catalog_timing_model": str(result.get("catalog_timing_model", "unavailable")),
+            "catalog_batch_size": int(result.get("catalog_batch_size", 1) or 1),
+            "catalog_batch_sync_count": int(result.get("catalog_batch_sync_count", 1) or 1),
+            "catalog_download_mode": str(result.get("catalog_download_mode", "per_frame")),
             "catalog_enqueue_s": float(result.get("catalog_enqueue_s", 0.0) or 0.0),
             "catalog_sync_s": float(result.get("catalog_sync_s", 0.0) or 0.0),
             "catalog_count_download_s": float(result.get("catalog_count_download_s", 0.0) or 0.0),

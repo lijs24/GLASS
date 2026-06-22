@@ -1122,7 +1122,10 @@ def test_resident_stack_grid_star_catalog_batch_reports_native_timing():
 
     assert [item["frame_index"] for item in batch] == [0, 1, 2]
     for batch_item, repeat_item, single_item in zip(batch, repeat_batch, singles, strict=True):
-        assert batch_item["catalog_timing_model"] == "per_frame_launch_sync_download"
+        assert batch_item["catalog_timing_model"] == "batch_launch_one_sync_bulk_download"
+        assert batch_item["catalog_batch_size"] == 3
+        assert batch_item["catalog_batch_sync_count"] == 1
+        assert batch_item["catalog_download_mode"] == "bulk_full_capacity"
         assert batch_item["catalog_sort_mode"] == "shared_bitonic_power2"
         assert batch_item["catalog_topk_mode"] == "strict_flux_precheck_per_cell_lock"
         assert batch_item["catalog_native_s"] >= 0.0
@@ -1171,6 +1174,10 @@ def test_resident_stack_grid_star_catalog_batch_reports_native_timing():
         deterministic_singles,
         strict=True,
     ):
+        assert batch_item["catalog_timing_model"] == "batch_launch_one_sync_bulk_download"
+        assert batch_item["catalog_batch_size"] == 3
+        assert batch_item["catalog_batch_sync_count"] == 1
+        assert batch_item["catalog_download_mode"] == "bulk_full_capacity"
         assert batch_item["catalog_topk_mode"] == "deterministic_parallel_per_cell"
         assert batch_item["count"] == repeat_item["count"]
         assert batch_item["stored_count"] == repeat_item["stored_count"]

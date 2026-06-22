@@ -6598,7 +6598,11 @@ def run_resident_calibration_integration(
                 triangle_catalog_native_sync_s = 0.0
                 triangle_catalog_native_count_download_s = 0.0
                 triangle_catalog_native_output_download_s = 0.0
+                triangle_catalog_native_centroid_refine_s = 0.0
                 triangle_catalog_native_total_s = 0.0
+                triangle_catalog_batch_size = 0
+                triangle_catalog_batch_sync_count = 0
+                triangle_catalog_download_mode = "off"
                 triangle_catalog_sort_mode = "off"
                 triangle_catalog_topk_mode = "off"
                 triangle_pixel_refine_batch_enabled = bool(
@@ -6828,10 +6832,14 @@ def run_resident_calibration_integration(
                     _stack=stack,
                 ) -> dict[str, Any]:
                     nonlocal triangle_catalog_native_count_download_s
+                    nonlocal triangle_catalog_native_centroid_refine_s
                     nonlocal triangle_catalog_native_enqueue_s
                     nonlocal triangle_catalog_native_output_download_s
                     nonlocal triangle_catalog_native_sync_s
                     nonlocal triangle_catalog_native_total_s
+                    nonlocal triangle_catalog_batch_size
+                    nonlocal triangle_catalog_batch_sync_count
+                    nonlocal triangle_catalog_download_mode
                     nonlocal triangle_catalog_sort_mode
                     nonlocal triangle_catalog_topk_mode
                     nonlocal triangle_catalog_timing_model
@@ -6890,6 +6898,17 @@ def run_resident_calibration_integration(
                                 triangle_catalog_topk_mode = str(
                                     batch_results[0].get("catalog_topk_mode", "unavailable")
                                 )
+                                triangle_catalog_batch_size = max(
+                                    int(item.get("catalog_batch_size", 0) or 0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_batch_sync_count = max(
+                                    int(item.get("catalog_batch_sync_count", 0) or 0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_download_mode = str(
+                                    batch_results[0].get("catalog_download_mode", "unavailable")
+                                )
                                 triangle_catalog_native_enqueue_s = sum(
                                     float(item.get("catalog_enqueue_s", 0.0) or 0.0)
                                     for item in batch_results
@@ -6904,6 +6923,10 @@ def run_resident_calibration_integration(
                                 )
                                 triangle_catalog_native_output_download_s = sum(
                                     float(item.get("catalog_output_download_s", 0.0) or 0.0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_native_centroid_refine_s = sum(
+                                    float(item.get("catalog_centroid_refine_s", 0.0) or 0.0)
                                     for item in batch_results
                                 )
                                 triangle_catalog_native_total_s = sum(
@@ -6929,6 +6952,11 @@ def run_resident_calibration_integration(
                                     registration_component_s,
                                     "triangle_moving_catalog_native_output_download",
                                     triangle_catalog_native_output_download_s,
+                                )
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_catalog_native_centroid_refine",
+                                    triangle_catalog_native_centroid_refine_s,
                                 )
                                 _add_elapsed(
                                     registration_component_s,
@@ -7960,6 +7988,9 @@ def run_resident_calibration_integration(
                                         + str(bool(triangle_catalog_grid_auto)).lower(),
                                         f"triangle_catalog_batch={triangle_catalog_batch_mode}",
                                         f"triangle_catalog_timing_model={triangle_catalog_timing_model}",
+                                        f"triangle_catalog_batch_size={triangle_catalog_batch_size}",
+                                        f"triangle_catalog_batch_sync_count={triangle_catalog_batch_sync_count}",
+                                        f"triangle_catalog_download_mode={triangle_catalog_download_mode}",
                                         f"triangle_catalog_sort_mode={triangle_catalog_sort_mode}",
                                         f"triangle_catalog_topk_mode={triangle_catalog_topk_mode}",
                                         f"triangle_star_grid_cols={triangle_star_grid_cols}",
@@ -10002,6 +10033,15 @@ def run_resident_calibration_integration(
                         "triangle_catalog_timing_model": triangle_catalog_timing_model
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_catalog_batch_size": int(triangle_catalog_batch_size)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_catalog_batch_sync_count": int(triangle_catalog_batch_sync_count)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_catalog_download_mode": triangle_catalog_download_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
                         "triangle_catalog_sort_mode": triangle_catalog_sort_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
@@ -10021,6 +10061,11 @@ def run_resident_calibration_integration(
                         else 0.0,
                         "triangle_catalog_native_output_download_s": float(
                             triangle_catalog_native_output_download_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_catalog_native_centroid_refine_s": float(
+                            triangle_catalog_native_centroid_refine_s
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,

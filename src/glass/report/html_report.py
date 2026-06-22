@@ -905,6 +905,9 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "warp": registration.get("warp_interpolation"),
                 "warp_batch_dispatch": registration.get("triangle_warp_batch_dispatch"),
                 "catalog_timing_model": registration.get("triangle_catalog_timing_model"),
+                "catalog_batch_size": registration.get("triangle_catalog_batch_size"),
+                "catalog_batch_sync_count": registration.get("triangle_catalog_batch_sync_count"),
+                "catalog_download_mode": registration.get("triangle_catalog_download_mode"),
                 "catalog_sort_mode": registration.get("triangle_catalog_sort_mode"),
                 "catalog_topk_mode": registration.get("triangle_catalog_topk_mode"),
                 "catalog_native_sync_s": round(
@@ -912,6 +915,10 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 ),
                 "catalog_native_output_download_s": round(
                     float(registration.get("triangle_catalog_native_output_download_s") or 0.0),
+                    3,
+                ),
+                "catalog_native_centroid_refine_s": round(
+                    float(registration.get("triangle_catalog_native_centroid_refine_s") or 0.0),
                     3,
                 ),
                 "catalog_native_total_s": round(
