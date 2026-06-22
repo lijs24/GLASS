@@ -3144,8 +3144,12 @@ def test_cli_resident_cuda_fused_minimal_output_maps_skip_diagnostic_downloads(t
     assert stack_output["dq_coverage_provenance"]["available"] is False
     assert stack_output["geometric_warp_coverage"]["available"] is False
     assert stack_dispatch["mode"] == "stack"
-    assert stack_dispatch["download_mode"] == "master_weight"
+    assert stack_dispatch["download_mode"] == "master_only"
     assert stack_dispatch["diagnostic_maps_downloaded"] is False
+    assert stack_dispatch["weight_map_downloaded"] is False
+    assert stack_output["output_map_policy"]["download_mode"] == "master_only"
+    assert stack_output["output_map_policy"]["weight_map_downloaded"] is False
+    assert stack_output["output_map_policy"]["available"] == ["master"]
     assert output["output_map_policy"]["mode"] == "minimal"
     assert Path(output["master_path"]).exists()
     assert output["weight_map_path"] is None
@@ -3157,11 +3161,16 @@ def test_cli_resident_cuda_fused_minimal_output_maps_skip_diagnostic_downloads(t
     assert output["dq_coverage_provenance"]["available"] is False
     assert output["geometric_warp_coverage"]["available"] is False
     assert dispatch["mode"] == "fused_matrix"
-    assert dispatch["download_mode"] == "master_weight"
+    assert dispatch["download_mode"] == "master_only"
     assert dispatch["diagnostic_maps_downloaded"] is False
-    assert timing["download_mode"] == "master_weight"
+    assert dispatch["weight_map_downloaded"] is False
+    assert output["output_map_policy"]["download_mode"] == "master_only"
+    assert output["output_map_policy"]["weight_map_downloaded"] is False
+    assert output["output_map_policy"]["available"] == ["master"]
+    assert timing["download_mode"] == "master_only"
     assert timing["diagnostic_maps_downloaded"] is False
-    assert timing["output_bytes"] == 16 * 16 * 4 * 2
+    assert timing["weight_map_downloaded"] is False
+    assert timing["output_bytes"] == 16 * 16 * 4
 
 
 def test_cli_resident_cuda_audit_output_maps_mirror_paths(tmp_path: Path):
@@ -4163,8 +4172,9 @@ def test_cli_resident_cuda_triangle_fused_matrix_matches_stack_dispatch(tmp_path
     assert dispatch["used"] is True
     assert "similarity_cuda_triangle" in dispatch["eligible_registration_modes"]
     assert dispatch["deferred_matrix_frame_count"] == 1
-    assert dispatch["download_mode"] == "master_weight"
+    assert dispatch["download_mode"] == "master_only"
     assert dispatch["diagnostic_maps_downloaded"] is False
+    assert dispatch["weight_map_downloaded"] is False
     assert resident_registration["mode"] == "similarity_cuda_triangle"
     assert resident_registration["triangle_warp_batch"] is False
     assert resident_registration["triangle_warp_batch_mode"] == "fused_matrix_deferred"

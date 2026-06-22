@@ -4076,15 +4076,15 @@ class ResidentCalibratedStack:
         download_mode: str = "full",
     ) -> tuple[
         np.ndarray,
-        np.ndarray,
+        np.ndarray | None,
         np.ndarray | None,
         np.ndarray | None,
         np.ndarray | None,
     ]:
         if not hasattr(self._impl, "integrate_sigma_clip"):
             raise RuntimeError("native ResidentCalibratedStack.integrate_sigma_clip is not available")
-        if download_mode not in {"full", "master_weight"}:
-            raise ValueError("download_mode must be full or master_weight")
+        if download_mode not in {"full", "master_weight", "master_only"}:
+            raise ValueError("download_mode must be full, master_weight, or master_only")
         master, weight_map, coverage, low_reject, high_reject = self._impl.integrate_sigma_clip(
             None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
             float(low_sigma),
@@ -4094,7 +4094,7 @@ class ResidentCalibratedStack:
         )
         return (
             np.asarray(master, dtype=np.float32),
-            np.asarray(weight_map, dtype=np.float32),
+            None if weight_map is None else np.asarray(weight_map, dtype=np.float32),
             None if coverage is None else np.asarray(coverage, dtype=np.float32),
             None if low_reject is None else np.asarray(low_reject, dtype=np.float32),
             None if high_reject is None else np.asarray(high_reject, dtype=np.float32),
@@ -4206,15 +4206,15 @@ class ResidentCalibratedStack:
         interpolation: str = "bilinear",
         clamping_threshold: float = -1.0,
         download_mode: str = "full",
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None, dict[str, Any]]:
         if not hasattr(self._impl, "integrate_matrix_warped_mean"):
             raise RuntimeError(
                 "native ResidentCalibratedStack.integrate_matrix_warped_mean is not available"
             )
         if interpolation not in {"bilinear", "lanczos3"}:
             raise ValueError("fused matrix-warped mean interpolation must be bilinear or lanczos3")
-        if download_mode not in {"full", "master_weight"}:
-            raise ValueError("download_mode must be full or master_weight")
+        if download_mode not in {"full", "master_weight", "master_only"}:
+            raise ValueError("download_mode must be full, master_weight, or master_only")
         matrix_array = np.asarray(matrices, dtype=np.float32)
         if matrix_array.ndim != 3 or matrix_array.shape != (self.frame_count, 3, 3):
             raise ValueError("matrices must have shape (frame_count, 3, 3)")
@@ -4229,7 +4229,7 @@ class ResidentCalibratedStack:
         timing_dict = dict(timing)
         return (
             np.asarray(master, dtype=np.float32),
-            np.asarray(weight_map, dtype=np.float32),
+            None if weight_map is None else np.asarray(weight_map, dtype=np.float32),
             None if coverage is None else np.asarray(coverage, dtype=np.float32),
             None if geometric_coverage is None else np.asarray(geometric_coverage, dtype=np.float32),
             {
@@ -4255,6 +4255,7 @@ class ResidentCalibratedStack:
                 "diagnostic_maps_downloaded": bool(
                     timing_dict.get("diagnostic_maps_downloaded", download_mode == "full")
                 ),
+                "weight_map_downloaded": bool(timing_dict.get("weight_map_downloaded", download_mode != "master_only")),
                 "avoids_stack_scatter": bool(timing_dict.get("avoids_stack_scatter", True)),
                 "modifies_resident_stack": bool(timing_dict.get("modifies_resident_stack", False)),
             },
@@ -4272,7 +4273,7 @@ class ResidentCalibratedStack:
         download_mode: str = "full",
     ) -> tuple[
         np.ndarray,
-        np.ndarray,
+        np.ndarray | None,
         np.ndarray | None,
         np.ndarray | None,
         np.ndarray | None,
@@ -4287,8 +4288,8 @@ class ResidentCalibratedStack:
             raise ValueError("fused matrix-warped sigma interpolation must be bilinear or lanczos3")
         if low_sigma <= 0.0 or high_sigma <= 0.0:
             raise ValueError("sigma thresholds must be positive")
-        if download_mode not in {"full", "master_weight"}:
-            raise ValueError("download_mode must be full or master_weight")
+        if download_mode not in {"full", "master_weight", "master_only"}:
+            raise ValueError("download_mode must be full, master_weight, or master_only")
         matrix_array = np.asarray(matrices, dtype=np.float32)
         if matrix_array.ndim != 3 or matrix_array.shape != (self.frame_count, 3, 3):
             raise ValueError("matrices must have shape (frame_count, 3, 3)")
@@ -4306,7 +4307,7 @@ class ResidentCalibratedStack:
         timing_dict = dict(timing)
         return (
             np.asarray(master, dtype=np.float32),
-            np.asarray(weight_map, dtype=np.float32),
+            None if weight_map is None else np.asarray(weight_map, dtype=np.float32),
             None if coverage is None else np.asarray(coverage, dtype=np.float32),
             None if low_reject is None else np.asarray(low_reject, dtype=np.float32),
             None if high_reject is None else np.asarray(high_reject, dtype=np.float32),
@@ -4337,6 +4338,7 @@ class ResidentCalibratedStack:
                 "diagnostic_maps_downloaded": bool(
                     timing_dict.get("diagnostic_maps_downloaded", download_mode == "full")
                 ),
+                "weight_map_downloaded": bool(timing_dict.get("weight_map_downloaded", download_mode != "master_only")),
                 "avoids_stack_scatter": bool(timing_dict.get("avoids_stack_scatter", True)),
                 "modifies_resident_stack": bool(timing_dict.get("modifies_resident_stack", False)),
             },

@@ -11258,6 +11258,90 @@ Completed in Gate446:
   - HTML report:
     `C:\glass_runs\phase2_s2_gate495_isolated_cuda_ab_real\reports\ab_current_report.html`.
 
+### S2-Gate 496: Resident Stack Minimal Diagnostic Download Skip
+
+- Return to the real 200-light speed path after the source-DQ hardening gates.
+  Gate495 showed the default route was green, but `--resident-output-maps
+  minimal` still paid for diagnostic map downloads in some registered-stack
+  paths.
+- Completed:
+  - added `download_mode=master_weight` to resident stack sigma/winsorized
+    integration so minimal mode skips coverage, low-rejection, high-rejection,
+    and geometric-coverage downloads;
+  - kept audit/science modes on full diagnostic-map download;
+  - recorded `download_mode` and `diagnostic_maps_downloaded` in resident
+    integration dispatch artifacts;
+  - reran the real 200-light audit/full-map and minimal/speed paths.
+- Real 200-light validation:
+  - audit/full maps: `17.824206900026184 s`, `61.29534997702451x` versus WBPP;
+  - minimal/speed: `8.31593049998628 s`, `131.37928461545013x` versus WBPP;
+  - minimal, audit, and Gate495 masters matched with RMS/p99/max all `0.0`;
+  - WBPP scaled coverage-190 compare stayed at RMS
+    `0.0017794216505176163`, p99 abs diff `0.00042621337808668863`, coverage
+    fraction `0.960532609259836`.
+- Interpretation:
+  - this was a transfer-path optimization, not an image-math change;
+  - minimal is a speed/probe mode, while audit remains the full DQ/rejection
+    evidence mode.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_496_status.md`;
+  - real run root:
+    `C:\glass_runs\phase2_s2_gate496_minimal_download_ab_real`.
+
+### S2-Gate 497: Resident Minimal Master-Only Output Transfer
+
+- Continue the resident CUDA speed path with a real optimization instead of
+  release/report handoff work. Gate496 skipped diagnostic map downloads, but
+  minimal mode still downloaded an internal host weight map that it never wrote.
+- Completed:
+  - added native/Python `download_mode=master_only` to resident stack and fused
+    matrix integration wrappers;
+  - changed `--resident-output-maps minimal` to download only the final master;
+  - kept device-side weight-map computation intact for the existing kernels,
+    avoiding any integration formula or accepted-frame change;
+  - made resident result contracts policy-aware for minimal outputs, so skipped
+    DQ/geometric maps are not false-negative contract failures;
+  - kept benchmark helper default `download_mode=master_weight` for tests that
+    intentionally compare weight-map numerics.
+- Focused validation:
+  - resident CUDA minimal-output and fused dispatch tests pass;
+  - resident result contract minimal-policy test passes;
+  - real minimal resident result contract passes with pixel verification.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate497_master_only_minimal_ab_real\runs\stack_minimal_master_only`;
+  - total runtime: `7.6039500999613665 s`;
+  - dispatch: `download_mode=master_only`, `weight_map_downloaded=false`,
+    `diagnostic_maps_downloaded=false`;
+  - public integration output: final master only;
+  - GLASS-vs-Gate496 minimal master difference: RMS/p99/max all `0.0`;
+  - GLASS-vs-WBPP scaled coverage-190 compare: RMS
+    `0.0017794216505176163`, p99 abs diff `0.00042621337808668863`, coverage
+    fraction `0.960532609259836`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - GLASS speedup versus WBPP: `143.6807166850754x`;
+  - acceptance audit passed with 200 light, 20 bias, 20 dark, 20 flat, at least
+    190 active frames, at least 100x speedup, and the established image-diff
+    thresholds.
+- Interpretation:
+  - speed-mode output transfer is now close to the final-master-only lower
+    bound for this resident stack path;
+  - audit/science remain the full diagnostic-map modes for DQ/rejection
+    evidence and publication-quality contracts;
+  - the next substantive target is resident registration/orchestration timing
+    and fused/deferred registration batching, not more release evidence gates.
+- Artifacts:
+  - real run root:
+    `C:\glass_runs\phase2_s2_gate497_master_only_minimal_ab_real`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate497_master_only_minimal_ab_real\compare\master_only_vs_wbpp_scaled_coverage190.json`;
+  - speedup:
+    `C:\glass_runs\phase2_s2_gate497_master_only_minimal_ab_real\speedup\master_only_vs_wbpp_speedup.json`;
+  - acceptance:
+    `C:\glass_runs\phase2_s2_gate497_master_only_minimal_ab_real\acceptance\master_only_acceptance_audit.json`;
+  - HTML report:
+    `C:\glass_runs\phase2_s2_gate497_master_only_minimal_ab_real\reports\master_only_report.html`.
+
 ## Gate Rules
 
 Each gate requires:

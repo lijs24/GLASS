@@ -9010,8 +9010,8 @@ def run_resident_calibration_integration(
             fused_matrix_integration_used = resident_integration_dispatch == "fused_matrix"
             fused_matrix_integration_timing: dict[str, Any] = {}
             hardened_winsorized_timing: dict[str, Any] = {}
-            fused_matrix_download_mode = "master_weight" if resident_output_maps == "minimal" else "full"
-            stack_integration_download_mode = "master_weight" if resident_output_maps == "minimal" else "full"
+            fused_matrix_download_mode = "master_only" if resident_output_maps == "minimal" else "full"
+            stack_integration_download_mode = "master_only" if resident_output_maps == "minimal" else "full"
             if (
                 resident_warp_coverage_supported
                 and not fused_matrix_integration_used
@@ -9230,7 +9230,11 @@ def run_resident_calibration_integration(
             validate_resident_dq_pixel_closure_group(group_dq_pixel_closure)
             resident_dq_pixel_closure_groups.append(group_dq_pixel_closure)
             count_dtype = _count_map_dtype(len(light_frames))
-            available_output_maps = ["master", "weight", "dq"]
+            available_output_maps = ["master"]
+            if weight_map is not None:
+                available_output_maps.append("weight")
+            if dq_map is not None:
+                available_output_maps.append("dq")
             if coverage_map is not None:
                 available_output_maps.append("coverage")
             if low_rejection_map is not None:
@@ -9567,7 +9571,24 @@ def run_resident_calibration_integration(
                 "skipped": skipped_output_maps,
                 "description": (
                     "audit writes all available diagnostic maps; science writes master, "
-                    "weight, coverage, and DQ maps; minimal writes only master."
+                    "weight, coverage, and DQ maps; minimal downloads and writes only master."
+                ),
+                "download_mode": (
+                    fused_matrix_download_mode
+                    if fused_matrix_integration_used
+                    else stack_integration_download_mode
+                ),
+                "weight_map_downloaded": bool(weight_map is not None),
+                "diagnostic_maps_downloaded": bool(
+                    any(
+                        item is not None
+                        for item in (
+                            coverage_map,
+                            low_rejection_map,
+                            high_rejection_map,
+                            geometric_warp_coverage_map,
+                        )
+                    )
                 ),
             }
             stack_surface_contract = build_resident_integration_stack_surface_contract(
@@ -10791,6 +10812,12 @@ def run_resident_calibration_integration(
                                         )
                                     )
                                 ),
+                            )
+                        ),
+                        "weight_map_downloaded": bool(
+                            fused_matrix_integration_timing.get(
+                                "weight_map_downloaded",
+                                weight_map is not None,
                             )
                         ),
                         "native_timing_s": fused_matrix_integration_timing,

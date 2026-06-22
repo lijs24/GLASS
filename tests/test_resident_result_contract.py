@@ -413,6 +413,86 @@ def test_resident_result_contract_allows_policy_skipped_coverage_provenance(tmp_
     assert checks["source_terms_present"]["passed"] is True
 
 
+def test_resident_result_contract_accepts_minimal_master_only_policy_without_dq_maps(
+    tmp_path: Path,
+) -> None:
+    integration = tmp_path / "integration"
+    integration.mkdir(parents=True)
+    write_fits_data(integration / "master_H.fits", np.ones((2, 2), dtype=np.float32))
+    write_json(
+        tmp_path / "integration_results.json",
+        {
+            "rejection": "winsorized_sigma",
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "memory_mode": "resident",
+                    "frame_count": 3,
+                    "master_path": str(integration / "master_H.fits"),
+                    "weight_map_path": None,
+                    "coverage_map_path": None,
+                    "dq_map_path": None,
+                    "low_rejection_map_path": None,
+                    "high_rejection_map_path": None,
+                    "dq_summary": None,
+                    "dq_coverage_provenance": {
+                        "available": False,
+                        "reason": "minimal output policy skipped diagnostic maps",
+                    },
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "stage": "integration",
+                        "item": "H",
+                        "engine": "cuda_resident_stack",
+                        "active_frame_count": 3,
+                        "source_terms": ["source_dq"],
+                        "output_dq_summary": {},
+                        "sample_accounting_closure": {
+                            "status": "passed",
+                            "input_valid_samples_before_rejection": 12,
+                            "valid_samples_after_rejection": None,
+                            "rejected_samples": None,
+                            "valid_rejection_match": None,
+                        },
+                    },
+                    "integration_rejection": resident_rejection_descriptor(
+                        "winsorized_sigma",
+                        3.0,
+                        3.0,
+                    ),
+                    "geometric_warp_coverage": {
+                        "available": False,
+                        "frame_count_matches_active": False,
+                    },
+                    "output_map_policy": {
+                        "mode": "minimal",
+                        "available": ["master"],
+                        "written": ["master"],
+                        "skipped": ["weight", "coverage", "dq", "low_rejection", "high_rejection"],
+                        "download_mode": "master_only",
+                        "weight_map_downloaded": False,
+                        "diagnostic_maps_downloaded": False,
+                    },
+                }
+            ],
+        },
+    )
+
+    payload = build_resident_result_contract(tmp_path, pixel_verify=True, pixel_verify_tile_size=1)
+
+    checks = {item["name"]: item for item in payload["outputs"][0]["checks"]}
+    assert payload["passed"] is True
+    assert checks["dq_summary_present"]["passed"] is True
+    assert checks["dq_summary_present"]["evidence"]["required"] is False
+    assert checks["dq_summary_matches_provenance"]["passed"] is True
+    assert checks["dq_summary_matches_provenance"]["evidence"]["required"] is False
+    assert checks["geometric_frame_count_matches_active"]["passed"] is True
+    assert checks["geometric_frame_count_matches_active"]["evidence"]["required"] is False
+    assert payload["outputs"][0]["pixel_verification"]["dq"]["status"] == "skipped_by_output_policy"
+    assert payload["outputs"][0]["pixel_verification"]["dq"]["ok"] is True
+
+
 def test_resident_result_contract_cli_writes_outputs(tmp_path: Path) -> None:
     _write_resident_run(tmp_path)
     out = tmp_path / "resident_contract.json"

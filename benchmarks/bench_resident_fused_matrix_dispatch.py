@@ -134,7 +134,7 @@ def main() -> int:
     parser.add_argument("--interpolation", choices=["bilinear", "lanczos3"], default="bilinear")
     parser.add_argument("--max-chunk-capacity-frames", type=int, default=8)
     parser.add_argument("--clamping-threshold", type=float, default=-1.0)
-    parser.add_argument("--download-mode", choices=["master_weight", "full"], default="master_weight")
+    parser.add_argument("--download-mode", choices=["master_only", "master_weight", "full"], default="master_weight")
     args = parser.parse_args()
 
     if args.frames <= 0 or args.width <= 0 or args.height <= 0:

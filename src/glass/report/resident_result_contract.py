@@ -355,9 +355,14 @@ def _pixel_verify(
 ) -> dict[str, Any]:
     dq_summary = output.get("dq_summary") if isinstance(output.get("dq_summary"), dict) else {}
     result: dict[str, Any] = {"enabled": True, "tile_size": tile_size, "tolerance_pixels": tolerance_pixels}
+    dq_required = _map_required(output, "dq", rejection=rejection)
     dq_path = _resolve_path(output.get("dq_map_path"), run_root)
     if dq_path is None:
-        result["dq"] = {"ok": False, "status": "missing_path"}
+        result["dq"] = {
+            "ok": not dq_required,
+            "status": "missing_path" if dq_required else "skipped_by_output_policy",
+            "required": dq_required,
+        }
     else:
         dq_pixels = summarize_dq_map_pixels(dq_path, flags=_dq_flags(dq_summary), tile_size=tile_size)
         matches = {}
@@ -482,9 +487,24 @@ def _resident_output_contract(
     frame_count = _int_value(output.get("frame_count"))
     min_required_active_frame_count = 2 if frame_count is not None and frame_count > 1 else 1
     map_rows = _map_rows(output, run_root, rejection=rejection)
+    dq_required = _map_required(output, "dq", rejection=rejection)
     coverage_required = _map_required(output, "coverage", rejection=rejection)
     coverage_available = bool(coverage_provenance) and bool(coverage_provenance.get("available", True))
+    geometric_output = output.get("geometric_warp_coverage")
+    geometric_available = (
+        bool(geometric_output.get("available"))
+        if isinstance(geometric_output, dict)
+        else bool(coverage_provenance.get("geometric_frame_count_matches_active") is not None)
+    )
+    geometric_required = coverage_required or coverage_available or geometric_available
+    if isinstance(geometric_output, dict):
+        geometric_frame_count_matches = bool(coverage_provenance.get("geometric_frame_count_matches_active", True)) and bool(
+            geometric_output.get("frame_count_matches_active", True)
+        )
+    else:
+        geometric_frame_count_matches = bool(coverage_provenance.get("geometric_frame_count_matches_active", True))
     summary_match = _summary_matches(dq_summary, provenance_summary)
+    dq_summary_match_required = dq_required or bool(dq_summary)
     source_terms = {str(item) for item in (provenance_summary.get("source_terms") or [])}
     source_terms_required = coverage_required or coverage_available
     coverage_rejected_samples = _int_value(coverage_provenance.get("rejected_sample_count"))
@@ -521,8 +541,8 @@ def _resident_output_contract(
         ),
         _check(
             "dq_summary_present",
-            bool(dq_summary) and "valid" in dq_summary,
-            {"keys": sorted(dq_summary.keys())},
+            (not dq_required) or (bool(dq_summary) and "valid" in dq_summary),
+            {"keys": sorted(dq_summary.keys()), "required": dq_required},
         ),
         _check(
             "resident_provenance_summary",
@@ -537,11 +557,12 @@ def _resident_output_contract(
         ),
         _check(
             "dq_summary_matches_provenance",
-            summary_match["passed"],
+            (not dq_summary_match_required) or summary_match["passed"],
             {
                 "mismatches": summary_match["mismatches"],
                 "dq_summary": dq_summary,
                 "provenance_output_dq_summary": provenance_summary.get("output_dq_summary"),
+                "required": dq_summary_match_required,
             },
         ),
         _check(
@@ -578,15 +599,13 @@ def _resident_output_contract(
         ),
         _check(
             "geometric_frame_count_matches_active",
-            bool(coverage_provenance.get("geometric_frame_count_matches_active", True))
-            and bool(output.get("geometric_warp_coverage", {}).get("frame_count_matches_active", True))
-            if isinstance(output.get("geometric_warp_coverage"), dict)
-            else bool(coverage_provenance.get("geometric_frame_count_matches_active", True)),
+            (not geometric_required) or geometric_frame_count_matches,
             {
                 "coverage_provenance": coverage_provenance.get("geometric_frame_count_matches_active"),
-                "output": (output.get("geometric_warp_coverage") or {}).get("frame_count_matches_active")
-                if isinstance(output.get("geometric_warp_coverage"), dict)
+                "output": (geometric_output or {}).get("frame_count_matches_active")
+                if isinstance(geometric_output, dict)
                 else None,
+                "required": geometric_required,
             },
         ),
         _check(

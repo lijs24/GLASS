@@ -8853,10 +8853,11 @@ class ResidentCalibratedStack {
     if (low_sigma <= 0.0f || high_sigma <= 0.0f) {
       throw std::invalid_argument("sigma thresholds must be positive");
     }
-    if (download_mode != "full" && download_mode != "master_weight") {
-      throw std::invalid_argument("download_mode must be full or master_weight");
+    if (download_mode != "full" && download_mode != "master_weight" && download_mode != "master_only") {
+      throw std::invalid_argument("download_mode must be full, master_weight, or master_only");
     }
     const bool download_diagnostics = download_mode == "full";
+    const bool download_weight_map = download_mode != "master_only";
 
     std::vector<float> weights(frame_count_, 1.0f);
     py::array_t<float, py::array::c_style | py::array::forcecast> weights_array;
@@ -8871,7 +8872,7 @@ class ResidentCalibratedStack {
     }
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> weight_map;
     py::array_t<float> coverage_map;
     py::array_t<float> low_rejection_map;
     py::array_t<float> high_rejection_map;
@@ -8881,13 +8882,20 @@ class ResidentCalibratedStack {
       high_rejection_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     }
     const py::buffer_info master_info = master.request();
-    const py::buffer_info weight_map_info = weight_map.request();
+    py::object weight_obj = py::none();
     py::object coverage_obj = py::none();
     py::object low_obj = py::none();
     py::object high_obj = py::none();
+    float* weight_ptr = nullptr;
     float* coverage_ptr = nullptr;
     float* low_ptr = nullptr;
     float* high_ptr = nullptr;
+    if (download_weight_map) {
+      weight_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      const py::buffer_info weight_map_info = weight_map.request();
+      weight_ptr = static_cast<float*>(weight_map_info.ptr);
+      weight_obj = weight_map;
+    }
     if (download_diagnostics) {
       const py::buffer_info coverage_info = coverage_map.request();
       const py::buffer_info low_info = low_rejection_map.request();
@@ -8942,13 +8950,15 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(master_info.ptr, d_master, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
           "cudaMemcpy(resident sigma master)");
-      check_cuda(
-          cudaMemcpy(
-              weight_map_info.ptr,
-              d_weight_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(resident sigma weight map)");
+      if (download_weight_map) {
+        check_cuda(
+            cudaMemcpy(
+                weight_ptr,
+                d_weight_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident sigma weight map)");
+      }
       if (download_diagnostics) {
         check_cuda(
             cudaMemcpy(
@@ -8989,7 +8999,7 @@ class ResidentCalibratedStack {
     cudaFree(d_high_rejection_map);
     return py::make_tuple(
         master,
-        weight_map,
+        weight_obj,
         coverage_obj,
         low_obj,
         high_obj);
@@ -9431,10 +9441,11 @@ class ResidentCalibratedStack {
     if (interpolation != "bilinear" && interpolation != "lanczos3") {
       throw std::invalid_argument("interpolation must be bilinear or lanczos3");
     }
-    if (download_mode != "full" && download_mode != "master_weight") {
-      throw std::invalid_argument("download_mode must be full or master_weight");
+    if (download_mode != "full" && download_mode != "master_weight" && download_mode != "master_only") {
+      throw std::invalid_argument("download_mode must be full, master_weight, or master_only");
     }
     const bool download_diagnostics = download_mode == "full";
+    const bool download_weight_map = download_mode != "master_only";
     const auto matrices = parse_matrix_stack(matrices_obj);
     if (matrices.size() != frame_count_) {
       throw std::invalid_argument("matrices must have shape (frame_count, 3, 3)");
@@ -9453,15 +9464,22 @@ class ResidentCalibratedStack {
     }
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> weight_map;
     const py::buffer_info master_info = master.request();
-    const py::buffer_info weight_map_info = weight_map.request();
+    py::object weight_obj = py::none();
     py::object coverage_obj = py::none();
     py::object geometric_obj = py::none();
+    float* weight_host_ptr = nullptr;
     float* coverage_host_ptr = nullptr;
     float* geometric_host_ptr = nullptr;
     py::array_t<float> coverage_map;
     py::array_t<float> geometric_coverage_map;
+    if (download_weight_map) {
+      weight_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      const py::buffer_info weight_map_info = weight_map.request();
+      weight_host_ptr = static_cast<float*>(weight_map_info.ptr);
+      weight_obj = weight_map;
+    }
     if (download_diagnostics) {
       coverage_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
       geometric_coverage_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
@@ -9550,13 +9568,15 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(master_info.ptr, d_master, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
           "cudaMemcpy(fused matrix master)");
-      check_cuda(
-          cudaMemcpy(
-              weight_map_info.ptr,
-              d_weight_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(fused matrix weight map)");
+      if (download_weight_map) {
+        check_cuda(
+            cudaMemcpy(
+                weight_host_ptr,
+                d_weight_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(fused matrix weight map)");
+      }
       if (download_diagnostics) {
         check_cuda(
             cudaMemcpy(
@@ -9608,11 +9628,12 @@ class ResidentCalibratedStack {
     timing["weights_bytes"] = static_cast<unsigned long long>(frame_count_ * sizeof(float));
     timing["download_mode"] = download_mode;
     timing["diagnostic_maps_downloaded"] = download_diagnostics;
+    timing["weight_map_downloaded"] = download_weight_map;
     timing["output_bytes"] = static_cast<unsigned long long>(
-        pixels_per_frame_ * sizeof(float) * (download_diagnostics ? 4 : 2));
+        pixels_per_frame_ * sizeof(float) * (1 + (download_weight_map ? 1 : 0) + (download_diagnostics ? 2 : 0)));
     timing["avoids_stack_scatter"] = true;
     timing["modifies_resident_stack"] = false;
-    return py::make_tuple(master, weight_map, coverage_obj, geometric_obj, timing);
+    return py::make_tuple(master, weight_obj, coverage_obj, geometric_obj, timing);
   }
 
   py::tuple integrate_matrix_warped_sigma_clip(
@@ -9633,10 +9654,11 @@ class ResidentCalibratedStack {
     if (low_sigma <= 0.0f || high_sigma <= 0.0f) {
       throw std::invalid_argument("sigma thresholds must be positive");
     }
-    if (download_mode != "full" && download_mode != "master_weight") {
-      throw std::invalid_argument("download_mode must be full or master_weight");
+    if (download_mode != "full" && download_mode != "master_weight" && download_mode != "master_only") {
+      throw std::invalid_argument("download_mode must be full, master_weight, or master_only");
     }
     const bool download_diagnostics = download_mode == "full";
+    const bool download_weight_map = download_mode != "master_only";
     const auto matrices = parse_matrix_stack(matrices_obj);
     if (matrices.size() != frame_count_) {
       throw std::invalid_argument("matrices must have shape (frame_count, 3, 3)");
@@ -9655,13 +9677,14 @@ class ResidentCalibratedStack {
     }
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> weight_map;
     const py::buffer_info master_info = master.request();
-    const py::buffer_info weight_map_info = weight_map.request();
+    py::object weight_obj = py::none();
     py::object coverage_obj = py::none();
     py::object low_obj = py::none();
     py::object high_obj = py::none();
     py::object geometric_obj = py::none();
+    float* weight_host_ptr = nullptr;
     float* coverage_host_ptr = nullptr;
     float* low_host_ptr = nullptr;
     float* high_host_ptr = nullptr;
@@ -9670,6 +9693,12 @@ class ResidentCalibratedStack {
     py::array_t<float> low_rejection_map;
     py::array_t<float> high_rejection_map;
     py::array_t<float> geometric_coverage_map;
+    if (download_weight_map) {
+      weight_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      const py::buffer_info weight_map_info = weight_map.request();
+      weight_host_ptr = static_cast<float*>(weight_map_info.ptr);
+      weight_obj = weight_map;
+    }
     if (download_diagnostics) {
       coverage_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
       low_rejection_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
@@ -9787,13 +9816,15 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(master_info.ptr, d_master, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
           "cudaMemcpy(fused matrix sigma master)");
-      check_cuda(
-          cudaMemcpy(
-              weight_map_info.ptr,
-              d_weight_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(fused matrix sigma weight map)");
+      if (download_weight_map) {
+        check_cuda(
+            cudaMemcpy(
+                weight_host_ptr,
+                d_weight_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(fused matrix sigma weight map)");
+      }
       if (download_diagnostics) {
         check_cuda(
             cudaMemcpy(
@@ -9866,13 +9897,14 @@ class ResidentCalibratedStack {
     timing["weights_bytes"] = static_cast<unsigned long long>(frame_count_ * sizeof(float));
     timing["download_mode"] = download_mode;
     timing["diagnostic_maps_downloaded"] = download_diagnostics;
+    timing["weight_map_downloaded"] = download_weight_map;
     timing["output_bytes"] = static_cast<unsigned long long>(
-        pixels_per_frame_ * sizeof(float) * (download_diagnostics ? 6 : 2));
+        pixels_per_frame_ * sizeof(float) * (1 + (download_weight_map ? 1 : 0) + (download_diagnostics ? 4 : 0)));
     timing["avoids_stack_scatter"] = true;
     timing["modifies_resident_stack"] = false;
     return py::make_tuple(
         master,
-        weight_map,
+        weight_obj,
         coverage_obj,
         low_obj,
         high_obj,
