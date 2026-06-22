@@ -11622,6 +11622,50 @@ Completed in Gate446:
   - real A/B root:
     `C:\glass_runs\phase2_s2_gate502_warp_chunk_capacity_ab_real\runs_20260623_051320`.
 
+### S2-Gate 503: Batched Triangle Descriptor Generation
+
+- Continued the resident registration/warp optimization path after Gate502
+  showed that larger warp chunks were not the main bottleneck.
+- Completed:
+  - added native CUDA `triangle_asterism_descriptors_batch_f32`;
+  - added Python wrapper/fallback `glass_cuda.triangle_asterism_descriptors_batch_f32`;
+  - routes resident `similarity_cuda_triangle` moving-catalog descriptor
+    generation through one padded batch call when native support exists;
+  - keeps existing per-catalog descriptor generation as the fallback;
+  - records descriptor-generation batch mode, call count, batch size, and
+    native timing in resident artifacts;
+  - added CUDA tests proving batch descriptor output matches single-catalog
+    descriptor output exactly.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate503_descriptor_batch_ab_real\runs_20260623_052608`;
+  - Gate502 default baseline:
+    `C:\glass_runs\phase2_s2_gate502_warp_chunk_capacity_ab_real\runs_20260623_051320\default_auto8`;
+  - first Gate503 run timing total: `7.1556646000244655 s`;
+  - repeat Gate503 run timing total: `7.309961199993268 s`;
+  - Gate502 baseline timing total: `7.12994339998113 s`;
+  - registration component improved from `2.0864001998257167 s` to
+    `2.0023035002699507 s` / `2.0049072001437387 s`;
+  - moving descriptor generation improved from `0.1319461001548916 s` to
+    `0.05534540000371635 s` / `0.05633970000781119 s`;
+  - Gate503 records one descriptor-generation batch call of size `198`;
+  - output write varied from Gate502 `0.5232929000048898 s` to Gate503
+    `0.612973100040108 s` and `0.7726493999944068 s`, which hides the
+    registration-component gain in end-to-end wall timing.
+- Numerical validation:
+  - both Gate503 masters are bitwise equal to Gate502 default;
+  - RMS/p99/max absolute differences are all `0.0`.
+- Interpretation:
+  - this is a real resident registration component optimization, not a science
+    change;
+  - the next larger target remains warp kernel/sync and output/write
+    variability, since descriptor generation is now a smaller fraction of the
+    registration component.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_503_status.md`;
+  - real A/B root:
+    `C:\glass_runs\phase2_s2_gate503_descriptor_batch_ab_real\runs_20260623_052608`.
+
 ## Gate Rules
 
 Each gate requires:

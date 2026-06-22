@@ -6799,6 +6799,21 @@ def run_resident_calibration_integration(
                 triangle_descriptor_fit_native_output_download_s = 0.0
                 triangle_descriptor_fit_native_frame_total_s = 0.0
                 triangle_descriptor_fit_native_total_s = 0.0
+                triangle_descriptor_generation_batch_enabled = bool(
+                    triangle_catalog_batch_enabled
+                    and hasattr(cuda_module, "triangle_asterism_descriptors_batch_f32")
+                )
+                triangle_descriptor_generation_batch_mode = (
+                    "native_batch_padded_catalog_one_sync"
+                    if triangle_descriptor_generation_batch_enabled
+                    else "per_frame"
+                )
+                triangle_descriptor_generation_batch_call_count = 0
+                triangle_descriptor_generation_batch_size = 0
+                triangle_descriptor_generation_batch_timing_model = "off"
+                triangle_descriptor_generation_batch_upload_s = 0.0
+                triangle_descriptor_generation_batch_kernel_sync_s = 0.0
+                triangle_descriptor_generation_batch_output_download_s = 0.0
                 triangle_fused_matrix_deferred_enabled = resident_integration_dispatch == "fused_matrix"
                 triangle_fused_matrix_deferred_count = 0
                 triangle_warp_batch_available = bool(
@@ -7220,27 +7235,94 @@ def run_resident_calibration_integration(
                     nonlocal triangle_descriptor_fit_native_reference_upload_s
                     nonlocal triangle_descriptor_fit_native_total_s
                     nonlocal triangle_descriptor_fit_native_workspace_alloc_s
+                    nonlocal triangle_descriptor_generation_batch_call_count
+                    nonlocal triangle_descriptor_generation_batch_kernel_sync_s
+                    nonlocal triangle_descriptor_generation_batch_output_download_s
+                    nonlocal triangle_descriptor_generation_batch_size
+                    nonlocal triangle_descriptor_generation_batch_timing_model
+                    nonlocal triangle_descriptor_generation_batch_upload_s
                     threshold_key = round(float(threshold), 6)
                     if triangle_descriptor_fit_batch_enabled:
                         cached_fits = descriptor_fit_batch_cache.get(threshold_key)
                         if cached_fits is None:
                             descriptor_by_index = moving_descriptor_batch_cache.setdefault(threshold_key, {})
+                            catalogs_by_index: dict[int, dict[str, Any]] = {}
                             fit_indices: list[int] = []
                             moving_x_list: list[Any] = []
                             moving_y_list: list[Any] = []
                             moving_descriptors_list: list[Any] = []
                             moving_indices_list: list[Any] = []
                             descriptor_batch_elapsed = 0.0
+                            descriptor_build_indices: list[int] = []
+                            descriptor_x_list: list[Any] = []
+                            descriptor_y_list: list[Any] = []
                             for moving_index in moving_catalog_batch_indices:
                                 catalog = detect_resident_triangle_moving_catalog(moving_index, threshold)
                                 if int(catalog["stored_count"]) < 3:
                                     continue
+                                catalogs_by_index[int(moving_index)] = catalog
                                 descriptor = descriptor_by_index.get(moving_index)
                                 if descriptor is None:
-                                    descriptor_start = perf_counter()
-                                    descriptor = triangle_descriptors(catalog)
-                                    descriptor_batch_elapsed += perf_counter() - descriptor_start
-                                    descriptor_by_index[moving_index] = descriptor
+                                    descriptor_build_indices.append(int(moving_index))
+                                    descriptor_x_list.append(catalog["x"])
+                                    descriptor_y_list.append(catalog["y"])
+                            if descriptor_build_indices:
+                                descriptor_start = perf_counter()
+                                if triangle_descriptor_generation_batch_enabled:
+                                    descriptor_results = cuda_module.triangle_asterism_descriptors_batch_f32(
+                                        descriptor_x_list,
+                                        descriptor_y_list,
+                                        max_stars=resident_star_max_candidates,
+                                        neighbors=descriptor_neighbors,
+                                        max_descriptors=max_descriptors,
+                                    )
+                                else:
+                                    descriptor_results = [
+                                        triangle_descriptors(
+                                            catalogs_by_index[int(moving_index)]
+                                        )
+                                        for moving_index in descriptor_build_indices
+                                    ]
+                                descriptor_batch_elapsed += perf_counter() - descriptor_start
+                                for moving_index, descriptor in zip(
+                                    descriptor_build_indices,
+                                    descriptor_results,
+                                    strict=True,
+                                ):
+                                    descriptor_by_index[int(moving_index)] = descriptor
+                                triangle_descriptor_generation_batch_call_count += 1
+                                triangle_descriptor_generation_batch_size = max(
+                                    triangle_descriptor_generation_batch_size,
+                                    len(descriptor_build_indices),
+                                )
+                                if descriptor_results:
+                                    first_descriptor = descriptor_results[0]
+                                    triangle_descriptor_generation_batch_timing_model = str(
+                                        first_descriptor.get(
+                                            "batch_timing_model",
+                                            triangle_descriptor_generation_batch_mode,
+                                        )
+                                    )
+                                    triangle_descriptor_generation_batch_upload_s += float(
+                                        first_descriptor.get("batch_upload_s", 0.0) or 0.0
+                                    )
+                                    triangle_descriptor_generation_batch_kernel_sync_s += float(
+                                        first_descriptor.get("batch_kernel_sync_s", 0.0) or 0.0
+                                    )
+                                    triangle_descriptor_generation_batch_output_download_s += float(
+                                        first_descriptor.get(
+                                            "batch_output_download_s",
+                                            0.0,
+                                        )
+                                        or 0.0
+                                    )
+                            for moving_index in moving_catalog_batch_indices:
+                                catalog = catalogs_by_index.get(int(moving_index))
+                                if catalog is None:
+                                    continue
+                                descriptor = descriptor_by_index.get(moving_index)
+                                if descriptor is None:
+                                    continue
                                 if int(descriptor["count"]) <= 0:
                                     continue
                                 fit_indices.append(int(moving_index))
@@ -10319,6 +10401,43 @@ def run_resident_calibration_integration(
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,
                         "triangle_catalog_native_total_s": float(triangle_catalog_native_total_s)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_generation_batch": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_descriptor_generation_batch_enabled
+                        ),
+                        "triangle_descriptor_generation_batch_mode": triangle_descriptor_generation_batch_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_descriptor_generation_batch_call_count": int(
+                            triangle_descriptor_generation_batch_call_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_descriptor_generation_batch_size": int(
+                            triangle_descriptor_generation_batch_size
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_descriptor_generation_batch_timing_model": (
+                            triangle_descriptor_generation_batch_timing_model
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_descriptor_generation_batch_upload_s": float(
+                            triangle_descriptor_generation_batch_upload_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_generation_batch_kernel_sync_s": float(
+                            triangle_descriptor_generation_batch_kernel_sync_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_generation_batch_output_download_s": float(
+                            triangle_descriptor_generation_batch_output_download_s
+                        )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,
                         "triangle_descriptor_fit_batch": bool(

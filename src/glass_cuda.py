@@ -1751,6 +1751,96 @@ def triangle_asterism_descriptors_f32(
     }
 
 
+def _normalize_triangle_descriptor_result(result: dict[str, Any]) -> dict[str, Any]:
+    normalized = {
+        "count": int(result["count"]),
+        "raw_count": int(result["raw_count"]),
+        "max_stars": int(result["max_stars"]),
+        "neighbors": int(result["neighbors"]),
+        "descriptors": np.asarray(result["descriptors"], dtype=np.float32),
+        "indices": np.asarray(result["indices"], dtype=np.int32),
+        "areas": np.asarray(result["areas"], dtype=np.float32),
+        "model": str(result.get("model", "triangle_asterism_descriptors_cuda")),
+    }
+    if "batch_index" in result:
+        normalized["batch_index"] = int(result["batch_index"])
+    if "batch_count" in result:
+        normalized["batch_count"] = int(result["batch_count"])
+    if "batch_model" in result:
+        normalized["batch_model"] = str(result["batch_model"])
+    if "batch_timing_model" in result:
+        normalized["batch_timing_model"] = str(result["batch_timing_model"])
+    for key in (
+        "batch_host_prepare_s",
+        "batch_upload_s",
+        "batch_kernel_sync_s",
+        "batch_output_download_s",
+        "batch_total_elapsed_s_at_result",
+    ):
+        if key in result:
+            normalized[key] = float(result[key])
+    return normalized
+
+
+def triangle_asterism_descriptors_batch_f32(
+    x_list: list[Any],
+    y_list: list[Any],
+    max_stars: int = 80,
+    neighbors: int = 5,
+    max_descriptors: int = 1200,
+) -> list[dict[str, Any]]:
+    """Generate local triangle asterism descriptors for a batch of compact catalogs."""
+
+    if len(x_list) != len(y_list):
+        raise ValueError("catalog x/y batch lists must have the same length")
+    if max_stars < 0:
+        raise ValueError("max_stars must be non-negative")
+    if max_descriptors < 0:
+        raise ValueError("max_descriptors must be non-negative")
+    if not x_list:
+        return []
+
+    x_arrays = [
+        np.ascontiguousarray(np.asarray(item, dtype=np.float32).reshape(-1))
+        for item in x_list
+    ]
+    y_arrays = [
+        np.ascontiguousarray(np.asarray(item, dtype=np.float32).reshape(-1))
+        for item in y_list
+    ]
+    for x_array, y_array in zip(x_arrays, y_arrays, strict=True):
+        if x_array.shape != y_array.shape:
+            raise ValueError("catalog coordinate arrays must have matching x/y shapes")
+
+    native = _native()
+    if native is not None and hasattr(native, "triangle_asterism_descriptors_batch_f32"):
+        results = native.triangle_asterism_descriptors_batch_f32(
+            x_arrays,
+            y_arrays,
+            int(max_stars),
+            int(neighbors),
+            int(max_descriptors),
+        )
+        return [_normalize_triangle_descriptor_result(dict(result)) for result in list(results)]
+
+    output = []
+    batch_count = len(x_arrays)
+    for batch_index, (x_array, y_array) in enumerate(zip(x_arrays, y_arrays, strict=True)):
+        result = triangle_asterism_descriptors_f32(
+            x_array,
+            y_array,
+            max_stars=max_stars,
+            neighbors=neighbors,
+            max_descriptors=max_descriptors,
+        )
+        result["batch_index"] = int(batch_index)
+        result["batch_count"] = int(batch_count)
+        result["batch_model"] = "triangle_asterism_descriptors_cpu_batch_fallback"
+        result["batch_timing_model"] = "per_catalog_cpu_fallback"
+        output.append(result)
+    return output
+
+
 def _normalize_triangle_similarity_result(result: dict[str, Any]) -> dict[str, Any]:
     normalized = {
         "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),

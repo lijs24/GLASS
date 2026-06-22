@@ -108,6 +108,52 @@ def test_gpu_triangle_asterism_descriptors_match_cpu_bridge():
     assert np.allclose(result["areas"], np.asarray([item[2] for item in expected], dtype=np.float32))
 
 
+def test_gpu_triangle_asterism_descriptor_batch_matches_single_catalogs():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "triangle_asterism_descriptors_batch_f32"):
+        raise AssertionError("triangle_asterism_descriptors_batch_f32 is missing from glass_cuda")
+
+    reference = _catalog_points()
+    moving = reference + np.asarray([1.25, -0.75], dtype=np.float64)
+    sparse = reference[:4] + np.asarray([-2.0, 1.5], dtype=np.float64)
+    catalogs = [reference, moving, sparse]
+
+    batch = module.triangle_asterism_descriptors_batch_f32(
+        [catalog[:, 0].astype(np.float32) for catalog in catalogs],
+        [catalog[:, 1].astype(np.float32) for catalog in catalogs],
+        max_stars=8,
+        neighbors=5,
+        max_descriptors=64,
+    )
+    singles = [
+        module.triangle_asterism_descriptors_f32(
+            catalog[:, 0].astype(np.float32),
+            catalog[:, 1].astype(np.float32),
+            max_stars=8,
+            neighbors=5,
+            max_descriptors=64,
+        )
+        for catalog in catalogs
+    ]
+
+    assert len(batch) == len(singles) == 3
+    assert [item["batch_index"] for item in batch] == [0, 1, 2]
+    assert [item["batch_count"] for item in batch] == [3, 3, 3]
+    assert batch[0]["batch_model"] == "triangle_asterism_descriptors_cuda_batch_padded_one_sync"
+    assert batch[0]["batch_timing_model"] == "padded_catalog_batch_one_kernel_one_sync"
+    assert batch[0]["batch_upload_s"] >= 0.0
+    assert batch[0]["batch_kernel_sync_s"] >= 0.0
+    assert batch[0]["batch_output_download_s"] >= 0.0
+    for batch_result, single_result in zip(batch, singles, strict=True):
+        assert batch_result["count"] == single_result["count"]
+        assert batch_result["raw_count"] == single_result["raw_count"]
+        assert batch_result["max_stars"] == single_result["max_stars"]
+        assert batch_result["neighbors"] == single_result["neighbors"]
+        assert np.allclose(batch_result["descriptors"], single_result["descriptors"])
+        assert np.array_equal(batch_result["indices"], single_result["indices"])
+        assert np.allclose(batch_result["areas"], single_result["areas"])
+
+
 def test_gpu_triangle_descriptor_similarity_recovers_catalog_transform():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_similarity_from_triangle_descriptors_f32"):

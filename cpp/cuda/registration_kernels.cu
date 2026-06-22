@@ -926,6 +926,167 @@ __global__ void triangle_asterism_descriptor_kernel(
   valid[slot] = 1;
 }
 
+__global__ void triangle_asterism_descriptor_batch_kernel(
+    const float* x_batch,
+    const float* y_batch,
+    float* descriptors,
+    int* indices,
+    float* areas,
+    unsigned char* valid,
+    const int* counts,
+    const int* neighbors_by_frame,
+    const int* combos_by_frame,
+    int batch_count,
+    int max_count,
+    int raw_capacity) {
+  constexpr int kMaxNeighbors = 16;
+  const int global_slot = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  const int total_slots = batch_count * raw_capacity;
+  if (global_slot >= total_slots) {
+    return;
+  }
+  descriptors[global_slot * 2 + 0] = NAN;
+  descriptors[global_slot * 2 + 1] = NAN;
+  indices[global_slot * 3 + 0] = -1;
+  indices[global_slot * 3 + 1] = -1;
+  indices[global_slot * 3 + 2] = -1;
+  areas[global_slot] = NAN;
+  valid[global_slot] = 0;
+
+  const int frame = global_slot / raw_capacity;
+  const int local_slot = global_slot % raw_capacity;
+  const int count = counts[frame];
+  const int neighbors = neighbors_by_frame[frame];
+  const int combos_per_anchor = combos_by_frame[frame];
+  const int raw_count = count * combos_per_anchor;
+  if (count < 3 || neighbors < 3 || neighbors > kMaxNeighbors ||
+      combos_per_anchor <= 0 || local_slot >= raw_count) {
+    return;
+  }
+
+  const float* x = x_batch + frame * max_count;
+  const float* y = y_batch + frame * max_count;
+  const int anchor = local_slot / combos_per_anchor;
+  const int combo_index = local_slot % combos_per_anchor;
+  const float ax = x[anchor];
+  const float ay = y[anchor];
+  if (!isfinite(ax) || !isfinite(ay)) {
+    return;
+  }
+
+  float best_distances[kMaxNeighbors];
+  int best_indices[kMaxNeighbors];
+  for (int i = 0; i < kMaxNeighbors; ++i) {
+    best_distances[i] = 3.402823466e+38F;
+    best_indices[i] = -1;
+  }
+  for (int candidate = 0; candidate < count; ++candidate) {
+    const float cx = x[candidate];
+    const float cy = y[candidate];
+    if (!isfinite(cx) || !isfinite(cy)) {
+      continue;
+    }
+    const float dx = cx - ax;
+    const float dy = cy - ay;
+    const float distance2 = dx * dx + dy * dy;
+    int insert_at = -1;
+    for (int pos = 0; pos < neighbors; ++pos) {
+      if (distance2 < best_distances[pos] ||
+          (distance2 == best_distances[pos] && candidate < best_indices[pos])) {
+        insert_at = pos;
+        break;
+      }
+    }
+    if (insert_at < 0) {
+      continue;
+    }
+    for (int pos = neighbors - 1; pos > insert_at; --pos) {
+      best_distances[pos] = best_distances[pos - 1];
+      best_indices[pos] = best_indices[pos - 1];
+    }
+    best_distances[insert_at] = distance2;
+    best_indices[insert_at] = candidate;
+  }
+
+  int ca = 0;
+  int cb = 1;
+  int cc = 2;
+  triangle_combo_indices(combo_index, neighbors, &ca, &cb, &cc);
+  const int i0 = best_indices[ca];
+  const int i1 = best_indices[cb];
+  const int i2 = best_indices[cc];
+  if (i0 < 0 || i1 < 0 || i2 < 0 || i0 == i1 || i1 == i2 || i0 == i2) {
+    return;
+  }
+  const float x0 = x[i0];
+  const float y0 = y[i0];
+  const float x1 = x[i1];
+  const float y1 = y[i1];
+  const float x2 = x[i2];
+  const float y2 = y[i2];
+  const float area = fabsf(((x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)) * 0.5f);
+  if (area < 2.0f) {
+    return;
+  }
+
+  const float d01 = sqrtf(distance2_catalog(x, y, i0, i1));
+  const float d12 = sqrtf(distance2_catalog(x, y, i1, i2));
+  const float d20 = sqrtf(distance2_catalog(x, y, i2, i0));
+  float shortest = d01;
+  float middle = d12;
+  float longest = d20;
+  if (shortest > middle) {
+    const float tmp = shortest;
+    shortest = middle;
+    middle = tmp;
+  }
+  if (middle > longest) {
+    const float tmp = middle;
+    middle = longest;
+    longest = tmp;
+  }
+  if (shortest > middle) {
+    const float tmp = shortest;
+    shortest = middle;
+    middle = tmp;
+  }
+  if (shortest <= 1.0e-6f || middle <= 1.0e-6f) {
+    return;
+  }
+
+  int first = i0;
+  int second = i1;
+  int third = i2;
+  float third_first_distance = d20;
+  float third_second_distance = d12;
+  if (d12 >= d01 && d12 >= d20) {
+    first = i1;
+    second = i2;
+    third = i0;
+    third_first_distance = d01;
+    third_second_distance = d20;
+  } else if (d20 >= d01 && d20 >= d12) {
+    first = i2;
+    second = i0;
+    third = i1;
+    third_first_distance = d12;
+    third_second_distance = d01;
+  }
+  if (third_first_distance < third_second_distance) {
+    const int tmp = first;
+    first = second;
+    second = tmp;
+  }
+
+  descriptors[global_slot * 2 + 0] = longest / middle;
+  descriptors[global_slot * 2 + 1] = middle / shortest;
+  indices[global_slot * 3 + 0] = first;
+  indices[global_slot * 3 + 1] = second;
+  indices[global_slot * 3 + 2] = third;
+  areas[global_slot] = area;
+  valid[global_slot] = 1;
+}
+
 __global__ void catalog_similarity_score_kernel(
     const float* reference_x,
     const float* reference_y,
@@ -1705,6 +1866,37 @@ void glass_triangle_asterism_descriptors_f32_launch(
   const int blocks = (raw_count + threads - 1) / threads;
   triangle_asterism_descriptor_kernel<<<blocks, threads>>>(
       x, y, descriptors, indices, areas, valid, count, neighbors, combos_per_anchor);
+}
+
+void glass_triangle_asterism_descriptors_batch_f32_launch(
+    const float* x_batch,
+    const float* y_batch,
+    float* descriptors,
+    int* indices,
+    float* areas,
+    unsigned char* valid,
+    const int* counts,
+    const int* neighbors_by_frame,
+    const int* combos_by_frame,
+    int batch_count,
+    int max_count,
+    int raw_capacity) {
+  const int total_slots = batch_count * raw_capacity;
+  const int threads = 256;
+  const int blocks = (total_slots + threads - 1) / threads;
+  triangle_asterism_descriptor_batch_kernel<<<blocks, threads>>>(
+      x_batch,
+      y_batch,
+      descriptors,
+      indices,
+      areas,
+      valid,
+      counts,
+      neighbors_by_frame,
+      combos_by_frame,
+      batch_count,
+      max_count,
+      raw_capacity);
 }
 
 void glass_estimate_similarity_from_triangle_descriptors_f32_launch(

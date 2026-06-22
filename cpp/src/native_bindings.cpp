@@ -276,6 +276,19 @@ void glass_triangle_asterism_descriptors_f32_launch(
     int count,
     int neighbors,
     int raw_count);
+void glass_triangle_asterism_descriptors_batch_f32_launch(
+    const float* x_batch,
+    const float* y_batch,
+    float* descriptors,
+    int* indices,
+    float* areas,
+    unsigned char* valid,
+    const int* counts,
+    const int* neighbors_by_frame,
+    const int* combos_by_frame,
+    int batch_count,
+    int max_count,
+    int raw_capacity);
 void glass_estimate_similarity_from_triangle_descriptors_f32_launch(
     const float* reference_x,
     const float* reference_y,
@@ -12134,6 +12147,348 @@ py::dict triangle_asterism_descriptors_f32(
   return result;
 }
 
+py::list triangle_asterism_descriptors_batch_f32(
+    py::sequence x_list,
+    py::sequence y_list,
+    int max_stars,
+    int neighbors,
+    int max_descriptors) {
+  const auto total_start = Clock::now();
+  const py::ssize_t batch_count_py = py::len(x_list);
+  if (py::len(y_list) != batch_count_py) {
+    throw std::invalid_argument("catalog x/y batch lists must have the same length");
+  }
+  if (max_stars < 0) {
+    throw std::invalid_argument("max_stars must be non-negative");
+  }
+  if (max_descriptors < 0) {
+    throw std::invalid_argument("max_descriptors must be non-negative");
+  }
+  py::list results;
+  if (batch_count_py == 0) {
+    return results;
+  }
+
+  using FloatArray = py::array_t<float, py::array::c_style | py::array::forcecast>;
+  std::vector<FloatArray> x_arrays;
+  std::vector<FloatArray> y_arrays;
+  std::vector<int> counts;
+  std::vector<int> neighbor_counts;
+  std::vector<int> combos_per_frame;
+  std::vector<int> raw_counts;
+  x_arrays.reserve(static_cast<std::size_t>(batch_count_py));
+  y_arrays.reserve(static_cast<std::size_t>(batch_count_py));
+  counts.reserve(static_cast<std::size_t>(batch_count_py));
+  neighbor_counts.reserve(static_cast<std::size_t>(batch_count_py));
+  combos_per_frame.reserve(static_cast<std::size_t>(batch_count_py));
+  raw_counts.reserve(static_cast<std::size_t>(batch_count_py));
+
+  int max_count = 0;
+  int raw_capacity = 0;
+  const auto host_prepare_start = Clock::now();
+  for (py::ssize_t batch_index = 0; batch_index < batch_count_py; ++batch_index) {
+    auto x = FloatArray::ensure(x_list[batch_index]);
+    auto y = FloatArray::ensure(y_list[batch_index]);
+    if (!x || !y) {
+      throw std::invalid_argument("catalog batch items must be convertible to float arrays");
+    }
+    const py::buffer_info x_info = x.request();
+    const py::buffer_info y_info = y.request();
+    if (x_info.ndim != 1 || y_info.ndim != 1) {
+      throw std::invalid_argument("catalog coordinate arrays must be one-dimensional");
+    }
+    require_same_shape(x_info, y_info);
+    const int input_count = static_cast<int>(x_info.shape[0]);
+    const int count = std::min(input_count, max_stars);
+    int neighbor_count = std::min(count, neighbors);
+    neighbor_count = std::max(3, neighbor_count);
+    neighbor_count = std::min(16, neighbor_count);
+    const int combos = neighbor_count * (neighbor_count - 1) * (neighbor_count - 2) / 6;
+    const int raw_count = count >= 3 ? count * combos : 0;
+    max_count = std::max(max_count, count);
+    raw_capacity = std::max(raw_capacity, raw_count);
+    x_arrays.push_back(std::move(x));
+    y_arrays.push_back(std::move(y));
+    counts.push_back(count);
+    neighbor_counts.push_back(neighbor_count);
+    combos_per_frame.push_back(combos);
+    raw_counts.push_back(raw_count);
+  }
+  const double host_prepare_s = seconds_since(host_prepare_start);
+
+  auto empty_result_for = [&](int batch_index) {
+    py::dict result;
+    result["count"] = 0;
+    result["raw_count"] = raw_counts[static_cast<std::size_t>(batch_index)];
+    result["max_stars"] = max_stars;
+    result["neighbors"] = neighbor_counts[static_cast<std::size_t>(batch_index)];
+    result["descriptors"] = py::array_t<float>({0, 2});
+    result["indices"] = py::array_t<int>({0, 3});
+    result["areas"] = py::array_t<float>({0});
+    result["model"] = "triangle_asterism_descriptors_cuda_batch_padded_one_sync";
+    result["batch_index"] = batch_index;
+    result["batch_count"] = static_cast<int>(batch_count_py);
+    result["batch_model"] = "triangle_asterism_descriptors_cuda_batch_padded_one_sync";
+    result["batch_timing_model"] = "padded_catalog_batch_one_kernel_one_sync";
+    result["batch_host_prepare_s"] = host_prepare_s;
+    result["batch_upload_s"] = 0.0;
+    result["batch_kernel_sync_s"] = 0.0;
+    result["batch_output_download_s"] = 0.0;
+    result["batch_total_elapsed_s_at_result"] = seconds_since(total_start);
+    return result;
+  };
+
+  if (max_count == 0 || raw_capacity == 0 || max_descriptors == 0) {
+    for (py::ssize_t batch_index = 0; batch_index < batch_count_py; ++batch_index) {
+      results.append(empty_result_for(static_cast<int>(batch_index)));
+    }
+    return results;
+  }
+
+  const std::size_t batch_count = static_cast<std::size_t>(batch_count_py);
+  std::vector<float> host_x(batch_count * static_cast<std::size_t>(max_count), std::numeric_limits<float>::quiet_NaN());
+  std::vector<float> host_y(batch_count * static_cast<std::size_t>(max_count), std::numeric_limits<float>::quiet_NaN());
+  for (py::ssize_t batch_index = 0; batch_index < batch_count_py; ++batch_index) {
+    const py::buffer_info x_info = x_arrays[static_cast<std::size_t>(batch_index)].request();
+    const py::buffer_info y_info = y_arrays[static_cast<std::size_t>(batch_index)].request();
+    const auto* x_ptr = static_cast<const float*>(x_info.ptr);
+    const auto* y_ptr = static_cast<const float*>(y_info.ptr);
+    const int count = counts[static_cast<std::size_t>(batch_index)];
+    const std::size_t base = static_cast<std::size_t>(batch_index) * static_cast<std::size_t>(max_count);
+    std::copy(x_ptr, x_ptr + count, host_x.begin() + static_cast<std::ptrdiff_t>(base));
+    std::copy(y_ptr, y_ptr + count, host_y.begin() + static_cast<std::ptrdiff_t>(base));
+  }
+
+  const std::size_t total_raw_slots = batch_count * static_cast<std::size_t>(raw_capacity);
+  std::vector<float> host_descriptors(total_raw_slots * 2, std::numeric_limits<float>::quiet_NaN());
+  std::vector<int> host_indices(total_raw_slots * 3, -1);
+  std::vector<float> host_areas(total_raw_slots, std::numeric_limits<float>::quiet_NaN());
+  std::vector<unsigned char> host_valid(total_raw_slots, 0);
+
+  float* d_x = nullptr;
+  float* d_y = nullptr;
+  float* d_descriptors = nullptr;
+  int* d_indices = nullptr;
+  float* d_areas = nullptr;
+  unsigned char* d_valid = nullptr;
+  int* d_counts = nullptr;
+  int* d_neighbors = nullptr;
+  int* d_combos = nullptr;
+  double upload_s = 0.0;
+  double kernel_sync_s = 0.0;
+  double output_download_s = 0.0;
+  try {
+    check_cuda(cudaMalloc(&d_x, host_x.size() * sizeof(float)), "cudaMalloc(batch triangle x)");
+    check_cuda(cudaMalloc(&d_y, host_y.size() * sizeof(float)), "cudaMalloc(batch triangle y)");
+    check_cuda(
+        cudaMalloc(&d_descriptors, host_descriptors.size() * sizeof(float)),
+        "cudaMalloc(batch triangle descriptors)");
+    check_cuda(
+        cudaMalloc(&d_indices, host_indices.size() * sizeof(int)),
+        "cudaMalloc(batch triangle indices)");
+    check_cuda(cudaMalloc(&d_areas, host_areas.size() * sizeof(float)), "cudaMalloc(batch triangle areas)");
+    check_cuda(cudaMalloc(&d_valid, host_valid.size() * sizeof(unsigned char)), "cudaMalloc(batch triangle valid)");
+    check_cuda(cudaMalloc(&d_counts, counts.size() * sizeof(int)), "cudaMalloc(batch triangle counts)");
+    check_cuda(cudaMalloc(&d_neighbors, neighbor_counts.size() * sizeof(int)), "cudaMalloc(batch triangle neighbors)");
+    check_cuda(cudaMalloc(&d_combos, combos_per_frame.size() * sizeof(int)), "cudaMalloc(batch triangle combos)");
+    const auto upload_start = Clock::now();
+    check_cuda(cudaMemcpy(d_x, host_x.data(), host_x.size() * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(batch triangle x)");
+    check_cuda(cudaMemcpy(d_y, host_y.data(), host_y.size() * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(batch triangle y)");
+    check_cuda(cudaMemcpy(d_counts, counts.data(), counts.size() * sizeof(int), cudaMemcpyHostToDevice), "cudaMemcpy(batch triangle counts)");
+    check_cuda(
+        cudaMemcpy(
+            d_neighbors,
+            neighbor_counts.data(),
+            neighbor_counts.size() * sizeof(int),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(batch triangle neighbors)");
+    check_cuda(
+        cudaMemcpy(
+            d_combos,
+            combos_per_frame.data(),
+            combos_per_frame.size() * sizeof(int),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(batch triangle combos)");
+    upload_s = seconds_since(upload_start);
+    const auto kernel_sync_start = Clock::now();
+    glass_triangle_asterism_descriptors_batch_f32_launch(
+        d_x,
+        d_y,
+        d_descriptors,
+        d_indices,
+        d_areas,
+        d_valid,
+        d_counts,
+        d_neighbors,
+        d_combos,
+        static_cast<int>(batch_count_py),
+        max_count,
+        raw_capacity);
+    check_cuda(cudaGetLastError(), "triangle_asterism_descriptors_batch_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "triangle_asterism_descriptors_batch_f32 synchronize");
+    kernel_sync_s = seconds_since(kernel_sync_start);
+    const auto output_download_start = Clock::now();
+    check_cuda(
+        cudaMemcpy(host_descriptors.data(), d_descriptors, host_descriptors.size() * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(batch triangle descriptors)");
+    check_cuda(
+        cudaMemcpy(host_indices.data(), d_indices, host_indices.size() * sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(batch triangle indices)");
+    check_cuda(
+        cudaMemcpy(host_areas.data(), d_areas, host_areas.size() * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(batch triangle areas)");
+    check_cuda(
+        cudaMemcpy(host_valid.data(), d_valid, host_valid.size() * sizeof(unsigned char), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(batch triangle valid)");
+    output_download_s = seconds_since(output_download_start);
+  } catch (...) {
+    cudaFree(d_x);
+    cudaFree(d_y);
+    cudaFree(d_descriptors);
+    cudaFree(d_indices);
+    cudaFree(d_areas);
+    cudaFree(d_valid);
+    cudaFree(d_counts);
+    cudaFree(d_neighbors);
+    cudaFree(d_combos);
+    throw;
+  }
+  cudaFree(d_x);
+  cudaFree(d_y);
+  cudaFree(d_descriptors);
+  cudaFree(d_indices);
+  cudaFree(d_areas);
+  cudaFree(d_valid);
+  cudaFree(d_counts);
+  cudaFree(d_neighbors);
+  cudaFree(d_combos);
+
+  struct TriangleDescriptor {
+    int key0;
+    int key1;
+    int key2;
+    float descriptor0;
+    float descriptor1;
+    int index0;
+    int index1;
+    int index2;
+    float area;
+  };
+
+  for (py::ssize_t batch_index = 0; batch_index < batch_count_py; ++batch_index) {
+    const int raw_count = raw_counts[static_cast<std::size_t>(batch_index)];
+    if (raw_count == 0) {
+      results.append(empty_result_for(static_cast<int>(batch_index)));
+      continue;
+    }
+    const std::size_t base = static_cast<std::size_t>(batch_index) * static_cast<std::size_t>(raw_capacity);
+    std::vector<TriangleDescriptor> triangles;
+    triangles.reserve(static_cast<std::size_t>(raw_count));
+    for (int slot = 0; slot < raw_count; ++slot) {
+      const std::size_t raw_slot = base + static_cast<std::size_t>(slot);
+      if (host_valid[raw_slot] == 0) {
+        continue;
+      }
+      int index0 = host_indices[raw_slot * 3 + 0];
+      int index1 = host_indices[raw_slot * 3 + 1];
+      int index2 = host_indices[raw_slot * 3 + 2];
+      if (index0 < 0 || index1 < 0 || index2 < 0) {
+        continue;
+      }
+      std::array<int, 3> key{index0, index1, index2};
+      std::sort(key.begin(), key.end());
+      triangles.push_back(
+          TriangleDescriptor{
+              key[0],
+              key[1],
+              key[2],
+              host_descriptors[raw_slot * 2 + 0],
+              host_descriptors[raw_slot * 2 + 1],
+              index0,
+              index1,
+              index2,
+              host_areas[raw_slot]});
+    }
+    std::sort(triangles.begin(), triangles.end(), [](const TriangleDescriptor& left, const TriangleDescriptor& right) {
+      if (left.key0 != right.key0) {
+        return left.key0 < right.key0;
+      }
+      if (left.key1 != right.key1) {
+        return left.key1 < right.key1;
+      }
+      return left.key2 < right.key2;
+    });
+    std::vector<TriangleDescriptor> unique_triangles;
+    unique_triangles.reserve(triangles.size());
+    for (const auto& triangle : triangles) {
+      if (!unique_triangles.empty()) {
+        const auto& previous = unique_triangles.back();
+        if (previous.key0 == triangle.key0 && previous.key1 == triangle.key1 && previous.key2 == triangle.key2) {
+          continue;
+        }
+      }
+      unique_triangles.push_back(triangle);
+    }
+    std::sort(
+        unique_triangles.begin(),
+        unique_triangles.end(),
+        [](const TriangleDescriptor& left, const TriangleDescriptor& right) {
+          if (left.area != right.area) {
+            return left.area > right.area;
+          }
+          if (left.key0 != right.key0) {
+            return left.key0 < right.key0;
+          }
+          if (left.key1 != right.key1) {
+            return left.key1 < right.key1;
+          }
+          return left.key2 < right.key2;
+        });
+
+    const int output_count =
+        std::min(static_cast<int>(unique_triangles.size()), max_descriptors);
+    py::array_t<float> descriptor_array({output_count, 2});
+    py::array_t<int> index_array({output_count, 3});
+    py::array_t<float> area_array({output_count});
+    auto descriptor_info = descriptor_array.request();
+    auto index_info = index_array.request();
+    auto area_info = area_array.request();
+    float* descriptor_ptr = static_cast<float*>(descriptor_info.ptr);
+    int* index_ptr = static_cast<int*>(index_info.ptr);
+    float* area_ptr = static_cast<float*>(area_info.ptr);
+    for (int i = 0; i < output_count; ++i) {
+      const auto& triangle = unique_triangles[static_cast<std::size_t>(i)];
+      descriptor_ptr[i * 2 + 0] = triangle.descriptor0;
+      descriptor_ptr[i * 2 + 1] = triangle.descriptor1;
+      index_ptr[i * 3 + 0] = triangle.index0;
+      index_ptr[i * 3 + 1] = triangle.index1;
+      index_ptr[i * 3 + 2] = triangle.index2;
+      area_ptr[i] = triangle.area;
+    }
+
+    py::dict result;
+    result["count"] = output_count;
+    result["raw_count"] = raw_count;
+    result["max_stars"] = max_stars;
+    result["neighbors"] = neighbor_counts[static_cast<std::size_t>(batch_index)];
+    result["descriptors"] = descriptor_array;
+    result["indices"] = index_array;
+    result["areas"] = area_array;
+    result["model"] = "triangle_asterism_descriptors_cuda_batch_padded_one_sync";
+    result["batch_index"] = static_cast<int>(batch_index);
+    result["batch_count"] = static_cast<int>(batch_count_py);
+    result["batch_model"] = "triangle_asterism_descriptors_cuda_batch_padded_one_sync";
+    result["batch_timing_model"] = "padded_catalog_batch_one_kernel_one_sync";
+    result["batch_host_prepare_s"] = host_prepare_s;
+    result["batch_upload_s"] = upload_s;
+    result["batch_kernel_sync_s"] = kernel_sync_s;
+    result["batch_output_download_s"] = output_download_s;
+    result["batch_total_elapsed_s_at_result"] = seconds_since(total_start);
+    results.append(result);
+  }
+  return results;
+}
+
 py::dict estimate_similarity_from_triangle_descriptors_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> reference_x,
     py::array_t<float, py::array::c_style | py::array::forcecast> reference_y,
@@ -14266,6 +14621,14 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       &triangle_asterism_descriptors_f32,
       py::arg("x"),
       py::arg("y"),
+      py::arg("max_stars") = 80,
+      py::arg("neighbors") = 5,
+      py::arg("max_descriptors") = 1200);
+  m.def(
+      "triangle_asterism_descriptors_batch_f32",
+      &triangle_asterism_descriptors_batch_f32,
+      py::arg("x_list"),
+      py::arg("y_list"),
       py::arg("max_stars") = 80,
       py::arg("neighbors") = 5,
       py::arg("max_descriptors") = 1200);
