@@ -10988,6 +10988,73 @@ Completed in Gate446:
   - source-DQ diagnostic failure contract:
     `C:\glass_runs\phase2_s2_gate491_source_dq_contract_ab_real\contracts\cosmetic_cuda_pipeline_contract_with_degenerate_guard.json`.
 
+### S2-Gate 492: Registration-Safe Cosmetic CUDA Source-DQ Ordering
+
+- Fix the Gate491 diagnostic failure without promoting any new source-DQ policy
+  to the default route. The failure was not that resident source-DQ execution was
+  untracked; it was that `cosmetic_cuda` applied a destructive light-frame
+  threshold before star registration, so real stars could be turned into NaN
+  samples before catalog detection and matching.
+- Completed:
+  - kept `cosmetic_cuda` threshold statistics on resident calibrated frames
+    during calibration, preserving the existing no-mask-upload threshold path;
+  - deferred threshold application whenever resident registration is enabled;
+  - applied deferred source-DQ immediately before each explicit warp, and added
+    a post-registration flush for reference, failed, excluded, and fused-matrix
+    frames before weighting/LN/integration;
+  - recorded `resident_inline_source_dq_application_order`,
+    `resident_inline_source_dq_deferred_frame_count`,
+    `resident_inline_source_dq_deferred_applied_frame_count`,
+    `resident_inline_source_dq_deferred_pending_frame_count`, and deferred
+    apply timing in resident artifacts;
+  - added a small resident CUDA regression proving
+    `similarity_cuda_triangle + cosmetic_cuda` keeps registration valid and
+    emits `post_registration_pre_warp` source-DQ rows.
+- Real 200-light default A/B validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate492_deferred_source_dq_ab_real\runs\default_runtime_stack_ab_current`;
+  - total runtime: `19.737044300010893 s`;
+  - active frames: `193 / 200`;
+  - GLASS-vs-Gate491 master difference: RMS/p99/max all `0.0`;
+  - GLASS-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`, coverage fraction
+    `0.960532609259836`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - GLASS speedup versus WBPP: `55.354843582095874x`;
+  - pixel-verifying pipeline contract, StackEngine contract, speedup summary,
+    acceptance audit, and HTML report passed.
+- Real 200-light `cosmetic_cuda` diagnostic:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate492_deferred_source_dq_ab_real\runs\cosmetic_cuda_source_dq_deferred`;
+  - registration status counts: `192 ok`, `1 reference`, `7 excluded`;
+  - coverage active frames: `193 / 200`;
+  - source-DQ summary passed with `200` rows and
+    `96,803,833` input invalid samples before rejection;
+  - deferred application fields: `deferred_frame_count=200`,
+    `deferred_applied_frame_count=200`, `deferred_pending_frame_count=0`,
+    `application_order=post_registration_pre_warp`;
+  - pixel-verifying pipeline contract passed.
+- Interpretation:
+  - source-DQ execution is now registration-safe for the opt-in
+    `cosmetic_cuda` path: registration sees calibrated light frames, while
+    integration sees source-DQ-invalid samples as resident NaNs;
+  - the default resident CUDA StackEngine-compatible path remains pixel
+    identical to Gate491 and keeps the same real-data acceptance margin;
+  - `cosmetic_cuda` remains opt-in because its global threshold is still not
+    star-aware and can remove many real star-core samples after registration.
+- Artifacts:
+  - default A/B acceptance:
+    `C:\glass_runs\phase2_s2_gate492_deferred_source_dq_ab_real\acceptance\ab_current_acceptance_audit.json`;
+  - default A/B speedup:
+    `C:\glass_runs\phase2_s2_gate492_deferred_source_dq_ab_real\speedup\ab_current_vs_wbpp_speedup_with_compare.json`;
+  - default A/B report:
+    `C:\glass_runs\phase2_s2_gate492_deferred_source_dq_ab_real\reports\ab_current_report.html`;
+  - source-DQ diagnostic contract:
+    `C:\glass_runs\phase2_s2_gate492_deferred_source_dq_ab_real\contracts\cosmetic_cuda_deferred_pipeline_contract.json`;
+  - source-DQ vs default compare:
+    `C:\glass_runs\phase2_s2_gate492_deferred_source_dq_ab_real\compare\cosmetic_cuda_deferred_vs_default.json`.
+
 ## Gate Rules
 
 Each gate requires:

@@ -2134,6 +2134,127 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert applied_rows[0]["threshold_stats_batch_histogram_download_bytes"] == 2 * 4096 * 8 * 2
     assert applied_rows[0]["component_summaries"][0]["source_model"] == "inline_cosmetic_cuda_thresholds"
     assert applied_rows[0]["component_summaries"][0]["threshold_stats_batch_reuses_device_work_buffers"] is True
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_application_order"] == (
+        "calibration_pre_registration"
+    )
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_deferred_frame_count"] == 0
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_deferred_applied_frame_count"] == 0
+
+
+def test_cli_resident_cuda_run_defers_inline_cosmetic_cuda_source_dq_until_after_registration(
+    tmp_path: Path,
+):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "rdq_inline_cosmetic_cuda_deferred_registration"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_triangle_tolerance_px": 1.5,
+            "cuda_triangle_descriptor_radius": 0.08,
+            "cuda_triangle_neighbors": 5,
+            "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine": True,
+            "cuda_triangle_pixel_refine_coarse_stride": 1,
+            "cuda_triangle_pixel_refine_final_stride": 1,
+            "cuda_triangle_min_pixel_ncc": 0.1,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-inline-source-dq",
+            "cosmetic_cuda",
+            "--resident-inline-source-dq-hot-sigma",
+            "2.0",
+            "--resident-inline-source-dq-cold-sigma",
+            "8.0",
+            "--resident-runtime-preset",
+            "manual",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_triangle",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
+            "--resident-star-catalog-deterministic",
+            "--resident-triangle-grid-top-per-cell",
+            "2",
+            "--resident-triangle-nms-scan-candidates",
+            "96",
+            "--resident-triangle-nms-min-separation-px",
+            "2.0",
+            "--resident-triangle-pixel-refine-final-stride",
+            "2",
+            "--resident-triangle-pixel-refine-fast-coarse",
+            "--resident-triangle-min-agreement-score",
+            "0.01",
+            "--resident-triangle-agreement-rms-scale",
+            "200",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--reference-frame-id",
+            "light_001",
+        ]
+    ) == 0
+
+    registration = read_json(run / "registration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    artifact = resident["artifacts"][0]
+    source_dq = artifact["source_dq_summary"]
+    pipeline = artifact["resident_io_pipeline"]
+    moving = [item for item in registration["results"] if item["status"] != "reference"][0]
+    rows = [row for row in source_dq["rows"] if row.get("inline_source_dq")]
+
+    assert moving["status"] == "ok"
+    assert moving["transform_model"] == "similarity_cuda_triangle"
+    assert source_dq["passed"] is True
+    assert pipeline["resident_inline_source_dq_application_order"] == "post_registration_pre_warp"
+    assert pipeline["resident_inline_source_dq_deferred_until_stage"] == "resident_registration_complete"
+    assert pipeline["resident_inline_source_dq_deferred_frame_count"] == 2
+    assert pipeline["resident_inline_source_dq_deferred_applied_frame_count"] == 2
+    assert pipeline["resident_inline_source_dq_deferred_pending_frame_count"] == 0
+    assert rows
+    assert {row["application_order"] for row in rows} == {"post_registration_pre_warp"}
+    assert {row["deferred_until_stage"] for row in rows} == {"resident_registration_complete"}
+    assert all(str(row["source"]).startswith("resident_post_registration_pre_warp") for row in rows)
 
 
 def test_cli_resident_cuda_run_consumes_two_phase_cosmetic_calibration_cache(tmp_path: Path):

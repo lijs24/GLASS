@@ -10,7 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 from threading import RLock
 from time import perf_counter
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 
@@ -4688,6 +4688,60 @@ def run_resident_calibration_integration(
             per_frame_registration_s = []
             registration_component_s: dict[str, float] = {}
             source_dq_rows: list[dict[str, Any]] = []
+            defer_inline_cosmetic_cuda_source_dq = bool(
+                resident_inline_source_dq == "cosmetic_cuda"
+                and resident_registration != "off"
+            )
+            deferred_inline_cosmetic_cuda_by_index: dict[int, dict[str, Any]] = {}
+            deferred_inline_cosmetic_cuda_stats: dict[str, float | int] = {
+                "deferred_frame_count": 0,
+                "applied_frame_count": 0,
+                "apply_s": 0.0,
+            }
+
+            def _record_inline_cosmetic_cuda_source_dq_item(item: dict[str, Any]) -> None:
+                frame_index = int(item["frame_index"])
+                if frame_index not in deferred_inline_cosmetic_cuda_by_index:
+                    deferred_inline_cosmetic_cuda_stats["deferred_frame_count"] = (
+                        int(deferred_inline_cosmetic_cuda_stats["deferred_frame_count"]) + 1
+                    )
+                deferred_inline_cosmetic_cuda_by_index[frame_index] = {
+                    **item,
+                    "deferred_until_stage": "resident_registration_complete",
+                }
+
+            def _apply_deferred_inline_cosmetic_cuda_source_dq(
+                stack_obj: Any,
+                indices: Iterable[int],
+                *,
+                source: str,
+            ) -> None:
+                pending_items: list[dict[str, Any]] = []
+                for raw_index in indices:
+                    frame_index = int(raw_index)
+                    item = deferred_inline_cosmetic_cuda_by_index.pop(frame_index, None)
+                    if item is not None:
+                        pending_items.append(item)
+                if not pending_items:
+                    return
+                apply_start = perf_counter()
+                rows = apply_resident_inline_cosmetic_thresholds_batch(
+                    stack_obj,
+                    items=pending_items,
+                    source=source,
+                )
+                deferred_inline_cosmetic_cuda_stats["apply_s"] = (
+                    float(deferred_inline_cosmetic_cuda_stats["apply_s"]) + perf_counter() - apply_start
+                )
+                deferred_inline_cosmetic_cuda_stats["applied_frame_count"] = (
+                    int(deferred_inline_cosmetic_cuda_stats["applied_frame_count"]) + len(rows)
+                )
+                for row in rows:
+                    row["application_order"] = "post_registration_pre_warp"
+                    row["deferred_until_stage"] = "resident_registration_complete"
+                    row["deferred_source"] = "resident_calibrated_input_cosmetic_cuda"
+                source_dq_rows.extend(rows)
+
             registration_during_load_elapsed = 0.0
             gc_elapsed = 0.0
             frame_weight_values: list[float] = []
@@ -5153,13 +5207,15 @@ def run_resident_calibration_integration(
                                     resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                                 )
                             if threshold_info is not None:
-                                batch_threshold_apply_items.append(
-                                    {
-                                        "frame_index": int(item_index),
-                                        "frame_id": str(frame["id"]),
-                                        "threshold_info": threshold_info,
-                                    }
-                                )
+                                threshold_item = {
+                                    "frame_index": int(item_index),
+                                    "frame_id": str(frame["id"]),
+                                    "threshold_info": threshold_info,
+                                }
+                                if defer_inline_cosmetic_cuda_source_dq:
+                                    _record_inline_cosmetic_cuda_source_dq_item(threshold_item)
+                                else:
+                                    batch_threshold_apply_items.append(threshold_item)
                             frame_weight = 0.0 if _matches_any_token(frame, excluded_tokens) else 1.0
                             frame_weights[str(frame["id"])] = frame_weight
                             frame_weight_values.append(frame_weight)
@@ -5171,13 +5227,14 @@ def run_resident_calibration_integration(
                             )
                             calibration_event_modes.append(str(calibration_timing.get("event_mode", "unknown")))
                         if batch_threshold_apply_items:
-                            source_dq_rows.extend(
-                                apply_resident_inline_cosmetic_thresholds_batch(
-                                    stack,
-                                    items=batch_threshold_apply_items,
-                                    source="resident_calibrated_batch_input_cosmetic_cuda",
-                                )
+                            rows = apply_resident_inline_cosmetic_thresholds_batch(
+                                stack,
+                                items=batch_threshold_apply_items,
+                                source="resident_calibrated_batch_input_cosmetic_cuda",
                             )
+                            for row in rows:
+                                row["application_order"] = "calibration_pre_registration"
+                            source_dq_rows.extend(rows)
                         for position, _item in enumerate(batch_items):
                             per_frame_s.append(perf_counter() - batch_frame_starts[position])
                         del batch_items
@@ -5323,15 +5380,23 @@ def run_resident_calibration_integration(
                             resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                         )
                         if threshold_info is not None:
-                            source_dq_rows.append(
-                                apply_resident_inline_cosmetic_thresholds(
+                            threshold_item = {
+                                "frame_index": int(index),
+                                "frame_id": str(frame["id"]),
+                                "threshold_info": threshold_info,
+                            }
+                            if defer_inline_cosmetic_cuda_source_dq:
+                                _record_inline_cosmetic_cuda_source_dq_item(threshold_item)
+                            else:
+                                row = apply_resident_inline_cosmetic_thresholds(
                                     stack,
                                     frame_index=int(index),
                                     frame_id=str(frame["id"]),
                                     threshold_info=threshold_info,
                                     source="resident_calibrated_input_cosmetic_cuda",
                                 )
-                            )
+                                row["application_order"] = "calibration_pre_registration"
+                                source_dq_rows.append(row)
                         per_frame_calibrate_s.append(perf_counter() - calibrate_start)
                         per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)))
                         per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)))
@@ -5357,6 +5422,11 @@ def run_resident_calibration_integration(
                                     )
                                     dx = float(preview_dx * preview_scale)
                                     dy = float(preview_dy * preview_scale)
+                                    _apply_deferred_inline_cosmetic_cuda_source_dq(
+                                        stack,
+                                        [index],
+                                        source="resident_post_registration_pre_warp_cosmetic_cuda",
+                                    )
                                     stack.apply_translation_frame(index, int(round(dx)), int(round(dy)), np.nan)
                                     warped_frame_indices.add(index)
                                 else:
@@ -5460,6 +5530,11 @@ def run_resident_calibration_integration(
                             dx = float(refined["dx"])
                             dy = float(refined["dy"])
                             score = float(refined["score"])
+                            _apply_deferred_inline_cosmetic_cuda_source_dq(
+                                stack,
+                                [index],
+                                source="resident_post_registration_pre_warp_cosmetic_cuda",
+                            )
                             stack.apply_translation_bilinear_frame(index, dx, dy, np.nan)
                             warped_frame_indices.add(index)
                             warnings.extend(
@@ -5615,6 +5690,11 @@ def run_resident_calibration_integration(
                                 frame_weights[frame["id"]] = 0.0
                                 warnings.append("resident star-catalog registration found no mutual inliers")
                             else:
+                                _apply_deferred_inline_cosmetic_cuda_source_dq(
+                                    stack,
+                                    [index],
+                                    source="resident_post_registration_pre_warp_cosmetic_cuda",
+                                )
                                 stack.apply_translation_bilinear_frame(index, dx, dy, np.nan)
                                 warped_frame_indices.add(index)
                             warnings.extend(
@@ -6193,6 +6273,11 @@ def run_resident_calibration_integration(
                                         + "; ".join(quality_failures)
                                     )
                                 else:
+                                    _apply_deferred_inline_cosmetic_cuda_source_dq(
+                                        stack,
+                                        [index],
+                                        source="resident_post_registration_pre_warp_cosmetic_cuda",
+                                    )
                                     warp_model = _apply_resident_registration_matrix(
                                         stack,
                                         index,
@@ -7295,6 +7380,11 @@ def run_resident_calibration_integration(
                     nonlocal triangle_warp_batch_timing_model
                     if not items:
                         return
+                    _apply_deferred_inline_cosmetic_cuda_source_dq(
+                        _stack,
+                        [int(item["index"]) for item in items],
+                        source="resident_post_registration_pre_warp_cosmetic_cuda",
+                    )
                     warp_start = perf_counter()
                     warp_models, warp_timing = _apply_resident_registration_matrix_batch(
                         _stack,
@@ -8284,6 +8374,11 @@ def run_resident_calibration_integration(
                             continue
                         valid_triangle_batch_warps.append((item, result))
                     if valid_triangle_batch_warps:
+                        _apply_deferred_inline_cosmetic_cuda_source_dq(
+                            stack,
+                            [int(item["index"]) for item, _result in valid_triangle_batch_warps],
+                            source="resident_post_registration_pre_warp_cosmetic_cuda",
+                        )
                         warp_start = perf_counter()
                         warp_models, warp_timing = _apply_resident_registration_matrix_batch(
                             stack,
@@ -8476,6 +8571,11 @@ def run_resident_calibration_integration(
                                     "external_registration_application=fused_matrix_deferred"
                                 )
                             else:
+                                _apply_deferred_inline_cosmetic_cuda_source_dq(
+                                    stack,
+                                    [index],
+                                    source="resident_post_registration_pre_warp_cosmetic_cuda",
+                                )
                                 warp_model = _apply_resident_registration_matrix(
                                     stack,
                                     index,
@@ -8510,6 +8610,12 @@ def run_resident_calibration_integration(
                             ],
                         )
                     )
+
+            _apply_deferred_inline_cosmetic_cuda_source_dq(
+                stack,
+                range(len(light_frames)),
+                source="resident_post_registration_pre_warp_cosmetic_cuda_flush",
+            )
 
             weighting_start = perf_counter()
             weighting_frame_results: list[dict[str, Any]] = []
@@ -9588,6 +9694,9 @@ def run_resident_calibration_integration(
                         "resident_registration_component_accounted": registration_component_total,
                         "resident_registration_orchestration": registration_orchestration_elapsed,
                         "gc": gc_elapsed,
+                        "resident_inline_source_dq_deferred_apply": float(
+                            deferred_inline_cosmetic_cuda_stats["apply_s"]
+                        ),
                         "light_loop_accounted_without_master": light_loop_accounted_without_master,
                         "light_loop_accounted": light_loop_accounted,
                         "light_loop_unaccounted": light_loop_unaccounted,
@@ -9653,6 +9762,30 @@ def run_resident_calibration_integration(
                         ),
                         "resident_inline_source_dq_detector_execution": (
                             "cuda_threshold_apply" if resident_inline_source_dq == "cosmetic_cuda" else None
+                        ),
+                        "resident_inline_source_dq_application_order": (
+                            "post_registration_pre_warp"
+                            if defer_inline_cosmetic_cuda_source_dq
+                            else "calibration_pre_registration"
+                            if resident_inline_source_dq == "cosmetic_cuda"
+                            else None
+                        ),
+                        "resident_inline_source_dq_deferred_until_stage": (
+                            "resident_registration_complete"
+                            if defer_inline_cosmetic_cuda_source_dq
+                            else None
+                        ),
+                        "resident_inline_source_dq_deferred_frame_count": int(
+                            deferred_inline_cosmetic_cuda_stats["deferred_frame_count"]
+                        ),
+                        "resident_inline_source_dq_deferred_applied_frame_count": int(
+                            deferred_inline_cosmetic_cuda_stats["applied_frame_count"]
+                        ),
+                        "resident_inline_source_dq_deferred_pending_frame_count": len(
+                            deferred_inline_cosmetic_cuda_by_index
+                        ),
+                        "resident_inline_source_dq_deferred_apply_s": float(
+                            deferred_inline_cosmetic_cuda_stats["apply_s"]
                         ),
                         "resident_inline_source_dq_hot_sigma": float(resident_inline_source_dq_hot_sigma),
                         "resident_inline_source_dq_cold_sigma": float(resident_inline_source_dq_cold_sigma),
