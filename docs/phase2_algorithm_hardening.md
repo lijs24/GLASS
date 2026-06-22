@@ -10175,6 +10175,79 @@ Completed in Gate446:
   - the real A/B timing comparison remains pending until the unrelated external
     GPU workload releases the RTX PRO 6000.
 
+### S2-Gate 476: Clean 200-Light Resident A/B Execution
+
+- Run the real M38 H-alpha 200-light A/B matrix in a clean GPU window using the
+  Gate475 live readiness executor.
+- Required work:
+  - add wait-ready execution controls so the executor can wait for a clean GPU
+    window without manual polling;
+  - require multiple consecutive ready samples before launching the real run;
+  - replace planned `glass` and `python` command tokens with the current
+    executable/interpreter when executing through the matrix runner;
+  - capture subprocess launch errors in execution artifacts instead of crashing;
+  - execute both real variants and record compare, acceptance, speedup, and
+    report artifacts.
+- Completed in S2-Gate476:
+  - added `--wait-ready-timeout-s`, `--wait-ready-interval-s`, and
+    `--wait-ready-consecutive-samples` to `glass resident-ab-matrix-execute`;
+  - added current-executable replacement for planned `glass` commands and
+    current-interpreter replacement for planned `python` commands;
+  - added tests for wait-ready transitions, consecutive-ready enforcement, and
+    subprocess launch-error capture;
+  - executed the real matrix after six consecutive ready samples on the RTX PRO
+    6000;
+  - generated `runs/checkpoints/s2_gate_476_real_ab_summary.json`.
+- Clean readiness evidence:
+  - GPU: `NVIDIA RTX PRO 6000 Blackwell Workstation Edition`;
+  - driver: `596.21`;
+  - six consecutive readiness samples at `0%` GPU utilization;
+  - free VRAM at launch: `97062 MiB`;
+  - target disk free at launch: `64.94022369384766 GiB`.
+- Real A/B results:
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - baseline `throughput_v1_lanczos3_parity`: `30.953057600010652 s`,
+    `35.29670684293315x` speedup, acceptance passed;
+  - candidate `throughput_v2_fused_bilinear`: `30.661248599993996 s`,
+    `35.63263239058744x` speedup, acceptance passed;
+  - candidate saved about `2.296694040298464 GiB` estimated peak VRAM versus
+    the registered-stack baseline;
+  - both variants used `193` weighted frames and rejected/zero-weighted `7`
+    frames.
+- WBPP-reference agreement:
+  - baseline coverage fraction `0.960532609259836`, RMS
+    `0.0017794216505176163`, p99 absolute difference
+    `0.00042621337808668863`;
+  - candidate coverage fraction `0.9680247262015986`, RMS
+    `0.0018004970117125889`, p99 absolute difference
+    `0.0004224973497912281`.
+- Baseline-vs-candidate note:
+  - direct candidate-vs-baseline RMS is `4.5849533818006405` ADU with p99
+    `2.975449752807606` ADU over the coverage-masked comparison;
+  - this is expected because the candidate intentionally uses bilinear
+    interpolation while the parity route uses Lanczos3;
+  - the candidate remains opt-in and is not promoted to default.
+- Performance interpretation:
+  - fused bilinear is only about `0.2918090000166558 s` faster than the
+    Lanczos3 registered-stack baseline on this run;
+  - the current dominant path remains FITS read/upload/calibration overlap
+    (`~14.1 s` wall, `~20.4 s` cumulative FITS native read), not registered
+    stack writeback;
+  - next optimization should target resident I/O/calibration scheduling and
+    only then revisit fused integration/interpolation policy.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_476_ab_matrix_execution_real.json`;
+  - `runs/checkpoints/s2_gate_476_wait_ready_execution_probe.json`;
+  - `runs/checkpoints/s2_gate_476_real_ab_summary.json`;
+  - `runs/checkpoints/s2_gate_476_status.md`;
+  - reports under
+    `C:\glass_runs\phase2_s2_gate475_ab_matrix_real\reports`.
+- Known limitation:
+  - the clean A/B validates speed and WBPP-reference agreement, but the fused
+    bilinear candidate is not parity-equivalent to the Lanczos3 baseline. It
+    must remain an explicit candidate until interpolation policy and
+    candidate-vs-baseline tolerances are settled.
+
 ## Gate Rules
 
 Each gate requires:

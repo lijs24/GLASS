@@ -1,0 +1,121 @@
+{
+  "artifact_type": "s2_gate_476_real_ab_summary",
+  "candidate_vs_baseline": {
+    "abs_diff_p50": 0.6654815673828125,
+    "abs_diff_p99": 2.975449752807606,
+    "abs_diff_p999": 9.921587371827627,
+    "compare_json": "C:\\glass_runs\\phase2_s2_gate475_ab_matrix_real\\compare\\throughput_v2_fused_bilinear_vs_throughput_v1_lanczos3_parity.json",
+    "coverage_fraction": 0.9680247262015986,
+    "relative_rms_diff": 0.016454569155982254,
+    "rms_diff": 4.5849533818006405,
+    "robust_fit_abs_diff_p99": 2.7769658584364603,
+    "robust_fit_rms_diff": 1.0147844203102725,
+    "shape_match": true
+  },
+  "decision": {
+    "baseline_green": true,
+    "candidate_green_vs_wbpp": true,
+    "candidate_promote_to_default": false,
+    "reason": "fused bilinear candidate is only 0.292 s faster than Lanczos3 parity and differs from the parity master; keep opt-in while optimizing I/O/calibration and deciding interpolation policy."
+  },
+  "execution_json": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_476_ab_matrix_execution_real.json",
+  "execution_readiness": {
+    "disk": {
+      "free_gib": 64.94022369384766,
+      "min_free_gib": 8.0,
+      "path": "C:\\glass_runs",
+      "ready": true,
+      "status": "ready",
+      "total_gib": 1906.7373008728027
+    },
+    "gpu": {
+      "driver": "596.21",
+      "free_mib": 97062,
+      "max_utilization_percent": 20,
+      "min_free_mib": 65000,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "ready": true,
+      "reason": "GPU is below the clean benchmark utilization threshold and has enough free memory",
+      "status": "ready",
+      "total_mib": 97887,
+      "used_mib": 825,
+      "utilization_percent": 0
+    },
+    "ready": true,
+    "source": "live_recheck",
+    "wait_ready_consecutive_observed": 6,
+    "wait_ready_consecutive_required": 6,
+    "wait_ready_satisfied": true
+  },
+  "execution_summary": {
+    "blocked": false,
+    "completed_variant_count": 2,
+    "failed": false,
+    "planned_variant_count": 0,
+    "recorded_variant_count": 2,
+    "skipped_existing_count": 0,
+    "status": "completed"
+  },
+  "run_root": "C:\\glass_runs\\phase2_s2_gate475_ab_matrix_real",
+  "schema_version": 1,
+  "variants": {
+    "throughput_v1_lanczos3_parity": {
+      "abs_diff_p999_vs_wbpp": 0.003845416396856427,
+      "abs_diff_p99_vs_wbpp": 0.00042621337808668863,
+      "acceptance_json": "C:\\glass_runs\\phase2_s2_gate475_ab_matrix_real\\acceptance\\throughput_v1_lanczos3_parity_acceptance.json",
+      "acceptance_status": "passed",
+      "coverage_fraction_vs_wbpp": 0.960532609259836,
+      "estimated_peak_gib": 49.608429938554764,
+      "glass_elapsed_s": 30.953057600010652,
+      "light_fits_native_total_s": 20.475552800000003,
+      "light_read_upload_calibrate_s": 14.113322600023821,
+      "report_html": "C:\\glass_runs\\phase2_s2_gate475_ab_matrix_real\\reports\\throughput_v1_lanczos3_parity_report.html",
+      "resident_fused_matrix_integration_native_s": 0.0,
+      "resident_integration_s": 0.2967888999846764,
+      "rms_diff_vs_wbpp": 0.0017794216505176163,
+      "run_total_elapsed_s": 30.953057600010652,
+      "speedup_json": "C:\\glass_runs\\phase2_s2_gate475_ab_matrix_real\\speedup\\throughput_v1_lanczos3_parity_speedup.json",
+      "speedup_vs_wbpp": 35.29670684293315,
+      "triangle_warp_batch_native_total_s": 0.4989655,
+      "warp_interpolation": null,
+      "warp_mode": "native_matrix_lanczos3_frames",
+      "wbpp_elapsed_s": 1092.541,
+      "weighted_frame_count": 193,
+      "zero_weight_frame_count": 7
+    },
+    "throughput_v2_fused_bilinear": {
+      "abs_diff_p999_vs_wbpp": 0.0038689467660156796,
+      "abs_diff_p99_vs_wbpp": 0.0004224973497912281,
+      "acceptance_json": "C:\\glass_runs\\phase2_s2_gate475_ab_matrix_real\\acceptance\\throughput_v2_fused_bilinear_acceptance.json",
+      "acceptance_status": "passed",
+      "coverage_fraction_vs_wbpp": 0.9680247262015986,
+      "estimated_peak_gib": 47.3117358982563,
+      "glass_elapsed_s": 30.661248599993996,
+      "light_fits_native_total_s": 20.444557500000002,
+      "light_read_upload_calibrate_s": 14.069710099953227,
+      "report_html": "C:\\glass_runs\\phase2_s2_gate475_ab_matrix_real\\reports\\throughput_v2_fused_bilinear_report.html",
+      "resident_fused_matrix_integration_native_s": 0.4265582,
+      "resident_integration_s": 0.42688669997733086,
+      "rms_diff_vs_wbpp": 0.0018004970117125889,
+      "run_total_elapsed_s": 30.661248599993996,
+      "speedup_json": "C:\\glass_runs\\phase2_s2_gate475_ab_matrix_real\\speedup\\throughput_v2_fused_bilinear_speedup.json",
+      "speedup_vs_wbpp": 35.63263239058744,
+      "triangle_warp_batch_native_total_s": 0.0,
+      "warp_interpolation": null,
+      "warp_mode": "fused_matrix_deferred",
+      "wbpp_elapsed_s": 1092.541,
+      "weighted_frame_count": 193,
+      "zero_weight_frame_count": 7
+    }
+  },
+  "wait_probe_json": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_476_wait_ready_execution_probe.json",
+  "wait_probe_summary": {
+    "blocked": true,
+    "completed_variant_count": 0,
+    "failed": false,
+    "planned_variant_count": 0,
+    "recorded_variant_count": 0,
+    "skipped_existing_count": 0,
+    "status": "blocked_by_readiness"
+  }
+}

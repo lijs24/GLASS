@@ -169,6 +169,96 @@ def test_resident_ab_matrix_execution_rechecks_stale_ready_plan(tmp_path: Path) 
     assert execution["variants"] == []
 
 
+def test_resident_ab_matrix_execution_waits_until_ready(tmp_path: Path) -> None:
+    plan_path = tmp_path / "ab_plan.json"
+    plan = build_resident_ab_matrix_plan(
+        root=tmp_path / "ab",
+        plan=tmp_path / "processing_plan.json",
+        manifest=tmp_path / "manifest.json",
+        wbpp_result=tmp_path / "wbpp_result.json",
+        reference=tmp_path / "wbpp_master.xisf",
+        gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 20000, 95, 596.21",
+    )
+    for variant in plan["variants"]:
+        acceptance = Path(variant["artifacts"]["acceptance_json"])
+        acceptance.parent.mkdir(parents=True, exist_ok=True)
+        acceptance.write_text("{}", encoding="utf-8")
+    write_json(plan_path, plan)
+
+    execution = build_resident_ab_matrix_execution(
+        plan_path,
+        skip_existing=True,
+        wait_ready_timeout_s=10,
+        wait_ready_interval_s=0,
+        wait_ready_consecutive_samples=2,
+        gpu_query_texts=[
+            "NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 20000, 95, 596.21",
+            "NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+            "NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+        ],
+    )
+
+    assert execution["summary"]["status"] == "completed"
+    assert execution["summary"]["skipped_existing_count"] == 2
+    assert execution["execution_readiness"]["gpu"]["status"] == "ready"
+    assert execution["execution_readiness"]["wait_ready_satisfied"] is True
+    assert [attempt["gpu_status"] for attempt in execution["readiness_attempts"]] == ["busy", "ready", "ready"]
+    assert [attempt["consecutive_ready"] for attempt in execution["readiness_attempts"]] == [0, 1, 2]
+
+
+def test_resident_ab_matrix_execution_blocks_without_required_consecutive_ready(tmp_path: Path) -> None:
+    plan_path = tmp_path / "ab_plan.json"
+    plan = build_resident_ab_matrix_plan(
+        root=tmp_path / "ab",
+        plan=tmp_path / "processing_plan.json",
+        manifest=tmp_path / "manifest.json",
+        wbpp_result=tmp_path / "wbpp_result.json",
+        reference=tmp_path / "wbpp_master.xisf",
+        gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 20000, 95, 596.21",
+    )
+    write_json(plan_path, plan)
+
+    execution = build_resident_ab_matrix_execution(
+        plan_path,
+        wait_ready_timeout_s=0,
+        wait_ready_consecutive_samples=2,
+        gpu_query_texts=[
+            "NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+        ],
+    )
+
+    assert execution["summary"]["status"] == "blocked_by_readiness"
+    assert execution["execution_readiness"]["wait_ready_satisfied"] is False
+    assert execution["execution_readiness"]["wait_ready_consecutive_observed"] == 1
+    assert execution["variants"] == []
+
+
+def test_resident_ab_matrix_execution_records_launch_errors(tmp_path: Path) -> None:
+    plan_path = tmp_path / "ab_plan.json"
+    plan = build_resident_ab_matrix_plan(
+        root=tmp_path / "ab",
+        plan=tmp_path / "processing_plan.json",
+        manifest=tmp_path / "manifest.json",
+        wbpp_result=tmp_path / "wbpp_result.json",
+        reference=tmp_path / "wbpp_master.xisf",
+        gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+    )
+    plan["variants"][0]["commands"]["run"] = "definitely_missing_glass_executable_476 --version"
+    write_json(plan_path, plan)
+
+    execution = build_resident_ab_matrix_execution(
+        plan_path,
+        variants=["throughput_v1_lanczos3_parity"],
+        gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+    )
+
+    assert execution["summary"]["status"] == "failed"
+    assert execution["summary"]["failed"] is True
+    step = execution["variants"][0]["steps"][0]
+    assert step["status"] == "failed"
+    assert step["error"]
+
+
 def test_cli_resident_ab_matrix_execute_writes_dry_run(tmp_path: Path) -> None:
     plan_path = tmp_path / "ab_plan.json"
     out = tmp_path / "ab_execution.json"

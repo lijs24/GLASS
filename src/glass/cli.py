@@ -2280,6 +2280,7 @@ def cmd_resident_ab_matrix_plan(args: argparse.Namespace) -> int:
 
 
 def cmd_resident_ab_matrix_execute(args: argparse.Namespace) -> int:
+    current_glass_executable = sys.argv[0] if Path(sys.argv[0]).name.lower().startswith("glass") else None
     payload = build_resident_ab_matrix_execution(
         args.plan,
         dry_run=args.dry_run,
@@ -2287,7 +2288,11 @@ def cmd_resident_ab_matrix_execute(args: argparse.Namespace) -> int:
         variants=args.variant,
         ignore_readiness=args.ignore_readiness,
         recheck_readiness=not args.no_readiness_recheck,
-        glass_executable=args.glass_executable,
+        wait_ready_timeout_s=args.wait_ready_timeout_s,
+        wait_ready_interval_s=args.wait_ready_interval_s,
+        wait_ready_consecutive_samples=args.wait_ready_consecutive_samples,
+        glass_executable=args.glass_executable or current_glass_executable,
+        python_executable=args.python_executable or sys.executable,
         cwd=args.cwd,
     )
     write_resident_ab_matrix_execution(args.out, payload)
@@ -6150,8 +6155,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="use the readiness state recorded in the plan instead of live GPU/disk rechecking",
     )
     resident_ab_matrix_execute.add_argument(
+        "--wait-ready-timeout-s",
+        type=float,
+        default=0.0,
+        help="seconds to keep rechecking readiness before blocking non-dry-run execution",
+    )
+    resident_ab_matrix_execute.add_argument(
+        "--wait-ready-interval-s",
+        type=float,
+        default=30.0,
+        help="seconds between readiness samples while waiting",
+    )
+    resident_ab_matrix_execute.add_argument(
+        "--wait-ready-consecutive-samples",
+        type=int,
+        default=1,
+        help="number of consecutive ready samples required before non-dry-run execution starts",
+    )
+    resident_ab_matrix_execute.add_argument(
         "--glass-executable",
         help="replace leading 'glass' commands with this executable path",
+    )
+    resident_ab_matrix_execute.add_argument(
+        "--python-executable",
+        help="replace leading 'python' commands with this executable path; defaults to the current interpreter",
     )
     resident_ab_matrix_execute.add_argument("--cwd", help="working directory for subprocess execution")
     resident_ab_matrix_execute.add_argument(

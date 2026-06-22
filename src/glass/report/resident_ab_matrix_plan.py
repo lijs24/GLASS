@@ -566,10 +566,16 @@ def _split_command(command: str) -> list[str]:
         kernel32.LocalFree(argv)
 
 
-def _command_tokens(command: str, glass_executable: str | Path | None) -> list[str]:
+def _command_tokens(
+    command: str,
+    glass_executable: str | Path | None,
+    python_executable: str | Path | None = None,
+) -> list[str]:
     tokens = _split_command(command)
     if tokens and tokens[0].lower() == "glass" and glass_executable is not None:
         tokens[0] = str(glass_executable)
+    if tokens and tokens[0].lower() in {"python", "python.exe"} and python_executable is not None:
+        tokens[0] = str(python_executable)
     return tokens
 
 
@@ -623,12 +629,93 @@ def _live_readiness_from_plan(
     }
 
 
+def _readiness_attempt_record(
+    attempt: int,
+    elapsed_s: float,
+    readiness: dict[str, Any],
+    *,
+    consecutive_ready: int,
+) -> dict[str, Any]:
+    gpu = readiness.get("gpu") if isinstance(readiness.get("gpu"), dict) else {}
+    disk = readiness.get("disk") if isinstance(readiness.get("disk"), dict) else {}
+    return {
+        "attempt": int(attempt),
+        "elapsed_s": float(elapsed_s),
+        "ready": bool(readiness.get("ready")),
+        "consecutive_ready": int(consecutive_ready),
+        "gpu_status": gpu.get("status"),
+        "gpu_utilization_percent": gpu.get("utilization_percent"),
+        "gpu_free_mib": gpu.get("free_mib"),
+        "disk_status": disk.get("status"),
+        "disk_free_gib": disk.get("free_gib"),
+    }
+
+
+def _wait_for_execution_readiness(
+    plan: dict[str, Any],
+    *,
+    wait_ready_timeout_s: float,
+    wait_ready_interval_s: float,
+    wait_ready_consecutive_samples: int,
+    gpu_query_text: str | None = None,
+    gpu_query_texts: list[str] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    started = time.perf_counter()
+    timeout_s = max(0.0, float(wait_ready_timeout_s))
+    interval_s = max(0.0, float(wait_ready_interval_s))
+    attempts: list[dict[str, Any]] = []
+    attempt = 0
+    consecutive_ready = 0
+    required_ready = max(1, int(wait_ready_consecutive_samples))
+    while True:
+        if gpu_query_texts is not None:
+            sample = gpu_query_texts[min(attempt, len(gpu_query_texts) - 1)] if gpu_query_texts else None
+            probe_gpu = False
+        elif gpu_query_text is not None:
+            sample = gpu_query_text
+            probe_gpu = False
+        else:
+            sample = None
+            probe_gpu = True
+        readiness = _live_readiness_from_plan(plan, gpu_query_text=sample, probe_gpu=probe_gpu)
+        consecutive_ready = consecutive_ready + 1 if readiness.get("ready") else 0
+        attempts.append(
+            _readiness_attempt_record(
+                attempt,
+                time.perf_counter() - started,
+                readiness,
+                consecutive_ready=consecutive_ready,
+            )
+        )
+        if consecutive_ready >= required_ready:
+            readiness["wait_ready_consecutive_required"] = required_ready
+            readiness["wait_ready_consecutive_observed"] = consecutive_ready
+            readiness["wait_ready_satisfied"] = True
+            return readiness, attempts
+        if time.perf_counter() - started >= timeout_s:
+            readiness = dict(readiness)
+            readiness["ready"] = False
+            readiness["wait_ready_consecutive_required"] = required_ready
+            readiness["wait_ready_consecutive_observed"] = consecutive_ready
+            readiness["wait_ready_satisfied"] = False
+            return readiness, attempts
+        attempt += 1
+        if gpu_query_texts is not None and attempt < len(gpu_query_texts):
+            continue
+        remaining_s = timeout_s - (time.perf_counter() - started)
+        if remaining_s <= 0:
+            return readiness, attempts
+        sleep_s = min(interval_s if interval_s > 0 else 1.0, remaining_s)
+        time.sleep(sleep_s)
+
+
 def _execution_step_record(
     *,
     step: str,
     command: str,
     dry_run: bool,
     glass_executable: str | Path | None,
+    python_executable: str | Path | None,
     cwd: str | Path | None,
 ) -> dict[str, Any]:
     record: dict[str, Any] = {
@@ -641,7 +728,17 @@ def _execution_step_record(
     if dry_run:
         return record
     started = time.perf_counter()
-    result = subprocess.run(_command_tokens(command, glass_executable), cwd=None if cwd is None else str(cwd))
+    try:
+        result = subprocess.run(
+            _command_tokens(command, glass_executable, python_executable),
+            cwd=None if cwd is None else str(cwd),
+        )
+    except OSError as exc:
+        record["elapsed_s"] = float(time.perf_counter() - started)
+        record["returncode"] = None
+        record["status"] = "failed"
+        record["error"] = str(exc)
+        return record
     record["elapsed_s"] = float(time.perf_counter() - started)
     record["returncode"] = int(result.returncode)
     record["status"] = "completed" if result.returncode == 0 else "failed"
@@ -657,7 +754,12 @@ def build_resident_ab_matrix_execution(
     ignore_readiness: bool = False,
     recheck_readiness: bool = True,
     gpu_query_text: str | None = None,
+    gpu_query_texts: list[str] | None = None,
+    wait_ready_timeout_s: float = 0.0,
+    wait_ready_interval_s: float = 30.0,
+    wait_ready_consecutive_samples: int = 1,
     glass_executable: str | Path | None = None,
+    python_executable: str | Path | None = None,
     cwd: str | Path | None = None,
 ) -> dict[str, Any]:
     payload = _read_ab_plan(plan)
@@ -668,11 +770,18 @@ def build_resident_ab_matrix_execution(
         "gpu": payload.get("readiness", {}).get("gpu", {}) if isinstance(payload.get("readiness"), dict) else {},
         "disk": payload.get("readiness", {}).get("disk", {}) if isinstance(payload.get("readiness"), dict) else {},
     }
-    execution_readiness = (
-        _live_readiness_from_plan(payload, gpu_query_text=gpu_query_text)
-        if recheck_readiness and not dry_run
-        else plan_readiness
-    )
+    readiness_attempts: list[dict[str, Any]] = []
+    if recheck_readiness and not dry_run:
+        execution_readiness, readiness_attempts = _wait_for_execution_readiness(
+            payload,
+            wait_ready_timeout_s=wait_ready_timeout_s,
+            wait_ready_interval_s=wait_ready_interval_s,
+            wait_ready_consecutive_samples=wait_ready_consecutive_samples,
+            gpu_query_text=gpu_query_text,
+            gpu_query_texts=gpu_query_texts,
+        )
+    else:
+        execution_readiness = plan_readiness
     readiness_allows_execution = bool(execution_readiness.get("ready"))
     blocked = bool(not dry_run and not ignore_readiness and not readiness_allows_execution)
 
@@ -705,6 +814,7 @@ def build_resident_ab_matrix_execution(
                     command=str(command),
                     dry_run=dry_run,
                     glass_executable=glass_executable,
+                    python_executable=python_executable,
                     cwd=cwd,
                 )
                 steps.append(step_record)
@@ -733,6 +843,9 @@ def build_resident_ab_matrix_execution(
         "skip_existing": bool(skip_existing),
         "ignore_readiness": bool(ignore_readiness),
         "recheck_readiness": bool(recheck_readiness),
+        "wait_ready_timeout_s": float(wait_ready_timeout_s),
+        "wait_ready_interval_s": float(wait_ready_interval_s),
+        "wait_ready_consecutive_samples": int(wait_ready_consecutive_samples),
         "selected_variant_count": len(selected),
         "summary": {
             "status": status,
@@ -745,10 +858,12 @@ def build_resident_ab_matrix_execution(
         },
         "readiness": payload.get("readiness"),
         "execution_readiness": execution_readiness,
+        "readiness_attempts": readiness_attempts,
         "variants": records,
         "limitations": [
             "This executor runs only commands recorded in a resident A/B matrix plan.",
             "Non-dry-run execution is blocked by live readiness unless ignore_readiness is set.",
+            "Optional wait-ready mode samples readiness until the timeout before deciding whether to execute.",
             "Dry-run mode records intended commands without executing subprocesses.",
         ],
     }
