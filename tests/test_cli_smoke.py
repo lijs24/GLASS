@@ -525,6 +525,56 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
     assert io_pipeline["calibration_release_mode_effective"] == "callback_queue"
 
 
+def test_cli_resident_run_blocks_explicit_low_vram_budget(
+    small_fits_dataset,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_low_budget"
+    assert main(["scan", "--root", str(small_fits_dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
+
+    def fail_if_resident_compute_starts(*_args, **_kwargs):
+        raise AssertionError("resident CUDA compute should not start after memory admission failure")
+
+    monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fail_if_resident_compute_starts)
+
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--backend",
+                "cuda",
+                "--memory-mode",
+                "resident",
+                "--vram-budget-gb",
+                "0.000001",
+            ]
+        )
+        == 2
+    )
+    admission = read_json(run / "resident_memory_admission.json")
+    state = read_json(run / "run_state.json")
+    timing = read_json(run / "run_timing.json")
+
+    assert admission["artifact_type"] == "resident_memory_admission"
+    assert admission["blocking"] is True
+    assert admission["passed"] is False
+    assert admission["reason"] == "estimated_peak_exceeds_explicit_vram_budget"
+    assert state["failed_stage"] == "resident_memory_admission"
+    assert state["artifacts"][0]["stage"] == "resident_memory_admission"
+    assert timing["stages"][0]["stage"] == "resident_memory_admission"
+    assert timing["stages"][0]["status"] == "failed"
+
+
 def test_cli_help_commands():
     for command in [
         "doctor",

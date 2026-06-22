@@ -1,0 +1,95 @@
+{
+  "gate": "S2-Gate 464",
+  "status": "passed",
+  "date_local": "2026-06-22",
+  "run": "C:\\glass_runs\\phase2_s2_gate_464_200\\memory_admission_contract_parity_r2_20260622",
+  "dataset": {
+    "target": "M38",
+    "filter": "H",
+    "lights": 200,
+    "bias": 20,
+    "dark": 20,
+    "flat": 20,
+    "input_policy": "read_only_user_owned_test_data"
+  },
+  "backend": {
+    "mode": "cuda_resident_stack",
+    "memory_mode": "resident",
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "driver_version": "596.21"
+  },
+  "resident_memory_admission": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_464_200\\memory_admission_contract_parity_r2_20260622\\resident_memory_admission.json",
+    "status": "passed",
+    "passed": true,
+    "blocking": false,
+    "recommended_action": "resident_full_frame",
+    "budget_source": "device_total_memory_safety_fraction",
+    "budget_gib": 86.03261718712747,
+    "estimated_peak_gib": 49.6084223985672,
+    "headroom_gib": 36.42419478856027,
+    "frame_count": 200,
+    "planned_active_frame_count": 193,
+    "planned_warp_frame_count": 192,
+    "preferred_chunk_capacity_frames": 8,
+    "chunked_warp_planned_workspace_bytes": 2466048352
+  },
+  "timing": {
+    "outer_powershell_elapsed_s": 37.9507698,
+    "internal_total_elapsed_s": 37.53807249997044,
+    "resident_memory_admission_s": 0.0036813999759033322,
+    "resident_calibration_integration_s": 37.53439109999454,
+    "wbpp_blackbox_elapsed_s": 1092.541,
+    "speedup_vs_wbpp": 29.10487745477236
+  },
+  "frame_accounting": {
+    "weighted_frame_count": 193,
+    "zero_weight_frame_count": 7,
+    "planned_warp_frame_count": 192
+  },
+  "warp": {
+    "dispatch": "chunked",
+    "timing_model": "native_chunked_batch_warp_scatter_one_sync",
+    "frame_count": 192,
+    "chunk_frames": 8,
+    "chunk_count": 24,
+    "workspace_bytes": 2466048352,
+    "resident_registration_warp_s": 3.351693999778945
+  },
+  "compare": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_464_200\\memory_admission_contract_parity_r2_20260622\\s2_gate_464_compare.json",
+    "shape_match": true,
+    "coverage_fraction": 0.9609726006955258,
+    "compared_pixels": 59245114,
+    "rms_diff": 0.0016529161011963533,
+    "abs_diff_p99": 0.0004501913627609523
+  },
+  "contracts": {
+    "resident_calibration_contract": "passed",
+    "resident_result_contract": "passed",
+    "resident_result_contract_pixel_verify": true,
+    "pipeline_contract": "passed",
+    "pipeline_contract_pixel_verify": true,
+    "stack_engine_contract": "passed",
+    "stack_engine_default_promotion_ready": true,
+    "acceptance_audit": "passed"
+  },
+  "pytest": {
+    "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+    "result": "1097 passed in 48.22s"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "notes": [
+      "No official PixInsight WBPP/PJSR source was read or used.",
+      "WBPP evidence is limited to user-generated black-box timing/output metadata.",
+      "Input image directories were treated as read-only."
+    ]
+  },
+  "known_limitations": [
+    "Reduced chunk capacity is a pre-run recommendation and explicit-budget guard; native chunked warp dispatch still enforces fallback capacity internally at runtime.",
+    "When no explicit --vram-budget-gb is supplied, detected device-total safety budget is evidence-only and does not block execution."
+  ]
+}

@@ -19,7 +19,7 @@ from glass.engine.pipeline import initialize_run, run_calibration_stages
 from glass.engine.quality import measure_calibrated_quality
 from glass.engine.registration import register_calibrated_frames
 from glass.engine.resident_calibration_artifacts import build_resident_calibration_artifacts
-from glass.engine.resident_cuda import run_resident_calibration_integration
+from glass.engine.resident_cuda import build_resident_memory_admission, run_resident_calibration_integration
 from glass.engine.resident_source_dq_strategy import build_resident_source_dq_strategy
 from glass.engine.warp import warp_registered_frames
 from glass.engine.resume import resume_summary
@@ -275,6 +275,15 @@ console = Console()
 
 class RegistrationAdmissionBlocked(RuntimeError):
     """Raised when registration policy blocks the selected reference frame."""
+
+
+class ResidentMemoryAdmissionBlocked(RuntimeError):
+    """Raised when resident VRAM admission rejects an explicit budget."""
+
+    def __init__(self, message: str, *, admission: dict[str, Any], path: Path):
+        super().__init__(message)
+        self.admission = admission
+        self.path = path
 
 
 RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
@@ -607,6 +616,73 @@ def _resident_source_dq_cache_preflight(
 
 def _resident_source_dq_strategy_path(run: Path) -> Path:
     return run / "resident_source_dq_strategy.json"
+
+
+def _resident_memory_admission_path(run: Path) -> Path:
+    return run / "resident_memory_admission.json"
+
+
+def _resident_memory_admission_message(admission: dict[str, Any]) -> str:
+    return (
+        "resident memory admission failed: "
+        f"estimated_peak_gib={float(admission.get('estimated_peak_gib') or 0.0):.6f}, "
+        f"budget_gib={float(admission.get('budget_gib') or 0.0):.6f}, "
+        f"recommended_action={admission.get('recommended_action')}"
+    )
+
+
+def _write_resident_memory_admission(
+    run: Path,
+    args: argparse.Namespace,
+    *,
+    plan_path: str | Path | None = None,
+) -> Path:
+    try:
+        import glass_cuda  # type: ignore[import-not-found]
+    except Exception:  # pragma: no cover - resident path already checks CUDA availability
+        glass_cuda = None  # type: ignore[assignment]
+    admission = build_resident_memory_admission(
+        plan_path or args.plan,
+        cuda_module=glass_cuda,
+        resident_registration=getattr(args, "resident_registration", "off"),
+        resident_warp_batch_dispatch=getattr(args, "resident_warp_batch_dispatch", "chunked"),
+        exclude_frame_ids=list(getattr(args, "exclude_frame_id", []) or []),
+        vram_budget_gb=getattr(args, "vram_budget_gb", None),
+        dispatch_explicit=_explicit_option(args, "--resident-warp-batch-dispatch"),
+    )
+    admission_path = _resident_memory_admission_path(run)
+    write_json(admission_path, admission)
+    args._resident_memory_admission = admission
+    if admission.get("blocking"):
+        raise ResidentMemoryAdmissionBlocked(
+            _resident_memory_admission_message(admission),
+            admission=admission,
+            path=admission_path,
+        )
+    return admission_path
+
+
+def _write_resident_memory_admission_failed_state(
+    run: Path,
+    exc: ResidentMemoryAdmissionBlocked,
+    *,
+    completed_stages: list[str] | None = None,
+) -> None:
+    state = initialize_run(run)
+    state.current_stage = "resident_memory_admission"
+    state.failed_stage = "resident_memory_admission"
+    state.completed_stages = list(completed_stages or [])
+    state.errors.append(str(exc))
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_memory_admission",
+            path=str(exc.path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    write_run_state(run, state)
 
 
 def _write_resident_source_dq_strategy(
@@ -1163,6 +1239,17 @@ def cmd_audit(args: argparse.Namespace) -> int:
     plan = _timed_stage(out, timing, "plan", lambda: build_processing_plan(manifest, manifest_path))
     write_json(plan_path, plan)
     if plan.executable and args.memory_mode == "resident":
+        try:
+            resident_memory_admission_path = _timed_stage(
+                out,
+                timing,
+                "resident_memory_admission",
+                lambda: _write_resident_memory_admission(out, args, plan_path=plan_path),
+            )
+        except ResidentMemoryAdmissionBlocked as exc:
+            _write_resident_memory_admission_failed_state(out, exc, completed_stages=["scan", "plan"])
+            console.print({"status": "failed", "stage": "resident_memory_admission", "error": str(exc)})
+            return 2
         state = _timed_stage(
             out,
             timing,
@@ -1239,6 +1326,17 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
             ),
         )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_memory_admission",
+                path=str(resident_memory_admission_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=[],
+            )
+        )
+        if "resident_memory_admission" not in state.completed_stages:
+            state.completed_stages.insert(0, "resident_memory_admission")
     elif plan.executable:
         try:
             state = _run_full_pipeline(
@@ -1293,6 +1391,17 @@ def cmd_run(args: argparse.Namespace) -> int:
         out = Path(args.out)
         timing = _new_timing("run", args.backend, None)
         _annotate_timing_execution_defaults(timing, args)
+        try:
+            resident_memory_admission_path = _timed_stage(
+                out,
+                timing,
+                "resident_memory_admission",
+                lambda: _write_resident_memory_admission(out, args),
+            )
+        except ResidentMemoryAdmissionBlocked as exc:
+            _write_resident_memory_admission_failed_state(out, exc)
+            console.print({"status": "failed", "stage": "resident_memory_admission", "error": str(exc)})
+            return 2
         source_dq_strategy_path = _write_resident_source_dq_strategy(out, args)
         source_dq_cache_route_path: Path | None = None
         if args.resident_source_dq_cache == "generate-calibration":
@@ -1410,6 +1519,17 @@ def cmd_run(args: argparse.Namespace) -> int:
                     source_frames=[],
                 )
             )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_memory_admission",
+                path=str(resident_memory_admission_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=[],
+            )
+        )
+        if "resident_memory_admission" not in state.completed_stages:
+            state.completed_stages.insert(0, "resident_memory_admission")
         state.artifacts.append(
             PipelineArtifact(
                 stage="resident_source_dq_strategy",
@@ -4843,6 +4963,8 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--root", required=True)
     audit.add_argument("--out", required=True)
     audit.add_argument("--backend", choices=["cpu", "cuda", "auto"], default="auto")
+    audit.add_argument("--vram-budget-gb", type=float)
+    audit.add_argument("--ram-budget-gb", type=float)
     audit.add_argument("--tile-size", type=int, default=512)
     audit.add_argument(
         "--memory-mode",

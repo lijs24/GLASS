@@ -9519,6 +9519,73 @@ Completed in Gate446:
     use these byte terms before allocation to choose resident, reduced chunk,
     or tiled fallback mode.
 
+### S2-Gate 464: Resident VRAM Admission Scheduler
+
+- Add a pre-run resident CUDA memory-admission artifact so `glass run` and
+  `glass audit` can make the chunked-warp VRAM decision explicit before large
+  frame allocation begins.
+- Required work:
+  - reuse the Gate463 calibrated-stack, output-map, and chunked-warp workspace
+    byte terms to estimate each light group's peak resident VRAM demand;
+  - honor `--vram-budget-gb` as an explicit blocking budget while recording the
+    detected device-total safety budget as non-blocking evidence;
+  - report frame-count, active-frame, warp-frame, preferred chunk-capacity,
+    reduced-capacity options, headroom, and recommended action in
+    `resident_memory_admission.json`;
+  - insert the admission stage before source-DQ strategy and before resident
+    CUDA allocation, and write a failed `run_state.json` if an explicit budget
+    blocks execution;
+  - keep the same 200-light science path and pass compare, resident,
+    pipeline, StackEngine, acceptance, and full pytest checks.
+- Completed in S2-Gate464:
+  - added `build_resident_memory_admission` and wired it into resident
+    `glass run`/`glass audit` as a timed `resident_memory_admission` stage;
+  - added `--vram-budget-gb`/`--ram-budget-gb` to `glass audit` and a blocking
+    explicit-budget path that exits before CUDA allocation while preserving a
+    diagnostic `run_state.json`;
+  - fixed pre-run frame exclusion accounting to use the same id/file-name/stem
+    token matching as resident execution, so commands excluding
+    `LIGHT_H_0100` style tokens now estimate active and warp frame counts
+    correctly;
+  - focused tests covered reduced-chunk recommendations, explicit-budget
+    blocking, stem-based exclude accounting, CLI failure-state artifacts, and
+    existing resident/report smoke paths;
+  - real 200-light run
+    `C:\glass_runs\phase2_s2_gate_464_200\memory_admission_contract_parity_r2_20260622`
+    completed in `37.538072 s` internal timing (`37.950770 s` outer
+    PowerShell timing);
+  - `resident_memory_admission.json` passed with action `resident_full_frame`,
+    budget source `device_total_memory_safety_fraction`, budget
+    `86.032617 GiB`, estimated peak `49.608422 GiB`, and headroom
+    `36.424195 GiB`;
+  - the admission artifact now records `frame_count=200`,
+    `planned_active_frame_count=193`, `planned_warp_frame_count=192`,
+    preferred chunk capacity `8`, and planned workspace bytes `2466048352`;
+  - real resident artifact still records chunked warp dispatch with
+    `triangle_warp_batch_frame_count=192`, `chunk_frames=8`, `chunk_count=24`,
+    timing model `native_chunked_batch_warp_scatter_one_sync`, and matching
+    observed workspace bytes;
+  - compare against the same user-generated WBPP black-box master remained
+    inside contract: coverage fraction `0.960973`, RMS diff `0.00165292`, and
+    P99 absolute diff `0.000450191`;
+  - resident calibration contract, resident result contract with pixel
+    verification, pipeline contract with pixel verification, StackEngine
+    contract with default-promotion readiness, and acceptance audit all passed;
+  - acceptance reports `29.104877x` speedup versus the WBPP black-box timing
+    `1092.541 s`;
+  - full pytest passed with `1097 passed`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_464_200\memory_admission_contract_parity_r2_20260622`;
+  - `runs/checkpoints/s2_gate_464_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_464_status.md`.
+- Known limitation:
+  - reduced chunk capacity is currently a pre-run recommendation and blocking
+    guard, while the native resident warp allocator still chooses its runtime
+    fallback capacity internally. A follow-up runtime scheduler gate should
+    plumb the selected admission capacity into native chunked warp dispatch so
+    budgeted reduced-capacity runs are enforced without relying on allocator
+    fallback.
+
 ## Gate Rules
 
 Each gate requires:

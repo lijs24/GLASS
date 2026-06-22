@@ -13,6 +13,7 @@ from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.engine.resident_cuda import (
     _apply_resident_registration_matrix_batch,
+    build_resident_memory_admission,
     _load_frame_weight_proposal,
     _load_tile_local_policy_replay,
     _matches_any_token,
@@ -66,6 +67,104 @@ def test_resident_memory_estimate_includes_chunked_warp_workspace() -> None:
     assert memory["chunked_warp_observed_workspace_bytes"] == workspace_bytes
     assert memory["estimated_peak_includes_chunked_warp_workspace"] is True
     assert memory["estimated_peak_bytes"] == base_peak_bytes + workspace_bytes
+
+
+def test_resident_memory_admission_recommends_reduced_chunk_capacity() -> None:
+    frames = [
+        {"id": f"L{index:03d}", "frame_type": "light", "filter": "H", "height": 72, "width": 80}
+        for index in range(10)
+    ]
+    full = build_resident_memory_admission(
+        {"frames": frames},
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        vram_budget_gb=1.0,
+    )
+    capacity4 = next(
+        item
+        for item in full["peak_group"]["capacity_options"]
+        if item["chunked_warp_capacity_frames"] == 4
+    )
+    admission = build_resident_memory_admission(
+        {"frames": frames},
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        vram_budget_gb=float(capacity4["estimated_peak_bytes"] + 1024) / (1024**3),
+        enforce_explicit_budget=False,
+    )
+
+    assert admission["passed"] is True
+    assert admission["blocking"] is False
+    assert admission["status"] == "warning_would_fit_reduced_chunk"
+    assert admission["recommended_action"] == "resident_reduced_chunk_capacity"
+    assert admission["recommended_chunk_capacity_frames"] == 4
+    assert admission["peak_group"]["preferred_chunk_capacity_frames"] == 8
+    assert admission["peak_group"]["planned_warp_frame_count"] == 9
+
+
+def test_resident_memory_admission_counts_stem_excludes() -> None:
+    frames = [
+        {
+            "id": "F000160",
+            "frame_type": "light",
+            "filter": "H",
+            "height": 72,
+            "width": 80,
+            "path": r"C:\data\LIGHT_H_0100.fits",
+        },
+        {
+            "id": "F000161",
+            "frame_type": "light",
+            "filter": "H",
+            "height": 72,
+            "width": 80,
+            "path": r"C:\data\LIGHT_H_0101.fits",
+        },
+        {
+            "id": "F000162",
+            "frame_type": "light",
+            "filter": "H",
+            "height": 72,
+            "width": 80,
+            "path": r"C:\data\LIGHT_H_0102.fits",
+        },
+    ]
+
+    admission = build_resident_memory_admission(
+        {"frames": frames},
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        exclude_frame_ids=["LIGHT_H_0100"],
+        vram_budget_gb=1.0,
+    )
+
+    assert admission["peak_group"]["frame_count"] == 3
+    assert admission["peak_group"]["planned_active_frame_count"] == 2
+    assert admission["peak_group"]["planned_warp_frame_count"] == 1
+
+
+def test_resident_memory_admission_blocks_explicit_budget() -> None:
+    frames = [
+        {"id": f"L{index:03d}", "frame_type": "light", "filter": "H", "height": 72, "width": 80}
+        for index in range(2)
+    ]
+
+    admission = build_resident_memory_admission(
+        {"frames": frames},
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="chunked",
+        vram_budget_gb=0.000001,
+    )
+
+    assert admission["passed"] is False
+    assert admission["blocking"] is True
+    assert admission["status"] == "failed"
+    assert admission["reason"] == "estimated_peak_exceeds_explicit_vram_budget"
+    assert admission["recommended_action"] in {
+        "resident_reduced_chunk_capacity",
+        "resident_loop_dispatch_or_tile_fallback",
+        "tile_fallback",
+    }
 
 
 def _write_test_frame(path: Path, frame_type: str, data: np.ndarray, exposure: float = 60.0) -> None:
@@ -2035,6 +2134,7 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     assert all(row["exists"] for row in route["dq_sidecars"])
     assert timing["resident_source_dq_cache"] == "generate-calibration"
     assert [row["stage"] for row in timing["stages"]] == [
+        "resident_memory_admission",
         "resident_source_dq_cache_calibration",
         "resident_calibration_integration",
     ]

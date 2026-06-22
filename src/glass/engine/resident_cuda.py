@@ -132,6 +132,7 @@ def _chunked_warp_workspace_estimate(
     width: int,
     enabled: bool,
     planned_warp_frame_count: int | None = None,
+    planned_capacity_frames: int | None = None,
     observed_chunk_frames: int = 0,
     observed_workspace_bytes: int = 0,
     observed_output_bytes: int = 0,
@@ -141,7 +142,10 @@ def _chunked_warp_workspace_estimate(
     pixels = int(height) * int(width)
     frame_bytes = pixels * 4
     planned_frames = max(0, int(planned_warp_frame_count if planned_warp_frame_count is not None else frame_count - 1))
-    planned_capacity = min(planned_frames, _BATCH_WARP_PREFERRED_FRAMES) if enabled else 0
+    if enabled and planned_capacity_frames is not None:
+        planned_capacity = max(0, min(planned_frames, int(planned_capacity_frames)))
+    else:
+        planned_capacity = min(planned_frames, _BATCH_WARP_PREFERRED_FRAMES) if enabled else 0
     planned_output_bytes = planned_capacity * frame_bytes
     planned_coverage_bytes = planned_capacity * pixels
     planned_inverse_bytes = planned_capacity * 9 * 4
@@ -191,6 +195,7 @@ def _memory_estimate(
     resident_registration: str | None = None,
     resident_warp_batch_dispatch: str = "loop",
     chunked_warp_frame_count: int | None = None,
+    chunked_warp_capacity_frames: int | None = None,
     observed_chunked_warp_chunk_frames: int = 0,
     observed_chunked_warp_workspace_bytes: int = 0,
     observed_chunked_warp_output_bytes: int = 0,
@@ -213,6 +218,7 @@ def _memory_estimate(
             and resident_warp_batch_dispatch == "chunked"
         ),
         planned_warp_frame_count=chunked_warp_frame_count,
+        planned_capacity_frames=chunked_warp_capacity_frames,
         observed_chunk_frames=observed_chunked_warp_chunk_frames,
         observed_workspace_bytes=observed_chunked_warp_workspace_bytes,
         observed_output_bytes=observed_chunked_warp_output_bytes,
@@ -239,6 +245,237 @@ def _memory_estimate(
         **chunked_warp,
         "estimated_peak_bytes": estimated_peak,
         "estimated_peak_gib": estimated_peak / (1024**3),
+    }
+
+
+def _as_plan_payload(plan: str | Path | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(plan, dict):
+        return plan
+    return read_json(plan)
+
+
+def _resident_memory_light_groups(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    groups: dict[tuple[str | None, int, int], list[dict[str, Any]]] = {}
+    for frame in _frames_by_type(plan, "light"):
+        height = int(frame.get("height") or 0)
+        width = int(frame.get("width") or 0)
+        groups.setdefault((frame.get("filter"), height, width), []).append(frame)
+    return [
+        {
+            "filter": filter_name,
+            "height": height,
+            "width": width,
+            "frames": frames,
+        }
+        for (filter_name, height, width), frames in sorted(
+            groups.items(),
+            key=lambda item: (str(item[0][0]), item[0][1], item[0][2]),
+        )
+    ]
+
+
+def _resident_planned_active_frame_count(
+    frames: list[dict[str, Any]],
+    *,
+    exclude_frame_ids: list[str] | None = None,
+) -> int:
+    excludes = {str(frame_id) for frame_id in (exclude_frame_ids or []) if str(frame_id)}
+    return sum(1 for frame in frames if not _matches_any_token(frame, excludes))
+
+
+def _resident_chunk_capacity_candidates(preferred_capacity: int) -> list[int]:
+    capacity = max(0, int(preferred_capacity))
+    values: list[int] = []
+    while capacity > 0:
+        values.append(capacity)
+        capacity //= 2
+    if 0 not in values:
+        values.append(0)
+    return values
+
+
+def _resident_memory_budget_from_device(
+    *,
+    device_info: dict[str, Any] | None,
+    explicit_budget_bytes: int | None,
+    safety_fraction: float,
+) -> tuple[int | None, str, float | None]:
+    if explicit_budget_bytes is not None:
+        return int(explicit_budget_bytes), "explicit_vram_budget_gb", None
+    if not isinstance(device_info, dict):
+        return None, "unavailable", None
+    total_mib = device_info.get("memory_total_mib", device_info.get("total_global_mem_mib"))
+    try:
+        total_bytes = int(float(total_mib) * 1024 * 1024)
+    except (TypeError, ValueError):
+        return None, "unavailable", None
+    fraction = min(1.0, max(0.0, float(safety_fraction)))
+    return int(total_bytes * fraction), "device_total_memory_safety_fraction", fraction
+
+
+def _resident_memory_device_info(cuda_module: Any | None) -> dict[str, Any] | None:
+    if cuda_module is None or not hasattr(cuda_module, "get_device_info"):
+        return None
+    try:
+        return dict(cuda_module.get_device_info(0))
+    except Exception as exc:  # pragma: no cover - diagnostic path
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def build_resident_memory_admission(
+    plan: str | Path | dict[str, Any],
+    *,
+    cuda_module: Any | None = None,
+    resident_registration: str = "off",
+    resident_warp_batch_dispatch: str = "chunked",
+    exclude_frame_ids: list[str] | None = None,
+    vram_budget_gb: float | None = None,
+    enforce_explicit_budget: bool = True,
+    dispatch_explicit: bool = False,
+    safety_fraction: float = 0.90,
+) -> dict[str, Any]:
+    payload = _as_plan_payload(plan)
+    explicit_budget_bytes = None
+    if vram_budget_gb is not None:
+        explicit_budget_bytes = int(float(vram_budget_gb) * (1024**3))
+    device_info = _resident_memory_device_info(cuda_module)
+    budget_bytes, budget_source, budget_fraction = _resident_memory_budget_from_device(
+        device_info=device_info,
+        explicit_budget_bytes=explicit_budget_bytes,
+        safety_fraction=safety_fraction,
+    )
+    chunked_enabled = bool(
+        resident_registration == "similarity_cuda_triangle"
+        and resident_warp_batch_dispatch == "chunked"
+    )
+    group_rows: list[dict[str, Any]] = []
+    peak_row: dict[str, Any] | None = None
+    for group in _resident_memory_light_groups(payload):
+        frames = list(group["frames"])
+        frame_count = len(frames)
+        active_count = _resident_planned_active_frame_count(frames, exclude_frame_ids=exclude_frame_ids)
+        warp_frame_count = max(0, active_count - 1) if chunked_enabled else 0
+        preferred_capacity = min(warp_frame_count, _BATCH_WARP_PREFERRED_FRAMES) if chunked_enabled else 0
+        preferred_estimate = _memory_estimate(
+            frame_count,
+            int(group["height"]),
+            int(group["width"]),
+            resident_registration=resident_registration,
+            resident_warp_batch_dispatch=resident_warp_batch_dispatch,
+            chunked_warp_frame_count=warp_frame_count,
+            chunked_warp_capacity_frames=preferred_capacity,
+        )
+        capacity_options = []
+        for capacity in _resident_chunk_capacity_candidates(preferred_capacity):
+            estimate = _memory_estimate(
+                frame_count,
+                int(group["height"]),
+                int(group["width"]),
+                resident_registration=resident_registration,
+                resident_warp_batch_dispatch=resident_warp_batch_dispatch,
+                chunked_warp_frame_count=warp_frame_count,
+                chunked_warp_capacity_frames=capacity,
+            )
+            capacity_options.append(
+                {
+                    "chunked_warp_capacity_frames": capacity,
+                    "estimated_peak_bytes": estimate["estimated_peak_bytes"],
+                    "estimated_peak_gib": estimate["estimated_peak_gib"],
+                    "fits_budget": bool(
+                        budget_bytes is None or int(estimate["estimated_peak_bytes"]) <= int(budget_bytes)
+                    ),
+                }
+            )
+        row = {
+            "filter": group["filter"],
+            "height": int(group["height"]),
+            "width": int(group["width"]),
+            "frame_count": frame_count,
+            "planned_active_frame_count": active_count,
+            "planned_warp_frame_count": warp_frame_count,
+            "preferred_chunk_capacity_frames": preferred_capacity,
+            "estimated_peak_bytes": preferred_estimate["estimated_peak_bytes"],
+            "estimated_peak_gib": preferred_estimate["estimated_peak_gib"],
+            "estimated_peak_without_chunked_warp_bytes": preferred_estimate[
+                "estimated_peak_without_chunked_warp_bytes"
+            ],
+            "chunked_warp_planned_workspace_bytes": preferred_estimate[
+                "chunked_warp_planned_workspace_bytes"
+            ],
+            "capacity_options": capacity_options,
+        }
+        group_rows.append(row)
+        if peak_row is None or int(row["estimated_peak_bytes"]) > int(peak_row["estimated_peak_bytes"]):
+            peak_row = row
+    estimated_peak_bytes = int(peak_row["estimated_peak_bytes"]) if peak_row is not None else 0
+    fits_budget = budget_bytes is None or estimated_peak_bytes <= int(budget_bytes)
+    selected_capacity = peak_row.get("preferred_chunk_capacity_frames") if isinstance(peak_row, dict) else 0
+    reduced_capacity = None
+    if not fits_budget and peak_row is not None:
+        for option in peak_row.get("capacity_options", []):
+            if option["fits_budget"]:
+                reduced_capacity = int(option["chunked_warp_capacity_frames"])
+                break
+    explicit_budget = explicit_budget_bytes is not None
+    if fits_budget:
+        recommended_action = "resident_full_frame"
+        status = "passed"
+    elif reduced_capacity is not None and reduced_capacity > 0:
+        recommended_action = "resident_reduced_chunk_capacity"
+        status = "would_fit_reduced_chunk"
+        selected_capacity = reduced_capacity
+    elif reduced_capacity == 0:
+        recommended_action = "resident_loop_dispatch_or_tile_fallback"
+        status = "would_fit_without_chunked_workspace"
+        selected_capacity = 0
+    else:
+        recommended_action = "tile_fallback"
+        status = "failed"
+    blocking = bool(
+        enforce_explicit_budget
+        and explicit_budget
+        and not fits_budget
+    )
+    artifact_status = "failed" if blocking else status if fits_budget else f"warning_{status}"
+    return {
+        "schema_version": 1,
+        "artifact_type": "resident_memory_admission",
+        "created_at": now_iso(),
+        "status": artifact_status,
+        "passed": bool(fits_budget or not blocking),
+        "blocking": blocking,
+        "reason": (
+            "estimated_peak_exceeds_explicit_vram_budget"
+            if blocking
+            else "estimated_peak_within_budget"
+            if fits_budget
+            else "estimated_peak_exceeds_recorded_budget"
+        ),
+        "resident_registration": resident_registration,
+        "requested_warp_batch_dispatch": resident_warp_batch_dispatch,
+        "effective_warp_batch_dispatch": resident_warp_batch_dispatch,
+        "dispatch_explicit": bool(dispatch_explicit),
+        "recommended_action": recommended_action,
+        "recommended_chunk_capacity_frames": selected_capacity,
+        "budget_bytes": budget_bytes,
+        "budget_gib": (budget_bytes / (1024**3)) if budget_bytes is not None else None,
+        "budget_source": budget_source,
+        "budget_safety_fraction": budget_fraction,
+        "explicit_budget": explicit_budget,
+        "estimated_peak_bytes": estimated_peak_bytes,
+        "estimated_peak_gib": estimated_peak_bytes / (1024**3),
+        "headroom_bytes": (int(budget_bytes) - estimated_peak_bytes) if budget_bytes is not None else None,
+        "headroom_gib": ((int(budget_bytes) - estimated_peak_bytes) / (1024**3))
+        if budget_bytes is not None
+        else None,
+        "peak_group": peak_row,
+        "groups": group_rows,
+        "device": device_info,
+        "limitations": [
+            "Pre-run admission uses metadata dimensions and planned frame admission; actual native fallback capacity is still recorded after execution.",
+            "Reduced chunk capacity is currently an admission recommendation; native batch warp capacity selection remains allocator-driven.",
+            "When no explicit --vram-budget-gb is supplied, the device-total safety budget is recorded as evidence and does not block the run.",
+        ],
     }
 
 
