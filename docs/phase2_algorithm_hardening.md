@@ -937,6 +937,98 @@ Decision:
 - The next substantive optimization should target light read/upload/calibration
   overlap and resident registration/warp residency.
 
+### S2-Gate 517: Resident DQ Provenance Fast Path
+
+Gate 517 continues the mainline performance work after Gate516. A warm-cache
+cProfile run showed the next large Python costs were in the actual resident
+DQ/provenance path: DQ map construction and summary, output diagnostics,
+coverage provenance, and count-map statistics. This gate removes repeated map
+passes while keeping the same DQ semantics and the same independent
+disk-backed pixel verification.
+
+Implementation:
+
+- `_output_diagnostics` now computes all requested percentiles in one
+  `np.percentile` call and reuses boolean mask counts for clipping fractions.
+- `_resident_dq_map` now returns a resident fast DQ summary from the masks used
+  to build the DQ map instead of calling `DQMask.summary()` over every defined
+  flag.
+- `_resident_count_map_array_stats` records the contract-required count-map
+  fields without a separate mean pass and marks the profile as
+  `count_map_contract_fields`.
+- `_resident_dq_coverage_provenance` reuses geometric warp coverage as
+  `finite_pre_rejection_coverage` when source-DQ applied zero invalid samples.
+  If source-DQ changes samples, it falls back to the previous
+  `post_rejection_coverage + low/high rejection maps` path.
+- `tests/test_resident_cuda_run.py` covers the geometric fast path and the
+  source-DQ fallback condition.
+
+Real 200-light validation:
+
+- Profile run root:
+  `C:\glass_runs\phase2_s2_gate517_profile\runs_20260623_074248`
+- Optimized run root:
+  `C:\glass_runs\phase2_s2_gate517_dq_provenance_fastpath\runs_20260623_074736`
+- Cold optimized audit run:
+  - internal elapsed: `12.870977100043092 s`;
+  - shell elapsed: `13.25686 s`;
+  - cache: `0` hits, `1` miss.
+- Warm optimized audit run:
+  - internal elapsed: `8.503292900044471 s`;
+  - shell elapsed: `8.854115 s`;
+  - cache: `1` hit, `0` misses;
+  - master build/load: `0.40851680003106594 s`;
+  - light read/upload/calibrate wall: `2.542228999955114 s`;
+  - resident registration component account: `1.9585369000975243 s`;
+  - resident registration warp: `0.4736267992993817 s`;
+  - resident integration: `0.303468799975235 s`;
+  - output write: `0.3315862999879755 s`.
+- Warm optimized vs Gate516:
+  - Gate516 warm internal elapsed: `11.345701600017492 s`;
+  - optimized warm internal speedup: `1.3342715267350318x`;
+  - optimized warm shell speedup: `1.3228609522239094x`.
+- Warm vs cold master: bitwise equal, `RMS=0`, `max_abs=0`, `p99_abs=0`.
+- Warm vs WBPP:
+  - WBPP black-box elapsed: `1092.541 s`;
+  - speedup: `128.48446041348123x` by GLASS internal timing and
+    `123.39358592021901x` by conservative shell timing;
+  - RMS diff: `0.0017794216505176163`;
+  - p99 absolute diff: `0.00042621337808668863`;
+  - coverage fraction: `0.960532609259836`.
+
+Contract status:
+
+- resident calibration contract: passed;
+- resident result contract with pixel verification: passed;
+- pipeline contract with pixel verification: passed;
+- StackEngine contract: passed and default-promotion ready;
+- acceptance audit: passed.
+
+Validation commands:
+
+- `python -m ruff check src\glass\engine\resident_cuda.py
+  tests\test_resident_cuda_run.py`
+- focused DQ/provenance and resident-result tests;
+- `python -m pytest -q tests/test_resident_cuda_run.py
+  tests/test_resident_stack_surface.py tests/test_stack_engine_contract.py`
+- optimized real 200-light cold/warm `glass run` commands under the same
+  parent, followed by cold/warm FITS bitwise comparison and WBPP compare.
+- `glass resident-calibration-contract ... --fail-on-failed`
+- `glass resident-result-contract ... --pixel-verify --fail-on-failed`
+- `glass pipeline-contract ... --pixel-verify`
+- `glass stack-engine-contract ... --expected-integration-engine
+  cuda_resident_stack --require-default-ready`
+- `glass acceptance-audit ... --benchmark-contract
+  benchmarks/phase2_m38_h_200_audit_maps_contract.json`
+
+Decision:
+
+- Keep the resident DQ provenance fast path as the default because it preserves
+  DQ/mask contracts, keeps the independent pixel verifier intact, and improves
+  the real 200-light audit route without changing pixels.
+- The next substantive gate should target the now-dominant warm-path costs:
+  resident read/upload/calibration overlap and registration/warp residency.
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

@@ -596,6 +596,7 @@ def test_resident_dq_coverage_provenance_separates_rejection_from_pre_rejection(
     assert provenance["rejection_reduced_pixels"] == 2
     assert provenance["rejected_sample_count"] == 2.0
     assert provenance["rejected_sample_count_source"] == "low_high_rejection_maps"
+    assert provenance["finite_pre_rejection_source"] == "post_rejection_coverage_plus_rejection_maps"
     assert provenance["finite_pre_rejection_coverage"]["max"] == 3.0
     assert provenance["partial_edge_inference"] == "deferred"
 
@@ -643,10 +644,32 @@ def test_resident_dq_coverage_provenance_includes_geometric_warp_coverage():
     assert provenance["source_terms"] == ["post_rejection_coverage", "geometric_warp_coverage"]
     assert provenance["geometric_warp_coverage_frame_count"] == 2
     assert provenance["geometric_frame_count_matches_active"] is True
+    assert provenance["finite_pre_rejection_source"] == "geometric_warp_coverage"
     assert provenance["geometric_zero_pixels"] == 1
     assert provenance["geometric_partial_pixels"] == 1
     assert provenance["geometric_full_pixels"] == 2
     assert provenance["partial_edge_inference"] == "available_from_geometric_warp_coverage"
+
+
+def test_resident_dq_coverage_provenance_falls_back_when_source_dq_changes_samples():
+    coverage = np.array([[3.0, 0.0], [2.0, 1.0]], dtype=np.float32)
+    low = np.array([[0.0, 0.0], [1.0, 0.0]], dtype=np.float32)
+    high = np.array([[0.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    geometric = np.full((2, 2), 3.0, dtype=np.float32)
+
+    provenance = _resident_dq_coverage_provenance(
+        coverage,
+        low,
+        high,
+        active_frame_count=3,
+        geometric_warp_coverage_map=geometric,
+        geometric_warp_coverage_frame_count=3,
+        source_dq_summary={"applied_invalid_samples": 1, "input_invalid_samples_before_rejection": 1},
+    )
+
+    assert provenance["finite_pre_rejection_source"] == "post_rejection_coverage_plus_rejection_maps"
+    assert provenance["finite_pre_rejection_coverage"]["rounded_sum"] == 8
+    assert provenance["geometric_warp_coverage"]["rounded_sum"] == 12
 
 
 def test_resident_output_map_selection_modes():
