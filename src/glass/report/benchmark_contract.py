@@ -201,7 +201,7 @@ def _resident_pipeline_expectation_match(
 
 
 def _resident_runtime_preset_expectations(preset: str) -> dict[str, Any] | None:
-    if preset == "throughput-v1":
+    if preset in {"throughput-v1", "throughput-v2-fused"}:
         return {
             "h2d_mode": "pinned_ring",
             "prefetch_frames": 12,

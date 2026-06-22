@@ -298,6 +298,17 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_wave_frames": 2,
         "resident_calibration_release_mode": "callback_queue",
     },
+    "throughput-v2-fused": {
+        "resident_prefetch_frames": 12,
+        "resident_prefetch_workers": 7,
+        "resident_prefetch_refill_mode": "queued",
+        "resident_h2d_mode": "pinned_ring",
+        "resident_calibration_batch_frames": 8,
+        "resident_calibration_streams": 4,
+        "resident_calibration_wave_frames": 2,
+        "resident_calibration_release_mode": "callback_queue",
+        "resident_integration_dispatch": "auto",
+    },
 }
 DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v1"
 DEFAULT_MEMORY_MODE = "resident"
@@ -314,6 +325,7 @@ RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_calibration_streams": "--resident-calibration-streams",
     "resident_calibration_wave_frames": "--resident-calibration-wave-frames",
     "resident_calibration_release_mode": "--resident-calibration-release-mode",
+    "resident_integration_dispatch": "--resident-integration-dispatch",
 }
 
 
@@ -4548,6 +4560,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "resident runtime scheduling preset; throughput-v1 is the default promoted by Gate180 and "
             "applies prefetch/H2D/calibration settings unless an individual option is explicitly provided; "
+            "throughput-v2-fused adds resident integration auto dispatch as a non-default A/B candidate; "
             "use manual for the legacy conservative schedule"
         ),
     )
@@ -5020,7 +5033,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "resident runtime scheduling preset for the audit run; throughput-v1 is the default promoted by "
             "Gate180 and applies prefetch/H2D/calibration settings unless an individual option is explicitly "
-            "provided; use manual for the legacy conservative schedule"
+            "provided; throughput-v2-fused adds resident integration auto dispatch as a non-default A/B "
+            "candidate; use manual for the legacy conservative schedule"
         ),
     )
     audit.add_argument(

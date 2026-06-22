@@ -75,6 +75,30 @@ def test_resident_runtime_preset_applies_gate158_values() -> None:
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v1"
 
 
+def test_resident_runtime_preset_throughput_v2_fused_applies_auto_dispatch() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "throughput-v2-fused",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_prefetch_frames == 12
+    assert args.resident_prefetch_workers == 7
+    assert args.resident_h2d_mode == "pinned_ring"
+    assert args.resident_calibration_release_mode == "callback_queue"
+    assert args.resident_integration_dispatch == "auto"
+    assert args._resident_runtime_preset_effective["preset"] == "throughput-v2-fused"
+    assert args._resident_runtime_preset_effective["applied"]["resident_integration_dispatch"] == "auto"
+
+
 def test_resident_runtime_preset_defaults_to_throughput_v1() -> None:
     args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
 
@@ -85,6 +109,7 @@ def test_resident_runtime_preset_defaults_to_throughput_v1() -> None:
     assert args.resident_prefetch_workers == 7
     assert args.resident_h2d_mode == "pinned_ring"
     assert args.resident_calibration_release_mode == "callback_queue"
+    assert args.resident_integration_dispatch == "stack"
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v1"
 
 
@@ -120,10 +145,12 @@ def test_resident_runtime_preset_respects_explicit_overrides() -> None:
             "--out",
             "run",
             "--resident-runtime-preset",
-            "throughput-v1",
+            "throughput-v2-fused",
             "--resident-prefetch-frames",
             "4",
             "--resident-calibration-streams=2",
+            "--resident-integration-dispatch",
+            "stack",
         ]
     )
 
@@ -135,6 +162,8 @@ def test_resident_runtime_preset_respects_explicit_overrides() -> None:
     explicit = args._resident_runtime_preset_effective["explicit_overrides"]
     assert explicit["resident_prefetch_frames"] == 4
     assert explicit["resident_calibration_streams"] == 2
+    assert explicit["resident_integration_dispatch"] == "stack"
+    assert "resident_integration_dispatch" not in args._resident_runtime_preset_effective["applied"]
 
 
 def test_run_defaults_promote_resident_cuda_when_available() -> None:

@@ -3874,8 +3874,8 @@ def test_cli_resident_cuda_auto_dispatch_selects_verified_bilinear_fused_path(tm
             "none",
             "--resident-registration",
             "similarity_cuda_triangle",
-            "--resident-integration-dispatch",
-            "auto",
+            "--resident-runtime-preset",
+            "throughput-v2-fused",
             "--resident-star-threshold",
             "30",
             "--resident-star-max-candidates",
@@ -3902,10 +3902,13 @@ def test_cli_resident_cuda_auto_dispatch_selects_verified_bilinear_fused_path(tm
     resident = read_json(run / "resident_artifacts.json")
     integration = read_json(run / "integration_results.json")
     registration = read_json(run / "registration_results.json")
+    timing = read_json(run / "run_timing.json")
     dispatch = resident["artifacts"][0]["resident_integration_dispatch"]
     resident_registration = resident["artifacts"][0]["resident_registration"]
     moving = [item for item in registration["results"] if item["status"] != "reference"][0]
 
+    assert timing["resident_runtime_preset"] == "throughput-v2-fused"
+    assert timing["resident_runtime_preset_effective"]["applied"]["resident_integration_dispatch"] == "auto"
     assert dispatch["requested_mode"] == "auto"
     assert dispatch["mode"] == "fused_matrix"
     assert dispatch["effective_mode"] == "fused_matrix"

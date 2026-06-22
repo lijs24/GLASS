@@ -9921,6 +9921,50 @@ Completed in Gate446:
     uploaded. It does not include FITS read, H2D upload, calibration, star
     detection, descriptor fit, or real 200-light I/O pressure.
 
+### S2-Gate 471: Fused Throughput Runtime Preset
+
+- Package the Gate470 fused-dispatch evidence into a non-default resident
+  runtime preset for the next real 200-light A/B run.
+- Required work:
+  - add `--resident-runtime-preset throughput-v2-fused`;
+  - inherit the proven `throughput-v1` prefetch, pinned-ring H2D, calibration
+    batch, stream, wave, and callback-release settings;
+  - add `resident_integration_dispatch=auto` through the preset while
+    preserving explicit user overrides;
+  - keep the default resident preset as `throughput-v1` until a real 200-light
+    A/B run passes frame accounting, DQ maps, acceptance contract, and compare
+    metrics;
+  - make benchmark-contract command-token checks recognize the new preset's
+    runtime I/O expectations.
+- Completed in S2-Gate471:
+  - added the `throughput-v2-fused` preset in `src/glass/cli.py`;
+  - extended preset flag handling so `--resident-integration-dispatch` can be
+    preset-managed or user-overridden;
+  - updated run/audit help text to describe the new preset as a non-default
+    A/B candidate;
+  - updated acceptance/benchmark-contract preset matching for
+    `--resident-runtime-preset throughput-v2-fused`;
+  - changed the small resident CUDA auto-fused smoke path to use the new preset
+    instead of spelling out `--resident-integration-dispatch auto`;
+  - focused pytest passed;
+  - full pytest passed with `1105 passed`.
+- Performance and regression note:
+  - this gate changes runtime configuration only when the user explicitly asks
+    for `throughput-v2-fused`;
+  - it does not change calibration, registration, warp, rejection, DQ, or
+    integration pixel formulas;
+  - the Gate470 synthetic benchmark remains the current speed evidence:
+    `4.1227x` faster fused dispatch than stack dispatch after resident upload
+    on 32 synthetic 512x512 frames with zero master/weight difference;
+  - a new 200-light run was not launched because C: free space remained too
+    low for a safe large output directory.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_471_status.md`.
+- Known limitation:
+  - `throughput-v2-fused` is an opt-in candidate. It must not be promoted to the
+    default until a 200-light A/B run proves speed and image agreement on the
+    current real dataset.
+
 ## Gate Rules
 
 Each gate requires:
