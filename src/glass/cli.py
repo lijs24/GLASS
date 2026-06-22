@@ -303,6 +303,7 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_streams": 4,
         "resident_calibration_wave_frames": 2,
         "resident_calibration_release_mode": "callback_queue",
+        "resident_integration_dispatch": "stack",
     },
     "throughput-v2-fused": {
         "resident_prefetch_frames": 12,

@@ -10807,6 +10807,94 @@ Completed in Gate446:
   - report:
     `C:\glass_runs\phase2_s2_gate488_catalog_multistream_ab_real\reports\warm_report.html`.
 
+### S2-Gate 489: Resident Runtime Default Stack Dispatch Proof
+
+- Continue from Gate488 with a default-path gate instead of another
+  performance-only tweak. Gate488 proved the optimized resident stack route is
+  fast and numerically stable when invoked explicitly; Gate489 proves the same
+  conservative route is the actual runtime default and is visible in artifacts.
+- Required work:
+  - do not change calibration math, registration math, warp interpolation,
+    rejection, DQ semantics, integration math, or CUDA kernels;
+  - make `throughput-v1` explicitly apply
+    `resident_integration_dispatch=stack` so `run_timing.json` records the
+    default dispatch decision in `resident_runtime_preset_effective.applied`;
+  - run the real 200-light command without explicit `--backend`,
+    `--memory-mode`, `--resident-runtime-preset`, or
+    `--resident-integration-dispatch`;
+  - verify the output with GLASS-vs-Gate488 compare, WBPP compare,
+    speedup summary, StackEngine contract, pixel-verifying pipeline contract,
+    acceptance audit, and report.
+- Completed:
+  - `RESIDENT_RUNTIME_PRESETS["throughput-v1"]` now contains
+    `resident_integration_dispatch=stack`;
+  - focused CLI tests now assert the default preset records stack dispatch as
+    an applied default rather than relying only on the argparse default;
+  - default-route run command omitted the runtime-default flags while keeping
+    the scientific parity settings explicit.
+- Real 200-light default-route validation:
+  - output root:
+    `C:\glass_runs\phase2_s2_gate489_runtime_default_stack_ab_real`;
+  - command evidence:
+    `run_command.txt` contains no explicit `--backend`, `--memory-mode`,
+    `--resident-runtime-preset`, or `--resident-integration-dispatch`;
+  - execution defaults:
+    `requested_backend=auto`, `requested_memory_mode=resident`,
+    `effective_backend=cuda`, `effective_memory_mode=resident`,
+    `explicit_backend=false`, `explicit_memory_mode=false`,
+    `reason=resident_cuda_default`;
+  - preset defaults:
+    `resident_runtime_preset=throughput-v1` and applied
+    `resident_integration_dispatch=stack`;
+  - resident dispatch artifact:
+    `mode=stack`, `requested_mode=stack`, `selection_reason=explicit_stack`,
+    `used_fused_matrix=false`, interpolation `lanczos3`;
+  - total runtime: `19.54827229998773 s`;
+  - `master_build_or_load`: `0.2983022999833338 s`;
+  - `light_read_upload_calibrate`: `3.526385199977085 s`;
+  - `resident_registration_component_accounted`:
+    `2.1170830003353207 s`;
+  - `resident_registration_warp`: `0.5607255008653738 s`;
+  - `resident_integration`: `0.2865610999870114 s`;
+  - `output_write`: `2.2916056999820285 s`;
+  - catalog timing model:
+    `batch_multistream_bulk_download_centroid_multistream`, batch size `199`,
+    stream count `4`, sync phases `3`, native total `0.2604065 s`;
+  - default-vs-Gate488 GLASS master difference: RMS/p99/max all `0.0`;
+  - default-vs-WBPP compare with coverage >= `190`: RMS
+    `0.0017794216505176163`, p99 abs diff
+    `0.00042621337808668863`, coverage fraction
+    `0.960532609259836`;
+  - warm GLASS default route vs WBPP speedup: `55.889389263351205x`;
+  - StackEngine contract passed with
+    `default_path.status=resident_cuda_stack_engine_surface` and
+    `default_promotion.ready=true`;
+  - pixel-verifying pipeline contract passed with no failed checks;
+  - acceptance audit passed with the real-data frame minima, speedup,
+    coverage, RMS/p99 thresholds, plus attached StackEngine and pipeline
+    contracts.
+- Interpretation:
+  - this gate closes a practical default-path audit gap: users can omit the
+    runtime-default flags and still get the conservative resident CUDA stack
+    route that has the Gate488 numerical proof;
+  - the explicit preset field makes future accidental default drift visible in
+    timing artifacts and tests;
+  - this remains a resident CUDA StackEngine-surface path, not strict native
+    CPU `stack_engine_cpu` readiness; strict native readiness remains false by
+    design for resident CUDA.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate489_runtime_default_stack_ab_real\gate489_real_default_summary.json`;
+  - StackEngine contract:
+    `C:\glass_runs\phase2_s2_gate489_runtime_default_stack_ab_real\contracts\stack_engine_contract.json`;
+  - pipeline contract:
+    `C:\glass_runs\phase2_s2_gate489_runtime_default_stack_ab_real\contracts\pipeline_contract.json`;
+  - threshold acceptance:
+    `C:\glass_runs\phase2_s2_gate489_runtime_default_stack_ab_real\acceptance\default_threshold_acceptance_audit.json`;
+  - speedup summary:
+    `C:\glass_runs\phase2_s2_gate489_runtime_default_stack_ab_real\speedup\default_vs_wbpp_speedup_with_compare.json`;
+  - report:
+    `C:\glass_runs\phase2_s2_gate489_runtime_default_stack_ab_real\reports\default_runtime_report.html`.
+
 ## Gate Rules
 
 Each gate requires:

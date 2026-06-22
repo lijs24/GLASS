@@ -138,6 +138,10 @@ def test_resident_runtime_preset_defaults_to_throughput_v1() -> None:
     assert args.resident_calibration_release_mode == "callback_queue"
     assert args.resident_integration_dispatch == "stack"
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v1"
+    assert (
+        args._resident_runtime_preset_effective["applied"]["resident_integration_dispatch"]
+        == "stack"
+    )
 
 
 def test_resident_runtime_preset_manual_keeps_legacy_values() -> None:
