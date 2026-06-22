@@ -1717,10 +1717,16 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector"] == (
         "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
     )
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_threshold_source"] == (
+        "cuda_resident_sampled_median_mad_scalar"
+    )
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_threshold_stats_domain"] == (
+        "resident_calibrated_frame"
+    )
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector_execution"] == "cuda_threshold_apply"
     assert strategy["inline_source_dq"]["mode"] == "cosmetic_cuda"
     assert strategy["inline_source_dq"]["detector"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
-    assert strategy["inline_source_dq"]["threshold_source"] == "cpu_median_mad_scalar"
+    assert strategy["inline_source_dq"]["threshold_source"] == "cuda_resident_sampled_median_mad_scalar"
     assert timing["resident_inline_source_dq"] == "cosmetic_cuda"
     assert not (run / "resident_source_dq_cache_route.json").exists()
     applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
@@ -1728,7 +1734,14 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert applied_rows[0]["native_method"] == "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame"
     assert applied_rows[0]["native"]["mask_upload_s"] == 0.0
     assert applied_rows[0]["detector_execution"] == "cuda_threshold_apply"
-    assert applied_rows[0]["threshold_source"] == "cpu_median_mad_scalar"
+    assert applied_rows[0]["threshold_source"] == "cuda_resident_sampled_median_mad_scalar"
+    assert applied_rows[0]["threshold_stats_native_method"] == (
+        "ResidentCalibratedStack.frame_sampled_robust_stats"
+    )
+    assert applied_rows[0]["threshold_stats_domain"] == "resident_calibrated_frame"
+    assert applied_rows[0]["threshold_stats_materializes_host_frame"] is False
+    assert applied_rows[0]["threshold_stats_sample_count"] == 256
+    assert applied_rows[0]["threshold_stats_sample_download_bytes"] == 1024
     assert applied_rows[0]["component_summaries"][0]["source_model"] == "inline_cosmetic_cuda_thresholds"
 
 

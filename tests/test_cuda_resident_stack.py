@@ -800,6 +800,43 @@ def test_resident_stack_global_stats_ignore_nonfinite_pixels():
     assert np.isclose(stats["std"], float(np.std(finite)))
 
 
+def test_resident_stack_sampled_robust_stats_matches_cpu_when_all_pixels_sampled():
+    module = cuda_module_or_skip()
+    frame = np.array(
+        [
+            [10.0, 11.0, 12.0, 13.0, 999.0],
+            [9.0, 10.0, 11.0, 12.0, 13.0],
+            [8.0, 9.0, np.nan, 11.0, 12.0],
+            [-200.0, 8.0, 9.0, 10.0, np.inf],
+        ],
+        dtype=np.float32,
+    )
+    finite = frame[np.isfinite(frame)]
+    median = float(np.median(finite))
+    mad = float(np.median(np.abs(finite - np.float32(median))))
+    sigma = 1.4826 * mad if mad > 0 else float(np.std(finite))
+
+    stack = module.ResidentCalibratedStack(1, frame.shape[0], frame.shape[1])
+    stack.upload_calibrated_frame(0, frame)
+    stats = stack.frame_sampled_robust_stats(0, 10_000, 2.0, 3.0)
+
+    assert stats["native_method"] == "ResidentCalibratedStack.frame_sampled_robust_stats"
+    assert stats["threshold_source"] == "cuda_resident_sampled_median_mad_scalar"
+    assert stats["stats_domain"] == "resident_calibrated_frame"
+    assert stats["robust_stats_execution"] == "cuda_even_sample_then_host_median_mad_scalar"
+    assert stats["all_pixels_sampled"] is True
+    assert stats["materializes_host_frame"] is False
+    assert stats["sample_count"] == frame.size
+    assert stats["finite_sample_count"] == int(finite.size)
+    assert stats["nonfinite_sample_count"] == 2
+    assert stats["sample_download_bytes"] == frame.size * 4
+    assert np.isclose(stats["median"], median)
+    assert np.isclose(stats["mad"], mad)
+    assert np.isclose(stats["sigma"], sigma)
+    assert np.isclose(stats["low_threshold"], float(np.float32(median - 3.0 * sigma)))
+    assert np.isclose(stats["high_threshold"], float(np.float32(median + 2.0 * sigma)))
+
+
 def test_resident_stack_global_normalization_matches_reference_stats():
     module = cuda_module_or_skip()
     reference = np.array([[10, 20], [30, 40]], dtype=np.float32)

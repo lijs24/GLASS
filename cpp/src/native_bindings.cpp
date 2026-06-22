@@ -398,6 +398,11 @@ void glass_apply_cosmetic_threshold_mask_f32_launch(
     float low_threshold,
     float high_threshold,
     unsigned long long* counts);
+void glass_sample_frame_even_f32_launch(
+    const float* frame,
+    float* sample,
+    std::size_t n,
+    std::size_t sample_count);
 void glass_integrate_resident_weighted_mean_f32_launch(
     const float* stack,
     const float* weights,
@@ -694,6 +699,18 @@ using Clock = std::chrono::steady_clock;
 
 double seconds_since(const Clock::time_point& start) {
   return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+double sorted_median_f32(std::vector<float>& values) {
+  if (values.empty()) {
+    return 0.0;
+  }
+  std::sort(values.begin(), values.end());
+  const std::size_t mid = values.size() / 2;
+  if ((values.size() % 2) != 0) {
+    return static_cast<double>(values[mid]);
+  }
+  return (static_cast<double>(values[mid - 1]) + static_cast<double>(values[mid])) * 0.5;
 }
 
 const char* grid_catalog_sort_mode(int grid_capacity) {
@@ -2123,6 +2140,148 @@ class ResidentCalibratedStack {
     result["device_counts_download_s"] = counts_download_s;
     result["total_s"] = seconds_since(total_start);
     result["detector_execution"] = "cuda_threshold_apply";
+    return result;
+  }
+
+  py::dict frame_sampled_robust_stats(
+      std::size_t index,
+      std::size_t sample_limit,
+      float hot_sigma,
+      float cold_sigma) const {
+    require_loaded(index, "resident sampled robust frame statistics");
+    if (sample_limit == 0) {
+      throw std::invalid_argument("sample_limit must be positive");
+    }
+    if (!(hot_sigma > 0.0f) || !(cold_sigma > 0.0f)) {
+      throw std::invalid_argument("hot_sigma and cold_sigma must be positive");
+    }
+
+    const auto total_start = Clock::now();
+    const std::size_t sample_count = std::min<std::size_t>(pixels_per_frame_, sample_limit);
+    float* d_sample = nullptr;
+    std::vector<float> host_sample(sample_count, 0.0f);
+    double alloc_s = 0.0;
+    double kernel_s = 0.0;
+    double sync_s = 0.0;
+    double download_s = 0.0;
+    if (sample_count > 0) {
+      try {
+        const auto alloc_start = Clock::now();
+        check_cuda(
+            cudaMalloc(&d_sample, sample_count * sizeof(float)),
+            "cudaMalloc(resident sampled robust stats buffer)");
+        alloc_s = seconds_since(alloc_start);
+
+        const auto kernel_start = Clock::now();
+        glass_sample_frame_even_f32_launch(
+            d_stack_ + index * pixels_per_frame_,
+            d_sample,
+            pixels_per_frame_,
+            sample_count);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.frame_sampled_robust_stats sample kernel launch");
+        kernel_s = seconds_since(kernel_start);
+
+        const auto sync_start = Clock::now();
+        check_cuda(
+            cudaDeviceSynchronize(),
+            "ResidentCalibratedStack.frame_sampled_robust_stats synchronize");
+        sync_s = seconds_since(sync_start);
+
+        const auto download_start = Clock::now();
+        check_cuda(
+            cudaMemcpy(host_sample.data(), d_sample, sample_count * sizeof(float), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident sampled robust stats sample)");
+        download_s = seconds_since(download_start);
+      } catch (...) {
+        cudaFree(d_sample);
+        throw;
+      }
+      cudaFree(d_sample);
+    }
+
+    const auto host_stats_start = Clock::now();
+    std::vector<float> finite;
+    finite.reserve(sample_count);
+    for (const float value : host_sample) {
+      if (std::isfinite(value)) {
+        finite.push_back(value);
+      }
+    }
+    const std::size_t finite_count = finite.size();
+    double median = 0.0;
+    double mad = 0.0;
+    double sigma = 0.0;
+    double mean = 0.0;
+    double stddev = 0.0;
+    bool std_fallback_used = false;
+    float low_threshold = -std::numeric_limits<float>::infinity();
+    float high_threshold = std::numeric_limits<float>::infinity();
+    if (!finite.empty()) {
+      median = sorted_median_f32(finite);
+      std::vector<float> deviations;
+      deviations.reserve(finite.size());
+      double sum = 0.0;
+      double sum2 = 0.0;
+      for (const float value : finite) {
+        const double value_d = static_cast<double>(value);
+        sum += value_d;
+        sum2 += value_d * value_d;
+        deviations.push_back(static_cast<float>(std::fabs(value_d - median)));
+      }
+      mean = sum / static_cast<double>(finite_count);
+      double variance = sum2 / static_cast<double>(finite_count) - mean * mean;
+      if (variance < 0.0) {
+        variance = 0.0;
+      }
+      stddev = std::sqrt(variance);
+      mad = sorted_median_f32(deviations);
+      sigma = mad > 0.0 ? 1.4826 * mad : stddev;
+      if (sigma <= 0.0 || !std::isfinite(sigma)) {
+        sigma = 1.0;
+        std_fallback_used = true;
+      } else {
+        std_fallback_used = mad <= 0.0;
+      }
+      low_threshold = static_cast<float>(median - static_cast<double>(cold_sigma) * sigma);
+      high_threshold = static_cast<float>(median + static_cast<double>(hot_sigma) * sigma);
+    }
+    const double host_stats_s = seconds_since(host_stats_start);
+
+    py::dict result;
+    result["schema_version"] = 1;
+    result["native_method"] = "ResidentCalibratedStack.frame_sampled_robust_stats";
+    result["frame_index"] = static_cast<unsigned long long>(index);
+    result["total_pixels"] = static_cast<unsigned long long>(pixels_per_frame_);
+    result["sample_limit"] = static_cast<unsigned long long>(sample_limit);
+    result["sample_count"] = static_cast<unsigned long long>(sample_count);
+    result["finite_sample_count"] = static_cast<unsigned long long>(finite_count);
+    result["nonfinite_sample_count"] = static_cast<unsigned long long>(sample_count - finite_count);
+    result["sample_fraction"] =
+        pixels_per_frame_ == 0 ? 0.0 : static_cast<double>(sample_count) / static_cast<double>(pixels_per_frame_);
+    result["all_pixels_sampled"] = sample_count == pixels_per_frame_;
+    result["materializes_host_frame"] = false;
+    result["sample_download_bytes"] = static_cast<unsigned long long>(sample_count * sizeof(float));
+    result["stats_domain"] = "resident_calibrated_frame";
+    result["threshold_source"] = "cuda_resident_sampled_median_mad_scalar";
+    result["robust_stats_execution"] = "cuda_even_sample_then_host_median_mad_scalar";
+    result["median"] = median;
+    result["mad"] = mad;
+    result["sigma"] = sigma;
+    result["mean"] = mean;
+    result["std"] = stddev;
+    result["std_fallback_used"] = std_fallback_used;
+    result["hot_sigma"] = hot_sigma;
+    result["cold_sigma"] = cold_sigma;
+    result["low_threshold"] = low_threshold;
+    result["high_threshold"] = high_threshold;
+    result["device_alloc_s"] = alloc_s;
+    result["sample_kernel_enqueue_s"] = kernel_s;
+    result["sync_s"] = sync_s;
+    result["sample_download_s"] = download_s;
+    result["host_scalar_stats_s"] = host_stats_s;
+    result["total_s"] = seconds_since(total_start);
     return result;
   }
 
@@ -11969,6 +12128,13 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("index"),
           py::arg("low_threshold"),
           py::arg("high_threshold"))
+      .def(
+          "frame_sampled_robust_stats",
+          &ResidentCalibratedStack::frame_sampled_robust_stats,
+          py::arg("index"),
+          py::arg("sample_limit") = 65536,
+          py::arg("hot_sigma") = 8.0f,
+          py::arg("cold_sigma") = 8.0f)
       .def(
           "calibrate_frame",
           &ResidentCalibratedStack::calibrate_frame,

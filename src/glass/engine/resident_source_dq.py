@@ -214,6 +214,78 @@ def inline_cosmetic_thresholds_from_array(
     }
 
 
+def inline_cosmetic_thresholds_from_resident_stack(
+    stack: Any,
+    *,
+    frame_index: int,
+    height: int,
+    width: int,
+    hot_sigma: float = 8.0,
+    cold_sigma: float = 8.0,
+    sample_limit: int = 65536,
+) -> dict[str, Any]:
+    """Compute cosmetic thresholds from an already resident calibrated frame."""
+
+    shape = (int(height), int(width))
+    if not hasattr(stack, "frame_sampled_robust_stats"):
+        return {
+            "supported": False,
+            "reason": "resident_cuda_sampled_robust_stats_unavailable",
+            "shape": list(shape),
+            "invalid_samples": 0,
+            "flag_counts": {},
+            "source_model": "inline_cosmetic_cuda_thresholds",
+            "threshold_source": "unavailable",
+        }
+
+    stats = dict(
+        stack.frame_sampled_robust_stats(
+            int(frame_index),
+            int(sample_limit),
+            float(hot_sigma),
+            float(cold_sigma),
+        )
+    )
+    return {
+        "supported": True,
+        "reason": "",
+        "shape": list(shape),
+        "dtype": "float32",
+        "invalid_samples": 0,
+        "flagged_samples": 0,
+        "nonfinite_samples": 0,
+        "flag_counts": {},
+        "source_model": "inline_cosmetic_cuda_thresholds",
+        "inline_source_dq": True,
+        "inline_source_dq_detector": "ResidentCalibratedStack.apply_cosmetic_threshold_mask_frame",
+        "inline_source_dq_applies_replacement": False,
+        "detector_execution": "cuda_threshold_apply",
+        "threshold_source": str(stats.get("threshold_source") or "cuda_resident_sampled_median_mad_scalar"),
+        "threshold_stats": stats,
+        "threshold_stats_native_method": str(
+            stats.get("native_method") or "ResidentCalibratedStack.frame_sampled_robust_stats"
+        ),
+        "threshold_stats_domain": str(stats.get("stats_domain") or "resident_calibrated_frame"),
+        "threshold_stats_execution": str(
+            stats.get("robust_stats_execution") or "cuda_even_sample_then_host_median_mad_scalar"
+        ),
+        "threshold_stats_materializes_host_frame": bool(stats.get("materializes_host_frame", False)),
+        "threshold_stats_sample_count": int(stats.get("sample_count") or 0),
+        "threshold_stats_sample_download_bytes": int(stats.get("sample_download_bytes") or 0),
+        "hot_sigma": float(hot_sigma),
+        "cold_sigma": float(cold_sigma),
+        "low_threshold": float(stats.get("low_threshold", float("-inf"))),
+        "high_threshold": float(stats.get("high_threshold", float("inf"))),
+        "cosmetic_metrics": {
+            "median": float(stats.get("median", 0.0)),
+            "sigma": float(stats.get("sigma", 0.0)),
+            "mad": float(stats.get("mad", 0.0)),
+            "hot_pixels": None,
+            "cold_pixels": None,
+        },
+    }
+
+
 def source_invalid_mask_from_dq_mask(
     dq: DQMask | np.ndarray,
     *,
@@ -336,6 +408,17 @@ def combine_source_invalid_masks(
                 "low_threshold": info.get("low_threshold"),
                 "high_threshold": info.get("high_threshold"),
                 "threshold_source": info.get("threshold_source"),
+                "threshold_stats": info.get("threshold_stats"),
+                "threshold_stats_native_method": info.get("threshold_stats_native_method"),
+                "threshold_stats_domain": info.get("threshold_stats_domain"),
+                "threshold_stats_execution": info.get("threshold_stats_execution"),
+                "threshold_stats_materializes_host_frame": info.get(
+                    "threshold_stats_materializes_host_frame"
+                ),
+                "threshold_stats_sample_count": info.get("threshold_stats_sample_count"),
+                "threshold_stats_sample_download_bytes": info.get(
+                    "threshold_stats_sample_download_bytes"
+                ),
                 "detector_execution": info.get("detector_execution"),
                 "cosmetic_metrics": info.get("cosmetic_metrics"),
             }
@@ -428,6 +511,13 @@ def apply_resident_source_invalid_mask(
         "inline_source_dq_detector",
         "inline_source_dq_applies_replacement",
         "threshold_source",
+        "threshold_stats",
+        "threshold_stats_native_method",
+        "threshold_stats_domain",
+        "threshold_stats_execution",
+        "threshold_stats_materializes_host_frame",
+        "threshold_stats_sample_count",
+        "threshold_stats_sample_download_bytes",
         "detector_execution",
         "low_threshold",
         "high_threshold",
@@ -498,6 +588,13 @@ def apply_resident_inline_cosmetic_thresholds(
             threshold_info.get("inline_source_dq_applies_replacement")
         ),
         "threshold_source": str(threshold_info.get("threshold_source") or "cpu_median_mad_scalar"),
+        "threshold_stats": dict(threshold_info.get("threshold_stats") or {}),
+        "threshold_stats_native_method": threshold_info.get("threshold_stats_native_method"),
+        "threshold_stats_domain": threshold_info.get("threshold_stats_domain"),
+        "threshold_stats_execution": threshold_info.get("threshold_stats_execution"),
+        "threshold_stats_materializes_host_frame": threshold_info.get("threshold_stats_materializes_host_frame"),
+        "threshold_stats_sample_count": threshold_info.get("threshold_stats_sample_count"),
+        "threshold_stats_sample_download_bytes": threshold_info.get("threshold_stats_sample_download_bytes"),
         "detector_execution": str(threshold_info.get("detector_execution") or "cuda_threshold_apply"),
         "hot_sigma": float(threshold_info.get("hot_sigma") or 0.0),
         "cold_sigma": float(threshold_info.get("cold_sigma") or 0.0),
@@ -575,6 +672,17 @@ def apply_resident_inline_cosmetic_thresholds(
                     "low_threshold": row["low_threshold"],
                     "high_threshold": row["high_threshold"],
                     "threshold_source": row["threshold_source"],
+                    "threshold_stats": row["threshold_stats"],
+                    "threshold_stats_native_method": row["threshold_stats_native_method"],
+                    "threshold_stats_domain": row["threshold_stats_domain"],
+                    "threshold_stats_execution": row["threshold_stats_execution"],
+                    "threshold_stats_materializes_host_frame": row[
+                        "threshold_stats_materializes_host_frame"
+                    ],
+                    "threshold_stats_sample_count": row["threshold_stats_sample_count"],
+                    "threshold_stats_sample_download_bytes": row[
+                        "threshold_stats_sample_download_bytes"
+                    ],
                     "detector_execution": row["detector_execution"],
                     "cosmetic_metrics": metrics,
                 }

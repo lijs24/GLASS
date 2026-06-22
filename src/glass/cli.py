@@ -4492,7 +4492,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="off",
         help=(
             "resident source-DQ in-memory detector; cosmetic uses the CPU baseline mask, while cosmetic_cuda "
-            "uses resident CUDA threshold application without a calibrated cache"
+            "uses resident sampled robust stats plus CUDA threshold application without a calibrated cache"
         ),
     )
     run.add_argument(
@@ -4930,7 +4930,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="off",
         help=(
             "resident source-DQ in-memory detector for audit; cosmetic uses the CPU baseline mask, while "
-            "cosmetic_cuda uses resident CUDA threshold application without materializing a calibrated cache"
+            "cosmetic_cuda uses resident sampled robust stats plus CUDA threshold application without materializing "
+            "a calibrated cache"
         ),
     )
     audit.add_argument(

@@ -9188,6 +9188,55 @@ Completed in Gate446:
     reduction in a later gate, especially for raw-u16 GPU decode paths where a
     host float image should not be materialized solely for thresholding.
 
+### S2-Gate 457: Resident CUDA Sampled Source-DQ Threshold Stats
+
+- Move Gate456's opt-in `cosmetic_cuda` threshold preparation off the host
+  full-frame image path.
+- Required work:
+  - add a resident CUDA native method that samples an already calibrated
+    resident frame without downloading the full frame;
+  - compute the scalar robust threshold contract from that bounded sample and
+    record the statistics domain, sample count, download bytes, and timing;
+  - switch `--resident-inline-source-dq cosmetic_cuda` to use calibrated
+    resident-frame sampled median/MAD thresholds before the existing CUDA
+    threshold-apply kernel;
+  - keep default `resident_inline_source_dq=off` and CPU-mask `cosmetic` mode
+    unchanged;
+  - prove small all-pixel samples match CPU median/MAD thresholds, prove CLI
+    artifacts report `cuda_resident_sampled_median_mad_scalar`, and rerun the
+    200-light contract-parity benchmark.
+- Completed in S2-Gate457:
+  - added `glass_sample_frame_even_f32_kernel` and
+    `ResidentCalibratedStack.frame_sampled_robust_stats`;
+  - exposed `frame_sampled_robust_stats` through `glass_cuda`, returning
+    `materializes_host_frame=false`, sample download bytes, sample fraction,
+    median/MAD/sigma, threshold values, and timing;
+  - added `inline_cosmetic_thresholds_from_resident_stack` and switched both
+    resident batch and single-frame calibration paths to compute
+    `cosmetic_cuda` thresholds after calibration while the frame is resident;
+  - updated resident source-DQ rows, strategy artifacts, and resident I/O
+    pipeline fields to record
+    `threshold_source=cuda_resident_sampled_median_mad_scalar` and
+    `threshold_stats_domain=resident_calibrated_frame`;
+  - focused resident/source-DQ pytest passed with `115 passed`;
+  - full pytest passed with `1086 passed`;
+  - real 200-light contract-token audit-map run completed in `36.073588 s`,
+    integrated `193/200` frames, and passed acceptance at `30.286452x` versus
+    the WBPP black-box timing `1092.541 s`;
+  - comparison remained inside the 200-light contract: shape matched,
+    coverage fraction `0.961069`, RMS diff `0.00170647`, and P99 absolute diff
+    `0.000455731`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_457_200\contract_parity_audit_required_20260622`;
+  - `runs/checkpoints/s2_gate_457_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_457_status.md`.
+- Known limitation:
+  - large frames use a bounded resident sample plus host scalar sort, not a
+    full device-side exact median/MAD reduction. This removes host full-frame
+    threshold preparation and supports raw-u16 resident decode paths, but a
+    later gate should add all-GPU robust quantile/histogram reductions and
+    batch threshold application across frames.
+
 ## Gate Rules
 
 Each gate requires:

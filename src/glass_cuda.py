@@ -3131,6 +3131,63 @@ class ResidentCalibratedStack:
             "model": str(result["model"]),
         }
 
+    def frame_sampled_robust_stats(
+        self,
+        index: int,
+        sample_limit: int = 65536,
+        hot_sigma: float = 8.0,
+        cold_sigma: float = 8.0,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "frame_sampled_robust_stats"):
+            raise RuntimeError("native ResidentCalibratedStack.frame_sampled_robust_stats is not available")
+        result = dict(
+            self._impl.frame_sampled_robust_stats(
+                int(index),
+                int(sample_limit),
+                float(hot_sigma),
+                float(cold_sigma),
+            )
+        )
+        int_keys = {
+            "schema_version",
+            "frame_index",
+            "total_pixels",
+            "sample_limit",
+            "sample_count",
+            "finite_sample_count",
+            "nonfinite_sample_count",
+            "sample_download_bytes",
+        }
+        float_keys = {
+            "sample_fraction",
+            "median",
+            "mad",
+            "sigma",
+            "mean",
+            "std",
+            "hot_sigma",
+            "cold_sigma",
+            "low_threshold",
+            "high_threshold",
+            "device_alloc_s",
+            "sample_kernel_enqueue_s",
+            "sync_s",
+            "sample_download_s",
+            "host_scalar_stats_s",
+            "total_s",
+        }
+        normalized: dict[str, Any] = {}
+        for key, value in result.items():
+            if key in int_keys:
+                normalized[key] = int(value)
+            elif key in float_keys:
+                normalized[key] = float(value)
+            elif key in {"all_pixels_sampled", "materializes_host_frame", "std_fallback_used"}:
+                normalized[key] = bool(value)
+            else:
+                normalized[key] = str(value)
+        return normalized
+
     def frame_pair_grid_stats(
         self,
         reference_index: int,

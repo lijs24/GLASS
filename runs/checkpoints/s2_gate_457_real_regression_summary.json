@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "gate": "S2-Gate457",
+  "objective": "Resident CUDA sampled robust source-DQ threshold statistics plus 200-light default-path regression.",
+  "primary_run": "C:\\glass_runs\\phase2_s2_gate_457_200\\contract_parity_audit_required_20260622",
+  "non_contract_smoke_run": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_457_200\\contract_parity_audit_20260622",
+    "elapsed_s": 59.15068959997734,
+    "accepted_for_gate": false,
+    "reason": "This smoke run omitted benchmark-contract runtime tokens such as reference frame, Lanczos3 warp settings, star thresholds, flat floor, and excluded frame ids."
+  },
+  "new_capability": {
+    "native_method": "ResidentCalibratedStack.frame_sampled_robust_stats",
+    "threshold_source": "cuda_resident_sampled_median_mad_scalar",
+    "threshold_stats_domain": "resident_calibrated_frame",
+    "robust_stats_execution": "cuda_even_sample_then_host_median_mad_scalar",
+    "materializes_host_frame": false,
+    "detector_execution": "cuda_threshold_apply",
+    "inline_mode": "cosmetic_cuda",
+    "inline_mode_default": "off"
+  },
+  "timing": {
+    "audit_map_total_elapsed_s": 36.073588100029156,
+    "wbpp_blackbox_elapsed_s": 1092.541,
+    "speedup_vs_wbpp_audit_map": 30.28645215359425,
+    "release_baseline_elapsed_s": 30.361440100008622,
+    "runtime_regression_factor_vs_release_baseline": 1.1881355500809494,
+    "required_max_elapsed_s": 39.46987213001121,
+    "resident_inline_source_dq": "off",
+    "resident_runtime_preset": "throughput-v1"
+  },
+  "compare": {
+    "shape_match": true,
+    "coverage_fraction": 0.9610693546922039,
+    "coverage_median": 192.0,
+    "coverage_max": 193.0,
+    "rms_diff": 0.0017064689542548306,
+    "abs_diff_p99": 0.0004557305946946144,
+    "glass_scale": 8.764434957115609e-06,
+    "glass_offset": 0.0006274500691899127,
+    "min_coverage": 190.0
+  },
+  "frame_accounting_summary": {
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "zero_weight_frames": 7,
+    "registration_accepted_frames": 193,
+    "resident_calibrated_frames": 200,
+    "resident_frame_mask_active_frames": 193,
+    "resident_frame_mask_masked_frames": 7,
+    "final_status_counts": {
+      "integrated": 193,
+      "quality_rejected": 7
+    },
+    "integration_status_counts": {
+      "used": 193,
+      "zero_weight": 7
+    }
+  },
+  "resident_source_dq_execution_summary": {
+    "applied_frame_count": 0,
+    "applied_invalid_samples": 0,
+    "estimated_all_frame_mask_bytes": 12330240000,
+    "estimated_peak_batch_mask_bytes": 493209600,
+    "execution_routes": [
+      "resident_in_memory_mask_streaming"
+    ],
+    "frame_count": 200,
+    "frame_with_invalid_count": 0,
+    "group_count": 1,
+    "input_invalid_samples_before_rejection": 0,
+    "materializes_calibrated_dq_cache": false,
+    "passed": true,
+    "status": "passed"
+  },
+  "acceptance": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_457_200\\contract_parity_audit_required_20260622\\phase2_contract_acceptance_audit_s2_gate_457.json",
+    "passed": true,
+    "status": "passed",
+    "speedup_vs_wbpp": 30.28645215359425,
+    "benchmark_contract": "benchmarks\\phase2_m38_h_200_audit_maps_contract.json"
+  },
+  "contracts": {
+    "resident_calibration_contract": "C:\\glass_runs\\phase2_s2_gate_457_200\\contract_parity_audit_required_20260622\\resident_calibration_contract_s2_gate_457.json",
+    "resident_result_contract": "C:\\glass_runs\\phase2_s2_gate_457_200\\contract_parity_audit_required_20260622\\resident_result_contract_s2_gate_457.json",
+    "pipeline_contract": "C:\\glass_runs\\phase2_s2_gate_457_200\\contract_parity_audit_required_20260622\\pipeline_contract_s2_gate_457.json",
+    "stack_engine_contract": "C:\\glass_runs\\phase2_s2_gate_457_200\\contract_parity_audit_required_20260622\\stack_engine_contract_s2_gate_457.json"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "multi_processor_count": 188,
+    "driver_version": "596.21",
+    "cuda_toolkit_used_for_build": "13.2"
+  },
+  "tests": {
+    "focused_source_dq_cuda_cli": "12 passed",
+    "resident_source_dq_regression": "115 passed",
+    "full_pytest": "1086 passed in 51.83 s",
+    "focused_ruff": "passed",
+    "native_cuda_build": "passed"
+  },
+  "conclusions": [
+    "Gate457 removes the full host-frame scalar threshold preparation from opt-in resident cosmetic_cuda mode.",
+    "The new threshold statistics are sampled from the calibrated resident CUDA frame and recorded as cuda_resident_sampled_median_mad_scalar.",
+    "Focused CUDA tests prove all-pixel small samples match CPU median/MAD threshold values.",
+    "The default 200-light audit-map path remains accepted, integrates 193/200 frames, and remains more than 30x faster than the WBPP black-box timing.",
+    "Large-frame robust thresholds are still sampled and host-sorted; exact all-GPU quantile reductions remain future work."
+  ]
+}

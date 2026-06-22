@@ -218,6 +218,37 @@ void glass_apply_cosmetic_threshold_mask_f32_launch(
       counts);
 }
 
+__global__ void glass_sample_frame_even_f32_kernel(
+    const float* frame,
+    float* sample,
+    std::size_t n,
+    std::size_t sample_count) {
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= sample_count) {
+    return;
+  }
+  std::size_t source = i;
+  if (sample_count < n) {
+    source = static_cast<std::size_t>(
+        (static_cast<unsigned long long>(i) * static_cast<unsigned long long>(n)) /
+        static_cast<unsigned long long>(sample_count));
+    if (source >= n) {
+      source = n - 1;
+    }
+  }
+  sample[i] = frame[source];
+}
+
+void glass_sample_frame_even_f32_launch(
+    const float* frame,
+    float* sample,
+    std::size_t n,
+    std::size_t sample_count) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((sample_count + threads - 1) / threads);
+  glass_sample_frame_even_f32_kernel<<<blocks, threads>>>(frame, sample, n, sample_count);
+}
+
 __global__ void glass_integrate_resident_weighted_mean_f32_kernel(
     const float* stack,
     const float* weights,

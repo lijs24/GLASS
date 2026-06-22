@@ -9,6 +9,7 @@ from glass.engine.resident_source_dq import (
     build_resident_source_dq_summary,
     combine_source_invalid_masks,
     inline_cosmetic_thresholds_from_array,
+    inline_cosmetic_thresholds_from_resident_stack,
     source_invalid_mask_from_array,
     source_invalid_mask_from_dq_mask,
     source_invalid_mask_from_inline_cosmetic,
@@ -107,6 +108,57 @@ def test_inline_cosmetic_thresholds_match_cpu_baseline_scalar_thresholds():
     assert threshold_info["inline_source_dq_applies_replacement"] is False
     assert threshold_info["low_threshold"] == pytest.approx(float(np.float32(median - 2.0 * sigma)))
     assert threshold_info["high_threshold"] == pytest.approx(float(np.float32(median + 2.0 * sigma)))
+
+
+def test_inline_cosmetic_thresholds_from_resident_stack_records_sampled_native_stats():
+    class FakeResidentStack:
+        def frame_sampled_robust_stats(
+            self,
+            frame_index: int,
+            sample_limit: int,
+            hot_sigma: float,
+            cold_sigma: float,
+        ) -> dict[str, object]:
+            assert frame_index == 3
+            assert sample_limit == 65536
+            assert hot_sigma == pytest.approx(2.0)
+            assert cold_sigma == pytest.approx(3.0)
+            return {
+                "native_method": "ResidentCalibratedStack.frame_sampled_robust_stats",
+                "threshold_source": "cuda_resident_sampled_median_mad_scalar",
+                "stats_domain": "resident_calibrated_frame",
+                "robust_stats_execution": "cuda_even_sample_then_host_median_mad_scalar",
+                "materializes_host_frame": False,
+                "sample_count": 128,
+                "sample_download_bytes": 512,
+                "median": 100.0,
+                "mad": 2.0,
+                "sigma": 2.9652,
+                "low_threshold": 91.1044,
+                "high_threshold": 105.9304,
+            }
+
+    threshold_info = inline_cosmetic_thresholds_from_resident_stack(
+        FakeResidentStack(),
+        frame_index=3,
+        height=8,
+        width=9,
+        hot_sigma=2.0,
+        cold_sigma=3.0,
+    )
+
+    assert threshold_info["supported"] is True
+    assert threshold_info["threshold_source"] == "cuda_resident_sampled_median_mad_scalar"
+    assert threshold_info["threshold_stats_native_method"] == (
+        "ResidentCalibratedStack.frame_sampled_robust_stats"
+    )
+    assert threshold_info["threshold_stats_domain"] == "resident_calibrated_frame"
+    assert threshold_info["threshold_stats_execution"] == "cuda_even_sample_then_host_median_mad_scalar"
+    assert threshold_info["threshold_stats_materializes_host_frame"] is False
+    assert threshold_info["threshold_stats_sample_count"] == 128
+    assert threshold_info["threshold_stats_sample_download_bytes"] == 512
+    assert threshold_info["low_threshold"] == pytest.approx(91.1044)
+    assert threshold_info["high_threshold"] == pytest.approx(105.9304)
 
 
 def test_source_invalid_mask_from_sidecar_path_reads_fits_dq_bits(tmp_path):
