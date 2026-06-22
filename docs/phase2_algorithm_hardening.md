@@ -611,6 +611,74 @@ Validation commands:
 - real 200-light chunk16/chunk24 `glass run` commands with the Gate511 plan,
   master cache, reference frame, Lanczos3 warp, and minimal output-map policy.
 
+### S2-Gate 513: Resident Lanczos3 NaN Footprint Parity
+
+Gate 513 narrows the next warp/integration handoff issue found after Gate512.
+The existing single-frame Lanczos3 warp and fused matrix-warped integration
+sampler skipped non-finite pixels inside the 6x6 Lanczos footprint, but the
+resident batch Lanczos3 warp path did not. That made the default resident stack
+path and the fused handoff path disagree for frames that contain source NaNs
+inside an otherwise valid Lanczos footprint.
+
+Implementation:
+
+- `cpp/cuda/warp_kernels.cu` updates both generic and unclamped resident batch
+  Lanczos3 kernels to skip non-finite footprint samples, matching the
+  single-frame Lanczos3 warp and fused sampler semantics.
+- `cpp/cuda/integration_kernels.cu` keeps the fused sampler on the same
+  skip-non-finite footprint rule.
+- `cpp/src/native_bindings.cpp` and `src/glass_cuda.py` expose
+  `clamping_threshold` in fused matrix-warped integration timing dictionaries so
+  unclamped and clamped fused routes are auditable.
+- `tests/test_cuda_resident_stack.py` adds a resident test that compares
+  fused, batch-warp-then-integrate, and single-warp reference behavior on an
+  unclamped Lanczos3 stack with NaNs inside the footprint.
+
+Real 200-light validation:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate513_lanczos_nan_parity\runs_20260623_070538`
+- Default stack run:
+  `6.643055199994706 s`, native warp total `0.4686301 s`, chunk `8`.
+- Gate513 default stack vs Gate511 default: bitwise equal, `RMS=0`,
+  `max_abs=0`, `p99_abs=0`.
+- Explicit fused_matrix probe:
+  `8.640848300012294 s`, native fused integration `2.3826089 s`,
+  `clamping_threshold=-1.0`.
+- Fused_matrix vs Gate513 stack remains not bitwise equal:
+  `RMS=0.46078309416770935`, `max_abs=562.0709228515625`,
+  `p99_abs=0.0`, `151149` pixels above `1e-6`.
+
+Decision:
+
+- Keep default `resident_integration_dispatch=stack` for Lanczos3 +
+  winsorized-sigma.
+- Do not promote `fused_matrix` for the 200-light Lanczos3 winsorized route.
+- Gate513 closes a real CUDA semantic mismatch for source-NaN footprints, while
+  the larger fused-matrix parity gap remains a separate future gate.
+
+Validation commands:
+
+- `cmake --build build --config Release -j 1` inside the VS BuildTools
+  developer environment.
+- `python -m pytest -q
+  tests/test_cuda_resident_stack.py::test_resident_stack_fused_and_batch_lanczos3_unclamped_skip_nan_footprint
+  tests/test_cuda_resident_stack.py::test_resident_stack_fused_matrix_warped_mean_lanczos3_matches_warp_then_integrate
+  tests/test_cuda_resident_stack.py::test_resident_stack_fused_matrix_warped_winsorized_lanczos3_matches_warp_then_integrate
+  tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference
+  tests/test_gpu_warp_vs_cpu.py::test_resident_stack_matrix_lanczos3_batch_records_unclamped_fast_path`
+- `python -m pytest -q tests/test_cuda_resident_stack.py
+  tests/test_gpu_warp_vs_cpu.py tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_smoke`
+- `python -m pytest -q
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_triangle_fused_matrix_matches_stack_dispatch
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_auto_dispatch_selects_verified_bilinear_fused_path
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_fused_matrix_dispatch_matches_external_stack
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_fused_minimal_output_maps_skip_diagnostic_downloads`
+- `python -m pytest -q`
+- real 200-light stack/fused `glass run` commands with the Gate511 plan, shared
+  master cache, reference frame, Lanczos3 warp, winsorized sigma, and minimal
+  output-map policy.
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

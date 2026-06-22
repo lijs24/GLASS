@@ -94,6 +94,7 @@ __device__ bool glass_fused_sample_matrix_lanczos3_f32(
 
   float weighted_sum = 0.0f;
   float weight_sum = 0.0f;
+  const bool clamp_enabled = clamping_threshold >= 0.0f;
   float local_min = 3.402823466e+38f;
   float local_max = -3.402823466e+38f;
   for (int ky = 0; ky < 6; ++ky) {
@@ -107,8 +108,10 @@ __device__ bool glass_fused_sample_matrix_lanczos3_f32(
       }
       weighted_sum += value * w;
       weight_sum += w;
-      local_min = fminf(local_min, value);
-      local_max = fmaxf(local_max, value);
+      if (clamp_enabled) {
+        local_min = fminf(local_min, value);
+        local_max = fmaxf(local_max, value);
+      }
     }
   }
 
@@ -116,7 +119,7 @@ __device__ bool glass_fused_sample_matrix_lanczos3_f32(
     return false;
   }
   float value = weighted_sum / weight_sum;
-  if (clamping_threshold >= 0.0f && local_max >= local_min) {
+  if (clamp_enabled && local_max >= local_min) {
     const float range = local_max - local_min;
     const float lo = local_min - clamping_threshold * range;
     const float hi = local_max + clamping_threshold * range;

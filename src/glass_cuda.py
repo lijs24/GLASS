@@ -4395,6 +4395,7 @@ class ResidentCalibratedStack:
                     timing_dict.get("timing_model", "native_fused_matrix_warp_weighted_mean_one_sync")
                 ),
                 "interpolation": str(timing_dict.get("interpolation", interpolation)),
+                "clamping_threshold": float(timing_dict.get("clamping_threshold", clamping_threshold)),
                 "rejection": str(timing_dict.get("rejection", "none")),
                 "frame_count": int(timing_dict.get("frame_count", self.frame_count)),
                 "inverse_prepare_s": float(timing_dict.get("inverse_prepare_s", 0.0)),
@@ -4475,6 +4476,7 @@ class ResidentCalibratedStack:
                     timing_dict.get("timing_model", "native_fused_matrix_warp_sigma_clip_one_sync")
                 ),
                 "interpolation": str(timing_dict.get("interpolation", interpolation)),
+                "clamping_threshold": float(timing_dict.get("clamping_threshold", clamping_threshold)),
                 "rejection": str(timing_dict.get("rejection", "winsorized_sigma" if winsorize else "sigma_clip")),
                 "winsorize": bool(timing_dict.get("winsorize", winsorize)),
                 "low_sigma": float(timing_dict.get("low_sigma", low_sigma)),

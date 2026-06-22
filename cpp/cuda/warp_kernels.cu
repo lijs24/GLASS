@@ -484,6 +484,9 @@ __global__ void glass_warp_matrix_lanczos3_batch_f32_kernel(
       const int xx = x0 - 2 + kx;
       const float weight = wx[kx] * wy[ky];
       const float value = input[yy * width + xx];
+      if (!isfinite(value)) {
+        continue;
+      }
       weighted_sum += value * weight;
       weight_sum += weight;
       if (clamp_enabled) {
@@ -604,6 +607,9 @@ __global__ void glass_warp_matrix_lanczos3_batch_unclamped_f32_kernel(
       const int xx = x0 - 2 + kx;
       const float weight = wx[kx] * wy[ky];
       const float value = input[yy * width + xx];
+      if (!isfinite(value)) {
+        continue;
+      }
       weighted_sum += value * weight;
       weight_sum += weight;
     }

@@ -506,6 +506,73 @@ def test_resident_stack_fused_matrix_warped_mean_lanczos3_matches_warp_then_inte
     assert np.allclose(geometric, expected_geometric, rtol=1e-6, atol=1e-6)
 
 
+def test_resident_stack_fused_and_batch_lanczos3_unclamped_skip_nan_footprint():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+
+    yy, xx = np.indices((20, 22), dtype=np.float32)
+    frames = [
+        (100.0 + np.sin(xx * 0.2) * 5.0 + yy * 0.3).astype(np.float32),
+        (90.0 + np.cos(yy * 0.25) * 3.0 + xx * 0.2).astype(np.float32),
+        (80.0 + xx * 0.4 - yy * 0.1).astype(np.float32),
+    ]
+    frames[1][8:13, 9:14] = np.nan
+    matrices = np.stack(
+        [
+            _matrix_translation(0.0, 0.0),
+            _matrix_translation(0.4, -0.3),
+            _matrix_translation(-0.75, 0.6),
+        ],
+        axis=0,
+    )
+    weights = np.array([1.0, 0.75, 0.25], dtype=np.float32)
+
+    stack = module.ResidentCalibratedStack(len(frames), 20, 22)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, geometric, timing = stack.integrate_matrix_warped_mean(
+        matrices,
+        weights,
+        interpolation="lanczos3",
+        clamping_threshold=-1.0,
+    )
+    expected_master, expected_weight, expected_coverage, expected_geometric = _expected_matrix_warped_mean(
+        module,
+        frames,
+        matrices,
+        weights,
+        "lanczos3",
+        clamping_threshold=-1.0,
+    )
+
+    assert timing["interpolation"] == "lanczos3"
+    assert timing["clamping_threshold"] == -1.0
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-6, atol=1e-6)
+    assert np.allclose(coverage, expected_coverage, rtol=1e-6, atol=1e-6)
+    assert np.allclose(geometric, expected_geometric, rtol=1e-6, atol=1e-6)
+
+    batch_stack = module.ResidentCalibratedStack(len(frames), 20, 22)
+    for index, frame in enumerate(frames):
+        batch_stack.upload_calibrated_frame(index, frame)
+    batch_timing = batch_stack.apply_matrix_lanczos3_frames(
+        list(range(len(frames))),
+        matrices,
+        np.nan,
+        -1.0,
+        dispatch="chunked",
+        max_chunk_capacity_frames=2,
+        track_coverage=False,
+    )
+    batch_master, batch_weight = batch_stack.integrate_mean(weights)
+
+    assert batch_timing["lanczos3_clamp_path"] == "unclamped_specialized"
+    assert np.allclose(batch_master, expected_master, rtol=2e-5, atol=2e-5)
+    assert np.allclose(batch_weight, expected_weight, rtol=1e-6, atol=1e-6)
+
+
 def test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):

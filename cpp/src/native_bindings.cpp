@@ -9744,6 +9744,7 @@ class ResidentCalibratedStack {
     timing["schema_version"] = 1;
     timing["timing_model"] = "native_fused_matrix_warp_weighted_mean_one_sync";
     timing["interpolation"] = interpolation;
+    timing["clamping_threshold"] = clamping_threshold;
     timing["rejection"] = "none";
     timing["frame_count"] = static_cast<unsigned long long>(frame_count_);
     timing["inverse_prepare_s"] = inverse_prepare_s;
@@ -10010,6 +10011,7 @@ class ResidentCalibratedStack {
     timing["schema_version"] = 1;
     timing["timing_model"] = "native_fused_matrix_warp_sigma_clip_one_sync";
     timing["interpolation"] = interpolation;
+    timing["clamping_threshold"] = clamping_threshold;
     timing["rejection"] = winsorize ? "winsorized_sigma" : "sigma_clip";
     timing["winsorize"] = winsorize;
     timing["low_sigma"] = low_sigma;
