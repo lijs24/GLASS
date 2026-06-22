@@ -6741,6 +6741,12 @@ def run_resident_calibration_integration(
                 triangle_catalog_batch_sync_count = 0
                 triangle_catalog_sync_phase_count = 0
                 triangle_catalog_download_mode = "off"
+                triangle_catalog_workspace_layout = "off"
+                triangle_catalog_grid_workspace_allocation_count = 0
+                triangle_catalog_output_workspace_allocation_count = 0
+                triangle_catalog_output_download_copy_count = 0
+                triangle_catalog_centroid_before_download_copy_count = 0
+                triangle_catalog_output_download_bytes = 0
                 triangle_catalog_sort_mode = "off"
                 triangle_catalog_topk_mode = "off"
                 triangle_pixel_refine_batch_enabled = bool(
@@ -6996,6 +7002,12 @@ def run_resident_calibration_integration(
                     nonlocal triangle_catalog_batch_sync_count
                     nonlocal triangle_catalog_sync_phase_count
                     nonlocal triangle_catalog_download_mode
+                    nonlocal triangle_catalog_workspace_layout
+                    nonlocal triangle_catalog_grid_workspace_allocation_count
+                    nonlocal triangle_catalog_output_workspace_allocation_count
+                    nonlocal triangle_catalog_output_download_copy_count
+                    nonlocal triangle_catalog_centroid_before_download_copy_count
+                    nonlocal triangle_catalog_output_download_bytes
                     nonlocal triangle_catalog_sort_mode
                     nonlocal triangle_catalog_topk_mode
                     nonlocal triangle_catalog_timing_model
@@ -7072,6 +7084,29 @@ def run_resident_calibration_integration(
                                 )
                                 triangle_catalog_download_mode = str(
                                     batch_results[0].get("catalog_download_mode", "unavailable")
+                                )
+                                triangle_catalog_workspace_layout = str(
+                                    batch_results[0].get("catalog_workspace_layout", "unavailable")
+                                )
+                                triangle_catalog_grid_workspace_allocation_count = max(
+                                    int(item.get("catalog_grid_workspace_allocation_count", 0) or 0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_output_workspace_allocation_count = max(
+                                    int(item.get("catalog_output_workspace_allocation_count", 0) or 0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_output_download_copy_count = max(
+                                    int(item.get("catalog_output_download_copy_count", 0) or 0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_centroid_before_download_copy_count = max(
+                                    int(item.get("catalog_centroid_before_download_copy_count", 0) or 0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_output_download_bytes = max(
+                                    int(item.get("catalog_output_download_bytes", 0) or 0)
+                                    for item in batch_results
                                 )
                                 triangle_catalog_native_enqueue_s = sum(
                                     float(item.get("catalog_enqueue_s", 0.0) or 0.0)
@@ -8237,6 +8272,11 @@ def run_resident_calibration_integration(
                                         f"triangle_catalog_batch_sync_count={triangle_catalog_batch_sync_count}",
                                         f"triangle_catalog_sync_phase_count={triangle_catalog_sync_phase_count}",
                                         f"triangle_catalog_download_mode={triangle_catalog_download_mode}",
+                                        f"triangle_catalog_workspace_layout={triangle_catalog_workspace_layout}",
+                                        "triangle_catalog_output_download_copy_count="
+                                        + str(int(triangle_catalog_output_download_copy_count)),
+                                        "triangle_catalog_centroid_before_download_copy_count="
+                                        + str(int(triangle_catalog_centroid_before_download_copy_count)),
                                         f"triangle_catalog_sort_mode={triangle_catalog_sort_mode}",
                                         f"triangle_catalog_topk_mode={triangle_catalog_topk_mode}",
                                         f"triangle_star_grid_cols={triangle_star_grid_cols}",
@@ -10408,6 +10448,34 @@ def run_resident_calibration_integration(
                         "triangle_catalog_download_mode": triangle_catalog_download_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_catalog_workspace_layout": triangle_catalog_workspace_layout
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_catalog_grid_workspace_allocation_count": int(
+                            triangle_catalog_grid_workspace_allocation_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_catalog_output_workspace_allocation_count": int(
+                            triangle_catalog_output_workspace_allocation_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_catalog_output_download_copy_count": int(
+                            triangle_catalog_output_download_copy_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_catalog_centroid_before_download_copy_count": int(
+                            triangle_catalog_centroid_before_download_copy_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_catalog_output_download_bytes": int(
+                            triangle_catalog_output_download_bytes
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
                         "triangle_catalog_sort_mode": triangle_catalog_sort_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",

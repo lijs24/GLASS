@@ -215,6 +215,67 @@ Validation commands:
   tests/test_resident_cuda_run.py::test_cli_resident_cuda_fused_minimal_output_maps_skip_diagnostic_downloads`
 - `python -m pytest -q` (`1153 passed`)
 
+### S2-Gate 507: Contiguous Resident Catalog Workspace
+
+Gate 507 continues the resident registration performance path by consolidating
+the batched resident grid/NMS star-catalog workspace. The star selection,
+ordering, centroid refinement, descriptor generation, registration decisions,
+warp, and integration math are unchanged. The accepted change makes the batch
+catalog device layout friendlier to later full-resident registration work:
+
+- grid candidate `x/y/flux` workspaces are allocated as one contiguous SoA
+  device buffer instead of three separate device allocations;
+- output catalog `x/y/flux` workspaces are allocated as one contiguous SoA
+  device buffer instead of three separate device allocations;
+- the final catalog output download copies one contiguous SoA range instead of
+  three separate `cudaMemcpy` calls;
+- centroid pre-refine `x/y` snapshots copy one contiguous SoA range instead of
+  two separate `cudaMemcpy` calls;
+- resident artifacts record `triangle_catalog_workspace_layout`,
+  `triangle_catalog_output_download_copy_count`,
+  `triangle_catalog_centroid_before_download_copy_count`, allocation counts,
+  and output bytes.
+
+Real 200-light evidence:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate507_catalog_contiguous_soa_ab_real\runs_20260623_061314`
+- Candidate runtime: `6.662307399965357 s`
+- Repeat runtime: `6.6277335999766365 s`
+- Gate506 repeat runtime: `6.644183400028851 s`
+- Candidate, repeat, and Gate506 repeat masters are bitwise identical
+  (`RMS=0`, `p99=0`, `max_abs=0`).
+- Repeat artifact records:
+  - `triangle_catalog_workspace_layout=contiguous_soa`;
+  - `triangle_catalog_output_download_copy_count=1`;
+  - `triangle_catalog_centroid_before_download_copy_count=1`;
+  - `triangle_catalog_output_download_bytes=114624`.
+- Repeat catalog component timing:
+  - `triangle_moving_catalog=0.2642694999813102 s`;
+  - `triangle_moving_catalog_native_total=0.257951 s`;
+  - `triangle_moving_catalog_native_output_download=0.0377995 s`;
+  - `triangle_moving_catalog_native_sync=0.2145568 s`.
+- Interpretation: the structural copy/allocation simplification is validated,
+  but the 200-light catalog output-download component did not improve
+  materially; the remaining registration cost is still dominated by native sync
+  and centroid/refine work.
+- WBPP fastIntegration comparison report:
+  `C:\glass_runs\phase2_s2_gate507_catalog_contiguous_soa_ab_real\runs_20260623_061314\compare_vs_wbpp_fastintegration_scaled_coverage190.html`
+- Gate507 repeat versus external reference:
+  `speedup=164.84383138209589x`, `RMS=0.0017794216505176163`,
+  `p99_abs=0.00042621337808668863`.
+
+Validation commands:
+
+- `cmd /c "VsDevCmd.bat -arch=x64 && cmake --build build --config Release -j 1"`
+- `python -m ruff check src\glass_cuda.py src\glass\engine\resident_cuda.py
+  tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py`
+- `python -m pytest -q
+  tests/test_cuda_resident_stack.py::test_resident_stack_grid_star_catalog_batch_reports_native_timing
+  tests/test_gpu_star_detect.py::test_resident_stack_star_grid_top_nms_candidates_batch_matches_single_calls
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair`
+- `python -m pytest -q` (`1153 passed`)
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

@@ -7871,6 +7871,8 @@ class ResidentCalibratedStack {
 
     const std::size_t grid_stride = static_cast<std::size_t>(grid_capacity);
     const std::size_t out_stride = static_cast<std::size_t>(max_output_candidates);
+    float* d_grid_values = nullptr;
+    float* d_catalog_values = nullptr;
     float* d_grid_xs = nullptr;
     float* d_grid_ys = nullptr;
     float* d_grid_fluxes = nullptr;
@@ -7888,24 +7890,20 @@ class ResidentCalibratedStack {
     std::size_t catalog_stream_count = 0;
     int catalog_sync_phase_count = 1;
     try {
+      const std::size_t grid_value_count = batch_count * grid_stride;
+      const std::size_t catalog_value_count = batch_count * out_stride;
       check_cuda(
-          cudaMalloc(&d_grid_xs, batch_count * grid_stride * sizeof(float)),
-          "cudaMalloc(resident batch grid top nms grid xs)");
+          cudaMalloc(&d_grid_values, 3 * grid_value_count * sizeof(float)),
+          "cudaMalloc(resident batch grid top nms contiguous grid workspace)");
+      d_grid_xs = d_grid_values;
+      d_grid_ys = d_grid_values + grid_value_count;
+      d_grid_fluxes = d_grid_values + 2 * grid_value_count;
       check_cuda(
-          cudaMalloc(&d_grid_ys, batch_count * grid_stride * sizeof(float)),
-          "cudaMalloc(resident batch grid top nms grid ys)");
-      check_cuda(
-          cudaMalloc(&d_grid_fluxes, batch_count * grid_stride * sizeof(float)),
-          "cudaMalloc(resident batch grid top nms grid fluxes)");
-      check_cuda(
-          cudaMalloc(&d_xs, batch_count * out_stride * sizeof(float)),
-          "cudaMalloc(resident batch grid top nms star xs)");
-      check_cuda(
-          cudaMalloc(&d_ys, batch_count * out_stride * sizeof(float)),
-          "cudaMalloc(resident batch grid top nms star ys)");
-      check_cuda(
-          cudaMalloc(&d_fluxes, batch_count * out_stride * sizeof(float)),
-          "cudaMalloc(resident batch grid top nms star fluxes)");
+          cudaMalloc(&d_catalog_values, 3 * catalog_value_count * sizeof(float)),
+          "cudaMalloc(resident batch grid top nms contiguous catalog workspace)");
+      d_xs = d_catalog_values;
+      d_ys = d_catalog_values + catalog_value_count;
+      d_fluxes = d_catalog_values + 2 * catalog_value_count;
       check_cuda(
           cudaMalloc(&d_count, batch_count * sizeof(int)),
           "cudaMalloc(resident batch grid top nms star count)");
@@ -8007,25 +8005,25 @@ class ResidentCalibratedStack {
       std::vector<float> centroid_backgrounds(batch_count, std::numeric_limits<float>::quiet_NaN());
       const char* centroid_background_mode = "local_median";
       double centroid_refine_s = 0.0;
+      int centroid_before_download_copy_count = 0;
       if (centroid_radius > 0) {
         const auto centroid_start = std::chrono::steady_clock::now();
-        centroid_before_xs.resize(batch_count * out_stride);
-        centroid_before_ys.resize(batch_count * out_stride);
+        std::vector<float> centroid_before_xy(2 * catalog_value_count);
         centroid_statuses.resize(batch_count * out_stride);
         check_cuda(
             cudaMemcpy(
-                centroid_before_xs.data(),
-                d_xs,
-                batch_count * out_stride * sizeof(float),
+                centroid_before_xy.data(),
+                d_catalog_values,
+                centroid_before_xy.size() * sizeof(float),
                 cudaMemcpyDeviceToHost),
-            "cudaMemcpy(resident batch grid top nms centroid original xs)");
-        check_cuda(
-            cudaMemcpy(
-                centroid_before_ys.data(),
-                d_ys,
-                batch_count * out_stride * sizeof(float),
-                cudaMemcpyDeviceToHost),
-            "cudaMemcpy(resident batch grid top nms centroid original ys)");
+            "cudaMemcpy(resident batch grid top nms centroid original xy)");
+        centroid_before_download_copy_count = 1;
+        centroid_before_xs.assign(
+            centroid_before_xy.begin(),
+            centroid_before_xy.begin() + static_cast<std::ptrdiff_t>(catalog_value_count));
+        centroid_before_ys.assign(
+            centroid_before_xy.begin() + static_cast<std::ptrdiff_t>(catalog_value_count),
+            centroid_before_xy.end());
         if (centroid_global_mean_background) {
           centroid_background_mode = "global_mean";
           ++catalog_sync_phase_count;
@@ -8131,22 +8129,19 @@ class ResidentCalibratedStack {
             std::chrono::steady_clock::now() - centroid_start).count();
       }
 
-      std::vector<float> host_xs(batch_count * out_stride);
-      std::vector<float> host_ys(batch_count * out_stride);
-      std::vector<float> host_fluxes(batch_count * out_stride);
-      check_cuda(
-          cudaMemcpy(host_xs.data(), d_xs, batch_count * out_stride * sizeof(float), cudaMemcpyDeviceToHost),
-          "cudaMemcpy(resident batch grid top nms star xs)");
-      check_cuda(
-          cudaMemcpy(host_ys.data(), d_ys, batch_count * out_stride * sizeof(float), cudaMemcpyDeviceToHost),
-          "cudaMemcpy(resident batch grid top nms star ys)");
+      std::vector<float> host_catalog_values(3 * catalog_value_count);
+      int catalog_output_download_copy_count = 0;
       check_cuda(
           cudaMemcpy(
-              host_fluxes.data(),
-              d_fluxes,
-              batch_count * out_stride * sizeof(float),
+              host_catalog_values.data(),
+              d_catalog_values,
+              host_catalog_values.size() * sizeof(float),
               cudaMemcpyDeviceToHost),
-          "cudaMemcpy(resident batch grid top nms star fluxes)");
+          "cudaMemcpy(resident batch grid top nms star catalog contiguous soa)");
+      catalog_output_download_copy_count = 1;
+      const float* host_xs = host_catalog_values.data();
+      const float* host_ys = host_xs + catalog_value_count;
+      const float* host_fluxes = host_ys + catalog_value_count;
       const auto catalog_download_end = std::chrono::steady_clock::now();
 
       const double enqueue_s = std::chrono::duration<double>(enqueue_end - enqueue_start).count();
@@ -8171,15 +8166,15 @@ class ResidentCalibratedStack {
         if (stored_count > 0) {
           std::memcpy(
               xs_info.ptr,
-              host_xs.data() + out_offset,
+              host_xs + out_offset,
               static_cast<std::size_t>(stored_count) * sizeof(float));
           std::memcpy(
               ys_info.ptr,
-              host_ys.data() + out_offset,
+              host_ys + out_offset,
               static_cast<std::size_t>(stored_count) * sizeof(float));
           std::memcpy(
               flux_info.ptr,
-              host_fluxes.data() + out_offset,
+              host_fluxes + out_offset,
               static_cast<std::size_t>(stored_count) * sizeof(float));
         }
         std::vector<float> per_frame_centroid_before_xs;
@@ -8216,6 +8211,13 @@ class ResidentCalibratedStack {
         result["catalog_batch_sync_count"] = static_cast<int>(catalog_stream_count);
         result["catalog_sync_phase_count"] = catalog_sync_phase_count;
         result["catalog_download_mode"] = "bulk_full_capacity";
+        result["catalog_workspace_layout"] = "contiguous_soa";
+        result["catalog_grid_workspace_allocation_count"] = 1;
+        result["catalog_output_workspace_allocation_count"] = 1;
+        result["catalog_output_download_copy_count"] = catalog_output_download_copy_count;
+        result["catalog_centroid_before_download_copy_count"] = centroid_before_download_copy_count;
+        result["catalog_output_download_bytes"] =
+            static_cast<unsigned long long>(host_catalog_values.size() * sizeof(float));
         result["catalog_enqueue_s"] = enqueue_s * inv_batch;
         result["catalog_sync_s"] = sync_s * inv_batch;
         result["catalog_count_download_s"] = count_download_s * inv_batch;
@@ -8246,12 +8248,8 @@ class ResidentCalibratedStack {
         results.append(result);
       }
 
-      cudaFree(d_grid_xs);
-      cudaFree(d_grid_ys);
-      cudaFree(d_grid_fluxes);
-      cudaFree(d_xs);
-      cudaFree(d_ys);
-      cudaFree(d_fluxes);
+      cudaFree(d_grid_values);
+      cudaFree(d_catalog_values);
       cudaFree(d_count);
       cudaFree(d_locks);
       cudaFree(d_cell_counts);
@@ -8272,12 +8270,8 @@ class ResidentCalibratedStack {
           (void)cudaStreamDestroy(stream);
         }
       }
-      cudaFree(d_grid_xs);
-      cudaFree(d_grid_ys);
-      cudaFree(d_grid_fluxes);
-      cudaFree(d_xs);
-      cudaFree(d_ys);
-      cudaFree(d_fluxes);
+      cudaFree(d_grid_values);
+      cudaFree(d_catalog_values);
       cudaFree(d_count);
       cudaFree(d_locks);
       cudaFree(d_cell_counts);

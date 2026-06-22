@@ -3972,6 +3972,24 @@ class ResidentCalibratedStack:
                     "catalog_download_mode": str(
                         result.get("catalog_download_mode", "per_frame")
                     ),
+                    "catalog_workspace_layout": str(
+                        result.get("catalog_workspace_layout", "separate_soa")
+                    ),
+                    "catalog_grid_workspace_allocation_count": int(
+                        result.get("catalog_grid_workspace_allocation_count", 3) or 0
+                    ),
+                    "catalog_output_workspace_allocation_count": int(
+                        result.get("catalog_output_workspace_allocation_count", 3) or 0
+                    ),
+                    "catalog_output_download_copy_count": int(
+                        result.get("catalog_output_download_copy_count", 3) or 0
+                    ),
+                    "catalog_centroid_before_download_copy_count": int(
+                        result.get("catalog_centroid_before_download_copy_count", 0) or 0
+                    ),
+                    "catalog_output_download_bytes": int(
+                        result.get("catalog_output_download_bytes", 0) or 0
+                    ),
                     "catalog_enqueue_s": float(result.get("catalog_enqueue_s", 0.0) or 0.0),
                     "catalog_sync_s": float(result.get("catalog_sync_s", 0.0) or 0.0),
                     "catalog_count_download_s": float(
@@ -4068,6 +4086,20 @@ class ResidentCalibratedStack:
             "catalog_batch_sync_count": int(result.get("catalog_batch_sync_count", 1) or 1),
             "catalog_sync_phase_count": int(result.get("catalog_sync_phase_count", 1) or 1),
             "catalog_download_mode": str(result.get("catalog_download_mode", "per_frame")),
+            "catalog_workspace_layout": str(result.get("catalog_workspace_layout", "separate_soa")),
+            "catalog_grid_workspace_allocation_count": int(
+                result.get("catalog_grid_workspace_allocation_count", 3) or 0
+            ),
+            "catalog_output_workspace_allocation_count": int(
+                result.get("catalog_output_workspace_allocation_count", 3) or 0
+            ),
+            "catalog_output_download_copy_count": int(
+                result.get("catalog_output_download_copy_count", 3) or 0
+            ),
+            "catalog_centroid_before_download_copy_count": int(
+                result.get("catalog_centroid_before_download_copy_count", 0) or 0
+            ),
+            "catalog_output_download_bytes": int(result.get("catalog_output_download_bytes", 0) or 0),
             "catalog_enqueue_s": float(result.get("catalog_enqueue_s", 0.0) or 0.0),
             "catalog_sync_s": float(result.get("catalog_sync_s", 0.0) or 0.0),
             "catalog_count_download_s": float(result.get("catalog_count_download_s", 0.0) or 0.0),

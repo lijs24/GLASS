@@ -3755,6 +3755,12 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_catalog_batch_sync_count"] == 1
     assert resident_registration["triangle_catalog_sync_phase_count"] >= 2
     assert resident_registration["triangle_catalog_download_mode"] == "bulk_full_capacity"
+    assert resident_registration["triangle_catalog_workspace_layout"] == "contiguous_soa"
+    assert resident_registration["triangle_catalog_grid_workspace_allocation_count"] == 1
+    assert resident_registration["triangle_catalog_output_workspace_allocation_count"] == 1
+    assert resident_registration["triangle_catalog_output_download_copy_count"] == 1
+    assert resident_registration["triangle_catalog_centroid_before_download_copy_count"] == 1
+    assert resident_registration["triangle_catalog_output_download_bytes"] > 0
     assert resident_registration["triangle_catalog_sort_mode"] == "shared_bitonic_power2"
     assert resident_registration["star_catalog_deterministic"] is True
     assert resident_registration["triangle_catalog_topk_mode"] == "deterministic_parallel_per_cell"
@@ -3923,6 +3929,8 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_catalog_batch_sync_count=1" in warning for warning in moving["warnings"])
     assert any("triangle_catalog_sync_phase_count=" in warning for warning in moving["warnings"])
     assert any("triangle_catalog_download_mode=bulk_full_capacity" in warning for warning in moving["warnings"])
+    assert any("triangle_catalog_workspace_layout=contiguous_soa" in warning for warning in moving["warnings"])
+    assert any("triangle_catalog_output_download_copy_count=1" in warning for warning in moving["warnings"])
     assert any("triangle_catalog_sort_mode=shared_bitonic_power2" in warning for warning in moving["warnings"])
     assert any("triangle_catalog_topk_mode=deterministic_parallel_per_cell" in warning for warning in moving["warnings"])
     assert any("triangle_grid_top_per_cell=2" in warning for warning in moving["warnings"])
