@@ -1,0 +1,91 @@
+{
+  "gate": "S2-Gate515",
+  "objective": "Default output-parent shared resident master cache for repeated 200-light A/B runs",
+  "run_root": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125",
+  "cold_run": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125\\cold_auto",
+  "warm_run": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125\\warm_auto",
+  "shared_cache_dir": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125\\resident_master_cache",
+  "cold_internal_elapsed_s": 21.563539599999785,
+  "warm_internal_elapsed_s": 16.721956100023817,
+  "cold_outer_elapsed_s": 21.945135,
+  "warm_outer_elapsed_s": 17.086332,
+  "wbpp_elapsed_s": 1092.541,
+  "warm_speedup_vs_wbpp_internal": 65.33571751204656,
+  "warm_speedup_vs_wbpp_outer": 63.942395594326506,
+  "internal_speedup_warm_vs_cold": 1.289534518032198,
+  "outer_speedup_warm_vs_cold": 1.284367821016237,
+  "cold_cache_summary": {
+    "cache_hit_count": 0,
+    "cache_miss_count": 1,
+    "cache_scope_counts": {
+      "shared": 1
+    },
+    "complete_set_count": 1,
+    "failed_group_count": 0,
+    "failed_groups": [],
+    "group_count": 1,
+    "incomplete_set_count": 0,
+    "passed": true,
+    "set_count": 1,
+    "total_required_bytes": 739866097
+  },
+  "warm_cache_summary": {
+    "cache_hit_count": 1,
+    "cache_miss_count": 0,
+    "cache_scope_counts": {
+      "shared": 1
+    },
+    "complete_set_count": 1,
+    "failed_group_count": 0,
+    "failed_groups": [],
+    "group_count": 1,
+    "incomplete_set_count": 0,
+    "passed": true,
+    "set_count": 1,
+    "total_required_bytes": 739866097
+  },
+  "cache_policy": {
+    "dir": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125\\resident_master_cache",
+    "effective": "shared",
+    "requested": "auto",
+    "source": "output_parent_default"
+  },
+  "cold_master_build_or_load_s": 4.839396100025624,
+  "warm_master_build_or_load_s": 0.4271910000243224,
+  "cold_light_read_upload_calibrate_s": 6.9864650000236,
+  "warm_light_read_upload_calibrate_s": 2.55382999998983,
+  "cold_warm_master_compare": {
+    "cold_master": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125\\cold_auto\\integration\\resident_master_H.fits",
+    "warm_master": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125\\warm_auto\\integration\\resident_master_H.fits",
+    "shape": [
+      6422,
+      9600
+    ],
+    "bitwise_equal": true,
+    "finite_pixels": 61651200,
+    "rms": 0.0,
+    "max_abs": 0.0,
+    "p99_abs": 0.0,
+    "nonzero_abs_gt_1e_6": 0
+  },
+  "wbpp_compare": {
+    "shape_match": true,
+    "rms_diff": 0.0017794216505176163,
+    "abs_diff_p99": 0.00042621337808668863,
+    "coverage_fraction": 0.960532609259836,
+    "coverage_max": 193.0,
+    "coverage_median": 192.0
+  },
+  "contracts": {
+    "acceptance_status": "passed",
+    "resident_calibration_contract": "passed",
+    "resident_result_contract": "passed",
+    "pipeline_contract": "passed",
+    "stack_engine_contract": "passed"
+  },
+  "artifacts": {
+    "cold_warm_compare": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125\\cold_warm_master_compare.json",
+    "warm_compare_html": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125\\warm_auto\\s2_gate_515_compare_vs_wbpp.html",
+    "warm_acceptance_md": "C:\\glass_runs\\phase2_s2_gate515_default_shared_master_cache\\runs_20260623_072125\\warm_auto\\phase2_contract_acceptance_audit_s2_gate_515.md"
+  }
+}

@@ -577,6 +577,8 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     timing["backend"] = getattr(args, "backend", timing.get("backend"))
     timing["memory_mode"] = getattr(args, "memory_mode", timing.get("memory_mode"))
     timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
+    timing["resident_master_cache_policy"] = getattr(args, "resident_master_cache_policy", None)
+    timing["resident_master_cache_dir"] = getattr(args, "resident_master_cache_dir", None)
     timing["resident_source_dq_cache"] = getattr(args, "resident_source_dq_cache", "off")
     timing["resident_inline_source_dq"] = getattr(args, "resident_inline_source_dq", "off")
     timing["resident_inline_source_dq_max_invalid_fraction"] = getattr(
@@ -1395,6 +1397,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_calibration_wave_frames=args.resident_calibration_wave_frames,
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
+                resident_master_cache_policy=args.resident_master_cache_policy,
                 resident_output_maps=args.resident_output_maps,
                 resident_inline_source_dq=args.resident_inline_source_dq,
                 resident_inline_source_dq_hot_sigma=args.resident_inline_source_dq_hot_sigma,
@@ -1584,6 +1587,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_calibration_wave_frames=args.resident_calibration_wave_frames,
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
+                resident_master_cache_policy=args.resident_master_cache_policy,
                 resident_output_maps=args.resident_output_maps,
                 resident_inline_source_dq=args.resident_inline_source_dq,
                 resident_inline_source_dq_hot_sigma=args.resident_inline_source_dq_hot_sigma,
@@ -4758,6 +4762,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional shared resident master-frame cache directory reused across output directories",
     )
     run.add_argument(
+        "--resident-master-cache-policy",
+        choices=["auto", "shared", "run"],
+        default="auto",
+        help=(
+            "resident master-frame cache policy: auto/shared use an output-parent shared cache unless "
+            "--resident-master-cache-dir is supplied; run keeps the legacy per-run cache"
+        ),
+    )
+    run.add_argument(
         "--resident-source-dq-cache",
         choices=["off", "generate-calibration"],
         default="off",
@@ -5230,6 +5243,15 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across audit output directories",
+    )
+    audit.add_argument(
+        "--resident-master-cache-policy",
+        choices=["auto", "shared", "run"],
+        default="auto",
+        help=(
+            "resident audit master-frame cache policy: auto/shared use an output-parent shared cache unless "
+            "--resident-master-cache-dir is supplied; run keeps the legacy per-run cache"
+        ),
     )
     audit.add_argument(
         "--resident-output-maps",

@@ -5395,6 +5395,130 @@ def test_cli_resident_cuda_shared_master_cache_reuses_across_runs(tmp_path: Path
     assert "--resident-master-cache-dir" in (run_b / "run_command.txt").read_text(encoding="utf-8")
 
 
+def test_cli_resident_cuda_auto_master_cache_reuses_output_parent_cache(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_dark_group_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run_a = tmp_path / "resident_auto_cache_first"
+    run_b = tmp_path / "resident_auto_cache_second"
+    expected_cache = tmp_path / "resident_master_cache"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    base_args = [
+        "run",
+        "--plan",
+        str(plan),
+        "--backend",
+        "cuda",
+        "--memory-mode",
+        "resident",
+        "--until-stage",
+        "integration",
+        "--local-normalization",
+        "off",
+        "--integration-rejection",
+        "none",
+        "--integration-weighting",
+        "none",
+        "--resident-registration",
+        "off",
+        "--flat-floor",
+        "0.05",
+    ]
+
+    assert main([*base_args, "--out", str(run_a)]) == 0
+    assert main([*base_args, "--out", str(run_b)]) == 0
+
+    first_artifact = read_json(run_a / "resident_artifacts.json")["artifacts"][0]
+    second_artifact = read_json(run_b / "resident_artifacts.json")["artifacts"][0]
+    first_cache = read_json(run_a / "resident_master_cache.json")
+    second_cache = read_json(run_b / "resident_master_cache.json")
+    second_integration = read_json(run_b / "integration_results.json")
+
+    assert expected_cache.exists()
+    assert first_artifact["resident_io_pipeline"]["master_cache_dir"] == str(expected_cache)
+    assert first_artifact["resident_io_pipeline"]["master_cache_scope"] == "shared"
+    assert first_artifact["resident_io_pipeline"]["master_cache_policy_requested"] == "auto"
+    assert first_artifact["resident_io_pipeline"]["master_cache_policy_effective"] == "shared"
+    assert first_artifact["resident_io_pipeline"]["master_cache_policy_source"] == "output_parent_default"
+    assert first_cache["policy"] == {
+        "requested": "auto",
+        "effective": "shared",
+        "source": "output_parent_default",
+        "dir": str(expected_cache),
+    }
+    assert first_cache["summary"]["cache_miss_count"] > 0
+    assert first_cache["summary"]["cache_hit_count"] == 0
+    assert second_cache["summary"]["cache_hit_count"] == first_cache["summary"]["cache_miss_count"]
+    assert second_cache["summary"]["cache_miss_count"] == 0
+    assert second_artifact["resident_io_pipeline"]["master_cache_dir"] == str(expected_cache)
+    assert second_integration["resident_master_cache_summary"]["cache_hit_count"] == (
+        first_cache["summary"]["cache_miss_count"]
+    )
+
+
+def test_cli_resident_cuda_master_cache_policy_run_keeps_run_local_cache(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_dark_group_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run_a = tmp_path / "resident_run_cache_first"
+    run_b = tmp_path / "resident_run_cache_second"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    base_args = [
+        "run",
+        "--plan",
+        str(plan),
+        "--backend",
+        "cuda",
+        "--memory-mode",
+        "resident",
+        "--until-stage",
+        "integration",
+        "--local-normalization",
+        "off",
+        "--integration-rejection",
+        "none",
+        "--integration-weighting",
+        "none",
+        "--resident-registration",
+        "off",
+        "--flat-floor",
+        "0.05",
+        "--resident-master-cache-policy",
+        "run",
+    ]
+
+    assert main([*base_args, "--out", str(run_a)]) == 0
+    assert main([*base_args, "--out", str(run_b)]) == 0
+
+    first_artifact = read_json(run_a / "resident_artifacts.json")["artifacts"][0]
+    second_artifact = read_json(run_b / "resident_artifacts.json")["artifacts"][0]
+    first_cache = read_json(run_a / "resident_master_cache.json")
+    second_cache = read_json(run_b / "resident_master_cache.json")
+
+    assert first_artifact["resident_io_pipeline"]["master_cache_dir"] is None
+    assert first_artifact["resident_io_pipeline"]["master_cache_scope"] == "run"
+    assert first_artifact["resident_io_pipeline"]["master_cache_policy_requested"] == "run"
+    assert first_artifact["resident_io_pipeline"]["master_cache_policy_effective"] == "run"
+    assert first_cache["policy"] == {
+        "requested": "run",
+        "effective": "run",
+        "source": "policy_run",
+        "dir": None,
+    }
+    assert first_cache["summary"]["cache_scope_counts"] == {"run": first_cache["summary"]["cache_miss_count"]}
+    assert second_cache["summary"]["cache_hit_count"] == 0
+    assert second_cache["summary"]["cache_miss_count"] == first_cache["summary"]["cache_miss_count"]
+    assert second_artifact["resident_io_pipeline"]["master_cache_dir"] is None
+
+
 def test_resident_frame_exclusion_matches_id_name_or_stem():
     frame = {
         "id": "F000196",

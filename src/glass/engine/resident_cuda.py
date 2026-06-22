@@ -3517,6 +3517,41 @@ def _master_cache_fingerprint(
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _default_shared_resident_master_cache_dir(run: Path) -> Path:
+    return run.parent / "resident_master_cache"
+
+
+def _resolve_resident_master_cache_policy(
+    run: Path,
+    master_cache_dir: str | Path | None,
+    policy: str,
+) -> tuple[Path | None, dict[str, Any]]:
+    if policy not in {"auto", "shared", "run"}:
+        raise ValueError("resident_master_cache_policy must be auto, shared, or run")
+    if master_cache_dir is not None:
+        cache_dir = Path(master_cache_dir)
+        return cache_dir, {
+            "requested": policy,
+            "effective": "shared",
+            "source": "explicit_dir",
+            "dir": str(cache_dir),
+        }
+    if policy in {"auto", "shared"}:
+        cache_dir = _default_shared_resident_master_cache_dir(run)
+        return cache_dir, {
+            "requested": policy,
+            "effective": "shared",
+            "source": "output_parent_default",
+            "dir": str(cache_dir),
+        }
+    return None, {
+        "requested": policy,
+        "effective": "run",
+        "source": "policy_run",
+        "dir": None,
+    }
+
+
 def _resident_master_cache_root(run: Path, master_cache_dir: str | Path | None) -> tuple[Path, str]:
     if master_cache_dir is None:
         return run / "calib_cache" / "resident_masters", "run"
@@ -4345,6 +4380,7 @@ def run_resident_calibration_integration(
     resident_calibration_wave_frames: int = 0,
     resident_calibration_release_mode: str = "sync",
     resident_master_cache_dir: str | Path | None = None,
+    resident_master_cache_policy: str = "auto",
     resident_output_maps: str = "audit",
     resident_inline_source_dq: str = "off",
     resident_inline_source_dq_hot_sigma: float = 8.0,
@@ -4372,6 +4408,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_winsorized_mode must be fast_approx or hardened_cpu_parity")
     if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
         raise ValueError("resident_fits_read_mode must be auto, fast, astropy, native_direct, or native_u16_gpu")
+    if resident_master_cache_policy not in {"auto", "shared", "run"}:
+        raise ValueError("resident_master_cache_policy must be auto, shared, or run")
     resident_fits_read_mode_resolution_payload = (
         copy.deepcopy(resident_fits_read_mode_resolution)
         if isinstance(resident_fits_read_mode_resolution, dict)
@@ -4532,7 +4570,11 @@ def run_resident_calibration_integration(
         run=run,
         plan_root=plan_root,
     )
-    shared_master_cache_dir = None if resident_master_cache_dir is None else Path(resident_master_cache_dir)
+    shared_master_cache_dir, master_cache_policy_record = _resolve_resident_master_cache_policy(
+        run,
+        resident_master_cache_dir,
+        resident_master_cache_policy,
+    )
     if shared_master_cache_dir is not None:
         shared_master_cache_dir.mkdir(parents=True, exist_ok=True)
     state = RunState(run_id=run.name or "glass-run", created_at=now_iso(), current_stage="resident_calibration")
@@ -10196,6 +10238,9 @@ def run_resident_calibration_integration(
                         "prefetch_max_inflight_slots": int(prefetch_max_inflight_slots),
                         "master_cache_dir": str(shared_master_cache_dir) if shared_master_cache_dir is not None else None,
                         "master_cache_scope": "shared" if shared_master_cache_dir is not None else "run",
+                        "master_cache_policy_requested": master_cache_policy_record["requested"],
+                        "master_cache_policy_effective": master_cache_policy_record["effective"],
+                        "master_cache_policy_source": master_cache_policy_record["source"],
                         "host_pinned_bytes": int(
                             max(prefetch_host_pinned_bytes, int(getattr(stack, "host_pinned_bytes", 0)))
                         ),
@@ -11327,6 +11372,7 @@ def run_resident_calibration_integration(
             "artifact": "resident_master_cache",
             "source_stage": "resident_calibrated_stack",
             "backend": "cuda_resident_stack",
+            "policy": master_cache_policy_record,
             "summary": summarize_resident_master_cache_groups(resident_master_cache_groups),
             "groups": resident_master_cache_groups,
         }

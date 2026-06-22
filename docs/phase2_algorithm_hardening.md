@@ -759,6 +759,86 @@ Decision:
 - The next substantive optimization should return to resident registration/warp
   and I/O/upload/calibration overlap, not additional report-only gates.
 
+### S2-Gate 515: Default Shared Resident Master Cache
+
+Gate 515 makes the master-cache optimization identified by Gate514 part of the
+default resident workflow. Before this gate, `glass run` without
+`--resident-master-cache-dir` wrote a per-run master cache under the output
+directory, so two neighboring A/B runs rebuilt the same bias/dark/flat masters.
+Gate515 changes the default `--resident-master-cache-policy auto` to use an
+output-parent shared cache, while `--resident-master-cache-policy run` preserves
+the old per-run behavior and explicit `--resident-master-cache-dir` still wins.
+
+Implementation:
+
+- `src/glass/engine/resident_cuda.py` resolves resident master-cache policy as:
+  - explicit `--resident-master-cache-dir`: shared explicit directory;
+  - `auto` or `shared`: `RUN_PARENT/resident_master_cache`;
+  - `run`: legacy `RUN/calib_cache/resident_masters`.
+- `resident_artifacts.json`, `resident_master_cache.json`, and
+  `run_timing.json` record requested/effective policy, source, and cache dir.
+- `tests/test_resident_cuda_run.py` covers:
+  - default auto policy reuses the output-parent cache on the second run;
+  - `--resident-master-cache-policy run` keeps run-local miss/miss behavior;
+  - the existing explicit shared-cache path still works.
+
+Real 200-light validation:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate515_default_shared_master_cache\runs_20260623_072125`
+- Cold default-auto audit run:
+  - internal elapsed: `21.563539599999785 s`;
+  - shell elapsed: `21.945135 s`;
+  - cache: `0` hits, `1` miss;
+  - master build/load: `4.839396100025624 s`;
+  - light read/upload/calibrate wall: `6.9864650000236 s`.
+- Warm default-auto audit run in the same parent:
+  - internal elapsed: `16.721956100023817 s`;
+  - shell elapsed: `17.086332 s`;
+  - cache: `1` hit, `0` misses;
+  - master build/load: `0.4271910000243224 s`;
+  - light read/upload/calibrate wall: `2.55382999998983 s`.
+- Warm vs cold master: bitwise equal, `RMS=0`, `max_abs=0`, `p99_abs=0`.
+- Warm vs WBPP:
+  - WBPP black-box elapsed: `1092.541 s`;
+  - speedup: `65.33571751204656x` by GLASS internal timing and
+    `63.942395594326506x` by conservative shell timing;
+  - RMS diff: `0.0017794216505176163`;
+  - p99 absolute diff: `0.00042621337808668863`;
+  - coverage fraction: `0.960532609259836`.
+
+Contract status:
+
+- resident calibration contract: passed;
+- resident result contract with pixel verification: passed;
+- pipeline contract with pixel verification: passed;
+- StackEngine contract: passed and default-promotion ready;
+- acceptance audit: passed.
+
+Validation commands:
+
+- focused ruff:
+  `python -m ruff check src\glass\cli.py src\glass\engine\resident_cuda.py
+  tests\test_resident_cuda_run.py`
+- focused pytest:
+  `python -m pytest -q
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_auto_master_cache_reuses_output_parent_cache
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_master_cache_policy_run_keeps_run_local_cache
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_shared_master_cache_reuses_across_runs`
+- two real 200-light default-auto `glass run` commands under the same parent,
+  followed by cold/warm FITS bitwise comparison, WBPP compare, resident
+  contracts, pipeline contract, StackEngine contract, and acceptance audit.
+- `python -m pytest -q tests/test_resident_cuda_run.py`
+- `python -m pytest -q`
+- `glass doctor`
+
+Decision:
+
+- Keep `auto` as the default resident master-cache policy because it improves
+  repeated A/B and resume-style workflows without changing pixels.
+- Keep `run` as the explicit isolation option for one-off fully self-contained
+  output directories.
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:
