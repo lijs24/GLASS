@@ -9586,6 +9586,76 @@ Completed in Gate446:
     budgeted reduced-capacity runs are enforced without relying on allocator
     fallback.
 
+### S2-Gate 465: Admission-Selected Chunk Capacity Execution
+
+- Turn Gate464's reduced chunk-capacity admission decision into an execution
+  constraint for resident CUDA matrix warp dispatch.
+- Required work:
+  - let explicit VRAM budgets proceed when a reduced chunked-warp capacity fits
+    the selected budget instead of blocking on the preferred full capacity;
+  - pass admission-selected reduced capacity from CLI to the resident engine;
+  - split Python-level matrix batch submissions only for reduced-capacity
+    execution, so the default full-capacity path remains the native one-call
+    chunked warp path;
+  - merge per-chunk native timing, workspace, and kernel-launch evidence into
+    resident registration artifacts;
+  - prove the default 200-light path keeps the previous one-sync native timing
+    model and passes compare/contract/acceptance checks.
+- Completed in S2-Gate465:
+  - extended `resident_memory_admission.json` with selected dispatch,
+    selected chunk capacity, selected peak/headroom fields, and preferred-vs-
+    selected budget fit flags;
+  - changed admission semantics so an explicit budget that cannot fit the
+    preferred chunk capacity but can fit a reduced capacity now passes with
+    `recommended_action=resident_reduced_chunk_capacity`;
+  - added CLI plumbing that applies the selected reduced chunk capacity to
+    resident execution while leaving `resident_full_frame` on the native
+    preferred allocator path;
+  - added `resident_warp_chunk_capacity_frames` to the resident engine and
+    taught `_apply_resident_registration_matrix_batch` to split batches by that
+    capacity and aggregate native timing/workspace/kernel-launch fields;
+  - added resident registration artifact fields for requested/effective chunk
+    capacity and capacity source;
+  - focused tests covered reduced-budget admission pass-through, chunk-capacity
+    batch splitting, explicit-budget blocking, and CLI-to-engine parameter
+    handoff;
+  - a first real run exposed why full-capacity paths must not be externally
+    split: passing capacity `8` caused 24 Python/native calls and changed the
+    timing model to a multi-call form. The implementation was corrected so
+    only reduced-capacity admission passes a capacity into the engine;
+  - a second run to `E:\glass_runs` passed numerically but failed the release
+    runtime contract because output writes on that volume took `13.13 s`, so it
+    was recorded as an I/O-placement diagnostic, not as green gate evidence;
+  - final comparable C-drive 200-light run
+    `C:\glass_runs\phase2_s2_gate_465_200\admission_capacity_default_parity_r3_20260622`
+    completed in `36.103794 s` internal timing (`36.485266 s` outer
+    PowerShell timing);
+  - default full-frame admission recorded selected capacity `8`,
+    `resident_full_frame`, selected peak `49.608422 GiB`, budget
+    `86.032617 GiB`, active frames `193`, and warp frames `192`;
+  - default runtime artifact kept `triangle_warp_batch_capacity_source`
+    `native_preferred`, no forced requested/effective capacity, native chunk
+    frames `8`, chunk count `24`, and timing model
+    `native_chunked_batch_warp_scatter_one_sync`;
+  - compare remained inside the 200-light contract: coverage fraction
+    `0.961043`, RMS diff `0.00170058`, and P99 absolute diff `0.000459801`;
+  - resident calibration contract, resident result contract with pixel
+    verification, pipeline contract with pixel verification, StackEngine
+    contract with default-promotion readiness, and acceptance audit all passed;
+  - acceptance reports `30.261113x` speedup versus the WBPP black-box timing
+    `1092.541 s`;
+  - full pytest passed with `1099 passed`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_465_200\admission_capacity_default_parity_r3_20260622`;
+  - `runs/checkpoints/s2_gate_465_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_465_status.md`.
+- Known limitation:
+  - reduced-capacity execution is currently enforced by Python-level batch
+    splitting, which may add extra native calls and synchronizations for budget-
+    constrained runs. A later CUDA backend gate should add a native
+    max-chunk-capacity argument so reduced-capacity execution can remain a
+    single native dispatch where possible.
+
 ## Gate Rules
 
 Each gate requires:

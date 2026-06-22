@@ -90,14 +90,18 @@ def test_resident_memory_admission_recommends_reduced_chunk_capacity() -> None:
         resident_registration="similarity_cuda_triangle",
         resident_warp_batch_dispatch="chunked",
         vram_budget_gb=float(capacity4["estimated_peak_bytes"] + 1024) / (1024**3),
-        enforce_explicit_budget=False,
     )
 
     assert admission["passed"] is True
     assert admission["blocking"] is False
-    assert admission["status"] == "warning_would_fit_reduced_chunk"
+    assert admission["status"] == "passed_reduced_chunk"
     assert admission["recommended_action"] == "resident_reduced_chunk_capacity"
     assert admission["recommended_chunk_capacity_frames"] == 4
+    assert admission["selected_chunk_capacity_frames"] == 4
+    assert admission["selected_warp_batch_dispatch"] == "chunked"
+    assert admission["selected_estimated_peak_bytes"] == capacity4["estimated_peak_bytes"]
+    assert admission["selected_fits_budget"] is True
+    assert admission["preferred_fits_budget"] is False
     assert admission["peak_group"]["preferred_chunk_capacity_frames"] == 8
     assert admission["peak_group"]["planned_warp_frame_count"] == 9
 
@@ -247,6 +251,86 @@ def test_resident_registration_matrix_batch_keeps_translation_matrices_batched()
     assert np.isnan(fill)
     assert clamping_threshold == pytest.approx(0.3)
     assert dispatch == "loop"
+
+
+def test_resident_registration_matrix_batch_honors_chunk_capacity() -> None:
+    class FakeStack:
+        def __init__(self) -> None:
+            self.calls: list[list[int]] = []
+
+        def apply_matrix_lanczos3_frames(
+            self,
+            indices: list[int],
+            matrices: np.ndarray,
+            fill: float,
+            clamping_threshold: float,
+            dispatch: str = "loop",
+        ) -> dict[str, object]:
+            self.calls.append(list(indices))
+            assert dispatch == "chunked"
+            assert matrices.shape[0] == len(indices)
+            assert np.isnan(fill)
+            assert clamping_threshold == pytest.approx(0.3)
+            return {
+                "batched": True,
+                "frame_count": len(indices),
+                "fallback_frame_count": 0,
+                "timing_model": "fake_chunked_one_sync",
+                "inverse_upload_mode": "chunked_device_batch",
+                "inverse_prepare_s": 0.1,
+                "inverse_batch_alloc_s": 0.2,
+                "inverse_batch_bytes": len(indices) * 36,
+                "index_upload_s": 0.3,
+                "inverse_upload_s": 0.4,
+                "kernel_enqueue_s": 0.5,
+                "coverage_reduce_enqueue_s": 0.6,
+                "scatter_enqueue_s": 0.7,
+                "device_copy_enqueue_s": 0.8,
+                "sync_s": 0.9,
+                "total_s": 1.0,
+                "batch_chunk_frames": len(indices),
+                "batch_chunk_count": 1,
+                "batch_workspace_bytes": len(indices) * 100,
+                "batch_output_bytes": len(indices) * 1000,
+                "batch_coverage_bytes": len(indices) * 10,
+                "warp_kernel_launches": 1,
+                "coverage_reduce_kernel_launches": 1,
+                "scatter_kernel_launches": 1,
+            }
+
+    stack = FakeStack()
+    matrices = [
+        (index, translation_matrix(float(index), -float(index)))
+        for index in range(5)
+    ]
+
+    models, timing = _apply_resident_registration_matrix_batch(
+        stack,
+        matrices,
+        interpolation="lanczos3",
+        clamping_threshold=0.3,
+        batch_dispatch="chunked",
+        chunk_capacity_frames=2,
+    )
+
+    assert models == ["matrix_lanczos3_batch"] * 5
+    assert stack.calls == [[0, 1], [2, 3], [4]]
+    assert timing["batched"] is True
+    assert timing["frame_count"] == 5
+    assert timing["fallback_frame_count"] == 0
+    assert timing["admission_chunk_capacity_frames"] == 2
+    assert timing["admission_chunk_call_count"] == 3
+    assert timing["batch_chunk_frames"] == 2
+    assert timing["batch_chunk_count"] == 3
+    assert timing["batch_workspace_bytes"] == 200
+    assert timing["batch_output_bytes"] == 2000
+    assert timing["batch_coverage_bytes"] == 20
+    assert timing["inverse_batch_bytes"] == 5 * 36
+    assert timing["warp_kernel_launches"] == 3
+    assert timing["coverage_reduce_kernel_launches"] == 3
+    assert timing["scatter_kernel_launches"] == 3
+    assert timing["total_s"] == pytest.approx(3.0)
+    assert timing["timing_model"] == "fake_chunked_one_sync_admission_capacity_multi_call"
 
 
 def _two_light_star_dataset(tmp_path: Path) -> Path:

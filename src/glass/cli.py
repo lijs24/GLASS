@@ -625,10 +625,37 @@ def _resident_memory_admission_path(run: Path) -> Path:
 def _resident_memory_admission_message(admission: dict[str, Any]) -> str:
     return (
         "resident memory admission failed: "
-        f"estimated_peak_gib={float(admission.get('estimated_peak_gib') or 0.0):.6f}, "
+        f"selected_estimated_peak_gib={float(admission.get('selected_estimated_peak_gib') or admission.get('estimated_peak_gib') or 0.0):.6f}, "
         f"budget_gib={float(admission.get('budget_gib') or 0.0):.6f}, "
         f"recommended_action={admission.get('recommended_action')}"
     )
+
+
+def _apply_resident_memory_admission_selection(
+    args: argparse.Namespace,
+    admission: dict[str, Any],
+) -> None:
+    selected_dispatch = str(
+        admission.get("selected_warp_batch_dispatch")
+        or admission.get("effective_warp_batch_dispatch")
+        or getattr(args, "resident_warp_batch_dispatch", "chunked")
+    )
+    if selected_dispatch in {"loop", "chunked"}:
+        args.resident_warp_batch_dispatch = selected_dispatch
+    selected_capacity = admission.get("selected_chunk_capacity_frames")
+    capacity_value: int | None = None
+    try:
+        if (
+            selected_capacity is not None
+            and selected_dispatch == "chunked"
+            and admission.get("recommended_action") == "resident_reduced_chunk_capacity"
+        ):
+            parsed = int(selected_capacity)
+            if parsed > 0:
+                capacity_value = parsed
+    except (TypeError, ValueError):
+        capacity_value = None
+    args._resident_warp_chunk_capacity_frames = capacity_value
 
 
 def _write_resident_memory_admission(
@@ -659,6 +686,7 @@ def _write_resident_memory_admission(
             admission=admission,
             path=admission_path,
         )
+    _apply_resident_memory_admission_selection(args, admission)
     return admission_path
 
 
@@ -1302,6 +1330,11 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
                 resident_warp_batch_dispatch=args.resident_warp_batch_dispatch,
+                resident_warp_chunk_capacity_frames=getattr(
+                    args,
+                    "_resident_warp_chunk_capacity_frames",
+                    None,
+                ),
                 resident_integration_dispatch=args.resident_integration_dispatch,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
@@ -1483,6 +1516,11 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
                 resident_warp_batch_dispatch=args.resident_warp_batch_dispatch,
+                resident_warp_chunk_capacity_frames=getattr(
+                    args,
+                    "_resident_warp_chunk_capacity_frames",
+                    None,
+                ),
                 resident_integration_dispatch=args.resident_integration_dispatch,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,

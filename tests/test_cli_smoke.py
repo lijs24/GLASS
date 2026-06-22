@@ -11,6 +11,7 @@ from glass.cli import _resolve_resident_fits_read_mode_default
 from glass.cli import build_parser
 from glass.cli import main
 from glass.engine.contracts import DQFlag
+from glass.engine.pipeline import initialize_run
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from tests.conftest import cuda_module_or_skip
@@ -573,6 +574,92 @@ def test_cli_resident_run_blocks_explicit_low_vram_budget(
     assert state["artifacts"][0]["stage"] == "resident_memory_admission"
     assert timing["stages"][0]["stage"] == "resident_memory_admission"
     assert timing["stages"][0]["status"] == "failed"
+
+
+def test_cli_resident_run_passes_reduced_chunk_capacity_from_admission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    frames = [
+        {
+            "id": f"L{index:03d}",
+            "path": str(tmp_path / f"light_{index:03d}.fits"),
+            "frame_type": "light",
+            "filter": "H",
+            "height": 72,
+            "width": 80,
+        }
+        for index in range(10)
+    ]
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_reduced_budget"
+    write_json(
+        plan,
+        {
+            "frames": frames,
+            "light_plans": [
+                {
+                    "filter": "H",
+                    "frames": [str(frame["id"]) for frame in frames],
+                    "calibration_status": "ready",
+                }
+            ],
+            "executable": True,
+        },
+    )
+    full = read_json(plan)
+    from glass.engine.resident_cuda import build_resident_memory_admission
+
+    capacity4 = next(
+        item
+        for item in build_resident_memory_admission(
+            full,
+            resident_registration="similarity_cuda_triangle",
+            resident_warp_batch_dispatch="chunked",
+            vram_budget_gb=1.0,
+        )["peak_group"]["capacity_options"]
+        if item["chunked_warp_capacity_frames"] == 4
+    )
+    captured: dict[str, object] = {}
+
+    def fake_resident_compute(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return initialize_run(kwargs.get("out_dir") or args[1])
+
+    monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
+    monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fake_resident_compute)
+
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--backend",
+                "cuda",
+                "--memory-mode",
+                "resident",
+                "--resident-registration",
+                "similarity_cuda_triangle",
+                "--resident-warp-batch-dispatch",
+                "chunked",
+                "--vram-budget-gb",
+                str(float(capacity4["estimated_peak_bytes"] + 1024) / (1024**3)),
+            ]
+        )
+        == 0
+    )
+
+    admission = read_json(run / "resident_memory_admission.json")
+    assert admission["blocking"] is False
+    assert admission["recommended_action"] == "resident_reduced_chunk_capacity"
+    assert admission["selected_chunk_capacity_frames"] == 4
+    assert admission["selected_warp_batch_dispatch"] == "chunked"
+    assert captured["kwargs"]["resident_warp_batch_dispatch"] == "chunked"
+    assert captured["kwargs"]["resident_warp_chunk_capacity_frames"] == 4
 
 
 def test_cli_help_commands():

@@ -294,6 +294,16 @@ def _resident_chunk_capacity_candidates(preferred_capacity: int) -> list[int]:
     return values
 
 
+def _resident_capacity_option_for(
+    capacity_options: list[dict[str, Any]],
+    capacity: int,
+) -> dict[str, Any] | None:
+    for option in capacity_options:
+        if int(option.get("chunked_warp_capacity_frames", -1)) == int(capacity):
+            return option
+    return None
+
+
 def _resident_memory_budget_from_device(
     *,
     device_info: dict[str, Any] | None,
@@ -408,55 +418,83 @@ def build_resident_memory_admission(
         if peak_row is None or int(row["estimated_peak_bytes"]) > int(peak_row["estimated_peak_bytes"]):
             peak_row = row
     estimated_peak_bytes = int(peak_row["estimated_peak_bytes"]) if peak_row is not None else 0
-    fits_budget = budget_bytes is None or estimated_peak_bytes <= int(budget_bytes)
+    preferred_fits_budget = budget_bytes is None or estimated_peak_bytes <= int(budget_bytes)
     selected_capacity = peak_row.get("preferred_chunk_capacity_frames") if isinstance(peak_row, dict) else 0
+    selected_option = (
+        _resident_capacity_option_for(peak_row.get("capacity_options", []), int(selected_capacity))
+        if isinstance(peak_row, dict)
+        else None
+    )
     reduced_capacity = None
-    if not fits_budget and peak_row is not None:
+    if not preferred_fits_budget and peak_row is not None:
         for option in peak_row.get("capacity_options", []):
             if option["fits_budget"]:
                 reduced_capacity = int(option["chunked_warp_capacity_frames"])
+                selected_option = option
                 break
     explicit_budget = explicit_budget_bytes is not None
-    if fits_budget:
+    if preferred_fits_budget:
         recommended_action = "resident_full_frame"
         status = "passed"
     elif reduced_capacity is not None and reduced_capacity > 0:
         recommended_action = "resident_reduced_chunk_capacity"
-        status = "would_fit_reduced_chunk"
+        status = "passed_reduced_chunk"
         selected_capacity = reduced_capacity
     elif reduced_capacity == 0:
         recommended_action = "resident_loop_dispatch_or_tile_fallback"
-        status = "would_fit_without_chunked_workspace"
+        status = "passed_without_chunked_workspace"
         selected_capacity = 0
     else:
         recommended_action = "tile_fallback"
         status = "failed"
+    selected_estimated_peak_bytes = (
+        int(selected_option["estimated_peak_bytes"])
+        if isinstance(selected_option, dict)
+        else estimated_peak_bytes
+    )
+    selected_fits_budget = budget_bytes is None or selected_estimated_peak_bytes <= int(budget_bytes)
+    selected_dispatch = (
+        "loop"
+        if (
+            resident_warp_batch_dispatch == "chunked"
+            and recommended_action == "resident_loop_dispatch_or_tile_fallback"
+        )
+        else resident_warp_batch_dispatch
+    )
     blocking = bool(
         enforce_explicit_budget
         and explicit_budget
-        and not fits_budget
+        and not selected_fits_budget
     )
-    artifact_status = "failed" if blocking else status if fits_budget else f"warning_{status}"
+    artifact_status = "failed" if blocking else status if selected_fits_budget else f"warning_{status}"
     return {
         "schema_version": 1,
         "artifact_type": "resident_memory_admission",
         "created_at": now_iso(),
         "status": artifact_status,
-        "passed": bool(fits_budget or not blocking),
+        "passed": bool(selected_fits_budget or not blocking),
         "blocking": blocking,
         "reason": (
             "estimated_peak_exceeds_explicit_vram_budget"
             if blocking
             else "estimated_peak_within_budget"
-            if fits_budget
+            if preferred_fits_budget
+            else "selected_reduced_capacity_within_budget"
+            if selected_fits_budget
             else "estimated_peak_exceeds_recorded_budget"
         ),
         "resident_registration": resident_registration,
         "requested_warp_batch_dispatch": resident_warp_batch_dispatch,
-        "effective_warp_batch_dispatch": resident_warp_batch_dispatch,
+        "effective_warp_batch_dispatch": selected_dispatch,
         "dispatch_explicit": bool(dispatch_explicit),
         "recommended_action": recommended_action,
         "recommended_chunk_capacity_frames": selected_capacity,
+        "selected_chunk_capacity_frames": selected_capacity,
+        "selected_warp_batch_dispatch": selected_dispatch,
+        "selected_estimated_peak_bytes": selected_estimated_peak_bytes,
+        "selected_estimated_peak_gib": selected_estimated_peak_bytes / (1024**3),
+        "selected_fits_budget": selected_fits_budget,
+        "preferred_fits_budget": preferred_fits_budget,
         "budget_bytes": budget_bytes,
         "budget_gib": (budget_bytes / (1024**3)) if budget_bytes is not None else None,
         "budget_source": budget_source,
@@ -466,6 +504,16 @@ def build_resident_memory_admission(
         "estimated_peak_gib": estimated_peak_bytes / (1024**3),
         "headroom_bytes": (int(budget_bytes) - estimated_peak_bytes) if budget_bytes is not None else None,
         "headroom_gib": ((int(budget_bytes) - estimated_peak_bytes) / (1024**3))
+        if budget_bytes is not None
+        else None,
+        "selected_headroom_bytes": (
+            int(budget_bytes) - selected_estimated_peak_bytes
+        )
+        if budget_bytes is not None
+        else None,
+        "selected_headroom_gib": (
+            (int(budget_bytes) - selected_estimated_peak_bytes) / (1024**3)
+        )
         if budget_bytes is not None
         else None,
         "peak_group": peak_row,
@@ -1557,12 +1605,83 @@ def _apply_resident_registration_matrix(
     return "matrix_bilinear"
 
 
+def _combine_resident_matrix_batch_timings(
+    timings: list[dict[str, Any]],
+    *,
+    total_items: int,
+    chunk_capacity_frames: int | None,
+) -> dict[str, Any]:
+    if not timings:
+        return {"batched": False, "frame_count": 0, "fallback_frame_count": total_items}
+    sum_keys = {
+        "frame_count",
+        "fallback_frame_count",
+        "inverse_prepare_s",
+        "inverse_batch_alloc_s",
+        "inverse_batch_bytes",
+        "index_upload_s",
+        "inverse_upload_s",
+        "kernel_enqueue_s",
+        "coverage_reduce_enqueue_s",
+        "scatter_enqueue_s",
+        "device_copy_enqueue_s",
+        "sync_s",
+        "total_s",
+        "batch_chunk_count",
+        "warp_kernel_launches",
+        "coverage_reduce_kernel_launches",
+        "scatter_kernel_launches",
+    }
+    max_keys = {
+        "batch_chunk_frames",
+        "batch_workspace_bytes",
+        "batch_output_bytes",
+        "batch_coverage_bytes",
+    }
+    combined: dict[str, Any] = {
+        "batched": any(bool(timing.get("batched", False)) for timing in timings),
+        "frame_count": 0,
+        "fallback_frame_count": 0,
+        "admission_chunk_capacity_frames": (
+            int(chunk_capacity_frames) if chunk_capacity_frames is not None else None
+        ),
+        "admission_chunk_call_count": len(timings),
+    }
+    for timing in timings:
+        for key in sum_keys:
+            if key not in timing:
+                continue
+            value = timing.get(key)
+            if isinstance(value, float):
+                combined[key] = float(combined.get(key, 0.0)) + float(value)
+            else:
+                combined[key] = int(combined.get(key, 0) or 0) + int(value or 0)
+        for key in max_keys:
+            if key in timing:
+                combined[key] = max(int(combined.get(key, 0) or 0), int(timing.get(key, 0) or 0))
+    combined["frame_count"] = int(combined.get("frame_count", 0) or 0)
+    combined["fallback_frame_count"] = total_items - int(combined["frame_count"])
+    inverse_modes = {str(timing.get("inverse_upload_mode", "unavailable")) for timing in timings}
+    combined["inverse_upload_mode"] = (
+        next(iter(inverse_modes)) if len(inverse_modes) == 1 else "mixed"
+    )
+    timing_models = [str(timing.get("timing_model", "unavailable")) for timing in timings]
+    first_model = timing_models[0] if timing_models else "unavailable"
+    combined["timing_model"] = (
+        first_model
+        if len(timings) == 1
+        else f"{first_model}_admission_capacity_multi_call"
+    )
+    return combined
+
+
 def _apply_resident_registration_matrix_batch(
     stack: Any,
     items: list[tuple[int, list[list[float]]]],
     interpolation: str = "bilinear",
     clamping_threshold: float = -1.0,
     batch_dispatch: str = "loop",
+    chunk_capacity_frames: int | None = None,
 ) -> tuple[list[str], dict[str, Any]]:
     if not items:
         return [], {"batched": False, "frame_count": 0}
@@ -1599,26 +1718,49 @@ def _apply_resident_registration_matrix_batch(
         "fallback_frame_count": len(items) - len(matrix_positions),
     }
     if matrix_positions:
+        chunk_size = len(matrix_positions)
+        if batch_dispatch == "chunked" and chunk_capacity_frames is not None:
+            chunk_size = max(1, min(chunk_size, int(chunk_capacity_frames)))
         if interpolation == "lanczos3" and matrix_batch_available:
-            timing = dict(
-                stack.apply_matrix_lanczos3_frames(
-                    matrix_indices,
-                    np.asarray(matrix_values, dtype=np.float32),
-                    np.nan,
-                    float(clamping_threshold),
-                    dispatch=batch_dispatch,
+            batch_timings = []
+            for start in range(0, len(matrix_indices), chunk_size):
+                stop = min(len(matrix_indices), start + chunk_size)
+                batch_timings.append(
+                    dict(
+                        stack.apply_matrix_lanczos3_frames(
+                            matrix_indices[start:stop],
+                            np.asarray(matrix_values[start:stop], dtype=np.float32),
+                            np.nan,
+                            float(clamping_threshold),
+                            dispatch=batch_dispatch,
+                        )
+                    )
                 )
+            timing = _combine_resident_matrix_batch_timings(
+                batch_timings,
+                total_items=len(items),
+                chunk_capacity_frames=chunk_capacity_frames,
             )
             for position in matrix_positions:
                 models[position] = "matrix_lanczos3_batch"
         elif interpolation == "bilinear" and matrix_batch_available:
-            timing = dict(
-                stack.apply_matrix_bilinear_frames(
-                    matrix_indices,
-                    np.asarray(matrix_values, dtype=np.float32),
-                    np.nan,
-                    dispatch=batch_dispatch,
+            batch_timings = []
+            for start in range(0, len(matrix_indices), chunk_size):
+                stop = min(len(matrix_indices), start + chunk_size)
+                batch_timings.append(
+                    dict(
+                        stack.apply_matrix_bilinear_frames(
+                            matrix_indices[start:stop],
+                            np.asarray(matrix_values[start:stop], dtype=np.float32),
+                            np.nan,
+                            dispatch=batch_dispatch,
+                        )
+                    )
                 )
+            timing = _combine_resident_matrix_batch_timings(
+                batch_timings,
+                total_items=len(items),
+                chunk_capacity_frames=chunk_capacity_frames,
             )
             for position in matrix_positions:
                 models[position] = "matrix_bilinear_batch"
@@ -3469,6 +3611,7 @@ def run_resident_calibration_integration(
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
     resident_warp_batch_dispatch: str = "chunked",
+    resident_warp_chunk_capacity_frames: int | None = None,
     resident_integration_dispatch: str = "stack",
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
@@ -3545,8 +3688,15 @@ def run_resident_calibration_integration(
         raise ValueError("resident_warp_interpolation must be bilinear or lanczos3")
     if resident_warp_batch_dispatch not in {"loop", "chunked"}:
         raise ValueError("resident_warp_batch_dispatch must be loop or chunked")
+    if resident_warp_chunk_capacity_frames is not None and resident_warp_chunk_capacity_frames <= 0:
+        raise ValueError("resident_warp_chunk_capacity_frames must be positive when provided")
     if resident_integration_dispatch not in {"stack", "fused_matrix", "auto"}:
         raise ValueError("resident_integration_dispatch must be stack, fused_matrix, or auto")
+    resident_warp_chunk_capacity_effective = (
+        int(resident_warp_chunk_capacity_frames)
+        if resident_warp_batch_dispatch == "chunked" and resident_warp_chunk_capacity_frames is not None
+        else None
+    )
     fused_matrix_registration_modes = {"off", "external_matrix", "similarity_cuda_triangle"}
     if (
         resident_integration_dispatch == "fused_matrix"
@@ -5867,6 +6017,11 @@ def run_resident_calibration_integration(
                 triangle_warp_batch_native_warp_kernel_launches = 0
                 triangle_warp_batch_native_coverage_reduce_kernel_launches = 0
                 triangle_warp_batch_native_scatter_kernel_launches = 0
+                triangle_warp_batch_capacity_source = (
+                    "resident_memory_admission"
+                    if resident_warp_chunk_capacity_effective is not None
+                    else "native_preferred"
+                )
                 catalog_selector = (
                     "resident_grid_top_nms"
                     if use_grid_catalog
@@ -6400,6 +6555,7 @@ def run_resident_calibration_integration(
                         resident_warp_interpolation,
                         resident_warp_clamping_threshold,
                         resident_warp_batch_dispatch,
+                        resident_warp_chunk_capacity_effective,
                     )
                     warp_elapsed = perf_counter() - warp_start
                     _add_elapsed(registration_component_s, "triangle_warp", warp_elapsed)
@@ -7355,6 +7511,7 @@ def run_resident_calibration_integration(
                             resident_warp_interpolation,
                             resident_warp_clamping_threshold,
                             resident_warp_batch_dispatch,
+                            resident_warp_chunk_capacity_effective,
                         )
                         warp_elapsed = perf_counter() - warp_start
                         _add_elapsed(registration_component_s, "triangle_warp", warp_elapsed)
@@ -8238,6 +8395,9 @@ def run_resident_calibration_integration(
                 resident_registration=resident_registration,
                 resident_warp_batch_dispatch=resident_warp_batch_dispatch,
                 chunked_warp_frame_count=triangle_warp_batch_frame_count
+                if resident_registration == "similarity_cuda_triangle"
+                else None,
+                chunked_warp_capacity_frames=resident_warp_chunk_capacity_effective
                 if resident_registration == "similarity_cuda_triangle"
                 else None,
                 observed_chunked_warp_chunk_frames=triangle_warp_batch_native_chunk_frames
@@ -9163,6 +9323,23 @@ def run_resident_calibration_integration(
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_warp_batch_dispatch": resident_warp_batch_dispatch
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_warp_batch_requested_chunk_capacity_frames": (
+                            int(resident_warp_chunk_capacity_frames)
+                            if resident_warp_chunk_capacity_frames is not None
+                            else None
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_warp_batch_effective_chunk_capacity_frames": (
+                            int(resident_warp_chunk_capacity_effective)
+                            if resident_warp_chunk_capacity_effective is not None
+                            else None
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_warp_batch_capacity_source": triangle_warp_batch_capacity_source
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_warp_batch_timing_model": triangle_warp_batch_timing_model

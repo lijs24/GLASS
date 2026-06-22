@@ -1,0 +1,116 @@
+{
+  "gate": "S2-Gate 465",
+  "status": "passed",
+  "date_local": "2026-06-22",
+  "run": "C:\\glass_runs\\phase2_s2_gate_465_200\\admission_capacity_default_parity_r3_20260622",
+  "discarded_or_diagnostic_runs": [
+    {
+      "run": "C:\\glass_runs\\phase2_s2_gate_465_200\\admission_capacity_default_parity_r1_20260622",
+      "status": "discarded_and_deleted",
+      "reason": "Early implementation passed full preferred capacity into Python-level batch splitting, causing multi-call timing; the path was corrected before final validation."
+    },
+    {
+      "run": "E:\\glass_runs\\phase2_s2_gate_465_200\\admission_capacity_default_parity_r3_20260622",
+      "status": "diagnostic_only",
+      "reason": "Numerical/contracts passed except release runtime; output_write on E: took 13.12794470001245 s and pushed total runtime beyond the release baseline factor."
+    }
+  ],
+  "dataset": {
+    "target": "M38",
+    "filter": "H",
+    "lights": 200,
+    "bias": 20,
+    "dark": 20,
+    "flat": 20,
+    "input_policy": "read_only_user_owned_test_data"
+  },
+  "backend": {
+    "mode": "cuda_resident_stack",
+    "memory_mode": "resident",
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "driver_version": "596.21"
+  },
+  "admission_execution": {
+    "artifact_path": "C:\\glass_runs\\phase2_s2_gate_465_200\\admission_capacity_default_parity_r3_20260622\\resident_memory_admission.json",
+    "status": "passed",
+    "recommended_action": "resident_full_frame",
+    "selected_chunk_capacity_frames": 8,
+    "selected_warp_batch_dispatch": "chunked",
+    "selected_estimated_peak_gib": 49.6084223985672,
+    "budget_gib": 86.03261718712747,
+    "selected_headroom_gib": 36.42419478856027,
+    "planned_active_frame_count": 193,
+    "planned_warp_frame_count": 192
+  },
+  "runtime_warp_evidence": {
+    "capacity_source": "native_preferred",
+    "requested_capacity_frames": null,
+    "effective_capacity_frames": null,
+    "native_chunk_frames": 8,
+    "native_chunk_count": 24,
+    "timing_model": "native_chunked_batch_warp_scatter_one_sync",
+    "memory_planned_capacity_frames": 8,
+    "memory_observed_capacity_frames": 8,
+    "estimated_peak_gib": 49.6084223985672
+  },
+  "timing": {
+    "outer_powershell_elapsed_s": 36.4852659,
+    "internal_total_elapsed_s": 36.10379439999815,
+    "resident_memory_admission_s": 0.002836700004991144,
+    "resident_calibration_integration_s": 36.10095769999316,
+    "wbpp_blackbox_elapsed_s": 1092.541,
+    "speedup_vs_wbpp": 30.261112942745317,
+    "stage_timing_s": {
+      "master_build_or_load": 11.831942200020421,
+      "light_read_upload_calibrate": 15.077263299957849,
+      "resident_registration_component_accounted": 11.341670499757747,
+      "resident_registration_warp": 3.647126000316348,
+      "resident_integration": 0.41369949997169897,
+      "output_write": 2.3636075999820605
+    }
+  },
+  "frame_accounting": {
+    "weighted_frame_count": 193,
+    "zero_weight_frame_count": 7
+  },
+  "compare": {
+    "path": "C:\\glass_runs\\phase2_s2_gate_465_200\\admission_capacity_default_parity_r3_20260622\\s2_gate_465_compare.json",
+    "shape_match": true,
+    "coverage_fraction": 0.961042639883733,
+    "compared_pixels": 59249432,
+    "rms_diff": 0.0017005768173342323,
+    "abs_diff_p99": 0.000459801172837615
+  },
+  "contracts": {
+    "resident_calibration_contract": "passed",
+    "resident_result_contract": "passed",
+    "resident_result_contract_pixel_verify": true,
+    "pipeline_contract": "passed",
+    "pipeline_contract_pixel_verify": true,
+    "stack_engine_contract": "passed",
+    "stack_engine_default_promotion_ready": true,
+    "acceptance_audit": "passed"
+  },
+  "tests": {
+    "ruff": "passed",
+    "focused": "4 passed",
+    "resident_cli": "104 passed",
+    "gpu_warp_resident_stack": "51 passed",
+    "full_pytest": "1099 passed in 48.22s"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "notes": [
+      "No official PixInsight WBPP/PJSR source was read or used.",
+      "WBPP evidence is limited to user-generated black-box timing/output metadata.",
+      "Input image directories were treated as read-only."
+    ]
+  },
+  "known_limitations": [
+    "Reduced-capacity execution is enforced by Python-level batch splitting, adding extra native calls and synchronizations for reduced-budget runs.",
+    "A future native CUDA binding should accept a max chunk capacity so reduced-capacity execution can remain a single native dispatch.",
+    "C: drive free space was very low during validation; one diagnostic E: run proved output disk placement can dominate acceptance runtime."
+  ]
+}
