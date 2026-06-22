@@ -4073,21 +4073,31 @@ class ResidentCalibratedStack:
         low_sigma: float = 3.0,
         high_sigma: float = 3.0,
         winsorize: bool = True,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        download_mode: str = "full",
+    ) -> tuple[
+        np.ndarray,
+        np.ndarray,
+        np.ndarray | None,
+        np.ndarray | None,
+        np.ndarray | None,
+    ]:
         if not hasattr(self._impl, "integrate_sigma_clip"):
             raise RuntimeError("native ResidentCalibratedStack.integrate_sigma_clip is not available")
+        if download_mode not in {"full", "master_weight"}:
+            raise ValueError("download_mode must be full or master_weight")
         master, weight_map, coverage, low_reject, high_reject = self._impl.integrate_sigma_clip(
             None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
             float(low_sigma),
             float(high_sigma),
             bool(winsorize),
+            download_mode,
         )
         return (
             np.asarray(master, dtype=np.float32),
             np.asarray(weight_map, dtype=np.float32),
-            np.asarray(coverage, dtype=np.float32),
-            np.asarray(low_reject, dtype=np.float32),
-            np.asarray(high_reject, dtype=np.float32),
+            None if coverage is None else np.asarray(coverage, dtype=np.float32),
+            None if low_reject is None else np.asarray(low_reject, dtype=np.float32),
+            None if high_reject is None else np.asarray(high_reject, dtype=np.float32),
         )
 
     def integrate_hardened_winsorized_sigma(

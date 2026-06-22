@@ -3120,14 +3120,32 @@ def test_cli_resident_cuda_fused_minimal_output_maps_skip_diagnostic_downloads(t
 
     stack_master = read_fits_data(stack_run / "integration" / "resident_master_H.fits", dtype=np.float32)
     fused_master = read_fits_data(fused_run / "integration" / "resident_master_H.fits", dtype=np.float32)
+    stack_integration = read_json(stack_run / "integration_results.json")
+    stack_resident = read_json(stack_run / "resident_artifacts.json")
     integration = read_json(fused_run / "integration_results.json")
     resident = read_json(fused_run / "resident_artifacts.json")
+    stack_output = stack_integration["outputs"][0]
+    stack_artifact = stack_resident["artifacts"][0]
+    stack_dispatch = stack_artifact["resident_integration_dispatch"]
     output = integration["outputs"][0]
     artifact = resident["artifacts"][0]
     dispatch = artifact["resident_integration_dispatch"]
     timing = dispatch["native_timing_s"]
 
     assert np.allclose(stack_master, fused_master, rtol=2e-5, atol=2e-4, equal_nan=True)
+    assert stack_output["output_map_policy"]["mode"] == "minimal"
+    assert Path(stack_output["master_path"]).exists()
+    assert stack_output["weight_map_path"] is None
+    assert stack_output["coverage_map_path"] is None
+    assert stack_output["low_rejection_map_path"] is None
+    assert stack_output["high_rejection_map_path"] is None
+    assert stack_output["dq_map_path"] is None
+    assert stack_output["dq_summary"] is None
+    assert stack_output["dq_coverage_provenance"]["available"] is False
+    assert stack_output["geometric_warp_coverage"]["available"] is False
+    assert stack_dispatch["mode"] == "stack"
+    assert stack_dispatch["download_mode"] == "master_weight"
+    assert stack_dispatch["diagnostic_maps_downloaded"] is False
     assert output["output_map_policy"]["mode"] == "minimal"
     assert Path(output["master_path"]).exists()
     assert output["weight_map_path"] is None

@@ -8845,13 +8845,18 @@ class ResidentCalibratedStack {
       py::object weights_obj,
       float low_sigma,
       float high_sigma,
-      bool winsorize) const {
+      bool winsorize,
+      const std::string& download_mode = "full") const {
     if (loaded_count_ != frame_count_) {
       throw std::runtime_error("all resident frames must be loaded before integration");
     }
     if (low_sigma <= 0.0f || high_sigma <= 0.0f) {
       throw std::invalid_argument("sigma thresholds must be positive");
     }
+    if (download_mode != "full" && download_mode != "master_weight") {
+      throw std::invalid_argument("download_mode must be full or master_weight");
+    }
+    const bool download_diagnostics = download_mode == "full";
 
     std::vector<float> weights(frame_count_, 1.0f);
     py::array_t<float, py::array::c_style | py::array::forcecast> weights_array;
@@ -8867,14 +8872,33 @@ class ResidentCalibratedStack {
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> low_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> high_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> coverage_map;
+    py::array_t<float> low_rejection_map;
+    py::array_t<float> high_rejection_map;
+    if (download_diagnostics) {
+      coverage_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      low_rejection_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      high_rejection_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    }
     const py::buffer_info master_info = master.request();
     const py::buffer_info weight_map_info = weight_map.request();
-    const py::buffer_info coverage_info = coverage_map.request();
-    const py::buffer_info low_info = low_rejection_map.request();
-    const py::buffer_info high_info = high_rejection_map.request();
+    py::object coverage_obj = py::none();
+    py::object low_obj = py::none();
+    py::object high_obj = py::none();
+    float* coverage_ptr = nullptr;
+    float* low_ptr = nullptr;
+    float* high_ptr = nullptr;
+    if (download_diagnostics) {
+      const py::buffer_info coverage_info = coverage_map.request();
+      const py::buffer_info low_info = low_rejection_map.request();
+      const py::buffer_info high_info = high_rejection_map.request();
+      coverage_ptr = static_cast<float*>(coverage_info.ptr);
+      low_ptr = static_cast<float*>(low_info.ptr);
+      high_ptr = static_cast<float*>(high_info.ptr);
+      coverage_obj = coverage_map;
+      low_obj = low_rejection_map;
+      high_obj = high_rejection_map;
+    }
 
     float* d_weights = nullptr;
     float* d_master = nullptr;
@@ -8925,27 +8949,29 @@ class ResidentCalibratedStack {
               pixels_per_frame_ * sizeof(float),
               cudaMemcpyDeviceToHost),
           "cudaMemcpy(resident sigma weight map)");
-      check_cuda(
-          cudaMemcpy(
-              coverage_info.ptr,
-              d_coverage_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(resident sigma coverage map)");
-      check_cuda(
-          cudaMemcpy(
-              low_info.ptr,
-              d_low_rejection_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(resident sigma low rejection map)");
-      check_cuda(
-          cudaMemcpy(
-              high_info.ptr,
-              d_high_rejection_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(resident sigma high rejection map)");
+      if (download_diagnostics) {
+        check_cuda(
+            cudaMemcpy(
+                coverage_ptr,
+                d_coverage_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident sigma coverage map)");
+        check_cuda(
+            cudaMemcpy(
+                low_ptr,
+                d_low_rejection_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident sigma low rejection map)");
+        check_cuda(
+            cudaMemcpy(
+                high_ptr,
+                d_high_rejection_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident sigma high rejection map)");
+      }
     } catch (...) {
       cudaFree(d_weights);
       cudaFree(d_master);
@@ -8961,7 +8987,12 @@ class ResidentCalibratedStack {
     cudaFree(d_coverage_map);
     cudaFree(d_low_rejection_map);
     cudaFree(d_high_rejection_map);
-    return py::make_tuple(master, weight_map, coverage_map, low_rejection_map, high_rejection_map);
+    return py::make_tuple(
+        master,
+        weight_map,
+        coverage_obj,
+        low_obj,
+        high_obj);
   }
 
   py::tuple integrate_hardened_winsorized_sigma(
@@ -14596,7 +14627,8 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("weights") = py::none(),
           py::arg("low_sigma") = 3.0f,
           py::arg("high_sigma") = 3.0f,
-          py::arg("winsorize") = true)
+          py::arg("winsorize") = true,
+          py::arg("download_mode") = "full")
       .def(
           "integrate_hardened_winsorized_sigma",
           &ResidentCalibratedStack::integrate_hardened_winsorized_sigma,

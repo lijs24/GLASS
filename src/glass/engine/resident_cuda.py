@@ -9011,7 +9011,12 @@ def run_resident_calibration_integration(
             fused_matrix_integration_timing: dict[str, Any] = {}
             hardened_winsorized_timing: dict[str, Any] = {}
             fused_matrix_download_mode = "master_weight" if resident_output_maps == "minimal" else "full"
-            if resident_warp_coverage_supported and not fused_matrix_integration_used:
+            stack_integration_download_mode = "master_weight" if resident_output_maps == "minimal" else "full"
+            if (
+                resident_warp_coverage_supported
+                and not fused_matrix_integration_used
+                and resident_output_maps != "minimal"
+            ):
                 for index, weight in enumerate(frame_weight_values):
                     if weight > 0.0 and index not in warped_frame_indices:
                         stack.accumulate_full_warp_coverage_frame()
@@ -9145,7 +9150,13 @@ def run_resident_calibration_integration(
                     coverage_map,
                     low_rejection_map,
                     high_rejection_map,
-                ) = stack.integrate_sigma_clip(weights_arg, low_sigma, high_sigma, winsorize)
+                ) = stack.integrate_sigma_clip(
+                    weights_arg,
+                    low_sigma,
+                    high_sigma,
+                    winsorize,
+                    download_mode=stack_integration_download_mode,
+                )
             integrate_elapsed = perf_counter() - integrate_start
             output_diagnostics = _output_diagnostics(master, weight_map)
             output_map_selection = _resident_output_map_selection(resident_output_maps)
@@ -10760,11 +10771,26 @@ def run_resident_calibration_integration(
                         "resident_winsorized_mode": resident_winsorized_mode,
                         "resident_winsorized_contract": resident_winsorized_contract,
                         "hardened_winsorized_timing_s": hardened_winsorized_timing,
-                        "download_mode": fused_matrix_download_mode if fused_matrix_integration_used else "full",
+                        "download_mode": (
+                            fused_matrix_download_mode
+                            if fused_matrix_integration_used
+                            else stack_integration_download_mode
+                        ),
                         "diagnostic_maps_downloaded": bool(
                             fused_matrix_integration_timing.get(
                                 "diagnostic_maps_downloaded",
-                                not fused_matrix_integration_used or fused_matrix_download_mode == "full",
+                                (
+                                    fused_matrix_download_mode == "full"
+                                    if fused_matrix_integration_used
+                                    else any(
+                                        item is not None
+                                        for item in (
+                                            coverage_map,
+                                            low_rejection_map,
+                                            high_rejection_map,
+                                        )
+                                    )
+                                ),
                             )
                         ),
                         "native_timing_s": fused_matrix_integration_timing,
