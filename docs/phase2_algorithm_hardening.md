@@ -9965,6 +9965,67 @@ Completed in Gate446:
     default until a 200-light A/B run proves speed and image agreement on the
     current real dataset.
 
+### S2-Gate 472: Real 200-Light WBPP/GLASS A/B Return
+
+- Return from report/default-promotion gate work to the Phase 2 substantive
+  validation line: real 200-light regression, DQ/mask closure, runtime timing,
+  and black-box WBPP comparison on the M38 H-alpha dataset.
+- Completed in S2-Gate472:
+  - freed enough C: space for a new real run, then used the staged
+    `C:\gpwbpp_runs\final_m38_h_200` input set with `200` lights, `20` bias,
+    `20` dark, and `20` flats;
+  - reused the user-generated PixInsight/WBPP black-box result at
+    `C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json`
+    as the A/B baseline;
+  - launched a fresh GLASS resident CUDA parity run at
+    `C:\glass_runs\phase2_ab_200_wbpp_parity_20260622_223410`;
+  - the run used `throughput-v1`, resident CUDA, `similarity_cuda_triangle`,
+    Lanczos3 warp, winsorized sigma rejection, no weighting, no local
+    normalization, and `flat_floor=0.05`;
+  - GLASS completed with `200` resident-calibrated lights, `193` integrated
+    frames, and `7` zero-weight/quality-rejected frames matching the known
+    registration-quality exceptions;
+  - generated full and coverage-masked compare reports against the WBPP
+    FastIntegration master;
+  - `glass acceptance-audit` passed the `200/20/20/20` frame minima, active
+    frame count, speedup, shape, coverage, RMS, and p99 difference checks;
+  - generated `report.html`, `acceptance_audit.json`, `acceptance_audit.md`,
+    `wbpp_speedup_summary.json`, and `wbpp_speedup_summary.md`.
+- Results:
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - GLASS elapsed time: `59.33264669997152 s`;
+  - speedup versus WBPP: `18.413825453037212x`;
+  - coverage-masked comparison: shape match `true`, compared pixels
+    `59217988`, coverage fraction `0.960532609259836`, RMS difference
+    `0.0017794216505176163`, absolute difference p99
+    `0.00042621337808668863`, absolute difference p99.9
+    `0.003845416396856427`.
+- Performance and regression note:
+  - this run was intentionally marked as contended because another GPU compute
+    process was active at launch. The result is valid as a functional,
+    frame-accounting, DQ, and image-agreement regression; the timing still
+    exceeds the acceptance speedup threshold but should not be treated as the
+    final clean performance number;
+  - the acceptance audit's optimization guidance identifies the current main
+    wall-clock targets as light read/upload/calibration (`37.70490640000207 s`),
+    master build/load (`17.644714499998372 s`), resident registration/warp
+    (`3.170013300376013 s`), and output-map writing
+    (`2.368561299983412 s`);
+  - the next substantive gate should rerun a clean 200-light A/B when the GPU is
+    idle, then compare `throughput-v1` Lanczos3 parity against an explicit
+    `throughput-v2-fused` bilinear candidate without promoting defaults until
+    frame accounting, DQ closure, speed, and image agreement all pass.
+- Artifacts:
+  - `C:\glass_runs\phase2_ab_200_wbpp_parity_20260622_223410\report.html`;
+  - `C:\glass_runs\phase2_ab_200_wbpp_parity_20260622_223410\acceptance_audit.md`;
+  - `C:\glass_runs\phase2_ab_200_wbpp_parity_20260622_223410\wbpp_speedup_summary.md`;
+  - `C:\glass_runs\phase2_ab_200_wbpp_parity_20260622_223410\compare_vs_wbpp_fastintegration_scaled_coverage190.html`;
+  - `runs/checkpoints/s2_gate_472_status.md`.
+- Known limitation:
+  - no code default changed in this gate. It records a real A/B regression and
+    confirms the resident CUDA path is still scientifically and operationally
+    healthy after Gates 469-471.
+
 ## Gate Rules
 
 Each gate requires:
