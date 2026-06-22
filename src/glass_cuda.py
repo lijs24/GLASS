@@ -2958,6 +2958,7 @@ class ResidentCalibratedStack:
         fill: float = np.nan,
         dispatch: str = "loop",
         max_chunk_capacity_frames: int | None = None,
+        track_coverage: bool = True,
     ) -> dict[str, Any]:
         method_name = "apply_matrix_bilinear_frames"
         if dispatch == "loop" and hasattr(self._impl, "apply_matrix_bilinear_frames_loop"):
@@ -2975,13 +2976,24 @@ class ResidentCalibratedStack:
                 np.asarray(matrices, dtype=np.float32),
                 float(fill),
                 int(max_chunk_capacity_frames),
+                bool(track_coverage),
             )
         else:
-            result = method(
-                np.asarray(indices, dtype=np.int64),
-                np.asarray(matrices, dtype=np.float32),
-                float(fill),
-            )
+            if dispatch == "chunked":
+                result = method(
+                    np.asarray(indices, dtype=np.int64),
+                    np.asarray(matrices, dtype=np.float32),
+                    float(fill),
+                    0,
+                    bool(track_coverage),
+                )
+            else:
+                result = method(
+                    np.asarray(indices, dtype=np.int64),
+                    np.asarray(matrices, dtype=np.float32),
+                    float(fill),
+                    bool(track_coverage),
+                )
         return dict(result)
 
     def apply_matrix_lanczos3_frame(
@@ -3008,6 +3020,7 @@ class ResidentCalibratedStack:
         clamping_threshold: float = -1.0,
         dispatch: str = "loop",
         max_chunk_capacity_frames: int | None = None,
+        track_coverage: bool = True,
     ) -> dict[str, Any]:
         method_name = "apply_matrix_lanczos3_frames"
         if dispatch == "loop" and hasattr(self._impl, "apply_matrix_lanczos3_frames_loop"):
@@ -3026,14 +3039,26 @@ class ResidentCalibratedStack:
                 float(fill),
                 float(clamping_threshold),
                 int(max_chunk_capacity_frames),
+                bool(track_coverage),
             )
         else:
-            result = method(
-                np.asarray(indices, dtype=np.int64),
-                np.asarray(matrices, dtype=np.float32),
-                float(fill),
-                float(clamping_threshold),
-            )
+            if dispatch == "chunked":
+                result = method(
+                    np.asarray(indices, dtype=np.int64),
+                    np.asarray(matrices, dtype=np.float32),
+                    float(fill),
+                    float(clamping_threshold),
+                    0,
+                    bool(track_coverage),
+                )
+            else:
+                result = method(
+                    np.asarray(indices, dtype=np.int64),
+                    np.asarray(matrices, dtype=np.float32),
+                    float(fill),
+                    float(clamping_threshold),
+                    bool(track_coverage),
+                )
         return dict(result)
 
     def matrix_alignment_metrics_to_reference(

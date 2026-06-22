@@ -1820,6 +1820,7 @@ def _apply_resident_registration_matrix_batch(
     clamping_threshold: float = -1.0,
     batch_dispatch: str = "loop",
     chunk_capacity_frames: int | None = None,
+    track_coverage: bool = True,
 ) -> tuple[list[str], dict[str, Any]]:
     if not items:
         return [], {"batched": False, "frame_count": 0}
@@ -1856,7 +1857,10 @@ def _apply_resident_registration_matrix_batch(
         "fallback_frame_count": len(items) - len(matrix_positions),
     }
     if matrix_positions:
-        batch_kwargs: dict[str, Any] = {"dispatch": batch_dispatch}
+        batch_kwargs: dict[str, Any] = {
+            "dispatch": batch_dispatch,
+            "track_coverage": bool(track_coverage),
+        }
         if batch_dispatch == "chunked" and chunk_capacity_frames is not None:
             batch_kwargs["max_chunk_capacity_frames"] = int(chunk_capacity_frames)
         if interpolation == "lanczos3" and matrix_batch_available:
@@ -4473,6 +4477,7 @@ def run_resident_calibration_integration(
         if resident_warp_interpolation == "lanczos3"
         else "apply_matrix_bilinear_frame"
     )
+    resident_track_warp_coverage = resident_output_maps != "minimal"
 
     cuda_module = _cuda_module_required()
     plan = read_json(plan_path)
@@ -7403,6 +7408,7 @@ def run_resident_calibration_integration(
                         resident_warp_clamping_threshold,
                         resident_warp_batch_dispatch,
                         resident_warp_chunk_capacity_effective,
+                        resident_track_warp_coverage,
                     )
                     warp_elapsed = perf_counter() - warp_start
                     _add_elapsed(registration_component_s, "triangle_warp", warp_elapsed)
@@ -7525,6 +7531,8 @@ def run_resident_calibration_integration(
                                 "triangle_warp_batch=" + str(bool(warp_timing.get("batched", False))).lower(),
                                 f"triangle_warp_batch_mode={triangle_warp_batch_mode}",
                                 f"triangle_warp_batch_dispatch={resident_warp_batch_dispatch}",
+                                "triangle_warp_coverage_tracking="
+                                + str(bool(resident_track_warp_coverage)).lower(),
                                 "triangle_warp_batch_timing_model="
                                 + str(warp_timing.get("timing_model", "per_frame")),
                                 "triangle_warp_batch_inverse_upload_mode="
@@ -8397,6 +8405,7 @@ def run_resident_calibration_integration(
                             resident_warp_clamping_threshold,
                             resident_warp_batch_dispatch,
                             resident_warp_chunk_capacity_effective,
+                            resident_track_warp_coverage,
                         )
                         warp_elapsed = perf_counter() - warp_start
                         _add_elapsed(registration_component_s, "triangle_warp", warp_elapsed)
@@ -10371,6 +10380,16 @@ def run_resident_calibration_integration(
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_warp_batch_dispatch": resident_warp_batch_dispatch
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_warp_batch_track_coverage": bool(resident_track_warp_coverage)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else False,
+                        "triangle_warp_batch_coverage_accumulator_policy": (
+                            "track_for_output_maps"
+                            if resident_track_warp_coverage
+                            else "skipped_by_minimal_output_policy"
+                        )
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_warp_batch_requested_chunk_capacity_frames": (

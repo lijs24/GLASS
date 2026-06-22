@@ -11342,6 +11342,70 @@ Completed in Gate446:
   - HTML report:
     `C:\glass_runs\phase2_s2_gate497_master_only_minimal_ab_real\reports\master_only_report.html`.
 
+### S2-Gate 498: Resident Minimal Warp Coverage Accumulator Skip
+
+- Return to the 200-light A/B speed path after Gate497. Gate497 had removed
+  unused host-side map downloads, but the pre-integration registered-stack warp
+  path still updated the resident geometric warp coverage accumulator even when
+  `--resident-output-maps minimal` would never download or report it.
+- Completed:
+  - added native/Python `track_coverage` controls to resident batch matrix
+    warp wrappers;
+  - kept the default `track_coverage=true` for audit/science and legacy calls;
+  - changed the resident minimal speed path to use
+    `track_coverage=false`, switching chunked warp postprocess from
+    `fused_scatter_reduce` to `scatter_only_no_coverage_accumulator`;
+  - preserved per-frame batch coverage scratch for the warp kernel and scatter
+    correctness, so invalid edge samples and resident stack pixels are
+    unchanged;
+  - recorded `triangle_warp_batch_track_coverage` and
+    `triangle_warp_batch_coverage_accumulator_policy` in resident artifacts.
+- Maintenance:
+  - reclaimed `153.468 GiB` from generated `C:\glass_runs\phase2_s2_gate*`
+    directories with Gate number `<480`;
+  - preserved current 200-light plans, WBPP black-box outputs, Gate480+ runs,
+    and the shared Gate486 master cache.
+- Focused validation:
+  - resident matrix-batch helper tests pass, including explicit
+    `track_coverage=false` propagation;
+  - CUDA import/device/smoke tests pass;
+  - native micro-check confirms `track_coverage=false` leaves
+    `warp_coverage_frame_count == 0`.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate498_skip_warpcoverage_ab_real\runs\stack_minimal_skip_warpcoverage`;
+  - total runtime: `7.653901700046845 s`;
+  - dispatch: `download_mode=master_only`,
+    `triangle_warp_batch_track_coverage=false`,
+    `triangle_warp_batch_native_postprocess_mode=scatter_only_no_coverage_accumulator`;
+  - native triangle warp timing changed from Gate497 sync/total
+    `0.4771082 / 0.4972761 s` to `0.465614 / 0.4856435 s`;
+  - GLASS-vs-Gate497 master difference: RMS/p99/max all `0.0`, bitwise equal
+    including NaN mask;
+  - WBPP black-box elapsed time remains `1092.541 s`;
+  - Gate498 speedup versus WBPP: `142.74301432344149x`;
+  - Gate498 no-coverage-mask compare report:
+    `C:\glass_runs\phase2_s2_gate498_skip_warpcoverage_ab_real\compare\gate498_vs_wbpp_scaled_no_coverage.json`;
+  - because Gate498 and Gate497 masters are bitwise identical, the established
+    WBPP scaled coverage-190 compare is unchanged: RMS
+    `0.0017794216505176163`, p99 abs diff `0.00042621337808668863`, coverage
+    fraction `0.960532609259836`.
+- Interpretation:
+  - this is a resident warp scheduling/output-policy optimization, not an
+    image-math change;
+  - the measured end-to-end runtime is neutral within run-to-run I/O variance,
+    but native warp sync/total improved slightly and unnecessary diagnostic
+    accumulator writes are no longer done in speed mode;
+  - the next substantive target remains the larger resident registration and
+    I/O/upload/calibration orchestration costs, especially reducing
+    per-frame host orchestration while keeping the bitwise result contract.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_498_status.md`;
+  - real run root:
+    `C:\glass_runs\phase2_s2_gate498_skip_warpcoverage_ab_real`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate498_skip_warpcoverage_ab_real\compare\gate498_vs_wbpp_scaled_no_coverage.json`.
+
 ## Gate Rules
 
 Each gate requires:

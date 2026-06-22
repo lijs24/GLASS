@@ -311,13 +311,17 @@ def test_resident_registration_matrix_batch_keeps_translation_matrices_batched()
             fill: float,
             clamping_threshold: float,
             dispatch: str = "loop",
+            track_coverage: bool = True,
         ) -> dict[str, object]:
-            self.calls.append(("batch", (indices, matrices.copy(), fill, clamping_threshold, dispatch)))
+            self.calls.append(
+                ("batch", (indices, matrices.copy(), fill, clamping_threshold, dispatch, track_coverage))
+            )
             return {
                 "frame_count": len(indices),
                 "fallback_frame_count": 0,
                 "timing_model": "fake_batch_one_sync",
                 "inverse_upload_mode": "fake_device_batch",
+                "track_coverage": track_coverage,
                 "total_s": 0.01,
             }
 
@@ -343,12 +347,13 @@ def test_resident_registration_matrix_batch_keeps_translation_matrices_batched()
     assert timing["frame_count"] == 2
     assert timing["fallback_frame_count"] == 0
     assert len(stack.calls) == 1
-    indices, matrices, fill, clamping_threshold, dispatch = stack.calls[0][1]
+    indices, matrices, fill, clamping_threshold, dispatch, track_coverage = stack.calls[0][1]
     assert indices == [1, 2]
     assert matrices.shape == (2, 3, 3)
     assert np.isnan(fill)
     assert clamping_threshold == pytest.approx(0.3)
     assert dispatch == "loop"
+    assert track_coverage is True
 
 
 def test_resident_registration_matrix_batch_honors_chunk_capacity() -> None:
@@ -364,10 +369,12 @@ def test_resident_registration_matrix_batch_honors_chunk_capacity() -> None:
             clamping_threshold: float,
             dispatch: str = "loop",
             max_chunk_capacity_frames: int | None = None,
+            track_coverage: bool = True,
         ) -> dict[str, object]:
             self.calls.append(list(indices))
             assert dispatch == "chunked"
             assert max_chunk_capacity_frames == 2
+            assert track_coverage is True
             assert matrices.shape[0] == len(indices)
             assert np.isnan(fill)
             assert clamping_threshold == pytest.approx(0.3)
@@ -398,6 +405,8 @@ def test_resident_registration_matrix_batch_honors_chunk_capacity() -> None:
                 "warp_kernel_launches": 3,
                 "coverage_reduce_kernel_launches": 3,
                 "scatter_kernel_launches": 3,
+                "track_coverage": track_coverage,
+                "coverage_accumulator_updated": track_coverage,
             }
 
     stack = FakeStack()
@@ -433,6 +442,59 @@ def test_resident_registration_matrix_batch_honors_chunk_capacity() -> None:
     assert timing["scatter_kernel_launches"] == 3
     assert timing["total_s"] == pytest.approx(1.0)
     assert timing["timing_model"] == "fake_chunked_one_sync"
+
+
+def test_resident_registration_matrix_batch_can_skip_warp_coverage_tracking() -> None:
+    class FakeStack:
+        def __init__(self) -> None:
+            self.track_values: list[bool] = []
+
+        def apply_matrix_bilinear_frames(
+            self,
+            indices: list[int],
+            matrices: np.ndarray,
+            fill: float,
+            dispatch: str = "loop",
+            max_chunk_capacity_frames: int | None = None,
+            track_coverage: bool = True,
+        ) -> dict[str, object]:
+            self.track_values.append(track_coverage)
+            assert dispatch == "chunked"
+            assert max_chunk_capacity_frames == 4
+            assert indices == [3, 4]
+            assert matrices.shape == (2, 3, 3)
+            assert np.isnan(fill)
+            return {
+                "batched": True,
+                "frame_count": len(indices),
+                "fallback_frame_count": 0,
+                "timing_model": "fake_scatter_only",
+                "inverse_upload_mode": "chunked_device_batch",
+                "postprocess_mode": "scatter_only_no_coverage_accumulator",
+                "track_coverage": track_coverage,
+                "coverage_accumulator_updated": False,
+                "warp_coverage_frame_count_delta": 0,
+            }
+
+    stack = FakeStack()
+    models, timing = _apply_resident_registration_matrix_batch(
+        stack,
+        [
+            (3, translation_matrix(1.0, 2.0)),
+            (4, translation_matrix(-2.0, 0.5)),
+        ],
+        interpolation="bilinear",
+        batch_dispatch="chunked",
+        chunk_capacity_frames=4,
+        track_coverage=False,
+    )
+
+    assert models == ["matrix_bilinear_batch", "matrix_bilinear_batch"]
+    assert stack.track_values == [False]
+    assert timing["track_coverage"] is False
+    assert timing["coverage_accumulator_updated"] is False
+    assert timing["warp_coverage_frame_count_delta"] == 0
+    assert timing["postprocess_mode"] == "scatter_only_no_coverage_accumulator"
 
 
 def _two_light_star_dataset(tmp_path: Path) -> Path:

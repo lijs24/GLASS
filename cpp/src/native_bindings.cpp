@@ -5432,7 +5432,11 @@ class ResidentCalibratedStack {
     ++warp_coverage_frame_count_;
   }
 
-  py::dict apply_matrix_bilinear_frames_loop(py::object indices_obj, py::object matrices_obj, float fill) {
+  py::dict apply_matrix_bilinear_frames_loop(
+      py::object indices_obj,
+      py::object matrices_obj,
+      float fill,
+      bool track_coverage = true) {
     const auto indices = parse_index_sequence(indices_obj, "indices");
     const auto matrices = parse_matrix_stack(matrices_obj);
     if (indices.size() != matrices.size()) {
@@ -5451,6 +5455,9 @@ class ResidentCalibratedStack {
       result["inverse_upload_s"] = 0.0;
       result["kernel_enqueue_s"] = 0.0;
       result["device_copy_enqueue_s"] = 0.0;
+      result["track_coverage"] = track_coverage;
+      result["coverage_accumulator_updated"] = false;
+      result["warp_coverage_frame_count_delta"] = 0;
       result["sync_s"] = 0.0;
       result["total_s"] = 0.0;
       return result;
@@ -5461,7 +5468,9 @@ class ResidentCalibratedStack {
     const auto total_start = Clock::now();
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
     allocate_warp_scratch_if_needed(true);
-    allocate_warp_coverage_if_needed();
+    if (track_coverage) {
+      allocate_warp_coverage_if_needed();
+    }
     const auto inverse_prepare_start = Clock::now();
     std::vector<float> inverse_host(indices.size() * 9, 0.0f);
     for (std::size_t i = 0; i < matrices.size(); ++i) {
@@ -5499,7 +5508,7 @@ class ResidentCalibratedStack {
           static_cast<int>(width_),
           static_cast<int>(height_),
           fill,
-          d_warp_coverage_);
+          track_coverage ? d_warp_coverage_ : nullptr);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_bilinear_frames_loop kernel launch");
       kernel_enqueue_s += seconds_since(kernel_start);
       const auto copy_start = Clock::now();
@@ -5512,7 +5521,9 @@ class ResidentCalibratedStack {
               0),
           "cudaMemcpyAsync(resident loop batched matrix warped frame)");
       copy_enqueue_s += seconds_since(copy_start);
-      ++warp_coverage_frame_count_;
+      if (track_coverage) {
+        ++warp_coverage_frame_count_;
+      }
     }
     const auto sync_start = Clock::now();
     check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_matrix_bilinear_frames_loop synchronize");
@@ -5529,6 +5540,10 @@ class ResidentCalibratedStack {
     result["inverse_upload_s"] = inverse_upload_s;
     result["kernel_enqueue_s"] = kernel_enqueue_s;
     result["device_copy_enqueue_s"] = copy_enqueue_s;
+    result["track_coverage"] = track_coverage;
+    result["coverage_accumulator_updated"] = track_coverage;
+    result["warp_coverage_frame_count_delta"] = static_cast<unsigned long long>(
+        track_coverage ? indices.size() : 0);
     result["sync_s"] = sync_s;
     result["total_s"] = seconds_since(total_start);
     return result;
@@ -5538,7 +5553,8 @@ class ResidentCalibratedStack {
       py::object indices_obj,
       py::object matrices_obj,
       float fill,
-      float clamping_threshold) {
+      float clamping_threshold,
+      bool track_coverage = true) {
     const auto indices = parse_index_sequence(indices_obj, "indices");
     const auto matrices = parse_matrix_stack(matrices_obj);
     if (indices.size() != matrices.size()) {
@@ -5557,6 +5573,9 @@ class ResidentCalibratedStack {
       result["inverse_upload_s"] = 0.0;
       result["kernel_enqueue_s"] = 0.0;
       result["device_copy_enqueue_s"] = 0.0;
+      result["track_coverage"] = track_coverage;
+      result["coverage_accumulator_updated"] = false;
+      result["warp_coverage_frame_count_delta"] = 0;
       result["sync_s"] = 0.0;
       result["total_s"] = 0.0;
       return result;
@@ -5567,7 +5586,9 @@ class ResidentCalibratedStack {
     const auto total_start = Clock::now();
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
     allocate_warp_scratch_if_needed(true);
-    allocate_warp_coverage_if_needed();
+    if (track_coverage) {
+      allocate_warp_coverage_if_needed();
+    }
     const auto inverse_prepare_start = Clock::now();
     std::vector<float> inverse_host(indices.size() * 9, 0.0f);
     for (std::size_t i = 0; i < matrices.size(); ++i) {
@@ -5606,7 +5627,7 @@ class ResidentCalibratedStack {
           static_cast<int>(height_),
           fill,
           clamping_threshold,
-          d_warp_coverage_);
+          track_coverage ? d_warp_coverage_ : nullptr);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frames_loop kernel launch");
       kernel_enqueue_s += seconds_since(kernel_start);
       const auto copy_start = Clock::now();
@@ -5619,7 +5640,9 @@ class ResidentCalibratedStack {
               0),
           "cudaMemcpyAsync(resident loop batched matrix Lanczos3 warped frame)");
       copy_enqueue_s += seconds_since(copy_start);
-      ++warp_coverage_frame_count_;
+      if (track_coverage) {
+        ++warp_coverage_frame_count_;
+      }
     }
     const auto sync_start = Clock::now();
     check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_matrix_lanczos3_frames_loop synchronize");
@@ -5636,6 +5659,10 @@ class ResidentCalibratedStack {
     result["inverse_upload_s"] = inverse_upload_s;
     result["kernel_enqueue_s"] = kernel_enqueue_s;
     result["device_copy_enqueue_s"] = copy_enqueue_s;
+    result["track_coverage"] = track_coverage;
+    result["coverage_accumulator_updated"] = track_coverage;
+    result["warp_coverage_frame_count_delta"] = static_cast<unsigned long long>(
+        track_coverage ? indices.size() : 0);
     result["sync_s"] = sync_s;
     result["total_s"] = seconds_since(total_start);
     return result;
@@ -5645,7 +5672,8 @@ class ResidentCalibratedStack {
       py::object indices_obj,
       py::object matrices_obj,
       float fill,
-      int max_chunk_capacity_frames = 0) {
+      int max_chunk_capacity_frames = 0,
+      bool track_coverage = true) {
     if (max_chunk_capacity_frames < 0) {
       throw std::invalid_argument("max_chunk_capacity_frames must be non-negative");
     }
@@ -5682,11 +5710,14 @@ class ResidentCalibratedStack {
       result["coverage_reduce_enqueue_s"] = 0.0;
       result["scatter_enqueue_s"] = 0.0;
       result["postprocess_enqueue_s"] = 0.0;
-      result["postprocess_mode"] = "fused_scatter_reduce";
+      result["postprocess_mode"] = track_coverage ? "fused_scatter_reduce" : "scatter_only_no_coverage_accumulator";
       result["warp_kernel_launches"] = 0;
       result["coverage_reduce_kernel_launches"] = 0;
       result["scatter_kernel_launches"] = 0;
       result["postprocess_kernel_launches"] = 0;
+      result["track_coverage"] = track_coverage;
+      result["coverage_accumulator_updated"] = false;
+      result["warp_coverage_frame_count_delta"] = 0;
       result["device_copy_enqueue_s"] = 0.0;
       result["sync_s"] = 0.0;
       result["total_s"] = 0.0;
@@ -5696,7 +5727,9 @@ class ResidentCalibratedStack {
       require_loaded(index, "batched matrix bilinear warp");
     }
     const auto total_start = Clock::now();
-    allocate_warp_coverage_if_needed();
+    if (track_coverage) {
+      allocate_warp_coverage_if_needed();
+    }
     auto workspace = allocate_batch_warp_workspace(
         indices.size(),
         static_cast<std::size_t>(std::max(0, max_chunk_capacity_frames)));
@@ -5755,18 +5788,35 @@ class ResidentCalibratedStack {
       kernel_enqueue_s += seconds_since(kernel_start);
       ++warp_kernel_launches;
       const auto postprocess_start = Clock::now();
-      glass_warp_batch_scatter_reduce_f32_launch(
-          workspace.output.get(),
-          workspace.coverage.get(),
-          d_stack_,
-          d_warp_coverage_,
-          workspace.indices.get() + begin,
-          static_cast<int>(chunk_frames),
-          pixels_per_frame_);
-      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_bilinear_frames fused scatter/reduce launch");
+      if (track_coverage) {
+        glass_warp_batch_scatter_reduce_f32_launch(
+            workspace.output.get(),
+            workspace.coverage.get(),
+            d_stack_,
+            d_warp_coverage_,
+            workspace.indices.get() + begin,
+            static_cast<int>(chunk_frames),
+            pixels_per_frame_);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.apply_matrix_bilinear_frames fused scatter/reduce launch");
+      } else {
+        glass_warp_batch_scatter_f32_launch(
+            workspace.output.get(),
+            d_stack_,
+            workspace.indices.get() + begin,
+            static_cast<int>(chunk_frames),
+            pixels_per_frame_);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.apply_matrix_bilinear_frames scatter-only launch");
+        ++scatter_kernel_launches;
+      }
       postprocess_enqueue_s += seconds_since(postprocess_start);
       ++postprocess_kernel_launches;
-      warp_coverage_frame_count_ += chunk_frames;
+      if (track_coverage) {
+        warp_coverage_frame_count_ += chunk_frames;
+      }
       ++chunk_count;
     }
     const auto sync_start = Clock::now();
@@ -5800,11 +5850,15 @@ class ResidentCalibratedStack {
     result["coverage_reduce_enqueue_s"] = coverage_reduce_enqueue_s;
     result["scatter_enqueue_s"] = scatter_enqueue_s;
     result["postprocess_enqueue_s"] = postprocess_enqueue_s;
-    result["postprocess_mode"] = "fused_scatter_reduce";
+    result["postprocess_mode"] = track_coverage ? "fused_scatter_reduce" : "scatter_only_no_coverage_accumulator";
     result["warp_kernel_launches"] = static_cast<unsigned long long>(warp_kernel_launches);
     result["coverage_reduce_kernel_launches"] = static_cast<unsigned long long>(coverage_reduce_kernel_launches);
     result["scatter_kernel_launches"] = static_cast<unsigned long long>(scatter_kernel_launches);
     result["postprocess_kernel_launches"] = static_cast<unsigned long long>(postprocess_kernel_launches);
+    result["track_coverage"] = track_coverage;
+    result["coverage_accumulator_updated"] = track_coverage;
+    result["warp_coverage_frame_count_delta"] = static_cast<unsigned long long>(
+        track_coverage ? indices.size() : 0);
     result["device_copy_enqueue_s"] = postprocess_enqueue_s;
     result["sync_s"] = sync_s;
     result["total_s"] = seconds_since(total_start);
@@ -5816,7 +5870,8 @@ class ResidentCalibratedStack {
       py::object matrices_obj,
       float fill,
       float clamping_threshold,
-      int max_chunk_capacity_frames = 0) {
+      int max_chunk_capacity_frames = 0,
+      bool track_coverage = true) {
     if (max_chunk_capacity_frames < 0) {
       throw std::invalid_argument("max_chunk_capacity_frames must be non-negative");
     }
@@ -5853,11 +5908,14 @@ class ResidentCalibratedStack {
       result["coverage_reduce_enqueue_s"] = 0.0;
       result["scatter_enqueue_s"] = 0.0;
       result["postprocess_enqueue_s"] = 0.0;
-      result["postprocess_mode"] = "fused_scatter_reduce";
+      result["postprocess_mode"] = track_coverage ? "fused_scatter_reduce" : "scatter_only_no_coverage_accumulator";
       result["warp_kernel_launches"] = 0;
       result["coverage_reduce_kernel_launches"] = 0;
       result["scatter_kernel_launches"] = 0;
       result["postprocess_kernel_launches"] = 0;
+      result["track_coverage"] = track_coverage;
+      result["coverage_accumulator_updated"] = false;
+      result["warp_coverage_frame_count_delta"] = 0;
       result["device_copy_enqueue_s"] = 0.0;
       result["sync_s"] = 0.0;
       result["total_s"] = 0.0;
@@ -5867,7 +5925,9 @@ class ResidentCalibratedStack {
       require_loaded(index, "batched matrix Lanczos3 warp");
     }
     const auto total_start = Clock::now();
-    allocate_warp_coverage_if_needed();
+    if (track_coverage) {
+      allocate_warp_coverage_if_needed();
+    }
     auto workspace = allocate_batch_warp_workspace(
         indices.size(),
         static_cast<std::size_t>(std::max(0, max_chunk_capacity_frames)));
@@ -5927,18 +5987,35 @@ class ResidentCalibratedStack {
       kernel_enqueue_s += seconds_since(kernel_start);
       ++warp_kernel_launches;
       const auto postprocess_start = Clock::now();
-      glass_warp_batch_scatter_reduce_f32_launch(
-          workspace.output.get(),
-          workspace.coverage.get(),
-          d_stack_,
-          d_warp_coverage_,
-          workspace.indices.get() + begin,
-          static_cast<int>(chunk_frames),
-          pixels_per_frame_);
-      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frames fused scatter/reduce launch");
+      if (track_coverage) {
+        glass_warp_batch_scatter_reduce_f32_launch(
+            workspace.output.get(),
+            workspace.coverage.get(),
+            d_stack_,
+            d_warp_coverage_,
+            workspace.indices.get() + begin,
+            static_cast<int>(chunk_frames),
+            pixels_per_frame_);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.apply_matrix_lanczos3_frames fused scatter/reduce launch");
+      } else {
+        glass_warp_batch_scatter_f32_launch(
+            workspace.output.get(),
+            d_stack_,
+            workspace.indices.get() + begin,
+            static_cast<int>(chunk_frames),
+            pixels_per_frame_);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.apply_matrix_lanczos3_frames scatter-only launch");
+        ++scatter_kernel_launches;
+      }
       postprocess_enqueue_s += seconds_since(postprocess_start);
       ++postprocess_kernel_launches;
-      warp_coverage_frame_count_ += chunk_frames;
+      if (track_coverage) {
+        warp_coverage_frame_count_ += chunk_frames;
+      }
       ++chunk_count;
     }
     const auto sync_start = Clock::now();
@@ -5972,11 +6049,15 @@ class ResidentCalibratedStack {
     result["coverage_reduce_enqueue_s"] = coverage_reduce_enqueue_s;
     result["scatter_enqueue_s"] = scatter_enqueue_s;
     result["postprocess_enqueue_s"] = postprocess_enqueue_s;
-    result["postprocess_mode"] = "fused_scatter_reduce";
+    result["postprocess_mode"] = track_coverage ? "fused_scatter_reduce" : "scatter_only_no_coverage_accumulator";
     result["warp_kernel_launches"] = static_cast<unsigned long long>(warp_kernel_launches);
     result["coverage_reduce_kernel_launches"] = static_cast<unsigned long long>(coverage_reduce_kernel_launches);
     result["scatter_kernel_launches"] = static_cast<unsigned long long>(scatter_kernel_launches);
     result["postprocess_kernel_launches"] = static_cast<unsigned long long>(postprocess_kernel_launches);
+    result["track_coverage"] = track_coverage;
+    result["coverage_accumulator_updated"] = track_coverage;
+    result["warp_coverage_frame_count_delta"] = static_cast<unsigned long long>(
+        track_coverage ? indices.size() : 0);
     result["device_copy_enqueue_s"] = postprocess_enqueue_s;
     result["sync_s"] = sync_s;
     result["total_s"] = seconds_since(total_start);
@@ -14507,13 +14588,15 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("indices"),
           py::arg("matrices"),
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
-          py::arg("max_chunk_capacity_frames") = 0)
+          py::arg("max_chunk_capacity_frames") = 0,
+          py::arg("track_coverage") = true)
       .def(
           "apply_matrix_bilinear_frames_loop",
           &ResidentCalibratedStack::apply_matrix_bilinear_frames_loop,
           py::arg("indices"),
           py::arg("matrices"),
-          py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
+          py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
+          py::arg("track_coverage") = true)
       .def(
           "apply_matrix_lanczos3_frames",
           &ResidentCalibratedStack::apply_matrix_lanczos3_frames,
@@ -14521,14 +14604,16 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("matrices"),
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
           py::arg("clamping_threshold") = -1.0f,
-          py::arg("max_chunk_capacity_frames") = 0)
+          py::arg("max_chunk_capacity_frames") = 0,
+          py::arg("track_coverage") = true)
       .def(
           "apply_matrix_lanczos3_frames_loop",
           &ResidentCalibratedStack::apply_matrix_lanczos3_frames_loop,
           py::arg("indices"),
           py::arg("matrices"),
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
-          py::arg("clamping_threshold") = -1.0f)
+          py::arg("clamping_threshold") = -1.0f,
+          py::arg("track_coverage") = true)
       .def(
           "matrix_alignment_metrics_to_reference",
           &ResidentCalibratedStack::matrix_alignment_metrics_to_reference,
