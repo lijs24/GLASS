@@ -1,0 +1,143 @@
+{
+  "artifact_type": "s2_gate_478_cleanup_and_real_ab_summary",
+  "candidate_vs_baseline": {
+    "abs_diff_p50": 0.6654815673828125,
+    "abs_diff_p99": 2.975449752807606,
+    "abs_diff_p999": 9.921587371827627,
+    "coverage_fraction": 0.9680247262015986,
+    "max_abs_diff": 1601.62109375,
+    "relative_rms_diff": 0.016454569155982254,
+    "rms_diff": 4.5849533818006405,
+    "robust_fit_abs_diff_p99": null,
+    "robust_fit_rms": null
+  },
+  "cleanup": {
+    "c_drive_free_gb_after_ab": 53.57,
+    "new_ab_run_size_gib": 3.23,
+    "preserved": [
+      "C:\\glass_runs historical run artifacts",
+      "C:\\gpwbpp_runs\\final_m38_h_200 reference/input artifacts"
+    ],
+    "project_size_gib_after_cleanup": 2.324,
+    "recommendation_if_c_drive_tight": "delete old regenerable C:\\glass_runs\\phase2_s2_gate_* probe directories before touching reference data",
+    "removed_cache_entries": 478,
+    "scope": "workspace Python/test/build caches only"
+  },
+  "created_at": "2026-06-22T15:43:37.761238+00:00",
+  "execution_path": "runs/checkpoints/s2_gate_478_ab_matrix_execution_real.json",
+  "plan_path": "runs/checkpoints/s2_gate_478_ab_matrix_plan.json",
+  "run_root": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real",
+  "variants": {
+    "throughput_v1_lanczos3_parity": {
+      "artifacts": {
+        "acceptance_json": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\acceptance\\throughput_v1_lanczos3_parity_acceptance.json",
+        "compare_wbpp_json": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\compare\\throughput_v1_lanczos3_parity_vs_wbpp.json",
+        "coverage_map": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_coverage_map_H.fits",
+        "master": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\runs\\throughput_v1_lanczos3_parity\\integration\\resident_master_H.fits",
+        "report_html": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\reports\\throughput_v1_lanczos3_parity_report.html",
+        "speedup_json": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\speedup\\throughput_v1_lanczos3_parity_speedup.json"
+      },
+      "estimated_peak_gib": 49.608429938554764,
+      "glass_elapsed_s": 30.788683499966282,
+      "meets_min_speedup": true,
+      "passed": true,
+      "resident_io_pipeline": {
+        "calibration_h2d_release_enabled": false,
+        "calibration_h2d_release_reason": "explicit_callback_queue_requested",
+        "fits_backend_counts": {
+          "native_u16be_raw": 200
+        },
+        "fits_native_file_read_cumulative_s": 20.442127399999997,
+        "fits_read_mode_effective": "native_u16_gpu",
+        "raw_gpu_decode_enabled": true,
+        "raw_gpu_float32_host_bytes_avoided": 49320960000,
+        "raw_gpu_h2d_bytes": 24660480000
+      },
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\runs\\throughput_v1_lanczos3_parity",
+      "speedup_vs_wbpp": 35.485148301361974,
+      "status": "passed",
+      "timing_s": {
+        "light_calibration_batch_stream_h2d_calibrate_store": 0.7212191047668457,
+        "light_fits_native_file_read": 20.442127399999997,
+        "light_loop_unaccounted": 10.966251299949363,
+        "light_read_decode": 2.2444186998764053,
+        "light_read_decode_worker": 20.61249859968666,
+        "light_read_upload_calibrate": 13.956307400017977,
+        "master_build_or_load": 10.765684999991208,
+        "output_write": 2.541386600001715,
+        "resident_fused_matrix_integration_native": 0.0,
+        "resident_integration": 0.2856906999950297,
+        "resident_registration_component_accounted": 4.203572700331799,
+        "resident_registration_warp": 1.2525539991329424
+      },
+      "wbpp_compare": {
+        "abs_diff_p50": 7.299671415239573e-05,
+        "abs_diff_p99": 0.00042621337808668863,
+        "abs_diff_p999": 0.003845416396856427,
+        "coverage_fraction": 0.960532609259836,
+        "max_abs_diff": 0.5499989986419678,
+        "relative_rms_diff": 0.4144607930330431,
+        "rms_diff": 0.0017794216505176163,
+        "shape_match": true
+      },
+      "weighted_frame_count": 193,
+      "zero_weight_frame_count": 7
+    },
+    "throughput_v2_fused_bilinear": {
+      "artifacts": {
+        "acceptance_json": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\acceptance\\throughput_v2_fused_bilinear_acceptance.json",
+        "compare_wbpp_json": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\compare\\throughput_v2_fused_bilinear_vs_wbpp.json",
+        "coverage_map": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\runs\\throughput_v2_fused_bilinear\\integration\\resident_coverage_map_H.fits",
+        "master": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\runs\\throughput_v2_fused_bilinear\\integration\\resident_master_H.fits",
+        "report_html": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\reports\\throughput_v2_fused_bilinear_report.html",
+        "speedup_json": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\speedup\\throughput_v2_fused_bilinear_speedup.json"
+      },
+      "estimated_peak_gib": 47.3117358982563,
+      "glass_elapsed_s": 30.46608580002794,
+      "meets_min_speedup": true,
+      "passed": true,
+      "resident_io_pipeline": {
+        "calibration_h2d_release_enabled": false,
+        "calibration_h2d_release_reason": "explicit_callback_queue_requested",
+        "fits_backend_counts": {
+          "native_u16be_raw": 200
+        },
+        "fits_native_file_read_cumulative_s": 20.4087263,
+        "fits_read_mode_effective": "native_u16_gpu",
+        "raw_gpu_decode_enabled": true,
+        "raw_gpu_float32_host_bytes_avoided": 49320960000,
+        "raw_gpu_h2d_bytes": 24660480000
+      },
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate478_cleanup_ab_real\\runs\\throughput_v2_fused_bilinear",
+      "speedup_vs_wbpp": 35.86089158847567,
+      "status": "passed",
+      "timing_s": {
+        "light_calibration_batch_stream_h2d_calibrate_store": 0.7112090587615968,
+        "light_fits_native_file_read": 20.4087263,
+        "light_loop_unaccounted": 11.237965500098653,
+        "light_read_decode": 2.2789558998774737,
+        "light_read_decode_worker": 20.544071400363464,
+        "light_read_upload_calibrate": 14.25223049998749,
+        "master_build_or_load": 11.038597800012212,
+        "output_write": 2.4458932999987155,
+        "resident_fused_matrix_integration_native": 0.4242426,
+        "resident_integration": 0.4245766999665648,
+        "resident_registration_component_accounted": 3.213099200155194,
+        "resident_registration_warp": 1.2524347999715246
+      },
+      "wbpp_compare": {
+        "abs_diff_p50": 7.414480205625296e-05,
+        "abs_diff_p99": 0.0004224973497912281,
+        "abs_diff_p999": 0.0038689467660156796,
+        "coverage_fraction": 0.9680247262015986,
+        "max_abs_diff": 0.554803341627121,
+        "relative_rms_diff": 0.41970697815425545,
+        "rms_diff": 0.0018004970117125889,
+        "shape_match": true
+      },
+      "weighted_frame_count": 193,
+      "zero_weight_frame_count": 7
+    }
+  },
+  "wbpp_blackbox_elapsed_s": 1092.541
+}
