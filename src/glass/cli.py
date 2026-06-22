@@ -2286,6 +2286,7 @@ def cmd_resident_ab_matrix_execute(args: argparse.Namespace) -> int:
         skip_existing=args.skip_existing,
         variants=args.variant,
         ignore_readiness=args.ignore_readiness,
+        recheck_readiness=not args.no_readiness_recheck,
         glass_executable=args.glass_executable,
         cwd=args.cwd,
     )
@@ -6142,6 +6143,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--ignore-readiness",
         action="store_true",
         help="allow non-dry-run execution even when the plan readiness sample is not ready",
+    )
+    resident_ab_matrix_execute.add_argument(
+        "--no-readiness-recheck",
+        action="store_true",
+        help="use the readiness state recorded in the plan instead of live GPU/disk rechecking",
     )
     resident_ab_matrix_execute.add_argument(
         "--glass-executable",

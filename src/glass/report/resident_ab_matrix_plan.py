@@ -592,6 +592,37 @@ def _selected_plan_variants(plan: dict[str, Any], variant_ids: list[str] | None)
     return selected
 
 
+def _live_readiness_from_plan(
+    plan: dict[str, Any],
+    *,
+    gpu_query_text: str | None = None,
+    probe_gpu: bool = True,
+) -> dict[str, Any]:
+    plan_readiness = plan.get("readiness") if isinstance(plan.get("readiness"), dict) else {}
+    plan_gpu = plan_readiness.get("gpu") if isinstance(plan_readiness.get("gpu"), dict) else {}
+    plan_disk = plan_readiness.get("disk") if isinstance(plan_readiness.get("disk"), dict) else {}
+    gpu_error = None
+    if gpu_query_text is None and probe_gpu:
+        gpu_query_text, gpu_error = _probe_gpu_text()
+    gpu = _parse_gpu_readiness(
+        gpu_query_text,
+        min_free_mib=int(plan_gpu.get("min_free_mib") or 65000),
+        max_utilization=int(plan_gpu.get("max_utilization_percent") or 20),
+    )
+    if gpu_error is not None:
+        gpu["probe_error"] = gpu_error
+    disk = _disk_readiness(
+        Path(str(plan.get("root") or ".")),
+        min_free_gib=float(plan_disk.get("min_free_gib") or 8.0),
+    )
+    return {
+        "source": "live_recheck",
+        "ready": bool(gpu.get("ready") and disk.get("ready")),
+        "gpu": gpu,
+        "disk": disk,
+    }
+
+
 def _execution_step_record(
     *,
     step: str,
@@ -624,12 +655,25 @@ def build_resident_ab_matrix_execution(
     skip_existing: bool = False,
     variants: list[str] | None = None,
     ignore_readiness: bool = False,
+    recheck_readiness: bool = True,
+    gpu_query_text: str | None = None,
     glass_executable: str | Path | None = None,
     cwd: str | Path | None = None,
 ) -> dict[str, Any]:
     payload = _read_ab_plan(plan)
     selected = _selected_plan_variants(payload, variants)
-    readiness_allows_execution = bool(payload.get("ready_to_execute"))
+    plan_readiness = {
+        "source": "plan",
+        "ready": bool(payload.get("ready_to_execute")),
+        "gpu": payload.get("readiness", {}).get("gpu", {}) if isinstance(payload.get("readiness"), dict) else {},
+        "disk": payload.get("readiness", {}).get("disk", {}) if isinstance(payload.get("readiness"), dict) else {},
+    }
+    execution_readiness = (
+        _live_readiness_from_plan(payload, gpu_query_text=gpu_query_text)
+        if recheck_readiness and not dry_run
+        else plan_readiness
+    )
+    readiness_allows_execution = bool(execution_readiness.get("ready"))
     blocked = bool(not dry_run and not ignore_readiness and not readiness_allows_execution)
 
     records: list[dict[str, Any]] = []
@@ -688,6 +732,7 @@ def build_resident_ab_matrix_execution(
         "dry_run": bool(dry_run),
         "skip_existing": bool(skip_existing),
         "ignore_readiness": bool(ignore_readiness),
+        "recheck_readiness": bool(recheck_readiness),
         "selected_variant_count": len(selected),
         "summary": {
             "status": status,
@@ -699,10 +744,11 @@ def build_resident_ab_matrix_execution(
             "skipped_existing_count": sum(1 for row in records if row.get("status") == "skipped_existing"),
         },
         "readiness": payload.get("readiness"),
+        "execution_readiness": execution_readiness,
         "variants": records,
         "limitations": [
             "This executor runs only commands recorded in a resident A/B matrix plan.",
-            "Non-dry-run execution is blocked by plan readiness unless ignore_readiness is set.",
+            "Non-dry-run execution is blocked by live readiness unless ignore_readiness is set.",
             "Dry-run mode records intended commands without executing subprocesses.",
         ],
     }

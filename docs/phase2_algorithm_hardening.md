@@ -10132,6 +10132,49 @@ Completed in Gate446:
     execution, the next gate must regenerate or revalidate readiness, then run
     the planned matrix only in a clean GPU window.
 
+### S2-Gate 475: Resident A/B Live Readiness Recheck
+
+- Remove the stale-readiness failure mode from the real 200-light A/B executor.
+- Required work:
+  - make `glass resident-ab-matrix-execute` recheck GPU and target-disk
+    readiness immediately before any non-dry-run execution;
+  - use the live readiness sample as the execution gate, so a plan generated
+    while idle cannot execute after the GPU becomes busy;
+  - allow a previously blocked plan to execute later when live readiness becomes
+    clean, without requiring manual command reconstruction;
+  - keep dry-run mode deterministic and non-executing.
+- Completed in S2-Gate475:
+  - added live readiness reconstruction from a plan's recorded thresholds and
+    root path;
+  - made non-dry-run execution block on `execution_readiness` unless
+    `--ignore-readiness` is explicitly used;
+  - added `--no-readiness-recheck` for controlled reproduction of legacy
+    plan-only behavior;
+  - added tests proving live recheck blocks a stale-ready plan when the GPU is
+    busy and records the live readiness source in execution artifacts;
+  - ran the real 200-light plan through non-dry-run execution while the GPU was
+    busy and confirmed the executor blocked before launching any heavy command.
+- Real readiness sample:
+  - plan sample: GPU utilization `55%`, disk free `65.20256042480469 GiB`;
+  - live execution sample: GPU utilization `64%`, disk free
+    `65.20090103149414 GiB`;
+  - result: execution blocked with `blocked_by_readiness` and zero recorded
+    variant steps, so no contaminated 200-light benchmark was launched.
+- Performance and regression note:
+  - this gate changes execution safety only. It does not change runtime
+    defaults, calibration, registration, interpolation, rejection, DQ, or
+    integration math;
+  - the next clean-GPU run can reuse the same plan because live recheck now
+    decides whether the execution window is valid.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_475_ab_matrix_plan_blocked.json`;
+  - `runs/checkpoints/s2_gate_475_ab_matrix_plan_blocked.md`;
+  - `runs/checkpoints/s2_gate_475_live_recheck_execution_blocked.json`;
+  - `runs/checkpoints/s2_gate_475_status.md`.
+- Known limitation:
+  - the real A/B timing comparison remains pending until the unrelated external
+    GPU workload releases the RTX PRO 6000.
+
 ## Gate Rules
 
 Each gate requires:

@@ -135,10 +135,37 @@ def test_resident_ab_matrix_execution_blocks_non_dry_run_when_not_ready(tmp_path
     )
     write_json(plan_path, plan)
 
-    execution = build_resident_ab_matrix_execution(plan_path)
+    execution = build_resident_ab_matrix_execution(
+        plan_path,
+        gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 20000, 97, 596.21",
+    )
 
     assert execution["summary"]["status"] == "blocked_by_readiness"
     assert execution["summary"]["blocked"] is True
+    assert execution["execution_readiness"]["source"] == "live_recheck"
+    assert execution["variants"] == []
+
+
+def test_resident_ab_matrix_execution_rechecks_stale_ready_plan(tmp_path: Path) -> None:
+    plan_path = tmp_path / "ab_plan.json"
+    plan = build_resident_ab_matrix_plan(
+        root=tmp_path / "ab",
+        plan=tmp_path / "processing_plan.json",
+        manifest=tmp_path / "manifest.json",
+        wbpp_result=tmp_path / "wbpp_result.json",
+        reference=tmp_path / "wbpp_master.xisf",
+        gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+    )
+    write_json(plan_path, plan)
+
+    execution = build_resident_ab_matrix_execution(
+        plan_path,
+        gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 20000, 95, 596.21",
+    )
+
+    assert plan["ready_to_execute"] is True
+    assert execution["summary"]["status"] == "blocked_by_readiness"
+    assert execution["execution_readiness"]["gpu"]["status"] == "busy"
     assert execution["variants"] == []
 
 

@@ -1,0 +1,74 @@
+{
+  "artifact_type": "resident_ab_matrix_execution",
+  "created_at": "2026-06-22T15:15:36+00:00",
+  "dry_run": false,
+  "execution_readiness": {
+    "disk": {
+      "free_gib": 65.20090103149414,
+      "min_free_gib": 8.0,
+      "path": "C:\\glass_runs",
+      "ready": true,
+      "status": "ready",
+      "total_gib": 1906.7373008728027
+    },
+    "gpu": {
+      "driver": "596.21",
+      "free_mib": 79001,
+      "max_utilization_percent": 20,
+      "min_free_mib": 65000,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "ready": false,
+      "reason": "GPU utilization is 64%, above the clean benchmark threshold",
+      "status": "busy",
+      "total_mib": 97887,
+      "used_mib": 18886,
+      "utilization_percent": 64
+    },
+    "ready": false,
+    "source": "live_recheck"
+  },
+  "ignore_readiness": false,
+  "limitations": [
+    "This executor runs only commands recorded in a resident A/B matrix plan.",
+    "Non-dry-run execution is blocked by live readiness unless ignore_readiness is set.",
+    "Dry-run mode records intended commands without executing subprocesses."
+  ],
+  "plan": "runs\\checkpoints\\s2_gate_475_ab_matrix_plan_blocked.json",
+  "readiness": {
+    "disk": {
+      "free_gib": 65.20256042480469,
+      "min_free_gib": 8.0,
+      "path": "C:\\glass_runs",
+      "ready": true,
+      "status": "ready",
+      "total_gib": 1906.7373008728027
+    },
+    "gpu": {
+      "driver": "596.21",
+      "free_mib": 79003,
+      "max_utilization_percent": 20,
+      "min_free_mib": 65000,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "ready": false,
+      "reason": "GPU utilization is 55%, above the clean benchmark threshold",
+      "status": "busy",
+      "total_mib": 97887,
+      "used_mib": 18884,
+      "utilization_percent": 55
+    }
+  },
+  "recheck_readiness": true,
+  "schema_version": 1,
+  "selected_variant_count": 2,
+  "skip_existing": false,
+  "summary": {
+    "blocked": true,
+    "completed_variant_count": 0,
+    "failed": false,
+    "planned_variant_count": 0,
+    "recorded_variant_count": 0,
+    "skipped_existing_count": 0,
+    "status": "blocked_by_readiness"
+  },
+  "variants": []
+}
