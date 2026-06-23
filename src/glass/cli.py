@@ -4601,6 +4601,11 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
             default_name="resident_result_contract.json",
         )
     )
+    pipeline_contract, pipeline_contract_path, pipeline_contract_source = _load_optional_run_contract(
+        explicit_path=getattr(args, "pipeline_contract_json", None),
+        run=args.run,
+        default_name="pipeline_contract.json",
+    )
     audit = build_stack_engine_contract_audit(
         args.run,
         scope=args.scope,
@@ -4610,6 +4615,9 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
         else None,
         resident_result_contract=resident_result_contract
         if resident_result_contract_source == "explicit" and isinstance(resident_result_contract, dict)
+        else None,
+        pipeline_contract=pipeline_contract
+        if pipeline_contract_source == "explicit" and isinstance(pipeline_contract, dict)
         else None,
     )
     write_stack_engine_contract_audit(args.out, audit, markdown=args.markdown)
@@ -4626,6 +4634,12 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
             "resident_result_contract_attached": audit.get("resident_result_contract_attached"),
             "resident_result_contract_json": resident_result_contract_path,
             "resident_result_contract_source": resident_result_contract_source,
+            "pipeline_contract_attached": audit.get("pipeline_contract_attached"),
+            "pipeline_contract_json": pipeline_contract_path,
+            "pipeline_contract_source": pipeline_contract_source,
+            "pipeline_contract_dq_ledger_ready": (
+                audit.get("pipeline_contract_dq_ledger") or {}
+            ).get("ready"),
             "default_path_status": default_path.get("status"),
             "strict_native_stack_engine_ready": default_path.get("strict_native_stack_engine_ready"),
             "default_promotion_ready": default_promotion.get("ready"),
@@ -9168,6 +9182,13 @@ def build_parser() -> argparse.ArgumentParser:
     stack_contract.add_argument(
         "--resident-result-contract-json",
         help="optional resident-result-contract JSON used to prove resident CUDA result-contract parity",
+    )
+    stack_contract.add_argument(
+        "--pipeline-contract-json",
+        help=(
+            "optional pipeline-contract JSON used to prove resident calibrated-light DQ/mask ledger closure "
+            "before resident CUDA can be treated as default-ready"
+        ),
     )
     stack_contract.add_argument(
         "--require-default-ready",

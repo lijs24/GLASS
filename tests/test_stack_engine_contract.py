@@ -9,6 +9,42 @@ from glass.report.stack_engine_contract import build_stack_engine_contract_audit
 from glass.synthetic.generator import generate_synthetic_dataset
 
 
+def _resident_pipeline_contract(
+    *,
+    frame_count: int = 200,
+    check_passed: bool = True,
+    required: bool = True,
+) -> dict:
+    evidence = {
+        "required": required,
+        "present": True,
+        "status": "passed" if check_passed else "failed",
+        "expected_rows": frame_count,
+        "accounting_rows": frame_count,
+        "expected_passed_rows": frame_count if check_passed else max(0, frame_count - 1),
+        "expected_failed_rows": 0 if check_passed else 1,
+        "failed_checks": [] if check_passed else ["summary_failed_count_matches_resident_calibration"],
+        "missing_frame_ids": [],
+        "extra_frame_ids": [],
+        "failed_frame_ids": [] if check_passed else ["L0001"],
+        "contract_sources": ["resident_source_dq_execution"],
+        "frame_mask_sources": ["resident_frame_masks"],
+    }
+    return {
+        "schema_version": 1,
+        "audit_type": "pipeline_invariant_contract",
+        "passed": check_passed,
+        "status": "passed" if check_passed else "failed",
+        "checks": [
+            {
+                "name": "frame_accounting_resident_dq_ledger_contract",
+                "passed": check_passed,
+                "evidence": evidence,
+            }
+        ],
+    }
+
+
 def test_stack_engine_contract_passes_for_cpu_audit_run(tmp_path: Path):
     data = tmp_path / "data"
     run = tmp_path / "run"
@@ -466,6 +502,7 @@ def test_stack_engine_contract_accepts_resident_calibration_for_default_ready(tm
         expected_integration_engine="cuda_resident_stack",
         resident_calibration_contract=resident_calibration_contract,
         resident_result_contract=resident_result_contract,
+        pipeline_contract=_resident_pipeline_contract(),
     )
 
     promotion = audit["default_promotion"]
@@ -479,9 +516,151 @@ def test_stack_engine_contract_accepts_resident_calibration_for_default_ready(tm
     assert audit["default_path"]["status"] == "resident_cuda_contract_emulation"
     assert audit["default_path"]["strict_native_stack_engine_ready"] is False
     assert audit["default_path"]["resident_cuda_contract_emulation_count"] == 2
+    assert audit["pipeline_contract_dq_ledger"]["ready"] is True
     assert promotion["ready"] is True
     assert promotion["status"] == "ready"
     assert promotion["blocker_count"] == 0
+
+
+def test_stack_engine_contract_blocks_resident_default_ready_without_pipeline_dq_ledger(
+    tmp_path: Path,
+):
+    run = tmp_path / "run"
+    run.mkdir()
+    resident_calibration_contract = {
+        "artifact_type": "resident_cuda_calibration_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "frame_count": 200,
+                "set_count": 1,
+                "bias_count": 20,
+                "dark_count": 20,
+                "flat_count": 20,
+                "checks": [{"name": "resident_output_contracts_passed", "passed": True}],
+            }
+        ],
+    }
+    resident_result_contract = {
+        "artifact_type": "resident_cuda_result_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "checks": [{"name": "resident_identity", "passed": True}],
+            }
+        ],
+    }
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                    },
+                }
+            ]
+        },
+    )
+
+    audit = build_stack_engine_contract_audit(
+        run,
+        expected_integration_engine="cuda_resident_stack",
+        resident_calibration_contract=resident_calibration_contract,
+        resident_result_contract=resident_result_contract,
+    )
+
+    promotion = audit["default_promotion"]
+    blockers = {item["name"] for item in promotion["blockers"]}
+    assert audit["passed"] is True
+    assert audit["pipeline_contract_attached"] is False
+    assert audit["pipeline_contract_dq_ledger"]["ready"] is False
+    assert promotion["pipeline_contract_dq_ledger_required"] is True
+    assert promotion["ready"] is False
+    assert "pipeline_contract_resident_dq_ledger_not_ready" in blockers
+
+
+def test_stack_engine_contract_blocks_resident_default_ready_on_failed_pipeline_dq_ledger(
+    tmp_path: Path,
+):
+    run = tmp_path / "run"
+    run.mkdir()
+    resident_calibration_contract = {
+        "artifact_type": "resident_cuda_calibration_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "frame_count": 200,
+                "set_count": 1,
+                "bias_count": 20,
+                "dark_count": 20,
+                "flat_count": 20,
+                "checks": [{"name": "resident_output_contracts_passed", "passed": True}],
+            }
+        ],
+    }
+    resident_result_contract = {
+        "artifact_type": "resident_cuda_result_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "checks": [{"name": "resident_identity", "passed": True}],
+            }
+        ],
+    }
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                    },
+                }
+            ]
+        },
+    )
+
+    audit = build_stack_engine_contract_audit(
+        run,
+        expected_integration_engine="cuda_resident_stack",
+        resident_calibration_contract=resident_calibration_contract,
+        resident_result_contract=resident_result_contract,
+        pipeline_contract=_resident_pipeline_contract(check_passed=False),
+    )
+
+    promotion = audit["default_promotion"]
+    blockers = {item["name"] for item in promotion["blockers"]}
+    assert audit["passed"] is True
+    assert audit["pipeline_contract_attached"] is True
+    assert audit["pipeline_contract_dq_ledger"]["ready"] is False
+    assert "dq_ledger_check_failed" in audit["pipeline_contract_dq_ledger"]["readiness_failures"]
+    assert promotion["ready"] is False
+    assert "pipeline_contract_resident_dq_ledger_not_ready" in blockers
 
 
 def test_stack_engine_contract_does_not_duplicate_resident_calibration_surfaces(tmp_path: Path):
@@ -758,6 +937,7 @@ def test_stack_engine_contract_cli_uses_resident_calibration_contract_json(tmp_p
     run.mkdir()
     resident_calibration_contract = tmp_path / "resident_calibration_contract.json"
     resident_result_contract = tmp_path / "resident_result_contract.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
     out = tmp_path / "stack_engine_contract.json"
     write_json(
         resident_calibration_contract,
@@ -796,6 +976,7 @@ def test_stack_engine_contract_cli_uses_resident_calibration_contract_json(tmp_p
             ],
         },
     )
+    write_json(pipeline_contract, _resident_pipeline_contract())
     write_json(
         run / "integration_results.json",
         {
@@ -827,6 +1008,8 @@ def test_stack_engine_contract_cli_uses_resident_calibration_contract_json(tmp_p
                 str(resident_calibration_contract),
                 "--resident-result-contract-json",
                 str(resident_result_contract),
+                "--pipeline-contract-json",
+                str(pipeline_contract),
                 "--out",
                 str(out),
                 "--require-default-ready",
@@ -837,6 +1020,8 @@ def test_stack_engine_contract_cli_uses_resident_calibration_contract_json(tmp_p
 
     audit = read_json(out)
     assert audit["resident_calibration_contract_attached"] is True
+    assert audit["pipeline_contract_attached"] is True
+    assert audit["pipeline_contract_dq_ledger"]["ready"] is True
     assert audit["default_promotion"]["ready"] is True
     assert audit["default_path"]["status"] == "resident_cuda_contract_emulation"
     assert audit["default_path"]["strict_native_stack_engine_ready"] is False
@@ -847,6 +1032,7 @@ def test_stack_engine_contract_auto_discovers_native_resident_calibration_contra
     run.mkdir()
     resident_calibration_contract = run / "resident_calibration_contract.json"
     resident_result_contract = run / "resident_result_contract.json"
+    pipeline_contract = run / "pipeline_contract.json"
     out = tmp_path / "stack_engine_contract.json"
     write_json(
         resident_calibration_contract,
@@ -885,6 +1071,7 @@ def test_stack_engine_contract_auto_discovers_native_resident_calibration_contra
             ],
         },
     )
+    write_json(pipeline_contract, _resident_pipeline_contract())
     write_json(
         run / "integration_results.json",
         {
@@ -926,6 +1113,10 @@ def test_stack_engine_contract_auto_discovers_native_resident_calibration_contra
     assert audit["resident_calibration_contract_path"] == str(resident_calibration_contract)
     assert audit["resident_result_contract_attached"] is True
     assert audit["resident_result_contract_source"] == "run_default"
+    assert audit["pipeline_contract_attached"] is True
+    assert audit["pipeline_contract_source"] == "run_default"
+    assert audit["pipeline_contract_path"] == str(pipeline_contract)
+    assert audit["pipeline_contract_dq_ledger"]["ready"] is True
     assert audit["default_promotion"]["ready"] is True
 
 

@@ -62,6 +62,19 @@ def _finite_float(value: Any) -> float | None:
     return numeric
 
 
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return sorted(str(item) for item in value)
+
+
 def _master_stats_contract(payload: dict[str, Any]) -> dict[str, Any]:
     stats = payload.get("stats") if isinstance(payload.get("stats"), dict) else {}
     required = ("min", "max", "mean", "median", "std")
@@ -322,6 +335,109 @@ def _resident_calibration_records(
             }
         )
     return records
+
+
+def _contract_check(payload: dict[str, Any], name: str) -> dict[str, Any] | None:
+    checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            return item
+    return None
+
+
+def _pipeline_contract_dq_ledger_state(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict) or not payload:
+        return {
+            "attached": False,
+            "ready": False,
+            "status": "missing",
+            "pipeline_contract_passed": False,
+            "audit_type": None,
+            "check_present": False,
+            "check_passed": False,
+            "required": None,
+            "expected_rows": None,
+            "accounting_rows": None,
+            "expected_passed_rows": None,
+            "expected_failed_rows": None,
+            "failed_checks": [],
+            "missing_frame_ids": [],
+            "extra_frame_ids": [],
+            "failed_frame_ids": [],
+            "contract_sources": [],
+            "frame_mask_sources": [],
+            "readiness_failures": ["pipeline_contract_missing"],
+        }
+
+    check = _contract_check(payload, "frame_accounting_resident_dq_ledger_contract")
+    evidence = check.get("evidence") if isinstance(check, dict) and isinstance(check.get("evidence"), dict) else {}
+    expected_rows = _int_or_none(evidence.get("expected_rows"))
+    accounting_rows = _int_or_none(evidence.get("accounting_rows"))
+    expected_passed_rows = _int_or_none(evidence.get("expected_passed_rows"))
+    expected_failed_rows = _int_or_none(evidence.get("expected_failed_rows"))
+    failed_checks = _string_list(evidence.get("failed_checks"))
+    missing_frame_ids = _string_list(evidence.get("missing_frame_ids"))
+    extra_frame_ids = _string_list(evidence.get("extra_frame_ids"))
+    failed_frame_ids = _string_list(evidence.get("failed_frame_ids"))
+    contract_sources = _string_list(evidence.get("contract_sources"))
+    frame_mask_sources = _string_list(evidence.get("frame_mask_sources"))
+
+    failures: list[str] = []
+    if payload.get("audit_type") != "pipeline_invariant_contract":
+        failures.append("pipeline_contract_audit_type_mismatch")
+    if payload.get("passed") is not True:
+        failures.append("pipeline_contract_failed")
+    if check is None:
+        failures.append("dq_ledger_check_missing")
+    elif check.get("passed") is not True:
+        failures.append("dq_ledger_check_failed")
+    if evidence.get("required") is not True:
+        failures.append("dq_ledger_not_required")
+    if evidence.get("status") != "passed":
+        failures.append("dq_ledger_status_not_passed")
+    if expected_rows is None or expected_rows <= 0:
+        failures.append("expected_rows_not_positive")
+    if expected_rows is None or accounting_rows != expected_rows:
+        failures.append("accounting_rows_mismatch")
+    if expected_rows is None or expected_passed_rows != expected_rows:
+        failures.append("expected_passed_rows_mismatch")
+    if expected_failed_rows != 0:
+        failures.append("expected_failed_rows_nonzero")
+    if failed_checks:
+        failures.append("dq_ledger_failed_checks_present")
+    if missing_frame_ids:
+        failures.append("dq_ledger_missing_frame_ids")
+    if extra_frame_ids:
+        failures.append("dq_ledger_extra_frame_ids")
+    if failed_frame_ids:
+        failures.append("dq_ledger_failed_frame_ids")
+    if "resident_source_dq_execution" not in contract_sources:
+        failures.append("resident_source_dq_execution_source_missing")
+    if "resident_frame_masks" not in frame_mask_sources:
+        failures.append("resident_frame_masks_source_missing")
+
+    return {
+        "attached": True,
+        "ready": not failures,
+        "status": "ready" if not failures else "blocked",
+        "pipeline_contract_passed": payload.get("passed") is True,
+        "audit_type": payload.get("audit_type"),
+        "check_present": check is not None,
+        "check_passed": isinstance(check, dict) and check.get("passed") is True,
+        "required": evidence.get("required"),
+        "evidence_status": evidence.get("status"),
+        "expected_rows": expected_rows,
+        "accounting_rows": accounting_rows,
+        "expected_passed_rows": expected_passed_rows,
+        "expected_failed_rows": expected_failed_rows,
+        "failed_checks": failed_checks,
+        "missing_frame_ids": missing_frame_ids,
+        "extra_frame_ids": extra_frame_ids,
+        "failed_frame_ids": failed_frame_ids,
+        "contract_sources": contract_sources,
+        "frame_mask_sources": frame_mask_sources,
+        "readiness_failures": failures,
+    }
 
 
 def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[str, Any]:
@@ -684,6 +800,7 @@ def _build_default_promotion_summary(
     masters: list[dict[str, Any]],
     integration_records: list[dict[str, Any]],
     adoption: dict[str, Any],
+    pipeline_dq_ledger: dict[str, Any],
 ) -> dict[str, Any]:
     failed_checks = [item.get("name") for item in checks if not item.get("passed")]
     blockers: list[dict[str, Any]] = []
@@ -727,6 +844,23 @@ def _build_default_promotion_summary(
                 "gap_surfaces": adoption.get("gap_surfaces") or [],
             }
         )
+    resident_surface_count = int(adoption.get("cuda_resident_surface_count") or 0)
+    pipeline_dq_required = resident_surface_count > 0
+    if pipeline_dq_required and not pipeline_dq_ledger.get("ready"):
+        blockers.append(
+            {
+                "name": "pipeline_contract_resident_dq_ledger_not_ready",
+                "required": True,
+                "resident_surface_count": resident_surface_count,
+                "status": pipeline_dq_ledger.get("status"),
+                "attached": pipeline_dq_ledger.get("attached"),
+                "expected_rows": pipeline_dq_ledger.get("expected_rows"),
+                "accounting_rows": pipeline_dq_ledger.get("accounting_rows"),
+                "expected_passed_rows": pipeline_dq_ledger.get("expected_passed_rows"),
+                "expected_failed_rows": pipeline_dq_ledger.get("expected_failed_rows"),
+                "readiness_failures": pipeline_dq_ledger.get("readiness_failures") or [],
+            }
+        )
     recommendation = str(adoption.get("recommendation") or "")
     if recommendation != "stack_engine_default_ready":
         blockers.append(
@@ -747,6 +881,10 @@ def _build_default_promotion_summary(
         "surface_count": adoption.get("surface_count", 0),
         "calibration_surface_count": len(masters),
         "integration_surface_count": len(integration_records),
+        "resident_surface_count": resident_surface_count,
+        "pipeline_contract_dq_ledger_required": pipeline_dq_required,
+        "pipeline_contract_dq_ledger_ready": bool(pipeline_dq_ledger.get("ready")),
+        "pipeline_contract_dq_ledger": pipeline_dq_ledger,
         "phase2_stack_engine_default_gap_count": gap_count,
         "recommendation": recommendation,
         "blocker_count": len(blockers),
@@ -761,12 +899,14 @@ def build_stack_engine_contract_audit(
     expected_integration_engine: str = "stack_engine_cpu",
     resident_result_contract: dict[str, Any] | None = None,
     resident_calibration_contract: dict[str, Any] | None = None,
+    pipeline_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_root = Path(run_dir)
     calibration_path = run_root / "calibration_artifacts.json"
     integration_path = run_root / "integration_results.json"
     resident_calibration_contract_path = run_root / "resident_calibration_contract.json"
     resident_result_contract_path = run_root / "resident_result_contract.json"
+    pipeline_contract_path = run_root / "pipeline_contract.json"
     calibration = _load_json_object(calibration_path)
     integration = _load_json_object(integration_path)
     resident_calibration_contract_source = (
@@ -779,8 +919,13 @@ def build_stack_engine_contract_audit(
     if resident_result_contract is None and resident_result_contract_path.exists():
         resident_result_contract = _load_json_object(resident_result_contract_path)
         resident_result_contract_source = "run_default"
+    pipeline_contract_source = "provided" if isinstance(pipeline_contract, dict) else "missing"
+    if pipeline_contract is None and pipeline_contract_path.exists():
+        pipeline_contract = _load_json_object(pipeline_contract_path)
+        pipeline_contract_source = "run_default"
     resident_contracts = _resident_contract_lookup(resident_result_contract or {})
     resident_calibration_contracts = _resident_calibration_lookup(resident_calibration_contract or {})
+    pipeline_dq_ledger = _pipeline_contract_dq_ledger_state(pipeline_contract)
     checks: list[dict[str, Any]] = []
 
     include_calibration = scope in {"all", "calibration"}
@@ -879,6 +1024,7 @@ def build_stack_engine_contract_audit(
         masters=masters,
         integration_records=integration_records,
         adoption=adoption,
+        pipeline_dq_ledger=pipeline_dq_ledger,
     )
     return {
         "schema_version": 1,
@@ -901,6 +1047,12 @@ def build_stack_engine_contract_audit(
         "resident_result_contract_source": resident_result_contract_source
         if bool(resident_contracts)
         else "missing",
+        "pipeline_contract_attached": bool(pipeline_contract),
+        "pipeline_contract_path": str(pipeline_contract_path)
+        if pipeline_contract_source == "run_default"
+        else None,
+        "pipeline_contract_source": pipeline_contract_source if bool(pipeline_contract) else "missing",
+        "pipeline_contract_dq_ledger": pipeline_dq_ledger,
         "status": "passed" if passed else "failed",
         "passed": passed,
         "checks": checks,
@@ -930,6 +1082,8 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
         f"- Expected integration engine: `{audit['expected_integration_engine']}`",
         f"- Resident calibration contract attached: `{audit.get('resident_calibration_contract_attached')}`",
         f"- Resident result contract attached: `{audit.get('resident_result_contract_attached')}`",
+        f"- Pipeline contract attached: `{audit.get('pipeline_contract_attached')}`",
+        f"- Pipeline DQ ledger ready: `{(audit.get('pipeline_contract_dq_ledger') or {}).get('ready')}`",
         f"- StackEngine adoption recommendation: `{(audit.get('adoption') or {}).get('recommendation')}`",
         f"- Phase 2 StackEngine default gaps: `{(audit.get('adoption') or {}).get('phase2_stack_engine_default_gap_count')}`",
         f"- Strict native StackEngine default ready: `{(audit.get('default_path') or {}).get('strict_native_stack_engine_ready')}`",
@@ -990,9 +1144,23 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
         lines.append(f"- Ready: `{promotion.get('ready')}`")
         lines.append(f"- Required scope: `{promotion.get('required_scope')}`")
         lines.append(f"- Actual scope: `{promotion.get('actual_scope')}`")
+        lines.append(
+            f"- Pipeline DQ ledger required: `{promotion.get('pipeline_contract_dq_ledger_required')}`"
+        )
+        lines.append(f"- Pipeline DQ ledger ready: `{promotion.get('pipeline_contract_dq_ledger_ready')}`")
         lines.append(f"- Blocker count: `{promotion.get('blocker_count')}`")
         for blocker in promotion.get("blockers") or []:
             lines.append(f"- Blocker `{blocker.get('name')}`: {blocker}")
+    pipeline_dq = audit.get("pipeline_contract_dq_ledger")
+    if isinstance(pipeline_dq, dict):
+        lines.extend(["", "## Pipeline DQ Ledger", ""])
+        lines.append(f"- Status: `{pipeline_dq.get('status')}`")
+        lines.append(f"- Ready: `{pipeline_dq.get('ready')}`")
+        lines.append(f"- Expected rows: `{pipeline_dq.get('expected_rows')}`")
+        lines.append(f"- Accounting rows: `{pipeline_dq.get('accounting_rows')}`")
+        lines.append(f"- Contract sources: `{pipeline_dq.get('contract_sources')}`")
+        lines.append(f"- Frame-mask sources: `{pipeline_dq.get('frame_mask_sources')}`")
+        lines.append(f"- Readiness failures: `{pipeline_dq.get('readiness_failures')}`")
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 

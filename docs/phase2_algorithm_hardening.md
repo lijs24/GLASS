@@ -361,6 +361,98 @@ Validation commands:
   --pipeline-contract-json
   C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\pipeline_contract.json`
 
+### S2-Gate 585: StackEngine Default Guard Requires Resident DQ Ledger
+
+Gate 585 connects the Gate584 pipeline invariant back into StackEngine default
+readiness. A resident CUDA StackEngine surface can still pass the core
+StackEngine contract through its resident calibration and result contracts, but
+it is no longer considered default-ready unless the attached pipeline contract
+also proves the frame-accounting resident DQ ledger is closed.
+
+Implementation:
+
+- `src/glass/report/stack_engine_contract.py` now consumes an optional
+  `pipeline_contract` payload, auto-discovers `pipeline_contract.json` from the
+  run directory, and extracts
+  `frame_accounting_resident_dq_ledger_contract`.
+- The extracted ledger state requires:
+  - a passing `pipeline_invariant_contract`;
+  - the ledger check present and passed;
+  - `required=true` and `status=passed`;
+  - expected/accounting row count agreement;
+  - all expected rows passed and zero expected failed rows;
+  - no missing, extra, or failed frame ids;
+  - source evidence from `resident_source_dq_execution`;
+  - frame-mask evidence from `resident_frame_masks`.
+- `default_promotion` now blocks resident CUDA surfaces with
+  `pipeline_contract_resident_dq_ledger_not_ready` when that ledger is missing
+  or failed.
+- CPU-only native StackEngine runs remain unaffected by this resident-only
+  requirement.
+- `glass stack-engine-contract` now accepts `--pipeline-contract-json` and also
+  auto-discovers `pipeline_contract.json` next to the run artifacts.
+
+Real 200-light evidence:
+
+- Source run:
+  `C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3`
+- Gate584 pipeline contract used as resident DQ ledger evidence:
+  `C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\pipeline_contract.json`
+- Gate585 evidence directory:
+  `C:\glass_runs\phase2_s2_gate585_stackengine_dq_default_guard`
+- StackEngine contract:
+  `C:\glass_runs\phase2_s2_gate585_stackengine_dq_default_guard\stack_engine_contract.json`
+- StackEngine status: `passed`.
+- Default-promotion status: `ready`.
+- Pipeline DQ ledger ready: `true`.
+- Resident DQ ledger rows: `200 / 200`.
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate585_stackengine_dq_default_guard\acceptance_audit.json`
+- Acceptance status: `passed`.
+- Speedup versus the WBPP black-box reference: `133.39198046200627x`.
+- Compare evidence remains the Gate584 coverage190 result:
+  coverage fraction `0.905523489118409`, RMS difference
+  `0.005340835487175878`, and p99 absolute difference
+  `0.002133606873685496`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\report\stack_engine_contract.py
+  src\glass\cli.py tests\test_stack_engine_contract.py`
+- `python -m pytest -q tests\test_stack_engine_contract.py -k
+  "pipeline_dq_ledger or resident_calibration_for_default_ready or
+  cli_uses_resident_calibration or auto_discovers_native_resident_calibration"`
+- `python -m pytest -q tests\test_stack_engine_contract.py`
+- `glass stack-engine-contract --run
+  C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3
+  --scope all --expected-integration-engine cuda_resident_stack
+  --pipeline-contract-json
+  C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\pipeline_contract.json
+  --out
+  C:\glass_runs\phase2_s2_gate585_stackengine_dq_default_guard\stack_engine_contract.json
+  --markdown
+  C:\glass_runs\phase2_s2_gate585_stackengine_dq_default_guard\stack_engine_contract.md
+  --require-default-ready`
+- `glass acceptance-audit --manifest
+  C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3\manifest.json
+  --glass-run
+  C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3
+  --wbpp-result
+  C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json
+  --compare-json
+  C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\compare_vs_wbpp_fastintegration_scaled_coverage190.json
+  --benchmark-contract benchmarks\phase2_m38_h_200_ln_on_default_contract.json
+  --pipeline-contract-json
+  C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\pipeline_contract.json
+  --stack-engine-contract-json
+  C:\glass_runs\phase2_s2_gate585_stackengine_dq_default_guard\stack_engine_contract.json
+  --warp-quality-contract-json
+  C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\warp_quality_contract.json
+  --require-warp-quality-contract --out
+  C:\glass_runs\phase2_s2_gate585_stackengine_dq_default_guard\acceptance_audit.json
+  --markdown
+  C:\glass_runs\phase2_s2_gate585_stackengine_dq_default_guard\acceptance_audit.md`
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident
