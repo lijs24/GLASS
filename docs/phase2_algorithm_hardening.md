@@ -13819,6 +13819,55 @@ Completed in Gate446:
   - speedup summary:
     `runs\benchmarks\m38_wbpp_speedup_summary_gate537_current.json`.
 
+### S2-Gate 538: Resident Compact Artifact Serialization
+
+- Continued the resident default-path performance and artifact-footprint line
+  without changing calibration, registration, warp, rejection, integration, DQ,
+  or output pixels.
+- Completed:
+  - added an explicit `compact=True` option to `glass.io.json_io.write_json()`;
+  - kept pretty JSON as the default for normal config, docs, tests, and small
+    human-facing files;
+  - wrote large resident machine artifacts in compact form:
+    `calibration_artifacts.json`, `frame_accounting.json`,
+    `registration_results.json`, `resident_artifacts.json`,
+    `resident_frame_masks.json`, `resident_registration_quality.json`, and
+    `integration_results.json`;
+  - added JSON I/O tests proving pretty output remains the default and compact
+    output round-trips without indentation.
+- Real 200-light validation:
+  - baseline Gate537:
+    `C:\glass_runs\phase2_s2_gate537_real_ab\runs_20260623_133539\current_head_default`;
+  - Gate538:
+    `C:\glass_runs\phase2_s2_gate538_compact_artifacts\runs_20260623_134508\compact_default`;
+  - same M38 H-alpha 200-light plan, shared master cache, resident CUDA,
+    `similarity_cuda_triangle`, Lanczos3 warp, winsorized sigma rejection, and
+    audit maps.
+- Artifact-footprint evidence:
+  - selected resident JSON artifacts: `4,797,890` bytes to `3,626,742` bytes;
+  - reduction: `1,171,148` bytes, or about `24.41%`;
+  - largest individual reductions were `resident_artifacts.json` (`-458,595`
+    bytes), `frame_accounting.json` (`-270,274` bytes), and
+    `registration_results.json` (`-269,987` bytes).
+- Runtime evidence:
+  - Gate537 shell/internal: `5.3052115 s` / `4.940610599995125 s`;
+  - Gate538 shell/internal: `5.4324295 s` / `5.0686043000314385 s`;
+  - no runtime speedup is claimed; the measured run is slightly slower within
+    normal disk/system variance, with `output_write` moving from
+    `0.2353500999743119 s` to `0.32156879996182397 s`.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to Gate537.
+- Interpretation:
+  - compact resident artifacts reduce per-run footprint and keep machine
+    artifacts cheaper to archive/transfer;
+  - this does not move the main timing bottleneck, so the next substantive gate
+    should return to I/O/upload/calibration overlap or resident orchestration.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_538_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_538_compact_artifact_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

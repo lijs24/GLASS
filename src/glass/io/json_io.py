@@ -12,9 +12,12 @@ def read_json(path: str | Path) -> Any:
         return json.load(f)
 
 
-def write_json(path: str | Path, value: Any) -> None:
+def write_json(path: str | Path, value: Any, *, compact: bool = False) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("w", encoding="utf-8") as f:
-        json.dump(to_jsonable(value), f, indent=2, sort_keys=True)
+        if compact:
+            json.dump(to_jsonable(value), f, separators=(",", ":"), sort_keys=True)
+        else:
+            json.dump(to_jsonable(value), f, indent=2, sort_keys=True)
         f.write("\n")

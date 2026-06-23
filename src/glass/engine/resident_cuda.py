@@ -12164,7 +12164,7 @@ def run_resident_calibration_integration(
             },
         }
         validate_resident_frame_mask_contract({"summary": resident_frame_mask_payload["summary"]})
-        write_json(resident_frame_masks_path, resident_frame_mask_payload)
+        write_json(resident_frame_masks_path, resident_frame_mask_payload, compact=True)
         resident_dq_pixel_closure_payload = {
             "schema_version": 1,
             "artifact": "resident_dq_pixel_closure",
@@ -12213,7 +12213,7 @@ def run_resident_calibration_integration(
             "summary": summarize_resident_registration_quality(registration_quality_decisions),
             "decisions": registration_quality_decisions,
         }
-        write_json(registration_quality_path, registration_quality_payload)
+        write_json(registration_quality_path, registration_quality_payload, compact=True)
         resident_payload = {
             "schema_version": 1,
             "backend": "cuda_resident_stack",
@@ -12224,8 +12224,13 @@ def run_resident_calibration_integration(
         write_json(
             resident_path,
             resident_payload,
+            compact=True,
         )
-        calibration_artifacts = write_resident_calibration_artifacts(run, resident_payload)
+        calibration_artifacts = write_resident_calibration_artifacts(
+            run,
+            resident_payload,
+            compact_json=True,
+        )
         resident_calibration_contract_path = run / "resident_calibration_contract.json"
         resident_calibration_contract = build_resident_calibration_contract(run)
         write_resident_calibration_contract(
@@ -12277,6 +12282,7 @@ def run_resident_calibration_integration(
                         ),
                     ],
                 },
+                compact=True,
             )
         local_norm_path = run / "local_norm_results.json"
         write_json(
@@ -12351,13 +12357,14 @@ def run_resident_calibration_integration(
                 "resident_master_cache_summary": resident_master_cache_payload["summary"],
                 "warnings": integration_warnings,
             },
+            compact=True,
         )
         resident_result_contract_path = run / "resident_result_contract.json"
         resident_result_contract = build_resident_result_contract(run)
         write_resident_result_contract(resident_result_contract_path, resident_result_contract)
         from glass.engine.frame_accounting import build_frame_accounting
 
-        build_frame_accounting(run)
+        build_frame_accounting(run, compact_json=True)
         state.artifacts.append(
             PipelineArtifact(
                 stage="resident_calibration",

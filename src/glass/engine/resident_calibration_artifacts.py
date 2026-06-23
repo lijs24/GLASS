@@ -304,7 +304,9 @@ def build_resident_calibration_artifacts(
 def write_resident_calibration_artifacts(
     run_dir: str | Path,
     resident_payload: dict[str, Any] | None = None,
+    *,
+    compact_json: bool = False,
 ) -> dict[str, Any]:
     payload = build_resident_calibration_artifacts(run_dir, resident_payload)
-    write_json(Path(run_dir) / "calibration_artifacts.json", payload)
+    write_json(Path(run_dir) / "calibration_artifacts.json", payload, compact=compact_json)
     return payload

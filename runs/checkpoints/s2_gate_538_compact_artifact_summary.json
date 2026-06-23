@@ -1,0 +1,90 @@
+{
+  "gate": "S2-Gate 538",
+  "status": "passed",
+  "scope": "resident_compact_artifact_serialization",
+  "baseline_run": "C:\\glass_runs\\phase2_s2_gate537_real_ab\\runs_20260623_133539\\current_head_default",
+  "candidate_run": "C:\\glass_runs\\phase2_s2_gate538_compact_artifacts\\runs_20260623_134508\\compact_default",
+  "timing": {
+    "gate537_shell_elapsed_s": 5.3052115,
+    "gate538_shell_elapsed_s": 5.4324295,
+    "gate537_internal_elapsed_s": 4.940610599995125,
+    "gate538_internal_elapsed_s": 5.0686043000314385,
+    "runtime_speedup_claimed": false
+  },
+  "artifact_footprint": {
+    "gate537_total_bytes": 4797890,
+    "gate538_total_bytes": 3626742,
+    "delta_bytes": -1171148,
+    "reduction_fraction": 0.24409646740546365,
+    "files": [
+      {
+        "file": "calibration_artifacts.json",
+        "gate537_bytes": 144160,
+        "gate538_bytes": 109237,
+        "delta_bytes": -34923,
+        "reduction_fraction": 0.2422516648168701
+      },
+      {
+        "file": "frame_accounting.json",
+        "gate537_bytes": 1572658,
+        "gate538_bytes": 1302384,
+        "delta_bytes": -270274,
+        "reduction_fraction": 0.1718580899343659
+      },
+      {
+        "file": "registration_results.json",
+        "gate537_bytes": 1434189,
+        "gate538_bytes": 1164202,
+        "delta_bytes": -269987,
+        "reduction_fraction": 0.1882506420004616
+      },
+      {
+        "file": "resident_artifacts.json",
+        "gate537_bytes": 1233736,
+        "gate538_bytes": 775141,
+        "delta_bytes": -458595,
+        "reduction_fraction": 0.37171242470026
+      },
+      {
+        "file": "resident_frame_masks.json",
+        "gate537_bytes": 125329,
+        "gate538_bytes": 79671,
+        "delta_bytes": -45658,
+        "reduction_fraction": 0.3643051488482315
+      },
+      {
+        "file": "resident_registration_quality.json",
+        "gate537_bytes": 221369,
+        "gate538_bytes": 155917,
+        "delta_bytes": -65452,
+        "reduction_fraction": 0.29566922197778367
+      },
+      {
+        "file": "integration_results.json",
+        "gate537_bytes": 66449,
+        "gate538_bytes": 40190,
+        "delta_bytes": -26259,
+        "reduction_fraction": 0.39517524718204944
+      }
+    ]
+  },
+  "bitwise_ab": {
+    "all_bitwise_identical": true,
+    "files": [
+      "resident_master_H.fits",
+      "resident_weight_map_H.fits",
+      "resident_coverage_map_H.fits",
+      "resident_low_rejection_map_H.fits",
+      "resident_high_rejection_map_H.fits",
+      "resident_dq_map_H.fits"
+    ]
+  },
+  "tests": {
+    "focused": "11 passed in 0.84s",
+    "full_pytest": "1178 passed in 42.86s"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "note": "Used GLASS code, GLASS-generated artifacts, user-owned benchmark images, and user-generated WBPP black-box comparison context only."
+  }
+}

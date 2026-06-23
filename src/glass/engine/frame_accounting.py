@@ -260,6 +260,8 @@ def _exception_summary(exceptions: list[dict[str, Any]]) -> dict[str, Any]:
 def build_frame_accounting(
     run_dir: str | Path,
     out_path: str | Path | None = None,
+    *,
+    compact_json: bool = False,
 ) -> dict[str, Any]:
     """Build a per-light audit ledger across quality, registration, warp, LN, and integration."""
 
@@ -562,5 +564,5 @@ def build_frame_accounting(
         "exception_frames": exceptions,
         "frames": rows,
     }
-    write_json(out_path or (run / "frame_accounting.json"), payload)
+    write_json(out_path or (run / "frame_accounting.json"), payload, compact=compact_json)
     return payload
