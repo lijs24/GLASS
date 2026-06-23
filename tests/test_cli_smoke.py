@@ -7,6 +7,7 @@ import pytest
 
 from glass.cli import _apply_resident_runtime_preset
 from glass.cli import _resolve_execution_defaults
+from glass.cli import _resolve_resident_integration_rejection_default
 from glass.cli import _resolve_resident_fits_read_mode_default
 from glass.cli import _resolve_resident_registration_default
 from glass.cli import build_parser
@@ -257,6 +258,56 @@ def test_run_resident_registration_auto_keeps_tile_path_off() -> None:
     assert args.resident_registration == "off"
     assert resolution["requested"] == "auto"
     assert resolution["effective"] == "off"
+    assert resolution["source"] == "unused_non_resident"
+
+
+def test_run_resident_rejection_defaults_to_winsorized_sigma() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_integration_rejection_default(args, command="run")
+
+    assert args.backend == "cuda"
+    assert args.memory_mode == "resident"
+    assert args.integration_rejection == "winsorized_sigma"
+    assert resolution["requested"] == "auto"
+    assert resolution["effective"] == "winsorized_sigma"
+    assert resolution["source"] == "resident_cuda_default"
+    assert resolution["escape_hatch"] == "--integration-rejection none"
+
+
+def test_run_resident_rejection_explicit_none_is_preserved() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--integration-rejection",
+            "none",
+        ]
+    )
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_integration_rejection_default(args, command="run")
+
+    assert args.integration_rejection == "none"
+    assert resolution["requested"] == "none"
+    assert resolution["effective"] == "none"
+    assert resolution["explicit"] is True
+
+
+def test_run_resident_rejection_auto_keeps_tile_path_auto() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run", "--backend", "cpu"])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_integration_rejection_default(args, command="run")
+
+    assert args.memory_mode == "tile"
+    assert args.integration_rejection == "auto"
+    assert resolution["requested"] == "auto"
+    assert resolution["effective"] == "auto"
     assert resolution["source"] == "unused_non_resident"
 
 

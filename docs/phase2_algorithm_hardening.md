@@ -15467,6 +15467,52 @@ Completed in Gate446:
     local-normalization, rejection, integration, CUDA kernels, DQ bits, frame
     admission, or output pixels.
 
+### S2-Gate 565: Resident Rejection Default Promotion
+
+- Continues the Phase 2 StackEngine/rejection mainline by making resident CUDA
+  integration default to an actual rejection algorithm instead of an unrejected
+  stack when the user leaves `--integration-rejection` unspecified.
+- Completed:
+  - full resident CUDA integration now resolves
+    `--integration-rejection auto` to `winsorized_sigma`;
+  - explicit `--integration-rejection none` is preserved as the unrejected
+    diagnostic escape hatch;
+  - non-resident/tile execution leaves `auto` for the non-resident pipeline;
+  - `run_timing.json` records `resident_integration_rejection_resolution`.
+- Tests:
+  - syntax check:
+    `.venv\Scripts\python.exe -m py_compile src\glass\cli.py
+    tests\test_cli_smoke.py`;
+  - focused default-resolution and resident smoke tests: `6 passed in 0.76 s`;
+  - full suite: `1210 passed in 45.24 s`.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate565_default_resident_rejection\runs_20260623_183202\default_rejection`;
+  - the command intentionally omitted `--backend`, `--memory-mode`,
+    `--until-stage`, `--resident-registration`, and
+    `--integration-rejection`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_565_default_resident_rejection_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `7.443477799999999 s` |
+  | Run timing total | `7.086396700004116 s` |
+  | Default backend/memory | `cuda / resident` |
+  | Registration requested/effective | `auto / similarity_cuda_triangle` |
+  | Rejection requested/effective | `auto / winsorized_sigma` |
+  | Pipeline contract status | `passed` |
+  | Decision statuses | `192 accepted / 1 reference / 7 rejected` |
+  | Active/rejected frames | `193 / 7` |
+  | Output SHA256 vs Gate564 | `all identical` |
+- Interpretation:
+  - this gate changes default dispatch only when the user has not explicitly
+    selected a rejection mode;
+  - it does not change the winsorized algorithm, rejection kernel, calibration,
+    registration, warp, local-normalization, integration, CUDA kernels, DQ
+    bits, frame admission, or output pixels.
+
 ## Gate Rules
 
 Each gate requires:
