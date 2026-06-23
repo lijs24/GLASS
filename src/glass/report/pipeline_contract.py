@@ -333,6 +333,17 @@ def _calibrated_light_rows(
             and payload.get("source_stage") == "resident_calibrated_stack"
             and _nonnegative_int(payload.get("resident_stack_index"))
         )
+        embedded_source_dq_contract = (
+            payload.get("source_dq_contract") if isinstance(payload.get("source_dq_contract"), dict) else None
+        )
+        embedded_frame_mask_contract = (
+            payload.get("frame_mask_contract") if isinstance(payload.get("frame_mask_contract"), dict) else None
+        )
+        embedded_dq_mask_contract = (
+            payload.get("resident_dq_mask_contract")
+            if isinstance(payload.get("resident_dq_mask_contract"), dict)
+            else None
+        )
         disk_dq_contract_ok = (
             path_exists
             and dq_path_exists
@@ -341,21 +352,35 @@ def _calibrated_light_rows(
             and _positive_int(payload.get("tile_count"))
             and _positive_int(payload.get("tile_size"))
         )
-        resident_source_dq_contract = (
-            _resident_source_dq_light_contract(payload, resident_source_dq_execution)
-            if is_resident
-            else {}
+        if is_resident and embedded_source_dq_contract and embedded_source_dq_contract.get("available"):
+            resident_source_dq_contract = embedded_source_dq_contract
+        else:
+            resident_source_dq_contract = (
+                _resident_source_dq_light_contract(payload, resident_source_dq_execution)
+                if is_resident
+                else {}
+            )
+        embedded_dq_mask_contract_passed = (
+            bool(embedded_dq_mask_contract.get("passed"))
+            if isinstance(embedded_dq_mask_contract, dict)
+            else None
         )
         resident_source_dq_contract_ok = (
             bool(resident_contract_ok)
             and bool(resident_source_dq_contract.get("passed"))
         )
         dq_contract_ok = bool(disk_dq_contract_ok) or bool(resident_source_dq_contract_ok)
+        if embedded_dq_mask_contract_passed is not None:
+            dq_contract_ok = bool(dq_contract_ok and embedded_dq_mask_contract_passed)
         dq_contract_source = None
         if disk_dq_contract_ok:
             dq_contract_source = "calibrated_disk_cache"
         elif resident_source_dq_contract_ok:
-            dq_contract_source = "resident_source_dq_execution"
+            dq_contract_source = (
+                payload.get("dq_contract_source")
+                or resident_source_dq_contract.get("source")
+                or "resident_source_dq_execution"
+            )
         rows.append(
             {
                 "index": index,
@@ -378,6 +403,14 @@ def _calibrated_light_rows(
                 "disk_dq_contract_ok": bool(disk_dq_contract_ok),
                 "resident_source_dq_contract_ok": bool(resident_source_dq_contract_ok),
                 "resident_source_dq_contract": resident_source_dq_contract,
+                "resident_frame_mask_contract_ok": (
+                    bool(embedded_frame_mask_contract.get("passed"))
+                    if isinstance(embedded_frame_mask_contract, dict)
+                    else None
+                ),
+                "resident_frame_mask_contract": embedded_frame_mask_contract or {},
+                "resident_dq_mask_contract_ok": embedded_dq_mask_contract_passed,
+                "resident_dq_mask_contract": embedded_dq_mask_contract or {},
                 "dq_contract_source": dq_contract_source,
                 "dq_contract_ok": bool(dq_contract_ok),
                 "contract_ok": bool(resident_contract_ok) or bool(dq_contract_ok),
@@ -2506,6 +2539,48 @@ def build_pipeline_contract_audit(
                 ),
             ]
         )
+        embedded_dq_mask_rows = [
+            row
+            for row in resident_calibrated_light_rows
+            if isinstance(row.get("resident_dq_mask_contract"), dict)
+            and row["resident_dq_mask_contract"].get("contract_type")
+            == "resident_calibrated_light_dq_mask_contract"
+        ]
+        if embedded_dq_mask_rows:
+            checks.append(
+                _check(
+                    "resident_calibrated_light_embedded_dq_mask_contract",
+                    all(bool(row["resident_dq_mask_contract_ok"]) for row in embedded_dq_mask_rows),
+                    {
+                        "light_count": len(resident_calibrated_light_rows),
+                        "embedded_contract_count": len(embedded_dq_mask_rows),
+                        "failed": [
+                            row["frame_id"] or row["index"]
+                            for row in embedded_dq_mask_rows
+                            if not row["resident_dq_mask_contract_ok"]
+                        ],
+                        "contract_sources": sorted(
+                            {
+                                str(source)
+                                for row in embedded_dq_mask_rows
+                                for source in (
+                                    row["resident_dq_mask_contract"].get("contract_sources") or []
+                                )
+                            }
+                        ),
+                        "frame_mask_sources": sorted(
+                            {
+                                str(source)
+                                for row in embedded_dq_mask_rows
+                                for source in (
+                                    row["resident_dq_mask_contract"].get("frame_mask_sources") or []
+                                )
+                            }
+                        ),
+                    },
+                    "Resident in-VRAM calibrated-light ledger rows must embed passing DQ/mask contract evidence when that row-level contract is present.",
+                )
+            )
         if resident_source_dq_execution["exists"]:
             checks.append(
                 _check(

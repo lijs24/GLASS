@@ -1669,7 +1669,7 @@ def _write_resident_native_calibration_source(run: Path) -> None:
             "artifacts": [
                 {
                     "filter": "H",
-                    "frame_ids": ["light_001", "light_002", "light_003"],
+                    "frame_ids": ["F1", "F2", "F3"],
                     "master_path": str(run / "integration" / "master_H.fits"),
                     "master_stats": {
                         "bias_count": 2,
@@ -1720,6 +1720,16 @@ def test_pipeline_contract_accepts_resident_native_calibration_artifacts(tmp_pat
     assert checks["calibration_master_surface_contract"]["passed"] is True
     assert checks["resident_calibrated_lights_present"]["passed"] is True
     assert checks["resident_calibrated_light_contract"]["passed"] is True
+    assert checks["resident_calibrated_light_embedded_dq_mask_contract"]["passed"] is True
+    assert checks["resident_calibrated_light_embedded_dq_mask_contract"]["evidence"][
+        "embedded_contract_count"
+    ] == 3
+    assert checks["resident_calibrated_light_embedded_dq_mask_contract"]["evidence"][
+        "frame_mask_sources"
+    ] == ["resident_frame_masks"]
+    assert checks["resident_calibrated_light_embedded_dq_mask_contract"]["evidence"][
+        "contract_sources"
+    ] == []
     assert "calibrated_light_dq_contract" not in checks
 
 
@@ -1738,6 +1748,7 @@ def test_pipeline_contract_maps_resident_source_dq_to_resident_calibrated_lights
 
     assert audit["passed"] is True
     assert checks["resident_calibrated_light_contract"]["passed"] is True
+    assert checks["resident_calibrated_light_embedded_dq_mask_contract"]["passed"] is True
     assert checks["resident_calibrated_light_dq_contract"]["passed"] is True
     assert checks["resident_calibrated_light_dq_contract"]["evidence"]["contract_sources"] == [
         "resident_source_dq_execution"
@@ -1747,11 +1758,17 @@ def test_pipeline_contract_maps_resident_source_dq_to_resident_calibrated_lights
     assert all(light["dq_contract_ok"] for light in lights)
     assert all(not light["disk_dq_contract_ok"] for light in lights)
     assert all(light["resident_source_dq_contract_ok"] for light in lights)
+    assert all(light["resident_frame_mask_contract_ok"] for light in lights)
+    assert all(light["resident_dq_mask_contract_ok"] for light in lights)
     assert {light["dq_contract_source"] for light in lights} == {"resident_source_dq_execution"}
     assert lights[0]["resident_source_dq_contract"]["matching_group_count"] == 1
     assert lights[0]["resident_source_dq_contract"]["execution_routes"] == [
         "resident_in_memory_mask_streaming"
     ]
+    assert lights[0]["resident_dq_mask_contract"]["contract_sources"] == [
+        "resident_source_dq_execution"
+    ]
+    assert lights[0]["resident_dq_mask_contract"]["frame_mask_sources"] == ["resident_frame_masks"]
 
 
 def test_pipeline_contract_fails_resident_calibrated_light_dq_when_source_dq_fails(
@@ -1769,15 +1786,17 @@ def test_pipeline_contract_fails_resident_calibrated_light_dq_when_source_dq_fai
 
     assert audit["passed"] is False
     assert checks["resident_calibrated_light_contract"]["passed"] is True
+    assert checks["resident_calibrated_light_embedded_dq_mask_contract"]["passed"] is False
     assert checks["resident_calibrated_light_dq_contract"]["passed"] is False
     assert checks["resident_calibrated_light_dq_contract"]["evidence"]["source_dq_status"] == "failed"
     assert checks["resident_calibrated_light_dq_contract"]["evidence"]["failed"] == [
-        "light_001",
-        "light_002",
-        "light_003",
+        "F1",
+        "F2",
+        "F3",
     ]
     assert all(not light["dq_contract_ok"] for light in lights)
     assert all(not light["resident_source_dq_contract_ok"] for light in lights)
+    assert all(not light["resident_dq_mask_contract_ok"] for light in lights)
 
 
 def test_pipeline_contract_synthesizes_resident_calibration_visibility_from_resident_artifacts(

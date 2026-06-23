@@ -46,6 +46,114 @@ def _contract_check(name: str, passed: bool, evidence: dict[str, Any]) -> dict[s
     return {"name": name, "passed": bool(passed), "evidence": evidence}
 
 
+def _load_optional_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    payload = read_json(path)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _resident_source_dq_contracts(run: Path) -> dict[str, dict[str, Any]]:
+    path = run / "resident_source_dq_execution.json"
+    payload = _load_optional_json(path)
+    if not payload:
+        return {}
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    summary_passed = bool(summary.get("passed") is True)
+    contracts: dict[str, dict[str, Any]] = {}
+    for group in payload.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        filter_name = str(group.get("filter") or "")
+        checks = [item for item in group.get("checks") or [] if isinstance(item, dict)]
+        failed_checks = [str(item.get("name")) for item in checks if item.get("passed") is not True]
+        passed = summary_passed and group.get("passed") is True and not failed_checks
+        execution_route = group.get("execution_route")
+        execution_routes = [str(execution_route)] if execution_route else []
+        contract = {
+            "source": "resident_source_dq_execution",
+            "artifact_path": str(path),
+            "available": True,
+            "passed": bool(passed),
+            "status": group.get("status") or summary.get("status"),
+            "summary_status": summary.get("status"),
+            "filter": filter_name or None,
+            "matching_group_count": 1,
+            "execution_route": execution_route,
+            "execution_routes": execution_routes,
+            "materializes_calibrated_dq_cache": bool(group.get("materializes_calibrated_dq_cache")),
+            "input_invalid_samples_before_rejection": group.get("input_invalid_samples_before_rejection"),
+            "applied_invalid_samples": group.get("applied_invalid_samples"),
+            "input_flagged_samples": group.get("input_flagged_samples"),
+            "input_nonfinite_samples": group.get("input_nonfinite_samples"),
+            "source_counts": group.get("source_counts") if isinstance(group.get("source_counts"), dict) else {},
+            "status_counts": group.get("status_counts") if isinstance(group.get("status_counts"), dict) else {},
+            "source_dq_flag_counts": (
+                group.get("source_dq_flag_counts")
+                if isinstance(group.get("source_dq_flag_counts"), dict)
+                else {}
+            ),
+            "check_count": len(checks),
+            "failed_checks": failed_checks,
+            "reason": None if passed else "resident_source_dq_execution_group_failed",
+            "contract_model": "filter_group_applies_to_resident_calibrated_lights",
+        }
+        contracts[filter_name] = contract
+    return contracts
+
+
+def _resident_frame_mask_contracts(run: Path) -> dict[str, dict[str, Any]]:
+    path = run / "resident_frame_masks.json"
+    payload = _load_optional_json(path)
+    if not payload:
+        return {}
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    top_passed = bool(summary.get("passed") is True)
+    contracts: dict[str, dict[str, Any]] = {}
+    for group in payload.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        group_summary = group.get("summary") if isinstance(group.get("summary"), dict) else {}
+        group_passed = bool(group_summary.get("passed") is True)
+        for row in group.get("rows") or []:
+            if not isinstance(row, dict):
+                continue
+            frame_id = row.get("frame_id")
+            if frame_id is None:
+                continue
+            passed = top_passed and group_passed and bool(row.get("auditable"))
+            contracts[str(frame_id)] = {
+                "source": "resident_frame_masks",
+                "artifact_path": str(path),
+                "available": True,
+                "passed": bool(passed),
+                "filter": row.get("filter") or group.get("filter"),
+                "frame_id": str(frame_id),
+                "mask_status": row.get("mask_status"),
+                "integration_weight": row.get("integration_weight"),
+                "auditable": bool(row.get("auditable")),
+                "mask_categories": list(row.get("mask_categories") or []),
+                "mask_reasons": list(row.get("mask_reasons") or []),
+                "observed_zero_weight_statuses": list(row.get("observed_zero_weight_statuses") or []),
+                "registration_status": row.get("registration_status"),
+                "registration_quality_status": row.get("registration_quality_status"),
+                "registration_quality_final_status": row.get("registration_quality_final_status"),
+                "weighting_status": row.get("weighting_status"),
+                "local_norm_status": row.get("local_norm_status"),
+                "contract_model": "frame_level_resident_admission",
+            }
+    return contracts
+
+
+def _unavailable_contract(source: str, reason: str) -> dict[str, Any]:
+    return {
+        "source": source,
+        "available": False,
+        "passed": True,
+        "reason": reason,
+    }
+
+
 def _resident_master_contract(
     *,
     master_type: str,
@@ -240,6 +348,8 @@ def build_resident_calibration_artifacts(
         if isinstance(resident_payload.get("artifacts"), list)
         else []
     )
+    source_dq_contracts = _resident_source_dq_contracts(run)
+    frame_mask_contracts = _resident_frame_mask_contracts(run)
     masters: dict[str, dict[str, Any]] = {}
     calibrated_lights: list[dict[str, Any]] = []
     warnings: list[str] = []
@@ -269,6 +379,51 @@ def build_resident_calibration_artifacts(
                     continue
                 masters.update(row)
         for stack_index, frame_id in enumerate(frame_ids):
+            frame_id = str(frame_id)
+            source_dq_contract = dict(
+                source_dq_contracts.get(output_filter)
+                or source_dq_contracts.get("")
+                or _unavailable_contract(
+                    "resident_source_dq_execution",
+                    "resident_source_dq_execution_not_present",
+                )
+            )
+            frame_mask_contract = dict(
+                frame_mask_contracts.get(frame_id)
+                or _unavailable_contract("resident_frame_masks", "resident_frame_masks_not_present")
+            )
+            dq_mask_contract_sources = [
+                source_dq_contract["source"]
+                for source_dq_contract in [source_dq_contract]
+                if source_dq_contract.get("available")
+            ]
+            frame_mask_sources = [
+                frame_mask_contract["source"]
+                for frame_mask_contract in [frame_mask_contract]
+                if frame_mask_contract.get("available")
+            ]
+            resident_dq_mask_contract = {
+                "schema_version": 1,
+                "contract_type": "resident_calibrated_light_dq_mask_contract",
+                "passed": bool(source_dq_contract.get("passed") and frame_mask_contract.get("passed")),
+                "status": "passed"
+                if source_dq_contract.get("passed") and frame_mask_contract.get("passed")
+                else "failed",
+                "frame_id": frame_id,
+                "source_dq_contract_available": bool(source_dq_contract.get("available")),
+                "frame_mask_contract_available": bool(frame_mask_contract.get("available")),
+                "contract_sources": dq_mask_contract_sources,
+                "frame_mask_sources": frame_mask_sources,
+                "materializes_calibrated_dq_cache": False,
+                "calibrated_dq_cache_required": False,
+                "semantics": (
+                    "Resident calibrated lights stay in VRAM. Source-DQ invalid samples "
+                    "are applied in memory when resident_source_dq_execution is present, "
+                    "while frame-level admission and zero-weight decisions are carried by "
+                    "resident_frame_masks. Pixel-level warp and rejection masks are emitted "
+                    "through integration DQ/count maps."
+                ),
+            }
             calibrated_lights.append(
                 {
                     "frame_id": frame_id,
@@ -282,6 +437,13 @@ def build_resident_calibration_artifacts(
                     "calibration_group_policy": master_stats.get("calibration_group_policy"),
                     "path": None,
                     "dq_mask_path": None,
+                    "source_dq_contract": source_dq_contract,
+                    "frame_mask_contract": frame_mask_contract,
+                    "resident_dq_mask_contract": resident_dq_mask_contract,
+                    "dq_contract_source": "resident_source_dq_execution"
+                    if source_dq_contract.get("available")
+                    else None,
+                    "dq_contract_ok": bool(resident_dq_mask_contract["passed"]),
                     "warnings": [],
                 }
             )

@@ -163,6 +163,62 @@ Validation commands:
 - Real 200-light `glass run` with
   `--resident-runtime-preset throughput-v4-native-completion`.
 
+### S2-Gate 582: Resident Calibrated-Light DQ Ledger
+
+Gate 582 advances the DQ/mask pipeline contract on the default resident CUDA
+path. Before this gate, `calibration_artifacts.json` listed resident calibrated
+light rows as `resident_in_vram`, but the per-frame rows did not directly carry
+the DQ/mask evidence that makes in-VRAM calibration auditable. Pipeline-contract
+checks could infer that evidence from `resident_source_dq_execution.json` and
+`resident_frame_masks.json`, but the calibrated-light ledger itself was still
+too thin.
+
+Implementation:
+
+- `src/glass/engine/resident_calibration_artifacts.py` now embeds per-light:
+  - `source_dq_contract`, linked to `resident_source_dq_execution.json`;
+  - `frame_mask_contract`, linked to `resident_frame_masks.json`;
+  - `resident_dq_mask_contract`, a row-level contract stating that the light
+    remains in VRAM, source-DQ samples are applied in memory, frame admission is
+    carried by resident frame masks, and pixel-level warp/rejection masks remain
+    in integration DQ/count maps.
+- `src/glass/report/pipeline_contract.py` consumes the embedded row contracts
+  when present and adds
+  `resident_calibrated_light_embedded_dq_mask_contract`.
+- Older resident artifacts remain compatible: when embedded row contracts are
+  absent, `pipeline-contract` still falls back to external resident DQ artifacts.
+
+Real 200-light evidence:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3`
+- Hash parity artifact:
+  `C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\hash_parity_vs_gate579.json`
+- Runtime: `8.19045490003191 s`.
+- Runtime preset: `throughput-v3-io`.
+- `calibration_artifacts.json` contains `200` resident calibrated-light rows.
+- `200 / 200` rows have passing `resident_dq_mask_contract`.
+- `200 / 200` rows link `resident_source_dq_execution`.
+- `200 / 200` rows link `resident_frame_masks`.
+- The new pipeline-contract check
+  `resident_calibrated_light_embedded_dq_mask_contract` passed with
+  `embedded_contract_count=200`.
+- Frame-mask admission still passed with `193` active and `7` masked frames.
+- All six integration FITS outputs were SHA256-identical to the Gate579 default
+  output: master, coverage, DQ, weight, low rejection, and high rejection maps.
+
+Validation commands:
+
+- `python -m pytest -q tests/test_pipeline_contract.py -k
+  "resident_native_calibration_artifacts or resident_source_dq or source_dq_fails"`
+- `python -m pytest -q tests/test_resident_cuda_run.py -k
+  "translation_aligns_shifted_pair or run_similarity_triangle"`
+- `python -m ruff check src\glass\engine\resident_calibration_artifacts.py
+  src\glass\report\pipeline_contract.py tests\test_pipeline_contract.py
+  tests\test_resident_cuda_run.py`
+- Real 200-light `glass run` with the default `throughput-v3-io` resident
+  preset.
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident

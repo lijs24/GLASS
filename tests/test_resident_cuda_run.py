@@ -2369,6 +2369,15 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert len(calibration["masters"]) >= 3
     assert len(calibration["calibrated_lights"]) == len(resident["artifacts"][0]["frame_ids"])
     assert all(item["status"] == "resident_in_vram" for item in calibration["calibrated_lights"])
+    assert all(item["resident_dq_mask_contract"]["passed"] for item in calibration["calibrated_lights"])
+    assert {
+        tuple(item["resident_dq_mask_contract"]["contract_sources"])
+        for item in calibration["calibrated_lights"]
+    } == {("resident_source_dq_execution",)}
+    assert {
+        tuple(item["resident_dq_mask_contract"]["frame_mask_sources"])
+        for item in calibration["calibrated_lights"]
+    } == {("resident_frame_masks",)}
     assert all(item["resident_calibration_contract"]["passed"] for item in calibration["masters"].values())
     assert all(item["stack_engine_surface_contract"]["passed"] for item in calibration["masters"].values())
     assert all(item["stack_engine_surface_contract"]["stack_request"]["frame_ids"] for item in calibration["masters"].values())
@@ -2387,6 +2396,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert pipeline_contract["passed"] is True
     pipeline_checks = {item["name"]: item for item in pipeline_contract["checks"]}
     assert pipeline_checks["integration_resident_result_contract"]["passed"] is True
+    assert pipeline_checks["resident_calibrated_light_embedded_dq_mask_contract"]["passed"] is True
     assert pipeline_checks["local_normalization_continuous_contract_audit"]["passed"] is True
     assert pipeline_contract["artifacts"]["local_norm_contract"]["attached"] is True
     assert any(item["stage"] == "pipeline_contract" for item in state["artifacts"])
