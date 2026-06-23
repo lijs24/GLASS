@@ -1,0 +1,292 @@
+{
+  "gate": "S2-Gate 561",
+  "run": "C:\\glass_runs\\phase2_s2_gate561_resident_ln_frame_accounting\\runs_20260623_180404\\ln_on_closure",
+  "baseline_run": "C:\\glass_runs\\phase2_s2_gate560_resident_ln_contract\\runs_20260623_175507\\ln_on_contract",
+  "shell_elapsed_s": 7.1862375,
+  "run_timing_total_elapsed_s": 6.819454700045753,
+  "run_timing_stages": [
+    {
+      "elapsed_s": 0.0029952999902889132,
+      "stage": "resident_memory_admission",
+      "started_at": "2026-06-23T10:04:04+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 6.48563449998619,
+      "stage": "resident_calibration_integration",
+      "started_at": "2026-06-23T10:04:04+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.18067880003945902,
+      "stage": "local_norm_contract",
+      "started_at": "2026-06-23T10:04:10+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.150146100029815,
+      "stage": "pipeline_contract",
+      "started_at": "2026-06-23T10:04:11+00:00",
+      "status": "ok"
+    }
+  ],
+  "local_norm_contract_passed": true,
+  "local_norm_contract_surface": "resident_in_vram",
+  "local_norm_failed_checks": [],
+  "frame_accounting_closure": {
+    "active_local_norm_output_count": 193,
+    "checks": [
+      {
+        "evidence": {
+          "path": "C:\\glass_runs\\phase2_s2_gate561_resident_ln_frame_accounting\\runs_20260623_180404\\ln_on_closure\\frame_accounting.json"
+        },
+        "name": "frame_accounting_present",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "input_light_frames": 200,
+          "local_norm_output_count": 200
+        },
+        "name": "local_norm_output_count_matches_input_light_frames",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "active_local_norm_output_count": 193,
+          "active_statuses": [
+            "offset_only",
+            "ok",
+            "partial",
+            "reference"
+          ],
+          "integrated_frames": 193
+        },
+        "name": "active_local_norm_count_matches_integrated_frames",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "zero_weight_frames": 7,
+          "zero_weight_local_norm_output_count": 7,
+          "zero_weight_statuses": [
+            "empty",
+            "skipped_zero_weight"
+          ]
+        },
+        "name": "zero_weight_local_norm_count_matches_zero_weight_frames",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "unknown_status_counts": {}
+        },
+        "name": "local_norm_statuses_are_accounted",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "duplicate_frame_ids": []
+        },
+        "name": "local_norm_frame_ids_unique",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "missing_count": 0,
+          "missing_frame_ids": []
+        },
+        "name": "local_norm_frame_ids_present_in_frame_accounting",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "mismatch_count": 0,
+          "mismatches": []
+        },
+        "name": "per_frame_local_norm_status_matches_integration_status",
+        "note": "",
+        "passed": true
+      }
+    ],
+    "duplicate_frame_ids": [],
+    "failed_checks": [],
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "local_norm_output_count": 200,
+    "missing_frame_ids": [],
+    "passed": true,
+    "path": "C:\\glass_runs\\phase2_s2_gate561_resident_ln_frame_accounting\\runs_20260623_180404\\ln_on_closure\\frame_accounting.json",
+    "row_mismatches": [],
+    "status": "passed",
+    "status_counts": {
+      "ok": 109,
+      "partial": 83,
+      "reference": 1,
+      "skipped_zero_weight": 7
+    },
+    "zero_weight_frames": 7,
+    "zero_weight_local_norm_output_count": 7
+  },
+  "pipeline_contract_passed": true,
+  "pipeline_failed_checks": null,
+  "frame_accounting_summary": {
+    "calibrated_frames": 0,
+    "calibration_artifact_type": "resident_cuda_calibration_artifacts",
+    "calibration_master_count": 3,
+    "exception_frames": 7,
+    "final_status_counts": {
+      "integrated": 193,
+      "quality_rejected": 7
+    },
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "integration_conflict_frames": 0,
+    "integration_status_counts": {
+      "used": 193,
+      "zero_weight": 7
+    },
+    "not_integrated_frames": 0,
+    "quality_accepted_frames": 0,
+    "quality_rejected_frames": 7,
+    "registration_accepted_frames": 193,
+    "resident_calibrated_frames": 200,
+    "resident_calibrated_light_ledger_rows": 200,
+    "resident_frame_mask_active_frames": 193,
+    "resident_frame_mask_masked_frames": 7,
+    "resident_frame_mask_unaudited_frames": 0,
+    "resident_native_calibration_artifact": true,
+    "warp_accepted_frames": 0,
+    "warp_skipped_frames": 0,
+    "zero_weight_frames": 7
+  },
+  "run_state_failed_stage": null,
+  "run_state_artifact_stages": [
+    "resident_calibration",
+    "resident_calibration_contract",
+    "resident_calibration_integration",
+    "resident_result_contract",
+    "resident_registration_quality",
+    "resident_frame_masks",
+    "resident_dq_pixel_closure",
+    "resident_source_dq_execution",
+    "resident_master_cache",
+    "resident_local_normalization",
+    "resident_memory_admission",
+    "resident_source_dq_strategy",
+    "local_norm_contract",
+    "pipeline_contract"
+  ],
+  "resident_local_normalization": {
+    "enabled": true,
+    "mode": "resident_grid_mean_std",
+    "reference_frame_id": "F000196",
+    "tile_size": 256,
+    "warning_count": 0
+  },
+  "output_compare_to_gate560": {
+    "master_path": {
+      "path": "C:\\glass_runs\\phase2_s2_gate561_resident_ln_frame_accounting\\runs_20260623_180404\\ln_on_closure\\integration\\resident_master_H.fits",
+      "baseline_path": "C:\\glass_runs\\phase2_s2_gate560_resident_ln_contract\\runs_20260623_175507\\ln_on_contract\\integration\\resident_master_H.fits",
+      "sha256": "c0d2fda42d0f85fe383ba24a2dbe7ef26023f860c8bbba37383b161ba4fa7d4f",
+      "baseline_sha256": "c0d2fda42d0f85fe383ba24a2dbe7ef26023f860c8bbba37383b161ba4fa7d4f",
+      "sha256_match": true,
+      "diff": {
+        "shape": [
+          6422,
+          9600
+        ],
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "mean": 0.0
+      }
+    },
+    "weight_map_path": {
+      "path": "C:\\glass_runs\\phase2_s2_gate561_resident_ln_frame_accounting\\runs_20260623_180404\\ln_on_closure\\integration\\resident_weight_map_H.fits",
+      "baseline_path": "C:\\glass_runs\\phase2_s2_gate560_resident_ln_contract\\runs_20260623_175507\\ln_on_contract\\integration\\resident_weight_map_H.fits",
+      "sha256": "41d9adfa0e8f93beae615536037a677bc21c4c70ef7730c634ad9b96590b01b2",
+      "baseline_sha256": "41d9adfa0e8f93beae615536037a677bc21c4c70ef7730c634ad9b96590b01b2",
+      "sha256_match": true,
+      "diff": {
+        "shape": [
+          6422,
+          9600
+        ],
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "mean": 0.0
+      }
+    },
+    "coverage_map_path": {
+      "path": "C:\\glass_runs\\phase2_s2_gate561_resident_ln_frame_accounting\\runs_20260623_180404\\ln_on_closure\\integration\\resident_coverage_map_H.fits",
+      "baseline_path": "C:\\glass_runs\\phase2_s2_gate560_resident_ln_contract\\runs_20260623_175507\\ln_on_contract\\integration\\resident_coverage_map_H.fits",
+      "sha256": "336178c34670ac08799640d4ed1b7462077091aaae4fc0858c9a5f08ba977523",
+      "baseline_sha256": "336178c34670ac08799640d4ed1b7462077091aaae4fc0858c9a5f08ba977523",
+      "sha256_match": true,
+      "diff": {
+        "shape": [
+          6422,
+          9600
+        ],
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "mean": 0.0
+      }
+    },
+    "low_rejection_map_path": {
+      "path": "C:\\glass_runs\\phase2_s2_gate561_resident_ln_frame_accounting\\runs_20260623_180404\\ln_on_closure\\integration\\resident_low_rejection_map_H.fits",
+      "baseline_path": "C:\\glass_runs\\phase2_s2_gate560_resident_ln_contract\\runs_20260623_175507\\ln_on_contract\\integration\\resident_low_rejection_map_H.fits",
+      "sha256": "7d2187b8876c31821e7f0aec3b94ba0ab2f9107e88387466ed114e6f5fe71710",
+      "baseline_sha256": "7d2187b8876c31821e7f0aec3b94ba0ab2f9107e88387466ed114e6f5fe71710",
+      "sha256_match": true,
+      "diff": {
+        "shape": [
+          6422,
+          9600
+        ],
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "mean": 0.0
+      }
+    },
+    "high_rejection_map_path": {
+      "path": "C:\\glass_runs\\phase2_s2_gate561_resident_ln_frame_accounting\\runs_20260623_180404\\ln_on_closure\\integration\\resident_high_rejection_map_H.fits",
+      "baseline_path": "C:\\glass_runs\\phase2_s2_gate560_resident_ln_contract\\runs_20260623_175507\\ln_on_contract\\integration\\resident_high_rejection_map_H.fits",
+      "sha256": "8cc323cac6e191541b4c3062fdfb7bc9d83dbdf5f9714cafff5be17f50b73198",
+      "baseline_sha256": "8cc323cac6e191541b4c3062fdfb7bc9d83dbdf5f9714cafff5be17f50b73198",
+      "sha256_match": true,
+      "diff": {
+        "shape": [
+          6422,
+          9600
+        ],
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "mean": 0.0
+      }
+    },
+    "dq_map_path": {
+      "path": "C:\\glass_runs\\phase2_s2_gate561_resident_ln_frame_accounting\\runs_20260623_180404\\ln_on_closure\\integration\\resident_dq_map_H.fits",
+      "baseline_path": "C:\\glass_runs\\phase2_s2_gate560_resident_ln_contract\\runs_20260623_175507\\ln_on_contract\\integration\\resident_dq_map_H.fits",
+      "sha256": "123ac40d25cd2968cac8f9422b5b81ac1cec9565dfdae555292a3baafd0df3be",
+      "baseline_sha256": "123ac40d25cd2968cac8f9422b5b81ac1cec9565dfdae555292a3baafd0df3be",
+      "sha256_match": true,
+      "diff": {
+        "shape": [
+          6422,
+          9600
+        ],
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "mean": 0.0
+      }
+    }
+  }
+}

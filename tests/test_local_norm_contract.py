@@ -167,6 +167,9 @@ def _write_resident_local_norm_run(
     *,
     enabled: bool = True,
     omit_grid: bool = False,
+    second_status: str = "ok",
+    accounting_integrated_frames: int | None = None,
+    accounting_zero_weight_frames: int | None = None,
 ) -> None:
     run.mkdir(parents=True)
     frame_results = []
@@ -198,8 +201,10 @@ def _write_resident_local_norm_run(
                 "reference_mean": 0.0,
                 "reference_std": 0.0,
                 "valid_pixels": None,
-                "grid_coefficients": None if omit_grid else _resident_grid_coefficients(),
-                "status": "ok",
+                "grid_coefficients": None
+                if omit_grid or second_status == "skipped_zero_weight"
+                else _resident_grid_coefficients(),
+                "status": second_status,
                 "warnings": [],
             },
         ]
@@ -224,6 +229,56 @@ def _write_resident_local_norm_run(
                     "warnings": [],
                 }
             ],
+        },
+    )
+    active_statuses = {"reference", "ok", "partial", "offset_only"}
+    zero_weight_statuses = {"empty", "skipped_zero_weight"}
+    active_count = sum(1 for item in frame_results if item.get("status") in active_statuses)
+    zero_count = sum(1 for item in frame_results if item.get("status") in zero_weight_statuses)
+    accounting_frames = []
+    for item in frame_results:
+        is_active = item.get("status") in active_statuses
+        accounting_frames.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "filter": "H",
+                "final_status": "integrated" if is_active else "quality_rejected",
+                "integration_status": "used" if is_active else "zero_weight",
+                "integration_weight": 1.0 if is_active else 0.0,
+                "local_norm_status": "resident_applied" if is_active else "resident_skipped_zero_weight",
+                "registration_status": "ok" if is_active else "excluded",
+                "quality_gate_status": "not_run" if is_active else "rejected",
+                "warnings": [],
+                "reasons": [],
+            }
+        )
+    write_json(
+        run / "frame_accounting.json",
+        {
+            "artifact": "frame_accounting",
+            "schema_version": 1,
+            "summary": {
+                "input_light_frames": len(frame_results),
+                "resident_calibrated_frames": len(frame_results),
+                "integrated_frames": active_count
+                if accounting_integrated_frames is None
+                else accounting_integrated_frames,
+                "zero_weight_frames": zero_count
+                if accounting_zero_weight_frames is None
+                else accounting_zero_weight_frames,
+                "integration_status_counts": {
+                    "used": active_count if accounting_integrated_frames is None else accounting_integrated_frames,
+                    "zero_weight": zero_count if accounting_zero_weight_frames is None else accounting_zero_weight_frames,
+                },
+                "final_status_counts": {
+                    "integrated": active_count if accounting_integrated_frames is None else accounting_integrated_frames,
+                    "quality_rejected": zero_count
+                    if accounting_zero_weight_frames is None
+                    else accounting_zero_weight_frames,
+                },
+            },
+            "frames": accounting_frames,
+            "exception_frames": [item for item in accounting_frames if item["integration_status"] != "used"],
         },
     )
 
@@ -267,7 +322,41 @@ def test_local_norm_contract_passes_for_resident_in_vram_grid(tmp_path: Path) ->
     assert payload["enabled"] is True
     assert payload["summary"]["output_count"] == 2
     assert payload["summary"]["status_counts"] == {"reference": 1, "ok": 1}
+    assert payload["summary"]["frame_accounting_closure"]["passed"] is True
+    assert payload["summary"]["frame_accounting_closure"]["active_local_norm_output_count"] == 2
     assert payload["outputs"][1]["grid_contract"]["passed"] is True
+
+
+def test_local_norm_contract_resident_frame_accounting_closes_zero_weight(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_resident_local_norm_run(run, second_status="skipped_zero_weight")
+
+    payload = build_local_norm_contract(run)
+
+    closure = payload["summary"]["frame_accounting_closure"]
+    assert payload["passed"] is True
+    assert payload["summary"]["status_counts"] == {"reference": 1, "skipped_zero_weight": 1}
+    assert closure["passed"] is True
+    assert closure["active_local_norm_output_count"] == 1
+    assert closure["zero_weight_local_norm_output_count"] == 1
+
+
+def test_local_norm_contract_resident_frame_accounting_catches_count_drift(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_resident_local_norm_run(run, accounting_integrated_frames=1, accounting_zero_weight_frames=1)
+
+    payload = build_local_norm_contract(run)
+
+    closure = payload["summary"]["frame_accounting_closure"]
+    assert payload["passed"] is False
+    assert "resident_frame_accounting_closure" in payload["failed_checks"]
+    assert closure["passed"] is False
+    assert "active_local_norm_count_matches_integrated_frames" in closure["failed_checks"]
+    assert "zero_weight_local_norm_count_matches_zero_weight_frames" in closure["failed_checks"]
 
 
 def test_local_norm_contract_passes_for_resident_disabled_in_vram(tmp_path: Path) -> None:
@@ -281,6 +370,7 @@ def test_local_norm_contract_passes_for_resident_disabled_in_vram(tmp_path: Path
     assert payload["enabled"] is False
     assert payload["summary"]["output_count"] == 0
     assert payload["model"] == "off"
+    assert payload["summary"]["frame_accounting_closure"]["status"] == "not_required"
 
 
 def test_local_norm_contract_rejects_resident_grid_missing_coefficients(tmp_path: Path) -> None:

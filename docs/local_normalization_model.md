@@ -285,3 +285,25 @@ resident CUDA runs self-auditing without requiring a later guardrails command.
 The gate does not change local-normalization formulas or CUDA kernels. It
 promotes resident LN metadata into the same contract path used by CPU
 continuous-field LN and by run-level pipeline acceptance.
+
+## S2-Gate 561 Resident Frame-Accounting Closure
+
+S2-Gate 561 tightens the resident in-VRAM LN contract by closing it against
+`frame_accounting.json`. When resident local normalization is enabled, the
+contract now requires:
+
+- the LN output row count to match the input light-frame count;
+- `reference`, `ok`, `partial`, and `offset_only` LN rows to match integrated
+  frames;
+- `empty` and `skipped_zero_weight` LN rows to match zero-weight frames;
+- every LN frame id to be unique and present in frame accounting;
+- each per-frame LN status to agree with the frame's integration status.
+
+This prevents a default resident run from passing local-normalization and
+pipeline contracts if LN metadata and the actual integration frame set drift
+apart. Disabled resident LN remains explicit: the closure is reported as
+`not_required` rather than failed.
+
+The gate is an accounting and contract hardening step only. It does not change
+the LN coefficient model, CUDA kernels, calibration, registration, rejection,
+or integration math.

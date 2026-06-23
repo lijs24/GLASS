@@ -15,6 +15,8 @@ DISABLED_MODEL = "disabled_passthrough"
 FULL_FIELD_STATUSES = {"written", "omitted_due_to_size"}
 RESIDENT_MODES = {"resident_global_mean_std", "resident_grid_mean_std", "off"}
 RESIDENT_FRAME_STATUSES = {"reference", "ok", "partial", "offset_only", "empty", "skipped_zero_weight"}
+RESIDENT_ACTIVE_FRAME_STATUSES = {"reference", "ok", "partial", "offset_only"}
+RESIDENT_ZERO_WEIGHT_FRAME_STATUSES = {"empty", "skipped_zero_weight"}
 
 
 def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
@@ -61,6 +63,13 @@ def _nonnegative_int(value: Any) -> bool:
         return int(value) >= 0
     except (TypeError, ValueError):
         return False
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _finite_float(value: Any) -> float | None:
@@ -561,6 +570,187 @@ def _resident_group_contracts(local_norm: dict[str, Any]) -> list[dict[str, Any]
     return output_contracts
 
 
+def _duplicate_values(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for value in values:
+        if value in seen:
+            duplicates.add(value)
+        seen.add(value)
+    return sorted(duplicates)
+
+
+def _resident_frame_accounting_closure(
+    output_contracts: list[dict[str, Any]],
+    *,
+    enabled: bool,
+    run_root: Path,
+    status_counts: dict[str, int],
+) -> dict[str, Any]:
+    if not enabled:
+        return {
+            "status": "not_required",
+            "passed": True,
+            "reason": "resident local normalization is disabled",
+        }
+
+    frame_accounting_path = run_root / "frame_accounting.json"
+    frame_accounting = _read_json_object(frame_accounting_path)
+    if frame_accounting is None:
+        return {
+            "status": "missing",
+            "passed": False,
+            "path": str(frame_accounting_path),
+            "reason": "resident local normalization is enabled but frame_accounting.json is missing",
+        }
+
+    summary = frame_accounting.get("summary") if isinstance(frame_accounting.get("summary"), dict) else {}
+    frames = frame_accounting.get("frames") if isinstance(frame_accounting.get("frames"), list) else []
+    frame_rows = [row for row in frames if isinstance(row, dict)]
+    accounting_by_id = {str(row.get("frame_id")): row for row in frame_rows if row.get("frame_id")}
+    output_ids = [str(item.get("frame_id")) for item in output_contracts if item.get("frame_id")]
+    duplicate_output_ids = _duplicate_values(output_ids)
+    missing_accounting_ids = sorted(set(output_ids).difference(accounting_by_id))
+
+    input_light_frames = _int_or_none(summary.get("input_light_frames"))
+    if input_light_frames is None and frame_rows:
+        input_light_frames = len(frame_rows)
+    integrated_frames = _int_or_none(summary.get("integrated_frames"))
+    if integrated_frames is None and frame_rows:
+        integrated_frames = sum(
+            1
+            for row in frame_rows
+            if row.get("integration_status") == "used" or row.get("final_status") == "integrated"
+        )
+    zero_weight_frames = _int_or_none(summary.get("zero_weight_frames"))
+    if zero_weight_frames is None:
+        integration_counts = summary.get("integration_status_counts")
+        if isinstance(integration_counts, dict):
+            zero_weight_frames = _int_or_none(integration_counts.get("zero_weight"))
+    if zero_weight_frames is None and frame_rows:
+        zero_weight_frames = sum(
+            1
+            for row in frame_rows
+            if row.get("integration_status") == "zero_weight" or _finite_float(row.get("integration_weight")) == 0.0
+        )
+
+    active_output_count = sum(status_counts.get(status, 0) for status in RESIDENT_ACTIVE_FRAME_STATUSES)
+    zero_weight_output_count = sum(status_counts.get(status, 0) for status in RESIDENT_ZERO_WEIGHT_FRAME_STATUSES)
+    unknown_status_counts = {
+        status: count
+        for status, count in status_counts.items()
+        if status not in RESIDENT_ACTIVE_FRAME_STATUSES and status not in RESIDENT_ZERO_WEIGHT_FRAME_STATUSES
+    }
+
+    row_mismatches: list[dict[str, Any]] = []
+    for item in output_contracts:
+        frame_id = item.get("frame_id")
+        if not frame_id:
+            continue
+        status = str(item.get("status") or "")
+        accounting_row = accounting_by_id.get(str(frame_id))
+        if accounting_row is None:
+            continue
+        integration_status = str(accounting_row.get("integration_status") or "")
+        integration_weight = _finite_float(accounting_row.get("integration_weight"))
+        accounting_used = integration_status == "used" or accounting_row.get("final_status") == "integrated"
+        accounting_zero = integration_status == "zero_weight" or integration_weight == 0.0
+        if status in RESIDENT_ACTIVE_FRAME_STATUSES and not accounting_used:
+            row_mismatches.append(
+                {
+                    "frame_id": frame_id,
+                    "local_norm_status": status,
+                    "integration_status": integration_status,
+                    "integration_weight": accounting_row.get("integration_weight"),
+                    "expected": "integration used",
+                }
+            )
+        if status in RESIDENT_ZERO_WEIGHT_FRAME_STATUSES and not accounting_zero:
+            row_mismatches.append(
+                {
+                    "frame_id": frame_id,
+                    "local_norm_status": status,
+                    "integration_status": integration_status,
+                    "integration_weight": accounting_row.get("integration_weight"),
+                    "expected": "zero-weight integration",
+                }
+            )
+
+    checks = [
+        _check(
+            "frame_accounting_present",
+            True,
+            {"path": str(frame_accounting_path)},
+        ),
+        _check(
+            "local_norm_output_count_matches_input_light_frames",
+            input_light_frames == len(output_contracts),
+            {
+                "input_light_frames": input_light_frames,
+                "local_norm_output_count": len(output_contracts),
+            },
+        ),
+        _check(
+            "active_local_norm_count_matches_integrated_frames",
+            integrated_frames == active_output_count,
+            {
+                "integrated_frames": integrated_frames,
+                "active_local_norm_output_count": active_output_count,
+                "active_statuses": sorted(RESIDENT_ACTIVE_FRAME_STATUSES),
+            },
+        ),
+        _check(
+            "zero_weight_local_norm_count_matches_zero_weight_frames",
+            zero_weight_frames == zero_weight_output_count,
+            {
+                "zero_weight_frames": zero_weight_frames,
+                "zero_weight_local_norm_output_count": zero_weight_output_count,
+                "zero_weight_statuses": sorted(RESIDENT_ZERO_WEIGHT_FRAME_STATUSES),
+            },
+        ),
+        _check(
+            "local_norm_statuses_are_accounted",
+            not unknown_status_counts,
+            {"unknown_status_counts": unknown_status_counts},
+        ),
+        _check(
+            "local_norm_frame_ids_unique",
+            not duplicate_output_ids,
+            {"duplicate_frame_ids": duplicate_output_ids[:20]},
+        ),
+        _check(
+            "local_norm_frame_ids_present_in_frame_accounting",
+            not missing_accounting_ids,
+            {
+                "missing_count": len(missing_accounting_ids),
+                "missing_frame_ids": missing_accounting_ids[:20],
+            },
+        ),
+        _check(
+            "per_frame_local_norm_status_matches_integration_status",
+            not row_mismatches,
+            {"mismatch_count": len(row_mismatches), "mismatches": row_mismatches[:20]},
+        ),
+    ]
+    return {
+        "status": "passed" if all(item["passed"] for item in checks) else "failed",
+        "passed": all(item["passed"] for item in checks),
+        "path": str(frame_accounting_path),
+        "input_light_frames": input_light_frames,
+        "integrated_frames": integrated_frames,
+        "zero_weight_frames": zero_weight_frames,
+        "local_norm_output_count": len(output_contracts),
+        "active_local_norm_output_count": active_output_count,
+        "zero_weight_local_norm_output_count": zero_weight_output_count,
+        "status_counts": status_counts,
+        "duplicate_frame_ids": duplicate_output_ids[:20],
+        "missing_frame_ids": missing_accounting_ids[:20],
+        "row_mismatches": row_mismatches[:20],
+        "checks": checks,
+        "failed_checks": [item["name"] for item in checks if not item["passed"]],
+    }
+
+
 def _resident_local_norm_contract(
     local_norm: dict[str, Any],
     *,
@@ -621,6 +811,21 @@ def _resident_local_norm_contract(
     for item in output_contracts:
         status = str(item.get("status") or "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
+    frame_accounting_closure = _resident_frame_accounting_closure(
+        output_contracts,
+        enabled=enabled,
+        run_root=run_root,
+        status_counts=status_counts,
+    )
+    top_checks.append(
+        _check(
+            "resident_frame_accounting_closure",
+            bool(frame_accounting_closure.get("passed")),
+            frame_accounting_closure,
+            "Resident LN rows must close against frame_accounting.json so the normalized and integrated frame sets cannot drift.",
+        )
+    )
+    passed = all(item["passed"] for item in top_checks)
     return {
         "schema_version": 1,
         "artifact_type": "local_norm_contract",
@@ -642,7 +847,9 @@ def _resident_local_norm_contract(
             "enabled": enabled,
             "mode": mode,
             "status_counts": status_counts,
+            "frame_accounting_closure": frame_accounting_closure,
         },
+        "frame_accounting_closure": frame_accounting_closure,
         "checks": top_checks,
         "outputs": output_contracts,
         "failed_checks": [item["name"] for item in top_checks if not item["passed"]],
@@ -857,6 +1064,8 @@ def write_local_norm_contract(
     write_json(path, payload)
     if markdown is None:
         return
+    summary = payload.get("summary") or {}
+    frame_accounting_closure = summary.get("frame_accounting_closure") or payload.get("frame_accounting_closure") or {}
     lines = [
         "# Local Normalization Contract",
         "",
@@ -866,14 +1075,25 @@ def write_local_norm_contract(
         f"- Reference frame: {payload.get('reference_frame_id')}",
         f"- Model: {payload.get('model')}",
         f"- Coefficient field model: {payload.get('coefficient_field_model')}",
-        f"- Output count: {(payload.get('summary') or {}).get('output_count')}",
-        f"- Failed output count: {(payload.get('summary') or {}).get('failed_output_count')}",
-        f"- Residual max RMS: {((payload.get('summary') or {}).get('residual_quality') or {}).get('max_rms')}",
-        f"- Residual max abs: {((payload.get('summary') or {}).get('residual_quality') or {}).get('max_abs')}",
-        "",
-        "## Checks",
-        "",
+        f"- Output count: {summary.get('output_count')}",
+        f"- Failed output count: {summary.get('failed_output_count')}",
+        f"- Residual max RMS: {(summary.get('residual_quality') or {}).get('max_rms')}",
+        f"- Residual max abs: {(summary.get('residual_quality') or {}).get('max_abs')}",
     ]
+    if frame_accounting_closure:
+        lines.extend(
+            [
+                f"- Frame accounting closure: {frame_accounting_closure.get('status')}",
+                f"- Frame accounting input/integrated/zero-weight: "
+                f"{frame_accounting_closure.get('input_light_frames')} / "
+                f"{frame_accounting_closure.get('integrated_frames')} / "
+                f"{frame_accounting_closure.get('zero_weight_frames')}",
+                f"- LN active/zero-weight rows: "
+                f"{frame_accounting_closure.get('active_local_norm_output_count')} / "
+                f"{frame_accounting_closure.get('zero_weight_local_norm_output_count')}",
+            ]
+        )
+    lines.extend(["", "## Checks", ""])
     for item in payload.get("checks") or []:
         marker = "PASS" if item.get("passed") else "FAIL"
         lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")

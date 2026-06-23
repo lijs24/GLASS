@@ -15277,6 +15277,49 @@ Completed in Gate446:
   - pipeline contract:
     `C:\glass_runs\phase2_s2_gate560_resident_ln_contract\runs_20260623_175507\ln_on_contract\pipeline_contract.json`.
 
+### S2-Gate 561: Resident LN Frame-Accounting Closure
+
+- Continues the Phase 2 mainline by strengthening the default resident LN
+  contract against the authoritative frame ledger instead of adding another
+  report-only gate.
+- Scope:
+  - `local_norm_contract.json` now embeds `frame_accounting_closure` for
+    resident in-VRAM LN;
+  - LN-enabled resident runs require `frame_accounting.json` to exist;
+  - LN output count must match input light frames;
+  - active LN states (`reference`, `ok`, `partial`, `offset_only`) must match
+    integrated frames;
+  - zero-weight LN states (`empty`, `skipped_zero_weight`) must match
+    zero-weight integration frames;
+  - per-frame LN status must agree with the corresponding frame-accounting
+    integration status.
+- Validation:
+  - syntax check:
+    `.venv\Scripts\python.exe -m py_compile
+    src\glass\report\local_norm_contract.py
+    tests\test_local_norm_contract.py`;
+  - focused resident LN/pipeline smoke tests: `13 passed in 0.78 s`;
+  - full `python -m pytest -q`: `1199 passed in 44.85 s`;
+  - real 200-light LN-on resident run:
+    `C:\glass_runs\phase2_s2_gate561_resident_ln_frame_accounting\runs_20260623_180404\ln_on_closure`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `7.1862375 s` |
+  | Run timing total | `6.819454700045753 s` |
+  | LN contract status | `passed` |
+  | Pipeline contract status | `passed` |
+  | Input/integrated/zero-weight frames | `200 / 193 / 7` |
+  | LN active/zero-weight rows | `193 / 7` |
+  | LN status counts | `109 ok / 83 partial / 1 reference / 7 skipped_zero_weight` |
+  | Output SHA256 vs Gate560 LN-on | `all identical` |
+- Interpretation:
+  - this gate protects the engineering correctness of default resident
+    StackEngine/LN integration;
+  - it does not change LN math, CUDA kernels, frame admission, registration,
+    rejection, or output pixels.
+
 ## Gate Rules
 
 Each gate requires:
