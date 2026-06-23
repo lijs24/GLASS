@@ -13404,6 +13404,68 @@ Completed in Gate446:
   - WBPP compare report:
     `C:\glass_runs\phase2_s2_gate529_native_dq_release\runs_20260623_115631\postchange_default\compare_vs_wbpp_fastintegration.html`.
 
+### S2-Gate 530: Native Count-Map DQ Fast Path
+
+- Returned to the DQ/mask runtime path with a substantive fast path rather than
+  a dispatch guard. The resident pipeline already proves that master/weight are
+  valid and the generated coverage/rejection maps are finite nonnegative count
+  maps; this gate adds a native path that uses exactly those preconditions.
+- Completed:
+  - added `_glass_cuda_native.resident_dq_map_count_maps_i16`, a native host
+    single-pass DQ builder for resident count maps;
+  - the new path emits an `int16` DQ map directly and avoids scanning master and
+    weight arrays;
+  - the strict generic native DQ scanner and Python fallback remain available;
+  - `_resident_dq_map` uses the new path only when
+    `assume_finite_count_maps`, `assume_nonnegative_count_maps`,
+    `assume_valid_master_weight`, and `dq_dtype=int16` are all true;
+  - added focused native parity, preference, and dispatch tests.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate530_native_count_dq\runs_20260623_120726`;
+  - same M38 H-alpha 200-light plan, shared master cache, resident CUDA,
+    `similarity_cuda_triangle`, Lanczos3 warp, winsorized sigma rejection, and
+    audit maps;
+  - first forced-Python DQ run: shell `6.273116 s`, internal
+    `5.905352900037542 s`;
+  - first native count-map DQ run: shell `6.091866 s`, internal
+    `5.724182699981611 s`;
+  - repeat forced-Python DQ run: shell `6.33212 s`, internal
+    `5.973562000028323 s`;
+  - repeat native count-map DQ run: shell `6.027409 s`, internal
+    `5.67795159999514 s`;
+  - two-run averages: Python shell `6.302618 s`, native shell
+    `6.059637499999999 s`, average shell gain `0.2429805000000007 s`;
+  - native artifact evidence includes `native_host_fast_count_maps`;
+  - an additional post-field validation run records
+    `dq_map_stats_backend=native_host_fast_count_maps`,
+    `dq_map_stats_profile=resident_valid_master_nonnegative_count_map_native_i16`,
+    and `dq_map_stats_native_method=resident_dq_map_count_maps_i16`.
+- Numerical and black-box validation:
+  - native count-map DQ and forced Python DQ outputs match bitwise for master,
+    weight, coverage, low/high rejection, and DQ maps across both run pairs;
+  - GLASS-vs-WBPP compare for `native_count_r2` is shape-matched with coverage
+    fraction `0.9892770479074376`, robust-fit RMS over fit pixels
+    `4.25294994505585e-05`, p99 absolute difference
+    `0.00011365715225056788`, and robust-fit fraction `0.9856440392790535`;
+  - shell speedup versus the WBPP black-box `1092.541 s` timing is
+    `181.26213104171296x` for the fastest native count-map repeat and
+    `180.2980788867321x` by native two-run shell average.
+- Interpretation:
+  - this is a real DQ/mask runtime improvement, not merely a report or release
+    evidence gate;
+  - the speedup is modest because the main 200-light path is already around six
+    seconds, but the new path removes repeated NumPy mask construction and keeps
+    output maps bitwise identical;
+  - next larger targets remain resident registration/warp batching and
+    light-pipeline read/H2D overlap.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_530_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_530_native_count_dq_summary.json`;
+  - WBPP compare report:
+    `C:\glass_runs\phase2_s2_gate530_native_count_dq\runs_20260623_120726\native_count_r2\compare_vs_wbpp_fastintegration.html`.
+
 ## Gate Rules
 
 Each gate requires:

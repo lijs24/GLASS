@@ -1,0 +1,306 @@
+{
+  "root": "C:\\glass_runs\\phase2_s2_gate530_native_count_dq\\runs_20260623_120726",
+  "cases": {
+    "python_count": {
+      "shell_elapsed_s": 6.273116,
+      "internal_elapsed_s": 5.905352900037542,
+      "resident_stage_elapsed_s": 5.90208910004003,
+      "dq_count_mode": "python",
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      },
+      "dq_native_count_method_seen": false,
+      "dq_native_count_backend_seen": false,
+      "light_pipeline_wall_s": 2.374186000030022,
+      "registration_component_s": 1.8443176999379522,
+      "dq_stats_profile_seen": false
+    },
+    "native_count": {
+      "shell_elapsed_s": 6.091866,
+      "internal_elapsed_s": 5.724182699981611,
+      "resident_stage_elapsed_s": 5.721003699989524,
+      "dq_count_mode": "default_native_count",
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      },
+      "dq_native_count_method_seen": false,
+      "dq_native_count_backend_seen": true,
+      "light_pipeline_wall_s": 2.3794481999939308,
+      "registration_component_s": 1.8494344000007554,
+      "dq_stats_profile_seen": false
+    }
+  },
+  "comparisons": {
+    "master": {
+      "bitwise_equal": true,
+      "same_shape": true,
+      "same_dtype": true,
+      "shape": [
+        6422,
+        9600
+      ],
+      "dtype_a": ">f4",
+      "dtype_b": ">f4",
+      "diff": null
+    },
+    "weight": {
+      "bitwise_equal": true,
+      "same_shape": true,
+      "same_dtype": true,
+      "shape": [
+        6422,
+        9600
+      ],
+      "dtype_a": ">f4",
+      "dtype_b": ">f4",
+      "diff": null
+    },
+    "coverage": {
+      "bitwise_equal": true,
+      "same_shape": true,
+      "same_dtype": true,
+      "shape": [
+        6422,
+        9600
+      ],
+      "dtype_a": ">i2",
+      "dtype_b": ">i2",
+      "diff": null
+    },
+    "low_rejection": {
+      "bitwise_equal": true,
+      "same_shape": true,
+      "same_dtype": true,
+      "shape": [
+        6422,
+        9600
+      ],
+      "dtype_a": ">i2",
+      "dtype_b": ">i2",
+      "diff": null
+    },
+    "high_rejection": {
+      "bitwise_equal": true,
+      "same_shape": true,
+      "same_dtype": true,
+      "shape": [
+        6422,
+        9600
+      ],
+      "dtype_a": ">i2",
+      "dtype_b": ">i2",
+      "diff": null
+    },
+    "dq": {
+      "bitwise_equal": true,
+      "same_shape": true,
+      "same_dtype": true,
+      "shape": [
+        6422,
+        9600
+      ],
+      "dtype_a": ">i2",
+      "dtype_b": ">i2",
+      "diff": null
+    }
+  },
+  "speed": {
+    "native_minus_python_shell_s": -0.18125000000000036,
+    "native_shell_ratio_vs_python": 0.9711068630007798,
+    "native_minus_python_internal_s": -0.18117020005593076,
+    "native_internal_ratio_vs_python": 0.9693210205854457,
+    "native_speedup_vs_wbpp_shell": 179.34422720394704,
+    "native_speedup_vs_wbpp_internal": 190.86410362190392
+  },
+  "repeat_cases": {
+    "python_count": {
+      "shell_elapsed_s": 6.273116,
+      "internal_elapsed_s": 5.905352900037542,
+      "dq_count_mode": "python",
+      "dq_native_count_backend_seen": false,
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      }
+    },
+    "native_count": {
+      "shell_elapsed_s": 6.091866,
+      "internal_elapsed_s": 5.724182699981611,
+      "dq_count_mode": "default_native_count",
+      "dq_native_count_backend_seen": true,
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      }
+    },
+    "native_count_r2": {
+      "shell_elapsed_s": 6.027409,
+      "internal_elapsed_s": 5.67795159999514,
+      "dq_count_mode": "default_native_count",
+      "dq_native_count_backend_seen": true,
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      }
+    },
+    "python_count_r2": {
+      "shell_elapsed_s": 6.33212,
+      "internal_elapsed_s": 5.973562000028323,
+      "dq_count_mode": "python",
+      "dq_native_count_backend_seen": false,
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      }
+    }
+  },
+  "repeat_speed": {
+    "python_shell_avg_s": 6.302618,
+    "native_shell_avg_s": 6.059637499999999,
+    "native_minus_python_shell_avg_s": -0.2429805000000007,
+    "native_shell_avg_ratio_vs_python": 0.9614476872943909,
+    "python_internal_avg_s": 5.939457450032933,
+    "native_internal_avg_s": 5.701067149988376,
+    "native_minus_python_internal_avg_s": -0.23839030004455708,
+    "native_internal_avg_ratio_vs_python": 0.9598632868321608,
+    "native_avg_speedup_vs_wbpp_shell": 180.2980788867321
+  },
+  "repeat_comparisons": {
+    "native_count_vs_python_count": {
+      "resident_master_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">f4",
+        "dtype_b": ">f4"
+      },
+      "resident_weight_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">f4",
+        "dtype_b": ">f4"
+      },
+      "resident_coverage_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      },
+      "resident_low_rejection_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      },
+      "resident_high_rejection_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      },
+      "resident_dq_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      }
+    },
+    "native_count_r2_vs_python_count_r2": {
+      "resident_master_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">f4",
+        "dtype_b": ">f4"
+      },
+      "resident_weight_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">f4",
+        "dtype_b": ">f4"
+      },
+      "resident_coverage_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      },
+      "resident_low_rejection_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      },
+      "resident_high_rejection_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      },
+      "resident_dq_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      }
+    },
+    "native_count_r2_vs_python_count": {
+      "resident_master_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">f4",
+        "dtype_b": ">f4"
+      },
+      "resident_weight_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">f4",
+        "dtype_b": ">f4"
+      },
+      "resident_coverage_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      },
+      "resident_low_rejection_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      },
+      "resident_high_rejection_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      },
+      "resident_dq_map_H.fits": {
+        "bitwise_equal": true,
+        "dtype_a": ">i2",
+        "dtype_b": ">i2"
+      }
+    }
+  },
+  "wbpp_compare": {
+    "json": "C:\\glass_runs\\phase2_s2_gate530_native_count_dq\\runs_20260623_120726\\native_count_r2\\compare_vs_wbpp_fastintegration.json",
+    "html": "C:\\glass_runs\\phase2_s2_gate530_native_count_dq\\runs_20260623_120726\\native_count_r2\\compare_vs_wbpp_fastintegration.html",
+    "shape_match": true,
+    "coverage_fraction": 0.9892770479074376,
+    "robust_fit_rms_fit_pixels": 4.25294994505585e-05,
+    "robust_fit_abs_diff_p99_fit_pixels": 0.00011365715225056788,
+    "robust_fit_fraction": 0.9856440392790535,
+    "speedup_vs_reference": 181.26213104171296
+  },
+  "artifact_field_validation": {
+    "case": "native_count_fields",
+    "shell_elapsed_s": 6.128546,
+    "internal_elapsed_s": 5.758655599958729,
+    "dq_map_stats_backend": "native_host_fast_count_maps",
+    "dq_map_stats_profile": "resident_valid_master_nonnegative_count_map_native_i16",
+    "dq_map_stats_native_method": "resident_dq_map_count_maps_i16",
+    "bitwise_vs_python_count": {
+      "resident_master_H.fits": true,
+      "resident_weight_map_H.fits": true,
+      "resident_coverage_map_H.fits": true,
+      "resident_low_rejection_map_H.fits": true,
+      "resident_high_rejection_map_H.fits": true,
+      "resident_dq_map_H.fits": true
+    }
+  }
+}

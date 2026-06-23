@@ -253,6 +253,44 @@ def resident_dq_map_host_f32_preferred() -> bool:
     return False
 
 
+def resident_dq_map_count_maps_i16_available() -> bool:
+    native = _native()
+    return native is not None and hasattr(native, "resident_dq_map_count_maps_i16")
+
+
+def resident_dq_map_count_maps_i16_preferred() -> bool:
+    mode = os.environ.get("GLASS_RESIDENT_DQ_COUNT_MAPS_NATIVE", "").strip().lower()
+    if mode in {"0", "false", "no", "off", "python", "fallback"}:
+        return False
+    if mode in {"1", "true", "yes", "on", "force", "native"}:
+        return resident_dq_map_count_maps_i16_available()
+    return resident_dq_map_count_maps_i16_available() and resident_dq_map_host_f32_optimized()
+
+
+def resident_dq_map_count_maps_i16(
+    master: Any,
+    coverage_map: Any | None,
+    low_rejection_map: Any | None,
+    high_rejection_map: Any | None,
+    geometric_warp_coverage_map: Any | None = None,
+    active_frame_count: int = 0,
+) -> tuple[np.ndarray, dict[str, int], dict[str, Any]]:
+    native = _native()
+    if native is None or not hasattr(native, "resident_dq_map_count_maps_i16"):
+        raise RuntimeError("native CUDA backend with resident_dq_map_count_maps_i16 is not available")
+    dq, summary, stats = native.resident_dq_map_count_maps_i16(
+        np.asarray(master, dtype=np.float32),
+        None if coverage_map is None else np.asarray(coverage_map, dtype=np.float32),
+        None if low_rejection_map is None else np.asarray(low_rejection_map, dtype=np.float32),
+        None if high_rejection_map is None else np.asarray(high_rejection_map, dtype=np.float32),
+        None
+        if geometric_warp_coverage_map is None
+        else np.asarray(geometric_warp_coverage_map, dtype=np.float32),
+        int(active_frame_count),
+    )
+    return np.asarray(dq, dtype=np.int16), dict(summary), dict(stats)
+
+
 def resident_dq_map_host_f32(
     master: Any,
     weight_map: Any,

@@ -2463,6 +2463,21 @@ def _resident_dq_map(
     if return_stats:
         import glass_cuda
 
+        if (
+            assume_finite_count_maps
+            and assume_nonnegative_count_maps
+            and assume_valid_master_weight
+            and np.dtype(dq_dtype) == np.dtype(np.int16)
+            and glass_cuda.resident_dq_map_count_maps_i16_preferred()
+        ):
+            return glass_cuda.resident_dq_map_count_maps_i16(
+                master,
+                coverage_map,
+                low_rejection_map,
+                high_rejection_map,
+                geometric_warp_coverage_map,
+                active_frame_count,
+            )
         if glass_cuda.resident_dq_map_host_f32_preferred():
             return glass_cuda.resident_dq_map_host_f32(
                 master,
@@ -10613,6 +10628,9 @@ def run_resident_calibration_integration(
                     "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_map_runtime_dtype": None if dq_map is None else str(np.asarray(dq_map).dtype),
                     "dq_summary": dq_summary,
+                    "dq_map_stats_backend": dq_map_stats_payload.get("stats_backend"),
+                    "dq_map_stats_profile": dq_map_stats_payload.get("stats_profile"),
+                    "dq_map_stats_native_method": dq_map_stats_payload.get("native_method"),
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
                     "source_dq_summary": source_dq_summary,
@@ -11949,6 +11967,9 @@ def run_resident_calibration_integration(
                     "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_map_runtime_dtype": None if dq_map is None else str(np.asarray(dq_map).dtype),
                     "dq_summary": dq_summary,
+                    "dq_map_stats_backend": dq_map_stats_payload.get("stats_backend"),
+                    "dq_map_stats_profile": dq_map_stats_payload.get("stats_profile"),
+                    "dq_map_stats_native_method": dq_map_stats_payload.get("native_method"),
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
                     "source_dq_summary": source_dq_summary,
