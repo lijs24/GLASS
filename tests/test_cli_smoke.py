@@ -715,6 +715,8 @@ def test_cli_resident_run_auto_reference_scout_feeds_reference_admission(
                 str(run),
                 "--resident-reference-scout-stride",
                 "1",
+                "--resident-reference-scout-backend",
+                "cpu",
             ]
         )
         == 0
@@ -727,6 +729,8 @@ def test_cli_resident_run_auto_reference_scout_feeds_reference_admission(
 
     reference_row = next(row for row in scout["frame_quality"] if row["frame_id"] == scout["reference_frame_id"])
     assert Path(reference_row["source_path"]).name == "light_002.fits"
+    assert scout["catalog_backend"] == "cpu"
+    assert reference_row["catalog_backend"] == "cpu"
     assert quality["reference_frame_id"] == scout["reference_frame_id"]
     assert quality["source_artifact"] == str(run / "resident_reference_scout.json")
     assert admission["blocking"] is False
@@ -748,7 +752,7 @@ def test_resident_reference_scout_prefers_dominant_orientation(tmp_path: Path) -
     assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
     assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
 
-    scout_path = write_resident_reference_scout(plan, run, sample_stride=1, max_frames=0)
+    scout_path = write_resident_reference_scout(plan, run, sample_stride=1, max_frames=0, catalog_backend="cpu")
     scout = read_json(scout_path)
     reference_row = next(row for row in scout["frame_quality"] if row["frame_id"] == scout["reference_frame_id"])
 
@@ -756,6 +760,111 @@ def test_resident_reference_scout_prefers_dominant_orientation(tmp_path: Path) -
     assert scout["orientation_constraint_applied"] is True
     assert Path(reference_row["source_path"]).name.startswith("light_west_")
     assert reference_row["orientation_key"] == ["west", "92.0"]
+
+
+def test_resident_reference_scout_cuda_catalog_backend_records_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import glass_cuda
+
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "cuda_scout"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    def fake_grid_catalog(data, threshold, grid_cols, grid_rows, candidates_per_cell, max_output_candidates, min_separation_px):
+        image = np.asarray(data, dtype=np.float32)
+        ys, xs = np.nonzero(image > float(threshold))
+        flux = image[ys, xs].astype(np.float32)
+        order = np.argsort(-flux, kind="stable")[: int(max_output_candidates)]
+        return {
+            "count": int(len(xs)),
+            "stored_count": int(len(order)),
+            "grid_cols": int(grid_cols),
+            "grid_rows": int(grid_rows),
+            "candidates_per_cell": int(candidates_per_cell),
+            "grid_capacity": int(grid_cols) * int(grid_rows) * int(candidates_per_cell),
+            "max_output_candidates": int(max_output_candidates),
+            "min_separation_px": float(min_separation_px),
+            "catalog_sort_mode": "fake_cuda_test",
+            "catalog_topk_mode": "fake_cuda_test",
+            "x": xs[order].astype(np.float32),
+            "y": ys[order].astype(np.float32),
+            "flux": flux[order].astype(np.float32),
+        }
+
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: True)
+    monkeypatch.setattr(glass_cuda, "star_grid_top_nms_candidates_f32", fake_grid_catalog)
+
+    scout_path = write_resident_reference_scout(
+        plan,
+        run,
+        sample_stride=1,
+        max_frames=0,
+        catalog_backend="cuda",
+    )
+    scout = read_json(scout_path)
+    reference_row = next(row for row in scout["frame_quality"] if row["frame_id"] == scout["reference_frame_id"])
+
+    assert scout["catalog_backend_requested"] == "cuda"
+    assert scout["catalog_backend"] == "cuda"
+    assert scout["catalog_backend_resolution"]["cuda_status"] == "available"
+    assert Path(reference_row["source_path"]).name == "light_002.fits"
+    assert reference_row["catalog_backend"] == "cuda"
+    assert reference_row["star_detector"] == "cuda_grid_top_nms_candidates_f32_sampled_raw"
+    assert reference_row["catalog_diagnostics"]["catalog_model"] == "cuda_grid_top_nms_candidates_f32"
+    assert reference_row["catalog_diagnostics"]["catalog_sort_mode"] == "fake_cuda_test"
+
+
+def test_resident_reference_scout_auto_keeps_cpu_until_cuda_reference_health_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import glass_cuda
+
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "auto_cpu_scout"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: True)
+
+    scout_path = write_resident_reference_scout(plan, run, sample_stride=1, max_frames=0, catalog_backend="auto")
+    scout = read_json(scout_path)
+
+    assert scout["catalog_backend_requested"] == "auto"
+    assert scout["catalog_backend"] == "cpu"
+    assert scout["catalog_backend_resolution"]["cuda_status"] == "available"
+    assert scout["catalog_backend_resolution"]["reason"] == (
+        "cuda_reference_scout_requires_explicit_backend_until_real_reference_health_passes"
+    )
+
+
+def test_resident_reference_scout_explicit_cuda_backend_reports_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import glass_cuda
+
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "cuda_unavailable_scout"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: False)
+
+    with pytest.raises(RuntimeError, match="CUDA backend requested but unavailable"):
+        write_resident_reference_scout(plan, run, catalog_backend="cuda")
 
 
 def test_run_defaults_fallback_to_tile_when_cuda_unavailable() -> None:

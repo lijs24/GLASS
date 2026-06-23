@@ -21,6 +21,7 @@ from glass.engine.registration import register_calibrated_frames
 from glass.engine.resident_calibration_artifacts import build_resident_calibration_artifacts
 from glass.engine.resident_cuda import build_resident_memory_admission, run_resident_calibration_integration
 from glass.engine.resident_reference_scout import (
+    DEFAULT_REFERENCE_SCOUT_BACKEND,
     DEFAULT_REFERENCE_SCOUT_MAX_FRAMES,
     DEFAULT_REFERENCE_SCOUT_MAX_STARS,
     DEFAULT_REFERENCE_SCOUT_SAMPLE_SIDE,
@@ -1049,6 +1050,7 @@ def _write_resident_reference_scout_if_needed(
             DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA,
         ),
         max_stars=getattr(args, "resident_reference_scout_max_stars", DEFAULT_REFERENCE_SCOUT_MAX_STARS),
+        catalog_backend=getattr(args, "resident_reference_scout_backend", DEFAULT_REFERENCE_SCOUT_BACKEND),
     )
     args._resident_reference_scout = str(scout_path)
     return scout_path
@@ -5890,6 +5892,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-reference-scout-backend",
+        choices=["auto", "cpu", "cuda"],
+        default=DEFAULT_REFERENCE_SCOUT_BACKEND,
+        help="star catalog backend for the resident raw-light reference scout",
+    )
+    run.add_argument(
         "--resident-reference-scout-stride",
         type=int,
         default=DEFAULT_REFERENCE_SCOUT_SAMPLE_STRIDE,
@@ -6343,6 +6351,12 @@ def build_parser() -> argparse.ArgumentParser:
             "raw-light sampled reference scout for default resident matrix-registration audits; "
             "auto writes resident_reference_scout.json and frame_quality.json when no explicit reference exists"
         ),
+    )
+    audit.add_argument(
+        "--resident-reference-scout-backend",
+        choices=["auto", "cpu", "cuda"],
+        default=DEFAULT_REFERENCE_SCOUT_BACKEND,
+        help="star catalog backend for the resident raw-light reference scout in audit runs",
     )
     audit.add_argument(
         "--resident-reference-scout-stride",

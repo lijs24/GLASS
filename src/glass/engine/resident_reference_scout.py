@@ -18,6 +18,7 @@ DEFAULT_REFERENCE_SCOUT_SAMPLE_SIDE = 768
 DEFAULT_REFERENCE_SCOUT_MAX_FRAMES = 64
 DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA = 5.0
 DEFAULT_REFERENCE_SCOUT_MAX_STARS = 300
+DEFAULT_REFERENCE_SCOUT_BACKEND = "auto"
 
 
 def _plan_light_frames(plan: dict[str, Any]) -> list[dict[str, Any]]:
@@ -117,6 +118,139 @@ def _sampled_light_frames(light_frames: list[dict[str, Any]], max_frames: int) -
     return selected
 
 
+def _cuda_catalog_available() -> tuple[bool, str]:
+    try:
+        import glass_cuda
+    except Exception as exc:
+        return False, f"import_failed:{type(exc).__name__}: {exc}"
+    if not getattr(glass_cuda, "cuda_available", lambda: False)():
+        return False, "cuda_unavailable"
+    if not hasattr(glass_cuda, "star_grid_top_nms_candidates_f32"):
+        return False, "missing_star_grid_top_nms_candidates_f32"
+    return True, "available"
+
+
+def _resolve_catalog_backend(requested: str) -> tuple[str, dict[str, Any]]:
+    mode = str(requested or DEFAULT_REFERENCE_SCOUT_BACKEND)
+    if mode not in {"auto", "cpu", "cuda"}:
+        raise ValueError("resident reference scout backend must be auto, cpu, or cuda")
+    available, reason = _cuda_catalog_available()
+    if mode == "cpu":
+        return "cpu", {"requested": mode, "effective": "cpu", "cuda_status": reason}
+    if mode == "cuda":
+        if not available:
+            raise RuntimeError(f"resident reference scout CUDA backend requested but unavailable: {reason}")
+        return "cuda", {"requested": mode, "effective": "cuda", "cuda_status": reason}
+    return {
+        True: (
+            "cpu",
+            {
+                "requested": mode,
+                "effective": "cpu",
+                "cuda_status": reason,
+                "reason": "cuda_reference_scout_requires_explicit_backend_until_real_reference_health_passes",
+            },
+        ),
+        False: ("cpu", {"requested": mode, "effective": "cpu", "cuda_status": reason}),
+    }[available]
+
+
+def _cuda_catalog_metrics(
+    sample: np.ndarray,
+    *,
+    median: float,
+    noise: float,
+    threshold_sigma: float,
+    max_stars: int,
+) -> tuple[dict[str, float | None], float, dict[str, float], int, dict[str, Any]]:
+    import glass_cuda
+
+    threshold = float(median) + float(threshold_sigma) * max(float(noise), 1.0e-6)
+    height, width = sample.shape
+    grid_cols = max(1, min(16, int(np.ceil(width / 64.0))))
+    grid_rows = max(1, min(12, int(np.ceil(height / 64.0))))
+    min_separation = max(2.0, float(min(height, width)) / 32.0)
+    catalog = glass_cuda.star_grid_top_nms_candidates_f32(
+        sample,
+        threshold,
+        grid_cols,
+        grid_rows,
+        4,
+        int(max_stars),
+        min_separation,
+    )
+    stored_count = int(catalog.get("stored_count") or 0)
+    flux = np.asarray(catalog.get("flux", []), dtype=np.float32)
+    peak_snr_values = np.maximum(flux - np.float32(median), 0.0) / np.float32(max(float(noise), 1.0e-6))
+    finite_snr = peak_snr_values[np.isfinite(peak_snr_values)]
+    peak_snr = float(np.median(finite_snr)) if finite_snr.size else 0.0
+    star_metrics = {
+        "fwhm_median_px": None,
+        "fwhm_iqr_px": None,
+        "eccentricity_median": None,
+        "star_snr_median": peak_snr,
+        "star_flux_median": None if flux.size == 0 else float(np.median(flux)),
+    }
+    weight, components = combined_quality_weight(
+        star_count=stored_count,
+        star_snr=peak_snr,
+        fwhm_px=None,
+        eccentricity=None,
+        background_rms=float(noise),
+        saturation_fraction=0.0,
+    )
+    diagnostics = {
+        "catalog_model": "cuda_grid_top_nms_candidates_f32",
+        "threshold": threshold,
+        "threshold_sigma": float(threshold_sigma),
+        "grid_cols": grid_cols,
+        "grid_rows": grid_rows,
+        "candidates_per_cell": 4,
+        "max_output_candidates": int(max_stars),
+        "min_separation_px": min_separation,
+        "detected_count": int(catalog.get("count") or 0),
+        "stored_count": stored_count,
+        "catalog_sort_mode": str(catalog.get("catalog_sort_mode", "unavailable")),
+        "catalog_topk_mode": str(catalog.get("catalog_topk_mode", "unavailable")),
+    }
+    return star_metrics, weight, components, stored_count, diagnostics
+
+
+def _cpu_star_metrics(
+    sample: np.ndarray,
+    *,
+    median: float,
+    noise: float,
+    threshold_sigma: float,
+    max_stars: int,
+) -> tuple[dict[str, float | None], float, dict[str, float], int, dict[str, Any]]:
+    stars = detect_stars(
+        sample,
+        threshold_sigma=float(threshold_sigma),
+        max_stars=int(max_stars),
+        background=median,
+        noise=noise,
+        window_radius=2,
+        min_separation_px=2.0,
+    )
+    star_metrics = summarize_stars(stars)
+    snr = float(star_metrics["star_snr_median"] or 0.0)
+    weight, components = combined_quality_weight(
+        star_count=len(stars),
+        star_snr=snr,
+        fwhm_px=star_metrics["fwhm_median_px"],
+        eccentricity=star_metrics["eccentricity_median"],
+        background_rms=float(noise),
+        saturation_fraction=0.0,
+    )
+    diagnostics = {
+        "catalog_model": "cpu_robust_local_maximum_moments_v1",
+        "detected_count": len(stars),
+        "stored_count": len(stars),
+    }
+    return star_metrics, weight, components, len(stars), diagnostics
+
+
 def _scout_frame_quality(
     frame: dict[str, Any],
     *,
@@ -124,6 +258,7 @@ def _scout_frame_quality(
     sample_side: int,
     threshold_sigma: float,
     max_stars: int,
+    catalog_backend: str,
 ) -> dict[str, Any]:
     path = Path(str(frame["path"]))
     warnings: list[str] = []
@@ -139,33 +274,35 @@ def _scout_frame_quality(
     finite = sample[np.isfinite(sample)]
     stats = robust_background(sample)
     mean = float(np.mean(finite, dtype=np.float64)) if finite.size else 0.0
-    stars = detect_stars(
-        sample,
-        threshold_sigma=float(threshold_sigma),
-        max_stars=int(max_stars),
-        background=stats.median,
-        noise=stats.noise,
-        window_radius=2,
-        min_separation_px=2.0,
-    )
-    star_metrics = summarize_stars(stars)
+    if catalog_backend == "cuda":
+        star_metrics, weight, components, star_count, catalog_diagnostics = _cuda_catalog_metrics(
+            sample,
+            median=stats.median,
+            noise=stats.noise,
+            threshold_sigma=threshold_sigma,
+            max_stars=max_stars,
+        )
+        star_detector = "cuda_grid_top_nms_candidates_f32_sampled_raw"
+        weight_source = "resident_reference_scout_cuda_catalog_raw_sample_v1"
+    else:
+        star_metrics, weight, components, star_count, catalog_diagnostics = _cpu_star_metrics(
+            sample,
+            median=stats.median,
+            noise=stats.noise,
+            threshold_sigma=threshold_sigma,
+            max_stars=max_stars,
+        )
+        star_detector = "robust_local_maximum_moments_v1_sampled_raw"
+        weight_source = "resident_reference_scout_raw_sample_v1"
     snr = float(star_metrics["star_snr_median"] or 0.0)
-    weight, components = combined_quality_weight(
-        star_count=len(stars),
-        star_snr=snr,
-        fwhm_px=star_metrics["fwhm_median_px"],
-        eccentricity=star_metrics["eccentricity_median"],
-        background_rms=stats.rms,
-        saturation_fraction=0.0,
-    )
-    if not stars:
+    if star_count <= 0:
         warnings.append("no stars detected in sampled raw light")
     quality = FrameQuality(
         frame_id=str(frame.get("id")),
         filter=frame.get("filter"),
         background_median=stats.median,
         background_rms=stats.rms,
-        star_count=len(stars),
+        star_count=star_count,
         fwhm_px=star_metrics["fwhm_median_px"],
         eccentricity=star_metrics["eccentricity_median"],
         snr=snr,
@@ -176,7 +313,7 @@ def _scout_frame_quality(
         noise_mad=stats.noise,
         saturation_fraction=0.0,
         quality_score=weight,
-        weight_source="resident_reference_scout_raw_sample_v1",
+        weight_source=weight_source,
         weight_components=components,
         star_metrics=star_metrics,
     )
@@ -184,16 +321,18 @@ def _scout_frame_quality(
     row.update(
         {
             "metric_source": "resident_reference_scout_raw_light_sample_v1",
-        "source_path": str(path),
-        "orientation_key": list(_frame_orientation_key(frame)),
-        "sample_stride": int(sample_stride),
+            "source_path": str(path),
+            "orientation_key": list(_frame_orientation_key(frame)),
+            "sample_stride": int(sample_stride),
             "sample_side": int(sample_side),
             "sample_origin_xy": [int(x0), int(y0)],
             "sample_shape": [int(sample.shape[0]), int(sample.shape[1])],
             "full_shape": full_shape,
             "sample_pixel_count": int(finite.size),
-            "reference_candidate": bool(stars),
-            "star_detector": "robust_local_maximum_moments_v1_sampled_raw",
+            "reference_candidate": bool(star_count > 0),
+            "star_detector": star_detector,
+            "catalog_backend": catalog_backend,
+            "catalog_diagnostics": catalog_diagnostics,
         }
     )
     return row
@@ -208,6 +347,7 @@ def build_resident_reference_scout(
     max_frames: int = DEFAULT_REFERENCE_SCOUT_MAX_FRAMES,
     threshold_sigma: float = DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA,
     max_stars: int = DEFAULT_REFERENCE_SCOUT_MAX_STARS,
+    catalog_backend: str = DEFAULT_REFERENCE_SCOUT_BACKEND,
 ) -> dict[str, Any]:
     plan = read_json(plan_path)
     if not isinstance(plan, dict):
@@ -217,6 +357,7 @@ def build_resident_reference_scout(
         raise ValueError("resident reference scout requires at least one light frame in the processing plan")
     dominant_orientation = _dominant_orientation_key(light_frames)
     scouted_frames = _sampled_light_frames(light_frames, max_frames=max_frames)
+    backend, backend_resolution = _resolve_catalog_backend(catalog_backend)
 
     rows: list[dict[str, Any]] = []
     row_errors: list[dict[str, Any]] = []
@@ -229,6 +370,7 @@ def build_resident_reference_scout(
                     sample_side=max(1, int(sample_side)),
                     threshold_sigma=float(threshold_sigma),
                     max_stars=max(1, int(max_stars)),
+                    catalog_backend=backend,
                 )
             )
         except Exception as exc:
@@ -271,6 +413,9 @@ def build_resident_reference_scout(
         "max_frames": int(max_frames),
         "threshold_sigma": float(threshold_sigma),
         "max_stars": max(1, int(max_stars)),
+        "catalog_backend_requested": str(catalog_backend),
+        "catalog_backend": backend,
+        "catalog_backend_resolution": backend_resolution,
         "frame_count": len(light_frames),
         "scouted_frame_count": len(scouted_frames),
         "dominant_orientation_key": None if dominant_orientation is None else list(dominant_orientation),
@@ -303,6 +448,7 @@ def write_resident_reference_scout(
     max_frames: int = DEFAULT_REFERENCE_SCOUT_MAX_FRAMES,
     threshold_sigma: float = DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA,
     max_stars: int = DEFAULT_REFERENCE_SCOUT_MAX_STARS,
+    catalog_backend: str = DEFAULT_REFERENCE_SCOUT_BACKEND,
 ) -> Path:
     run = Path(run_dir)
     payload = build_resident_reference_scout(
@@ -313,6 +459,7 @@ def write_resident_reference_scout(
         max_frames=max_frames,
         threshold_sigma=threshold_sigma,
         max_stars=max_stars,
+        catalog_backend=catalog_backend,
     )
     scout_path = run / "resident_reference_scout.json"
     quality_path = run / "frame_quality.json"

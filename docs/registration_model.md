@@ -638,12 +638,17 @@ The selection policy is deliberately simple and auditable:
 - inspect at most `--resident-reference-scout-max-frames` light frames;
 - read a centered `--resident-reference-scout-sample-side` crop per frame;
 - apply `--resident-reference-scout-stride` within the crop;
+- resolve `--resident-reference-scout-backend auto` to the CPU star detector
+  until the CUDA catalog reference-health gate is proven on real data; explicit
+  `--resident-reference-scout-backend cuda` records CUDA grid-top-NMS catalog
+  diagnostics for opt-in experiments;
 - prefer the dominant `PIERSIDE`/rotation orientation when metadata is known;
 - then sort by star count, combined sample quality, FWHM, eccentricity, and
   background RMS.
 
 This avoids the unsafe first-light fallback while keeping startup cost low on
-external disks. It is still a CPU/raw-light scout, not the final resident GPU
-quality-reference implementation. The intended next step is to replace the
-inside of this stage with resident GPU star catalogs and batched quality metrics
-while preserving the same artifact contract.
+external disks. The CUDA backend is currently opt-in because the first real
+200-light probe showed that raw sampled catalog peak counts alone can select a
+poor registration reference. The intended next step is to add a real
+reference-health gate using resident registration evidence or calibrated-frame
+GPU catalogs before any CUDA scout path becomes the `auto` default.
