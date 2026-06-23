@@ -14938,6 +14938,62 @@ Completed in Gate446:
   - full metrics summary:
     `C:\glass_runs\phase2_s2_gate554_ready_batch_select\final_20260623_165105\gate554_final_metrics_summary.json`.
 
+### S2-Gate 555: Throughput-v3 Prefetch32 Default Retune
+
+- Continued the resident CUDA I/O/calibration mainline by retuning the current
+  default `throughput-v3-io` preset against the post-Gate554 raw-u16,
+  ready-first, callback-release path.
+- Completed:
+  - changed default `throughput-v3-io` from `resident_prefetch_frames=24` to
+    `resident_prefetch_frames=32`;
+  - kept `resident_prefetch_workers=16`, pinned-ring H2D, queued refill,
+    calibration batch `16`, streams `4`, wave `4`, and callback-queue release;
+  - updated benchmark-contract expectations for `throughput-v3-io`;
+  - updated CLI preset and acceptance-audit tests;
+  - recorded that 48/96/200-frame prefetch reduces queue wait but regresses
+    light-stage and end-to-end time on the current machine.
+- Tests:
+  - focused CLI/acceptance preset tests: `3 passed in 0.42 s`;
+  - full pytest: `1189 passed in 45.03 s`.
+- Real 200-light matrix:
+  - broad matrix:
+    `C:\glass_runs\phase2_s2_gate555_prefetch_depth_matrix\runs_20260623_165707`;
+  - nearby matrix:
+    `C:\glass_runs\phase2_s2_gate555_prefetch_depth_matrix\nearby_20260623_165816`;
+  - refined matrix:
+    `C:\glass_runs\phase2_s2_gate555_prefetch_depth_matrix\refine_20260623_165929`;
+  - postpatch default validation:
+    `C:\glass_runs\phase2_s2_gate555_prefetch32_default\runs_20260623_170124\default_prefetch32_postpatch`.
+- Key timing summary:
+
+  | Run | Shell s | Resident stage s | Light read/upload/calibrate s | Ready wait s | Pinned bytes | SHA256 vs Gate554 |
+  | --- | ---: | ---: | ---: | ---: | ---: | --- |
+  | Gate554 default no-env baseline | `5.429829` | `5.031444` | `2.588569` | `1.158067` | `2959257600` | baseline |
+  | Gate555 postpatch default p32/w16 | `5.251073` | `4.872004` | `2.417012` | `0.748604` | `3945676800` | identical |
+  | Nearby p24/w16 control | `5.355637` | `4.994760` | `2.567499` | `1.159996` | `2959257600` | identical |
+  | Nearby p32/w16 | `5.126908` | `4.731957` | `2.419902` | `0.739668` | `3945676800` | identical |
+  | Refined p36/w16 | `5.128637` | `4.759546` | `2.454329` | `0.724921` | `4438886400` | identical |
+  | Broad p48/w16 | `6.010976` | `5.632519` | `2.626816` | `0.627772` | `5918515200` | identical |
+  | Broad p96/w16 | `7.039116` | `6.652209` | `3.565068` | `0.575984` | `11837030400` | identical |
+  | Broad p200/w16 | `10.414094` | `10.043203` | `6.126009` | `0.599989` | `24660480000` | identical |
+
+- Interpretation:
+  - p32/w16 is the best current default candidate for the targeted
+    read/upload/calibrate stage, while p36/w16 is close but slightly slower on
+    the light-stage target;
+  - very deep prefetch is a negative result: it lowers measured ready wait but
+    increases pinned host memory pressure and total light-stage time;
+  - the default retune increases pinned host memory by `986419200` bytes versus
+    p24/w16 but remains below `4 GB` for this 200-light raw-u16 benchmark;
+  - all successful matrix runs were bitwise-identical to the Gate554 default
+    baseline, so this is a scheduling-only change.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_555_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_555_prefetch32_default_summary.json`;
+  - postpatch full summary:
+    `C:\glass_runs\phase2_s2_gate555_prefetch32_default\runs_20260623_170124\gate555_postpatch_default_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

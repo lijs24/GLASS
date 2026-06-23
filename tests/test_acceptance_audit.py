@@ -2888,7 +2888,7 @@ def test_acceptance_audit_accepts_io_runtime_preset_from_artifact(tmp_path: Path
         ),
         resident_io_pipeline={
             "h2d_mode": "pinned_ring",
-            "prefetch_frames": 24,
+            "prefetch_frames": 32,
             "prefetch_workers": 16,
             "calibration_batch_requested_frames": 16,
             "calibration_batch_requested_streams": 4,

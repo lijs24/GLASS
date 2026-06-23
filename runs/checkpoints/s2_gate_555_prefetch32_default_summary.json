@@ -1,0 +1,127 @@
+{
+  "gate": "S2-Gate 555",
+  "date": "2026-06-23",
+  "result": "green",
+  "decision": "promote_prefetch32_as_throughput_v3_io_default",
+  "changed_default": {
+    "resident_runtime_preset": "throughput-v3-io",
+    "resident_prefetch_frames_before": 24,
+    "resident_prefetch_frames_after": 32,
+    "resident_prefetch_workers": 16,
+    "resident_h2d_mode": "pinned_ring",
+    "resident_prefetch_refill_mode": "queued",
+    "resident_calibration_batch_frames": 16,
+    "resident_calibration_streams": 4,
+    "resident_calibration_wave_frames": 4,
+    "resident_calibration_release_mode": "callback_queue"
+  },
+  "runs": {
+    "baseline_gate554_default_noenv": {
+      "path": "C:\\glass_runs\\phase2_s2_gate554_ready_batch_select\\final_20260623_165105\\default_noenv",
+      "shell_seconds": 5.4298293,
+      "resident_stage_elapsed_s": 5.031443500018213,
+      "light_read_upload_calibrate_s": 2.588569000014104,
+      "prefetch_ready_queue_wait_s": 1.1580666000954807,
+      "host_pinned_bytes": 2959257600
+    },
+    "postpatch_default_prefetch32": {
+      "path": "C:\\glass_runs\\phase2_s2_gate555_prefetch32_default\\runs_20260623_170124\\default_prefetch32_postpatch",
+      "shell_seconds": 5.251072999963071,
+      "resident_stage_elapsed_s": 4.872004400007427,
+      "light_read_upload_calibrate_s": 2.4170120999915525,
+      "prefetch_ready_queue_wait_s": 0.7486038998467848,
+      "host_pinned_bytes": 3945676800,
+      "prefetch_frames": 32,
+      "prefetch_workers": 16,
+      "hash_match_baseline": true,
+      "surface_contract_passed": true,
+      "dq_pixel_closure_passed": true
+    }
+  },
+  "deltas_vs_gate554_default_noenv": {
+    "shell_s": -0.17875630003692855,
+    "stage_s": -0.1594391000107862,
+    "light_s": -0.17155690002255142,
+    "ready_wait_s": -0.4094627002486959,
+    "host_pinned_bytes": 986419200
+  },
+  "matrix_highlights": [
+    {
+      "name": "nearby_p24_w16_control",
+      "shell_seconds": 5.355637300002854,
+      "resident_stage_elapsed_s": 4.994760099973064,
+      "light_read_upload_calibrate_s": 2.5674990999978036,
+      "prefetch_ready_queue_wait_s": 1.159996099944692,
+      "host_pinned_bytes": 2959257600,
+      "hash_match_baseline": true
+    },
+    {
+      "name": "nearby_p32_w16",
+      "shell_seconds": 5.126907599973492,
+      "resident_stage_elapsed_s": 4.731957399984822,
+      "light_read_upload_calibrate_s": 2.419901799992658,
+      "prefetch_ready_queue_wait_s": 0.7396678003715351,
+      "host_pinned_bytes": 3945676800,
+      "hash_match_baseline": true
+    },
+    {
+      "name": "refined_p36_w16",
+      "shell_seconds": 5.128636699984781,
+      "resident_stage_elapsed_s": 4.759545899985824,
+      "light_read_upload_calibrate_s": 2.454329299973324,
+      "prefetch_ready_queue_wait_s": 0.7249208998400718,
+      "host_pinned_bytes": 4438886400,
+      "hash_match_baseline": true
+    },
+    {
+      "name": "broad_p48_w16_negative",
+      "shell_seconds": 6.010976400051732,
+      "resident_stage_elapsed_s": 5.632518700032961,
+      "light_read_upload_calibrate_s": 2.6268159999744967,
+      "prefetch_ready_queue_wait_s": 0.6277724002138712,
+      "host_pinned_bytes": 5918515200,
+      "hash_match_baseline": true
+    },
+    {
+      "name": "broad_p96_w16_negative",
+      "shell_seconds": 7.039115599996876,
+      "resident_stage_elapsed_s": 6.652208799961954,
+      "light_read_upload_calibrate_s": 3.565067900053691,
+      "prefetch_ready_queue_wait_s": 0.5759837000514381,
+      "host_pinned_bytes": 11837030400,
+      "hash_match_baseline": true
+    },
+    {
+      "name": "broad_p200_w16_negative",
+      "shell_seconds": 10.414093700004742,
+      "resident_stage_elapsed_s": 10.043202999979258,
+      "light_read_upload_calibrate_s": 6.12600879999809,
+      "prefetch_ready_queue_wait_s": 0.599989200127311,
+      "host_pinned_bytes": 24660480000,
+      "hash_match_baseline": true
+    }
+  ],
+  "output_hashes": {
+    "resident_master_H.fits": "8bc069ce6858ab5e065b5d9af297c35c36d4240c13980546e43cfb480115e110",
+    "resident_weight_map_H.fits": "5862111ee6f527a40671ac13f1faa43f037c90271f872f27af4acf17040fbfe8",
+    "resident_coverage_map_H.fits": "b87517be794a3b4bdcff0d8536ee0188da6afa54ed2be818bd911ba6cf1be1b3",
+    "resident_low_rejection_map_H.fits": "f1181e0ce52a7ff77b988afaf8a8911a1beaf94df54b25b0aa51014cb0d66e23",
+    "resident_high_rejection_map_H.fits": "adb66c931c5a48d6e0d7f5c2fcbcc58481420ad4912304843a3802089050c805",
+    "resident_dq_map_H.fits": "934f661119ce18bbcac1d369488aed4d959669c6ef614d6076d74be06e69ccfb"
+  },
+  "tests": {
+    "focused": "3 passed in 0.42 s",
+    "full_pytest": "1189 passed in 45.03 s"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "clean_room": {
+    "compliant": true,
+    "notes": "GLASS-owned scheduling controls and artifacts only; no external implementation source inspected; no pixel math or accepted-frame changes."
+  },
+  "next_step": "Reduce remaining ready wait and Python/native read orchestration without promoting over-deep prefetch."
+}
