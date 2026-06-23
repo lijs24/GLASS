@@ -1061,6 +1061,7 @@ class _LightPrefetcher:
         self.ready_queue_callback_count = 0
         self.ready_queue_wait_count = 0
         self.ready_queue_wait_s = 0.0
+        self.ready_candidate_probe_mode = "ready_set_intersection"
         ready_batch_policy = str(os.environ.get("GLASS_RESIDENT_READY_BATCH_SELECT", "")).strip().lower()
         self.ready_batch_select_policy = (
             "env_enabled"
@@ -1545,6 +1546,17 @@ class _LightPrefetcher:
             self._fill()
         return data, read_profile, wait_elapsed
 
+    def _ready_candidate_indices_locked(self, candidates: set[int]) -> list[int]:
+        if not candidates or not self.ready_indices:
+            return []
+        if len(self.ready_indices) <= len(candidates):
+            ready = self.ready_indices.intersection(candidates)
+        else:
+            ready = candidates.intersection(self.ready_indices)
+        if ready:
+            ready.intersection_update(self.pending.keys())
+        return sorted(ready)
+
     def ready_index(self, indices: Iterable[int]) -> int | None:
         candidates = {int(index) for index in indices}
         if not candidates:
@@ -1553,11 +1565,7 @@ class _LightPrefetcher:
             return min(candidates)
         while True:
             with self.ready_condition:
-                ready = [
-                    index
-                    for index in candidates
-                    if index in self.ready_indices and index in self.pending
-                ]
+                ready = self._ready_candidate_indices_locked(candidates)
                 if ready:
                     return min(ready)
                 has_pending_candidate = any(index in self.pending for index in candidates)
@@ -1595,11 +1603,7 @@ class _LightPrefetcher:
         selected: list[int] = []
         while candidates and len(selected) < max_count:
             with self.ready_condition:
-                ready = [
-                    index
-                    for index in sorted(candidates)
-                    if index in self.ready_indices and index in self.pending
-                ]
+                ready = self._ready_candidate_indices_locked(candidates)
                 if ready:
                     take = ready[: max_count - len(selected)]
                     selected.extend(take)
@@ -11591,6 +11595,7 @@ def run_resident_calibration_integration(
                 "prefetch_ready_queue_callback_count": int(light_prefetch.ready_queue_callback_count),
                 "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
                 "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
+                "prefetch_ready_candidate_probe_mode": str(light_prefetch.ready_candidate_probe_mode),
                 "prefetch_ready_batch_select_policy": str(light_prefetch.ready_batch_select_policy),
                 "prefetch_ready_batch_select_enabled": bool(light_prefetch.ready_batch_select_enabled),
                 "prefetch_ready_batch_select_count": int(light_prefetch.ready_batch_select_count),
@@ -11716,6 +11721,7 @@ def run_resident_calibration_integration(
                 "prefetch_ready_queue_callback_count": int(light_prefetch.ready_queue_callback_count),
                 "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
                 "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
+                "prefetch_ready_candidate_probe_mode": str(light_prefetch.ready_candidate_probe_mode),
                 "prefetch_ready_batch_select_policy": str(light_prefetch.ready_batch_select_policy),
                 "prefetch_ready_batch_select_enabled": bool(light_prefetch.ready_batch_select_enabled),
                 "prefetch_ready_batch_select_count": int(light_prefetch.ready_batch_select_count),
@@ -12299,6 +12305,7 @@ def run_resident_calibration_integration(
                         ),
                         "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
                         "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
+                        "prefetch_ready_candidate_probe_mode": str(light_prefetch.ready_candidate_probe_mode),
                         "prefetch_ready_batch_select_policy": str(light_prefetch.ready_batch_select_policy),
                         "prefetch_ready_batch_select_enabled": bool(light_prefetch.ready_batch_select_enabled),
                         "prefetch_ready_batch_select_count": int(light_prefetch.ready_batch_select_count),

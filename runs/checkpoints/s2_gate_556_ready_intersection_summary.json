@@ -1,0 +1,74 @@
+{
+  "gate": "S2-Gate 556",
+  "date": "2026-06-23",
+  "result": "green",
+  "decision": "keep_ready_set_intersection_default_do_not_promote_opt_in_schedulers",
+  "implementation": {
+    "ready_candidate_probe_mode": "ready_set_intersection",
+    "single_selection_order": "smallest_ready_candidate",
+    "batch_selection_order": "sorted_ready_candidates_up_to_batch_limit",
+    "artifact_field": "prefetch_ready_candidate_probe_mode"
+  },
+  "baseline": {
+    "name": "Gate555 default p32/w16",
+    "path": "C:\\glass_runs\\phase2_s2_gate555_prefetch32_default\\runs_20260623_170124\\default_prefetch32_postpatch",
+    "shell_seconds": 5.251072999963071,
+    "resident_stage_elapsed_s": 4.872004400007427,
+    "light_read_upload_calibrate_s": 2.4170120999915525,
+    "prefetch_ready_queue_wait_s": 0.7486038998467848
+  },
+  "postpatch_default": {
+    "path": "C:\\glass_runs\\phase2_s2_gate556_ready_intersection_light\\runs_20260623_171238\\default_ready_intersection_light",
+    "summary_path": "C:\\glass_runs\\phase2_s2_gate556_ready_intersection_light\\runs_20260623_171238\\gate556_ready_intersection_light_summary.json",
+    "shell_seconds": 5.248957900039386,
+    "resident_stage_elapsed_s": 4.894711499975529,
+    "light_read_upload_calibrate_s": 2.414014300040435,
+    "prefetch_ready_queue_wait_s": 0.7411338998936117,
+    "prefetch_frames": 32,
+    "hash_match_baseline": true,
+    "surface_contract_passed": true,
+    "dq_pixel_closure_passed": true
+  },
+  "postpatch_deltas_vs_gate555": {
+    "shell_s": -0.002115099923685193,
+    "stage_s": 0.02270709996810183,
+    "light_s": -0.0029977999511174858,
+    "ready_wait_s": -0.007469999953173101
+  },
+  "candidate_matrix": {
+    "path": "C:\\glass_runs\\phase2_s2_gate556_scheduler_candidates\\runs_20260623_170611\\gate556_scheduler_candidates_summary.json",
+    "combo_path": "C:\\glass_runs\\phase2_s2_gate556_scheduler_candidates\\combos_20260623_170712\\gate556_scheduler_combo_summary.json",
+    "not_promoted": [
+      "GLASS_RESIDENT_READY_BATCH_SELECT",
+      "GLASS_RESIDENT_NATIVE_QUEUE_READ",
+      "GLASS_RESIDENT_NATIVE_BATCH_READ",
+      "GLASS_RESIDENT_NATIVE_QUEUE_DRAIN_MODE=inline"
+    ],
+    "reason": "Light-bucket differences were small and stage/shell wins were not stable under the p32 default."
+  },
+  "output_hashes": {
+    "resident_master_H.fits": "8bc069ce6858ab5e065b5d9af297c35c36d4240c13980546e43cfb480115e110",
+    "resident_weight_map_H.fits": "5862111ee6f527a40671ac13f1faa43f037c90271f872f27af4acf17040fbfe8",
+    "resident_coverage_map_H.fits": "b87517be794a3b4bdcff0d8536ee0188da6afa54ed2be818bd911ba6cf1be1b3",
+    "resident_low_rejection_map_H.fits": "f1181e0ce52a7ff77b988afaf8a8911a1beaf94df54b25b0aa51014cb0d66e23",
+    "resident_high_rejection_map_H.fits": "adb66c931c5a48d6e0d7f5c2fcbcc58481420ad4912304843a3802089050c805",
+    "resident_dq_map_H.fits": "934f661119ce18bbcac1d369488aed4d959669c6ef614d6076d74be06e69ccfb"
+  },
+  "tests": {
+    "syntax_check": "passed",
+    "focused": "4 passed in 0.91 s",
+    "resident_cuda_profile": "157 passed in 9.60 s",
+    "full_pytest": "1189 passed in 43.94 s"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "clean_room": {
+    "compliant": true,
+    "notes": "GLASS-owned scheduler code and artifacts only; no external implementation source inspected; no pixel math or accepted-frame changes."
+  },
+  "next_step": "Reduce remaining ready wait/read-H2D orchestration with a default-safe native path or a stronger resident pipeline batch primitive."
+}

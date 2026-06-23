@@ -118,6 +118,7 @@ def test_light_prefetcher_ready_index_selects_completed_candidate(monkeypatch) -
     with _LightPrefetcher(frames, depth=2, workers=2) as prefetcher:
         assert prefetcher.ready_index([0, 1]) == 1
         assert prefetcher.ready_queue_callback_count >= 1
+        assert prefetcher.ready_candidate_probe_mode == "ready_set_intersection"
         data, _profile, _wait_s = prefetcher.result(1)
         assert data.tolist() == [1.0]
 
@@ -153,6 +154,7 @@ def test_light_prefetcher_ready_indices_batch_selects_multiple_completed_candida
         assert len(selected) == 2
         assert 0 not in selected
         assert set(selected).issubset({1, 2, 3})
+        assert prefetcher.ready_candidate_probe_mode == "ready_set_intersection"
         assert prefetcher.ready_batch_select_count == 1
         assert prefetcher.ready_batch_selected_count == 2
 
@@ -3705,6 +3707,7 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(
     assert io_pipeline["prefetch_ready_batch_select_enabled"] is True
     assert io_pipeline["prefetch_ready_batch_select_count"] >= 1
     assert io_pipeline["prefetch_ready_batch_selected_count"] == 2
+    assert io_pipeline["prefetch_ready_candidate_probe_mode"] == "ready_set_intersection"
     assert io_pipeline["calibration_wave_effective_frames"] == 1
     assert io_pipeline["calibration_wave_release_mode"] == "callback_after_h2d_event"
     assert io_pipeline["calibration_batch_count"] == 1
@@ -3729,6 +3732,7 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(
     assert profile_knobs["prefetch_ready_batch_selected_count"] == io_pipeline[
         "prefetch_ready_batch_selected_count"
     ]
+    assert profile_knobs["prefetch_ready_candidate_probe_mode"] == "ready_set_intersection"
 
 
 def test_cli_resident_cuda_callback_queue_clamps_fetch_batch_to_prefetch_depth(tmp_path: Path):
@@ -3798,10 +3802,12 @@ def test_cli_resident_cuda_callback_queue_clamps_fetch_batch_to_prefetch_depth(t
     assert io_pipeline["prefetch_ready_batch_select_enabled"] is False
     assert io_pipeline["prefetch_ready_batch_select_count"] == 0
     assert io_pipeline["prefetch_ready_batch_selected_count"] == 0
+    assert io_pipeline["prefetch_ready_candidate_probe_mode"] == "ready_set_intersection"
     assert io_overlap["calibration_fetch_batch_frames"] == 1
     assert profile_knobs["calibration_fetch_batch_frames"] == 1
     assert profile_knobs["prefetch_ready_batch_select_policy"] == "env_disabled_default"
     assert profile_knobs["prefetch_ready_batch_select_enabled"] is False
+    assert profile_knobs["prefetch_ready_candidate_probe_mode"] == "ready_set_intersection"
 
 
 def test_cli_resident_cuda_callback_queue_clamps_wave_to_stream_count(tmp_path: Path):

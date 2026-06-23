@@ -14994,6 +14994,62 @@ Completed in Gate446:
   - postpatch full summary:
     `C:\glass_runs\phase2_s2_gate555_prefetch32_default\runs_20260623_170124\gate555_postpatch_default_summary.json`.
 
+### S2-Gate 556: Ready-Set Intersection Selector
+
+- Continued the resident CUDA I/O/calibration mainline by reducing ready-first
+  selector overhead without promoting unstable opt-in scheduler paths.
+- Completed:
+  - changed `_LightPrefetcher.ready_index(...)` and
+    `_LightPrefetcher.ready_indices_batch(...)` to compute ready candidates by
+    intersecting the current ready set with the candidate set and pending
+    frames, instead of scanning the full candidate list for membership;
+  - recorded `prefetch_ready_candidate_probe_mode=ready_set_intersection` in
+    resident artifacts and the light pipeline profile;
+  - kept `GLASS_RESIDENT_READY_BATCH_SELECT`,
+    `GLASS_RESIDENT_NATIVE_QUEUE_READ`, and
+    `GLASS_RESIDENT_NATIVE_BATCH_READ` opt-in, because the same p32 default
+    scheduler A/B did not show stable stage/shell wins;
+  - added focused tests for direct ready selection, batch ready selection, and
+    CLI artifact/profile propagation.
+- Tests:
+  - focused prefetcher/CLI tests: `4 passed in 0.91 s`;
+  - resident CUDA/profile tests: `157 passed in 9.60 s`;
+  - full pytest: `1189 passed in 43.94 s`.
+- Real 200-light scheduler candidate probes:
+  - first candidate matrix:
+    `C:\glass_runs\phase2_s2_gate556_scheduler_candidates\runs_20260623_170611`;
+  - combination matrix:
+    `C:\glass_runs\phase2_s2_gate556_scheduler_candidates\combos_20260623_170712`;
+  - final postpatch default validation:
+    `C:\glass_runs\phase2_s2_gate556_ready_intersection_light\runs_20260623_171238\default_ready_intersection_light`.
+- Key timing summary:
+
+  | Run | Shell s | Resident stage s | Light read/upload/calibrate s | Ready wait s | Selector / backend | SHA256 vs Gate555 |
+  | --- | ---: | ---: | ---: | ---: | --- | --- |
+  | Gate555 default baseline | `5.251073` | `4.872004` | `2.417012` | `0.748604` | old ready scan / `native_u16be_raw` | baseline |
+  | Gate556 postpatch default | `5.248958` | `4.894711` | `2.414014` | `0.741134` | `ready_set_intersection` / `native_u16be_raw` | identical |
+  | Candidate default repeat | `5.076926` | `4.707955` | `2.429361` | `0.745074` | old ready scan / `native_u16be_raw` | identical |
+  | Candidate ready-batch opt-in | `5.091549` | `4.734076` | `2.413701` | `0.769515` | ready batch env / `native_u16be_raw` | identical |
+  | Candidate native queue opt-in | `5.211115` | `4.843345` | `2.402654` | `0.754001` | native queue thread / `native_u16be_raw_queue` | identical |
+  | Candidate native batch opt-in | `5.246128` | `4.895505` | `2.438893` | `0.754998` | native batch env / `native_u16be_raw_batch` | identical |
+  | Candidate native queue inline | `5.200585` | `4.835087` | `2.409111` | `0.757858` | native queue inline / `native_u16be_raw_queue` | identical |
+
+- Interpretation:
+  - intersection selection is a default-path complexity reduction, not a large
+    200-light speed win;
+  - the final default run is bitwise-identical and effectively flat versus
+    Gate555, with a small light/ready-wait improvement and a small resident
+    stage fluctuation;
+  - native queue and ready-batch opt-ins can improve the light bucket by a few
+    milliseconds in some runs, but they do not produce stable total/stage wins,
+    so no opt-in gate is promoted.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_556_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_556_ready_intersection_summary.json`;
+  - final real summary:
+    `C:\glass_runs\phase2_s2_gate556_ready_intersection_light\runs_20260623_171238\gate556_ready_intersection_light_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

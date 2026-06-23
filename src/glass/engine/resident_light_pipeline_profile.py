@@ -178,6 +178,9 @@ def build_resident_light_pipeline_profile(
                 resident_io_pipeline,
                 "prefetch_ready_queue_wait_s",
             ),
+            "prefetch_ready_candidate_probe_mode": resident_io_pipeline.get(
+                "prefetch_ready_candidate_probe_mode"
+            ),
             "prefetch_ready_batch_select_policy": resident_io_pipeline.get(
                 "prefetch_ready_batch_select_policy"
             ),
