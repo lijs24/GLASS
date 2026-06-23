@@ -5465,12 +5465,24 @@ def run_resident_calibration_integration(
                 and resident_calibration_batch_frames > 1
                 and calibration_batch_supported
             )
-            calibration_wave_effective_frames = int(resident_calibration_batch_frames)
+            calibration_wave_requested_effective_frames = int(resident_calibration_batch_frames)
+            calibration_wave_effective_source = "batch_frame_count"
             if calibration_batch_enabled and resident_calibration_wave_frames > 0:
-                calibration_wave_effective_frames = min(
+                calibration_wave_requested_effective_frames = min(
                     int(resident_calibration_batch_frames),
                     int(resident_calibration_wave_frames),
                 )
+                calibration_wave_effective_source = "requested_wave_frames"
+            calibration_wave_effective_frames = int(calibration_wave_requested_effective_frames)
+            calibration_wave_lane_guard_applied = False
+            if (
+                calibration_batch_enabled
+                and resident_calibration_streams > 0
+                and calibration_wave_effective_frames > int(resident_calibration_streams)
+            ):
+                calibration_wave_effective_frames = int(resident_calibration_streams)
+                calibration_wave_effective_source = f"{calibration_wave_effective_source}_clamped_to_stream_count"
+                calibration_wave_lane_guard_applied = True
             calibration_wave_enabled = bool(
                 calibration_batch_enabled
                 and resident_calibration_wave_frames > 0
@@ -10426,6 +10438,11 @@ def run_resident_calibration_integration(
                 "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
                 "calibration_batch_requested_streams": int(resident_calibration_streams),
                 "calibration_wave_requested_frames": int(resident_calibration_wave_frames),
+                "calibration_wave_requested_effective_frames": int(calibration_wave_requested_effective_frames),
+                "calibration_wave_effective_frames": int(calibration_wave_effective_frames),
+                "calibration_wave_effective_source": calibration_wave_effective_source,
+                "calibration_wave_lane_guard_applied": bool(calibration_wave_lane_guard_applied),
+                "calibration_wave_stream_count_limit": int(resident_calibration_streams),
                 "calibration_release_mode_effective": calibration_release_mode_effective,
                 "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
                 "host_pinned_bytes": int(
@@ -10850,7 +10867,11 @@ def run_resident_calibration_integration(
                         "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
                         "calibration_batch_requested_streams": int(resident_calibration_streams),
                         "calibration_wave_requested_frames": int(resident_calibration_wave_frames),
+                        "calibration_wave_requested_effective_frames": int(calibration_wave_requested_effective_frames),
                         "calibration_wave_effective_frames": int(calibration_wave_effective_frames),
+                        "calibration_wave_effective_source": calibration_wave_effective_source,
+                        "calibration_wave_lane_guard_applied": bool(calibration_wave_lane_guard_applied),
+                        "calibration_wave_stream_count_limit": int(resident_calibration_streams),
                         "calibration_fetch_batch_frames": int(calibration_fetch_batch_frames),
                         "calibration_wave_enabled": bool(calibration_wave_enabled),
                         "calibration_wave_release_mode": (

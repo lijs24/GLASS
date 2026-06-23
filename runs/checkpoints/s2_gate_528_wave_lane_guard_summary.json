@@ -1,0 +1,93 @@
+{
+    "gate":  "S2-Gate 528",
+    "title":  "Resident calibration wave lane guard",
+    "created_at":  "2026-06-23",
+    "change_summary":  [
+                           "resident calibration wave size is clamped to stream/lane count before release-mode capability selection",
+                           "resident artifacts record requested/effective wave sizes and lane guard status",
+                           "native callback-release functions defensively clamp wave_frames to stream count",
+                           "resident light pipeline profile records effective guarded wave size"
+                       ],
+    "build":  {
+                  "native_rebuild_command":  "cmd /c \"call \"\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\"\" -arch=x64 -host_arch=x64 \u0026\u0026 .venv\\Scripts\\cmake.exe --build build --target _glass_cuda_native --config Release\"",
+                  "status":  "passed"
+              },
+    "tests":  {
+                  "focused_resident_cuda":  "4 passed, 87 deselected in 0.93s",
+                  "cuda_smoke":  "3 passed in 0.23s",
+                  "resident_light_pipeline_profile":  "3 passed in 0.04s",
+                  "ruff":  "passed",
+                  "full_pytest":  "1171 passed in 43.17s"
+              },
+    "real_200_light":  {
+                           "pre_fix_problematic_run":  "C:\\glass_runs\\phase2_mainline_calibration_schedule_sweep\\runs_20260623_113629\\b32_s4_w8",
+                           "post_fix_guarded_run":  "C:\\glass_runs\\phase2_s2_gate528_wave_guard_real\\runs_20260623_114527\\b32_s4_w8_guarded",
+                           "current_default_baseline":  "C:\\glass_runs\\phase2_mainline_real_200_ab\\runs_20260623_113423\\glass_current",
+                           "config":  {
+                                          "resident_calibration_batch_frames":  32,
+                                          "resident_calibration_streams":  4,
+                                          "resident_calibration_wave_frames":  8,
+                                          "resident_calibration_release_mode":  "callback_queue"
+                                      },
+                           "pre_fix":  {
+                                           "shell_elapsed_s":  22.639912,
+                                           "internal_total_s":  22.263613699993584
+                                       },
+                           "post_fix":  {
+                                            "shell_elapsed_s":  6.422997,
+                                            "internal_total_s":  6.050774999952409,
+                                            "calibration_wave_requested_frames":  8,
+                                            "calibration_wave_requested_effective_frames":  8,
+                                            "calibration_wave_effective_frames":  4,
+                                            "calibration_wave_effective_source":  "requested_wave_frames_clamped_to_stream_count",
+                                            "calibration_wave_lane_guard_applied":  true,
+                                            "calibration_release_mode_effective":  "callback_queue",
+                                            "raw_gpu_decode_enabled":  true,
+                                            "fits_read_mode_effective":  "native_u16_gpu",
+                                            "light_pipeline_wall_s":  2.621918899996672,
+                                            "light_pipeline_components_s":  {
+                                                                                "consumer_read_wait":  1.0221229999442585,
+                                                                                "master_build_or_load":  0.3575559000018984,
+                                                                                "native_calibrate_store":  0.8008971748352052,
+                                                                                "native_h2d_calibrate_store":  0.8112155,
+                                                                                "native_sync":  0.0035773000000000003,
+                                                                                "python_orchestration_unaccounted":  0.42215489997761324
+                                                                            }
+                                        },
+                           "speedup_vs_problematic_shell":  3.5248205783063575,
+                           "speedup_vs_problematic_internal":  3.6794648123866267,
+                           "bitwise_compare_to_current_default":  {
+                                                                      "resident_master_H.fits":  {
+                                                                                                     "equal":  true,
+                                                                                                     "rms":  0.0,
+                                                                                                     "max_abs":  0.0
+                                                                                                 },
+                                                                      "resident_weight_map_H.fits":  {
+                                                                                                         "equal":  true,
+                                                                                                         "rms":  0.0,
+                                                                                                         "max_abs":  0.0
+                                                                                                     },
+                                                                      "resident_coverage_map_H.fits":  {
+                                                                                                           "equal":  true,
+                                                                                                           "rms":  0.0,
+                                                                                                           "max_abs":  0.0
+                                                                                                       },
+                                                                      "resident_low_rejection_map_H.fits":  {
+                                                                                                                "equal":  true,
+                                                                                                                "rms":  0.0,
+                                                                                                                "max_abs":  0.0
+                                                                                                            },
+                                                                      "resident_high_rejection_map_H.fits":  {
+                                                                                                                 "equal":  true,
+                                                                                                                 "rms":  0.0,
+                                                                                                                 "max_abs":  0.0
+                                                                                                             },
+                                                                      "resident_dq_map_H.fits":  {
+                                                                                                     "equal":  true,
+                                                                                                     "rms":  0.0,
+                                                                                                     "max_abs":  0.0
+                                                                                                 }
+                                                                  }
+                       },
+    "clean_room":  "Only GLASS code, GLASS-generated artifacts, and user-owned 200-light data were used; no official PixInsight/WBPP/PJSR source was accessed."
+}

@@ -3456,6 +3456,74 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(tmp_path:
     assert io_pipeline["prefetch_release_fill_model"] == "batched_release_single_fill"
 
 
+def test_cli_resident_cuda_callback_queue_clamps_wave_to_stream_count(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_callback_queue_wave_guard"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "manual",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "4",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-calibration-wave-frames",
+            "4",
+            "--resident-calibration-release-mode",
+            "callback_queue",
+        ]
+    ) == 0
+
+    resident = read_json(run / "resident_artifacts.json")
+    io_pipeline = resident["artifacts"][0]["resident_io_pipeline"]
+    profile_knobs = resident["artifacts"][0]["resident_light_pipeline_profile"]["knobs"]
+    assert io_pipeline["calibration_release_mode_requested"] == "callback_queue"
+    assert io_pipeline["calibration_release_mode_effective"] == "callback_queue"
+    assert io_pipeline["calibration_wave_requested_frames"] == 4
+    assert io_pipeline["calibration_wave_requested_effective_frames"] == 4
+    assert io_pipeline["calibration_wave_effective_frames"] == 2
+    assert io_pipeline["calibration_wave_stream_count_limit"] == 2
+    assert io_pipeline["calibration_wave_lane_guard_applied"] is True
+    assert io_pipeline["calibration_wave_effective_source"] == "requested_wave_frames_clamped_to_stream_count"
+    assert io_pipeline["calibration_callback_release_capable"] is True
+    assert io_pipeline["calibration_callback_release_enabled"] is True
+    assert io_pipeline["calibration_batch_actual_stream_count"] == 2
+    assert io_pipeline["calibration_batch_timing_model"] == "multi_stream_callback_release_waves_one_final_sync"
+    assert profile_knobs["calibration_wave_effective_frames"] == 2
+    assert profile_knobs["calibration_wave_lane_guard_applied"] is True
+
+
 def test_cli_resident_cuda_callback_queue_queued_prefetch_refill(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_weight_dataset(tmp_path)

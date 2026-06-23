@@ -13289,6 +13289,67 @@ Completed in Gate446:
   - profile after:
     `C:\glass_runs\phase2_s2_gate527_pinned_slab_profile\runs_20260623_120000\profile_after.prof`.
 
+### S2-Gate 528: Resident Calibration Wave Lane Guard
+
+- Returned to the real resident CUDA calibration scheduling path after the
+  200-light high-VRAM sweep showed that requesting more calibration wave frames
+  than native lane streams silently disabled the callback-release/raw-u16 fast
+  path and pushed the run onto the slow host path. This gate fixes a scheduling
+  contract, not image math.
+- Completed:
+  - Python resident scheduling now clamps the effective calibration wave size to
+    the requested stream count before deciding callback-release capability;
+  - resident artifacts record the requested effective wave size, final effective
+    wave size, clamp source, stream-count limit, and whether the lane guard was
+    applied;
+  - resident light-pipeline profiles expose the guarded effective wave size in
+    their knob summary;
+  - native callback-release functions defensively clamp `wave_frames` to the
+    stream count as well, preserving `requested_wave_frames` for audit while
+    preventing direct native calls from over-indexing lane buffers;
+  - added a resident CUDA regression where `batch=4`, `streams=2`, `wave=4`
+    remains on callback-release with effective wave `2`.
+- Real 200-light validation:
+  - pre-fix problematic sweep:
+    `C:\glass_runs\phase2_mainline_calibration_schedule_sweep\runs_20260623_113629\b32_s4_w8`;
+  - post-fix guarded run:
+    `C:\glass_runs\phase2_s2_gate528_wave_guard_real\runs_20260623_114527\b32_s4_w8_guarded`;
+  - same M38 H-alpha 200-light plan, shared master cache, resident CUDA,
+    `similarity_cuda_triangle`, Lanczos3 warp, winsorized sigma rejection, and
+    audit maps;
+  - requested `batch=32`, `streams=4`, `wave=8`,
+    `release_mode=callback_queue`;
+  - post-fix artifact records `calibration_wave_requested_frames=8`,
+    `calibration_wave_requested_effective_frames=8`,
+    `calibration_wave_effective_frames=4`,
+    `calibration_wave_lane_guard_applied=true`,
+    `calibration_release_mode_effective=callback_queue`,
+    `raw_gpu_decode_enabled=true`, and
+    `fits_read_mode_effective=native_u16_gpu`;
+  - pre-fix shell `22.639912 s`, internal `22.263613699993584 s`;
+  - post-fix shell `6.422997 s`, internal `6.050774999952409 s`;
+  - post-fix `resident_light_pipeline_profile` reports light pipeline wall
+    `2.621918899996672 s`, native H2D/calibrate/store `0.8112155 s`, and
+    consumer read wait `1.0221229999442585 s`.
+- Numerical validation:
+  - post-fix guarded master, weight map, coverage map, low/high rejection maps,
+    and DQ map match the current default 200-light output bitwise;
+  - RMS and max absolute difference are `0.0` for those six outputs.
+- Interpretation:
+  - this keeps high-VRAM batch experiments on the resident raw-u16 GPU path
+    instead of silently falling back to the slow host/sync path;
+  - the default `throughput-v3-io` route already used `wave=streams=4`, so this
+    is a guard and high-batch enablement fix rather than a default-route speedup;
+  - the next substantive target remains a larger runtime component: reducing
+    consumer read wait/native H2D synchronization or batching resident
+    registration/warp more deeply.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_528_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_528_wave_lane_guard_summary.json`;
+  - post-fix real run:
+    `C:\glass_runs\phase2_s2_gate528_wave_guard_real\runs_20260623_114527\b32_s4_w8_guarded`.
+
 ## Gate Rules
 
 Each gate requires:

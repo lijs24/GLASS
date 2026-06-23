@@ -4857,6 +4857,7 @@ class ResidentCalibratedStack {
       out["stream_count"] = 0;
       out["requested_wave_frames"] = wave_frames;
       out["wave_frames"] = 0;
+      out["wave_frames_clamped_to_stream_count"] = false;
       out["wave_count"] = 0;
       out["frame_count"] = 0;
       out["callback_release_count"] = 0;
@@ -4879,9 +4880,11 @@ class ResidentCalibratedStack {
       throw std::invalid_argument("indices, lights, light_exposures, and dark_exposures must have the same length");
     }
     const std::size_t requested_wave_frames = static_cast<std::size_t>(wave_frames);
-    const std::size_t lane_count = std::min<std::size_t>(
-        static_cast<std::size_t>(stream_count),
-        std::min<std::size_t>(requested_wave_frames, frame_count));
+    const std::size_t stream_limit = static_cast<std::size_t>(stream_count);
+    const std::size_t effective_wave_frames =
+        std::min<std::size_t>(std::min<std::size_t>(requested_wave_frames, stream_limit), frame_count);
+    const bool wave_frames_clamped_to_stream_count = requested_wave_frames > stream_limit;
+    const std::size_t lane_count = std::min<std::size_t>(stream_limit, effective_wave_frames);
     ensure_calibration_lanes(lane_count);
 
     std::vector<py::array_t<float, py::array::c_style | py::array::forcecast>> light_arrays;
@@ -4910,7 +4913,7 @@ class ResidentCalibratedStack {
     std::vector<unsigned char> lane_used_in_wave(lane_count, 0);
     std::vector<double> lane_elapsed(lane_count, 0.0);
     std::vector<double> wave_h2d_elapsed;
-    wave_h2d_elapsed.reserve((frame_count + requested_wave_frames - 1) / requested_wave_frames);
+    wave_h2d_elapsed.reserve((frame_count + effective_wave_frames - 1) / effective_wave_frames);
     double h2d_event_sync_s = 0.0;
     double h2d_event_elapsed_s = 0.0;
     double callback_s = 0.0;
@@ -4918,8 +4921,8 @@ class ResidentCalibratedStack {
     std::size_t wave_count = 0;
     double h2d_release_s = 0.0;
     try {
-      for (std::size_t wave_start = 0; wave_start < frame_count; wave_start += requested_wave_frames) {
-        const std::size_t frames_in_wave = std::min<std::size_t>(requested_wave_frames, frame_count - wave_start);
+      for (std::size_t wave_start = 0; wave_start < frame_count; wave_start += effective_wave_frames) {
+        const std::size_t frames_in_wave = std::min<std::size_t>(effective_wave_frames, frame_count - wave_start);
         std::fill(lane_used_in_wave.begin(), lane_used_in_wave.end(), 0);
         double wave_elapsed_s = 0.0;
         {
@@ -5054,7 +5057,8 @@ class ResidentCalibratedStack {
     out["requested_stream_count"] = stream_count;
     out["stream_count"] = static_cast<unsigned long long>(lane_count);
     out["requested_wave_frames"] = wave_frames;
-    out["wave_frames"] = static_cast<unsigned long long>(requested_wave_frames);
+    out["wave_frames"] = static_cast<unsigned long long>(effective_wave_frames);
+    out["wave_frames_clamped_to_stream_count"] = wave_frames_clamped_to_stream_count;
     out["wave_count"] = static_cast<unsigned long long>(wave_count);
     out["frame_count"] = static_cast<unsigned long long>(frame_count);
     out["callback_release_count"] = static_cast<unsigned long long>(callback_release_count);
@@ -5111,6 +5115,7 @@ class ResidentCalibratedStack {
       out["stream_count"] = 0;
       out["requested_wave_frames"] = wave_frames;
       out["wave_frames"] = 0;
+      out["wave_frames_clamped_to_stream_count"] = false;
       out["wave_count"] = 0;
       out["frame_count"] = 0;
       out["callback_release_count"] = 0;
@@ -5135,9 +5140,11 @@ class ResidentCalibratedStack {
       throw std::invalid_argument("indices, raw_lights, light_exposures, and dark_exposures must have the same length");
     }
     const std::size_t requested_wave_frames = static_cast<std::size_t>(wave_frames);
-    const std::size_t lane_count = std::min<std::size_t>(
-        static_cast<std::size_t>(stream_count),
-        std::min<std::size_t>(requested_wave_frames, frame_count));
+    const std::size_t stream_limit = static_cast<std::size_t>(stream_count);
+    const std::size_t effective_wave_frames =
+        std::min<std::size_t>(std::min<std::size_t>(requested_wave_frames, stream_limit), frame_count);
+    const bool wave_frames_clamped_to_stream_count = requested_wave_frames > stream_limit;
+    const std::size_t lane_count = std::min<std::size_t>(stream_limit, effective_wave_frames);
     ensure_calibration_lanes(lane_count);
 
     const std::size_t raw_frame_bytes = pixels_per_frame_ * 2u;
@@ -5168,7 +5175,7 @@ class ResidentCalibratedStack {
     std::vector<unsigned char> lane_used_in_wave(lane_count, 0);
     std::vector<double> lane_elapsed(lane_count, 0.0);
     std::vector<double> wave_h2d_elapsed;
-    wave_h2d_elapsed.reserve((frame_count + requested_wave_frames - 1) / requested_wave_frames);
+    wave_h2d_elapsed.reserve((frame_count + effective_wave_frames - 1) / effective_wave_frames);
     double h2d_event_sync_s = 0.0;
     double h2d_event_elapsed_s = 0.0;
     double callback_s = 0.0;
@@ -5176,8 +5183,8 @@ class ResidentCalibratedStack {
     std::size_t wave_count = 0;
     double h2d_release_s = 0.0;
     try {
-      for (std::size_t wave_start = 0; wave_start < frame_count; wave_start += requested_wave_frames) {
-        const std::size_t frames_in_wave = std::min<std::size_t>(requested_wave_frames, frame_count - wave_start);
+      for (std::size_t wave_start = 0; wave_start < frame_count; wave_start += effective_wave_frames) {
+        const std::size_t frames_in_wave = std::min<std::size_t>(effective_wave_frames, frame_count - wave_start);
         std::fill(lane_used_in_wave.begin(), lane_used_in_wave.end(), 0);
         double wave_elapsed_s = 0.0;
         {
@@ -5314,7 +5321,8 @@ class ResidentCalibratedStack {
     out["requested_stream_count"] = stream_count;
     out["stream_count"] = static_cast<unsigned long long>(lane_count);
     out["requested_wave_frames"] = wave_frames;
-    out["wave_frames"] = static_cast<unsigned long long>(requested_wave_frames);
+    out["wave_frames"] = static_cast<unsigned long long>(effective_wave_frames);
+    out["wave_frames_clamped_to_stream_count"] = wave_frames_clamped_to_stream_count;
     out["wave_count"] = static_cast<unsigned long long>(wave_count);
     out["frame_count"] = static_cast<unsigned long long>(frame_count);
     out["callback_release_count"] = static_cast<unsigned long long>(callback_release_count);

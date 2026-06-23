@@ -123,6 +123,13 @@ def build_resident_light_pipeline_profile(
                 resident_io_pipeline,
                 "calibration_wave_requested_frames",
             ),
+            "calibration_wave_effective_frames": _int_value(
+                resident_io_pipeline,
+                "calibration_wave_effective_frames",
+            ),
+            "calibration_wave_lane_guard_applied": bool(
+                resident_io_pipeline.get("calibration_wave_lane_guard_applied", False)
+            ),
             "calibration_release_mode_effective": resident_io_pipeline.get(
                 "calibration_release_mode_effective"
             ),
