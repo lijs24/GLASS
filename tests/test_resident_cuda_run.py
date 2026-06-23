@@ -6060,6 +6060,7 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_QUEUE_READ", raising=False)
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", raising=False)
     monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION", "1")
+    monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US", "25")
     assert main(
         [
             "run",
@@ -6116,8 +6117,10 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     assert io_pipeline["calibration_wave_release_mode"] == "native_completion_queue_event_gated_slot_reuse"
     assert io_pipeline["native_completion_calibration_slot_release_mode"] == "event_query_deferred_reuse"
     assert io_pipeline["native_completion_calibration_consumer_schedule_mode"] == "completion_lane_wave_drain"
-    assert io_pipeline["native_completion_calibration_consumer_wave_fill_policy"] == "timed_wait_100us"
-    assert io_pipeline["native_completion_calibration_consumer_wave_fill_wait_us"] == 100
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_policy"] == "timed_wait_25us"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_source"] == "env"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_wait_us"] == 25
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_requested_wait_us"] == 25
     assert io_pipeline["native_completion_calibration_consumer_wave_count"] >= 1
     assert io_pipeline["native_completion_calibration_consumer_max_wave_frames"] >= 1
     assert io_pipeline["native_completion_calibration_slot_reuse_count"] == 0

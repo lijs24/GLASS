@@ -1,0 +1,123 @@
+{
+  "gate": "S2-Gate 553",
+  "title": "Native completion wave-fill tuning matrix",
+  "date": "2026-06-23",
+  "result": "green_checkpoint_not_promoted",
+  "checkpoint_status": "runs/checkpoints/s2_gate_553_status.md",
+  "implementation": {
+    "native_method": "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed",
+    "completion_env_flag": "GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION",
+    "wave_fill_env_flag": "GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US",
+    "wave_fill_range_us": [0, 10000],
+    "default_wave_fill_wait_us": 0,
+    "default_wave_fill_policy": "disabled",
+    "positive_policy_format": "timed_wait_<N>us",
+    "default_enabled": false
+  },
+  "tests": {
+    "native_build": {
+      "command": "cmd.exe /c '\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\" -arch=x64 -host_arch=x64 && .venv\\Scripts\\cmake.exe --build build --target _glass_cuda_native --config Release'",
+      "result": "success"
+    },
+    "focused": {
+      "command": ".venv\\Scripts\\python.exe -m pytest -q tests/test_cuda_resident_stack.py::test_resident_stack_calibrates_u16be_paths_completion_queue_on_gpu_like_cpu tests/test_cuda_resident_stack.py::test_resident_stack_calibrates_u16be_paths_on_gpu_like_cpu tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_path_calibration_is_opt_in tests/test_resident_cuda_run.py::test_cli_resident_cuda_records_native_u16_gpu_decode_backend",
+      "result": "5 passed in 0.88 s"
+    },
+    "full_pytest": {
+      "command": ".venv\\Scripts\\python.exe -m pytest -q",
+      "result": "1188 passed in 43.69 s"
+    }
+  },
+  "real_200_light_matrix": {
+    "root": "C:\\glass_runs\\phase2_s2_gate553_wave_fill_matrix\\runs_20260623_163435",
+    "full_metrics_summary": "C:\\glass_runs\\phase2_s2_gate553_wave_fill_matrix\\runs_20260623_163435\\gate553_matrix_metrics_summary.json",
+    "comparison_default": "default_release_postpatch",
+    "frame_count": 200,
+    "active_frame_count": 193,
+    "masked_frame_ids": [
+      "F000160",
+      "F000213",
+      "F000214",
+      "F000215",
+      "F000216",
+      "F000217",
+      "F000218"
+    ],
+    "runs": {
+      "completion_50us": {
+        "shell_s": 5.5724979,
+        "light_read_upload_calibrate_s": 2.8834914000472054,
+        "wave_fill_policy": "timed_wait_50us",
+        "wave_fill_wait_s": 0.3070641,
+        "consumer_wave_count": 59,
+        "consumer_multi_frame_wave_count": 53,
+        "hash_match_default": true
+      },
+      "completion_0us": {
+        "shell_s": 5.5844456,
+        "light_read_upload_calibrate_s": 2.869436000008136,
+        "wave_fill_policy": "disabled",
+        "wave_fill_wait_s": 0.0,
+        "consumer_wave_count": 184,
+        "consumer_multi_frame_wave_count": 9,
+        "hash_match_default": true
+      },
+      "completion_25us": {
+        "shell_s": 5.5872911,
+        "light_read_upload_calibrate_s": 2.883540299953893,
+        "wave_fill_policy": "timed_wait_25us",
+        "wave_fill_wait_s": 0.3235743,
+        "consumer_wave_count": 64,
+        "consumer_multi_frame_wave_count": 51,
+        "hash_match_default": true
+      },
+      "completion_default_disabled": {
+        "shell_s": 5.6308196,
+        "light_read_upload_calibrate_s": 2.9238443999784067,
+        "wave_fill_policy": "disabled",
+        "wave_fill_wait_s": 0.0,
+        "consumer_wave_count": 179,
+        "consumer_multi_frame_wave_count": 13,
+        "hash_match_default": true
+      },
+      "completion_100us": {
+        "shell_s": 5.7587759,
+        "light_read_upload_calibrate_s": 3.024601699959021,
+        "wave_fill_policy": "timed_wait_100us",
+        "wave_fill_wait_s": 0.3441486,
+        "consumer_wave_count": 64,
+        "consumer_multi_frame_wave_count": 53,
+        "hash_match_default": true
+      },
+      "default_release_postpatch": {
+        "shell_s": 5.434383,
+        "light_read_upload_calibrate_s": 2.556746000016574,
+        "hash_match_default": true
+      }
+    }
+  },
+  "output_sha256": {
+    "resident_master_H.fits": "8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110",
+    "resident_weight_map_H.fits": "5862111EE6F527A40671AC13F1FAA43F037C90271F872F27AF4ACF17040FBFE8",
+    "resident_coverage_map_H.fits": "B87517BE794A3B4BDCFF0D8536EE0188DA6AFA54ED2BE818BD911BA6CF1BE1B3",
+    "resident_low_rejection_map_H.fits": "F1181E0CE52A7FF77B988AFAF8A8911A1BEAF94DF54B25B0AA51014CB0D66E23",
+    "resident_high_rejection_map_H.fits": "ADB66C931C5A48D6E0D7F5C2FCBCC58481420AD4912304843A3802089050C805",
+    "resident_dq_map_H.fits": "934F661119CE18BBCAC1D369488AED4D959669C6EF614D6076D74BE06E69CCFB"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "decision": {
+    "promote_completion_to_default": false,
+    "promote_fixed_wave_fill": false,
+    "reason": "Fixed waits improve multi-frame wave packing but do not beat the default light-stage scheduler; no-env completion defaults to disabled wave-fill.",
+    "next_step": "Reconnect native reads to the faster callback-release/ready-first scheduler or reduce native completion orchestration."
+  },
+  "clean_room": {
+    "compliant": true,
+    "notes": "GLASS-owned scheduling over public FITS byte ranges and resident CUDA calibration kernels only; no external implementation source inspected or copied."
+  }
+}

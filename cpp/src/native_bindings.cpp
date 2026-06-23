@@ -891,6 +891,13 @@ float dict_float(const py::dict& dict, const char* key, float fallback) {
   return py::cast<float>(dict[key]);
 }
 
+int dict_int(const py::dict& dict, const char* key, int fallback) {
+  if (!dict.contains(key)) {
+    return fallback;
+  }
+  return py::cast<int>(dict[key]);
+}
+
 using Clock = std::chrono::steady_clock;
 
 double seconds_since(const Clock::time_point& start) {
@@ -6106,6 +6113,20 @@ class ResidentCalibratedStack {
     if (worker_count <= 0) {
       throw std::invalid_argument("worker_count must be positive");
     }
+    py::dict policy;
+    if (!policy_obj.is_none()) {
+      policy = py::cast<py::dict>(policy_obj);
+    }
+    const int consumer_wave_fill_wait_us =
+        dict_int(policy, "native_completion_consumer_wave_fill_wait_us", 0);
+    if (consumer_wave_fill_wait_us < 0 || consumer_wave_fill_wait_us > 10000) {
+      throw std::invalid_argument(
+          "native_completion_consumer_wave_fill_wait_us must be between 0 and 10000");
+    }
+    const std::string consumer_wave_fill_policy =
+        consumer_wave_fill_wait_us > 0
+            ? "timed_wait_" + std::to_string(consumer_wave_fill_wait_us) + "us"
+            : "disabled";
     const auto indices = parse_index_sequence(indices_obj, "indices");
     const auto paths = py::cast<std::vector<std::string>>(paths_obj);
     const auto data_offsets = py::cast<std::vector<unsigned long long>>(data_offsets_obj);
@@ -6149,8 +6170,8 @@ class ResidentCalibratedStack {
       out["native_completion_slot_reuse_wait_s"] = 0.0;
       out["native_completion_final_h2d_collect_count"] = 0;
       out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
-      out["native_completion_consumer_wave_fill_policy"] = "timed_wait_100us";
-      out["native_completion_consumer_wave_fill_wait_us"] = 100;
+      out["native_completion_consumer_wave_fill_policy"] = consumer_wave_fill_policy;
+      out["native_completion_consumer_wave_fill_wait_us"] = consumer_wave_fill_wait_us;
       out["native_completion_consumer_wave_fill_wait_count"] = 0;
       out["native_completion_consumer_wave_fill_timeout_count"] = 0;
       out["native_completion_consumer_wave_fill_wait_s"] = 0.0;
@@ -6435,12 +6456,13 @@ class ResidentCalibratedStack {
             completion_wave.push_back(std::move(completions.front()));
             completions.pop_front();
           }
-          while (completion_wave.size() < lane_count &&
+          while (consumer_wave_fill_wait_us > 0 &&
+                 completion_wave.size() < lane_count &&
                  submit_count > completion_count + static_cast<unsigned long long>(completion_wave.size())) {
             const auto fill_wait_start = Clock::now();
             const bool filled = completion_condition.wait_for(
                 lock,
-                std::chrono::microseconds(100),
+                std::chrono::microseconds(consumer_wave_fill_wait_us),
                 [&]() { return closing || !completions.empty(); });
             consumer_wave_fill_wait_s += seconds_since(fill_wait_start);
             ++consumer_wave_fill_wait_count;
@@ -6639,8 +6661,8 @@ class ResidentCalibratedStack {
     out["native_completion_slot_reuse_wait_s"] = slot_reuse_wait_s;
     out["native_completion_final_h2d_collect_count"] = final_h2d_collect_count;
     out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
-    out["native_completion_consumer_wave_fill_policy"] = "timed_wait_100us";
-    out["native_completion_consumer_wave_fill_wait_us"] = 100;
+    out["native_completion_consumer_wave_fill_policy"] = consumer_wave_fill_policy;
+    out["native_completion_consumer_wave_fill_wait_us"] = consumer_wave_fill_wait_us;
     out["native_completion_consumer_wave_fill_wait_count"] = consumer_wave_fill_wait_count;
     out["native_completion_consumer_wave_fill_timeout_count"] = consumer_wave_fill_timeout_count;
     out["native_completion_consumer_wave_fill_wait_s"] = consumer_wave_fill_wait_s;

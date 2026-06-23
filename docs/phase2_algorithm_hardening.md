@@ -14817,6 +14817,66 @@ Completed in Gate446:
   - full run summary:
     `C:\glass_runs\phase2_s2_gate552_completion_wave_fill\runs_20260623_162509\gate552_metrics_summary.json`.
 
+### S2-Gate 553: Native Completion Wave-Fill Tuning Matrix
+
+- Continued the resident CUDA I/O/calibration mainline by turning Gate552's
+  fixed native completion ready-buffer wait into an explicit policy parameter:
+  `GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US`.
+- Completed:
+  - native completion calibration now reads
+    `native_completion_consumer_wave_fill_wait_us` from the existing policy
+    payload and validates the range `0..10000`;
+  - a value of `0` disables the fill wait and records policy `disabled`;
+  - positive values record policy strings such as `timed_wait_25us`;
+  - resident CUDA injects the policy from
+    `GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US` and records the source
+    (`env` or `default_disabled`) plus the requested wait budget in
+    `resident_io_pipeline`;
+  - no-env completion calibration now defaults to `0 us` fill wait, because the
+    Gate553 matrix showed fixed waits improve wave packing but not the target
+    light-stage time.
+- Tests:
+  - Release native extension build: success;
+  - focused completion/path/default tests: `5 passed in 0.88 s`;
+  - full pytest: `1188 passed in 43.69 s`.
+- Real 200-light matrix:
+  - matrix root:
+    `C:\glass_runs\phase2_s2_gate553_wave_fill_matrix\runs_20260623_163435`;
+  - explicit completion runs: `0 us`, `25 us`, `50 us`, `100 us`;
+  - no-env completion run:
+    `completion_wave_fill_default_disabled`;
+  - postpatch default run:
+    `default_release_postpatch`;
+  - all completion outputs are SHA256-identical to the postpatch default output.
+- Matrix timing summary:
+
+  | Run | Shell s | Light read/upload/calibrate s | Fill policy | Fill wait s | Consumer waves | Multi-frame waves |
+  | --- | ---: | ---: | --- | ---: | ---: | ---: |
+  | completion `50 us` | `5.572498` | `2.883491` | `timed_wait_50us` | `0.307064` | `59` | `53` |
+  | completion `0 us` | `5.584446` | `2.869436` | `disabled` | `0.000000` | `184` | `9` |
+  | completion `25 us` | `5.587291` | `2.883540` | `timed_wait_25us` | `0.323574` | `64` | `51` |
+  | completion no-env | `5.630820` | `2.923844` | `disabled` | `0.000000` | `179` | `13` |
+  | completion `100 us` | `5.758776` | `3.024602` | `timed_wait_100us` | `0.344149` | `64` | `53` |
+  | default postpatch | `5.434383` | `2.556746` | n/a | `0.000000` | `0` | `0` |
+
+- Interpretation:
+  - fixed fill waits strongly change queue shape: `25..100 us` runs produce
+    about `51..53` multi-frame waves versus `9..13` with disabled wait;
+  - the added waiting and orchestration do not solve the main light-stage
+    bottleneck, and every completion variant remained slower than the
+    postpatch default light stage;
+  - the no-env completion policy is therefore changed to disabled wait (`0 us`)
+    so profiling the completion path does not silently pay a fixed wait tax;
+  - the next substantial target should reconnect native reads to the faster
+    default callback-release/ready-first scheduler or reduce native completion
+    orchestration, not continue tuning fixed wait constants.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_553_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_553_wave_fill_matrix_summary.json`;
+  - full matrix summary:
+    `C:\glass_runs\phase2_s2_gate553_wave_fill_matrix\runs_20260623_163435\gate553_matrix_metrics_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:
