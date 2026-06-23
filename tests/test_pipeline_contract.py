@@ -586,6 +586,97 @@ def _write_frame_accounting_fixture(path: Path, *, conflict: bool = False) -> No
     )
 
 
+def _write_resident_frame_accounting_dq_ledger_fixture(
+    path: Path,
+    *,
+    frame_count: int = 3,
+    active_frame_count: int = 3,
+    passed: bool = True,
+    source_contract_available: bool = True,
+    contract_sources: list[str] | None = None,
+    frame_mask_sources: list[str] | None = None,
+) -> None:
+    active = max(0, min(int(active_frame_count), int(frame_count)))
+    masked = max(0, int(frame_count) - active)
+    contract_sources = (
+        ["resident_source_dq_execution"] if contract_sources is None and source_contract_available else []
+    )
+    frame_mask_sources = ["resident_frame_masks"] if frame_mask_sources is None else frame_mask_sources
+    frames = []
+    for index in range(int(frame_count)):
+        frame_id = f"F{index + 1}"
+        integrated = index < active
+        frames.append(
+            {
+                "frame_id": frame_id,
+                "filter": "H",
+                "quality_gate_status": "accepted" if integrated else "rejected",
+                "registration_status": "reference" if index == 0 else ("ok" if integrated else "excluded"),
+                "warp_status": "resident_in_vram",
+                "local_norm_status": "resident_applied",
+                "integration_status": "used" if integrated else "zero_weight",
+                "integration_weight": 1.0 if integrated else 0.0,
+                "integration_conflict_count": 0,
+                "integration_conflicts": [],
+                "final_status": "integrated" if integrated else "quality_rejected",
+                "resident_source_dq_contract_available": source_contract_available,
+                "resident_source_dq_contract_passed": passed if source_contract_available else None,
+                "resident_source_dq_contract_status": "passed"
+                if source_contract_available and passed
+                else "failed"
+                if source_contract_available
+                else None,
+                "resident_source_dq_execution_route": "resident_in_memory_mask_streaming"
+                if source_contract_available
+                else None,
+                "resident_dq_mask_contract_available": True,
+                "resident_dq_mask_contract_status": "passed" if passed else "failed",
+                "resident_dq_mask_contract_passed": passed,
+                "resident_dq_mask_contract_sources": contract_sources,
+                "resident_dq_frame_mask_sources": frame_mask_sources,
+                "resident_calibrated_light_frame_mask_contract_available": True,
+                "resident_calibrated_light_frame_mask_contract_passed": passed,
+                "resident_frame_mask_status": "active" if integrated else "masked",
+                "resident_frame_mask_auditable": True,
+            }
+        )
+
+    write_json(
+        path / "frame_accounting.json",
+        {
+            "schema_version": 1,
+            "artifact": "frame_accounting",
+            "summary": {
+                "input_light_frames": int(frame_count),
+                "integrated_frames": active,
+                "zero_weight_frames": masked,
+                "integration_conflict_frames": 0,
+                "exception_frames": masked,
+                "final_status_counts": {
+                    "integrated": active,
+                    **({"quality_rejected": masked} if masked else {}),
+                },
+                "resident_calibrated_light_dq_contract_rows": int(frame_count),
+                "resident_calibrated_light_dq_contract_passed": int(frame_count) if passed else 0,
+                "resident_calibrated_light_dq_contract_failed": 0 if passed else int(frame_count),
+                "resident_source_dq_contract_rows": int(frame_count) if source_contract_available else 0,
+                "resident_frame_mask_contract_rows": int(frame_count),
+                "resident_dq_mask_contract_sources": contract_sources,
+                "resident_dq_frame_mask_sources": frame_mask_sources,
+                "resident_frame_mask_active_frames": active,
+                "resident_frame_mask_masked_frames": masked,
+                "resident_frame_mask_unaudited_frames": 0,
+            },
+            "exception_summary": {
+                "count": masked,
+                "final_status_counts": {"quality_rejected": masked} if masked else {},
+            },
+            "exception_frames": frames[active:],
+            "frames": frames,
+        },
+    )
+
+
 def _write_nonresident_cuda_fast_path_pipeline_run(path: Path, *, explicit: bool) -> None:
     integration_dir = path / "integration"
     integration_dir.mkdir(parents=True)
@@ -1709,6 +1800,11 @@ def test_pipeline_contract_accepts_resident_native_calibration_artifacts(tmp_pat
     _write_resident_pipeline_run(run)
     _write_resident_native_calibration_source(run)
     write_resident_calibration_artifacts(run)
+    _write_resident_frame_accounting_dq_ledger_fixture(
+        run,
+        source_contract_available=False,
+        contract_sources=[],
+    )
 
     audit = build_pipeline_contract_audit(run)
     checks = {item["name"]: item for item in audit["checks"]}
@@ -1731,6 +1827,7 @@ def test_pipeline_contract_accepts_resident_native_calibration_artifacts(tmp_pat
         "contract_sources"
     ] == []
     assert "calibrated_light_dq_contract" not in checks
+    assert checks["frame_accounting_resident_dq_ledger_contract"]["passed"] is True
 
 
 def test_pipeline_contract_maps_resident_source_dq_to_resident_calibrated_lights(
@@ -1741,6 +1838,7 @@ def test_pipeline_contract_maps_resident_source_dq_to_resident_calibrated_lights
     _write_resident_native_calibration_source(run)
     _write_resident_source_dq_execution_fixture(run)
     write_resident_calibration_artifacts(run)
+    _write_resident_frame_accounting_dq_ledger_fixture(run)
 
     audit = build_pipeline_contract_audit(run)
     checks = {item["name"]: item for item in audit["checks"]}
@@ -1769,6 +1867,34 @@ def test_pipeline_contract_maps_resident_source_dq_to_resident_calibrated_lights
         "resident_source_dq_execution"
     ]
     assert lights[0]["resident_dq_mask_contract"]["frame_mask_sources"] == ["resident_frame_masks"]
+    assert checks["frame_accounting_resident_dq_ledger_contract"]["passed"] is True
+    assert audit["frame_accounting_resident_dq_ledger"]["expected_rows"] == 3
+    assert audit["frame_accounting_resident_dq_ledger"]["accounting_rows"] == 3
+
+
+def test_pipeline_contract_fails_frame_accounting_resident_dq_ledger_drift(
+    tmp_path: Path,
+):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    _write_resident_native_calibration_source(run)
+    _write_resident_source_dq_execution_fixture(run)
+    write_resident_calibration_artifacts(run)
+    _write_resident_frame_accounting_dq_ledger_fixture(run)
+    accounting = read_json(run / "frame_accounting.json")
+    accounting["summary"]["resident_calibrated_light_dq_contract_rows"] = 2
+    accounting["frames"][0]["resident_dq_mask_contract_sources"] = []
+    write_json(run / "frame_accounting.json", accounting)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    ledger = audit["frame_accounting_resident_dq_ledger"]
+
+    assert audit["passed"] is False
+    assert checks["frame_accounting_resident_dq_ledger_contract"]["passed"] is False
+    assert "summary_row_count_matches_resident_calibration" in ledger["failed_checks"]
+    assert "per_frame_contract_sources_match" in ledger["failed_checks"]
+    assert ledger["source_mismatch_frame_ids"] == ["F1"]
 
 
 def test_pipeline_contract_fails_resident_calibrated_light_dq_when_source_dq_fails(
@@ -1779,6 +1905,7 @@ def test_pipeline_contract_fails_resident_calibrated_light_dq_when_source_dq_fai
     _write_resident_native_calibration_source(run)
     _write_resident_source_dq_execution_fixture(run, passed=False)
     write_resident_calibration_artifacts(run)
+    _write_resident_frame_accounting_dq_ledger_fixture(run, passed=False)
 
     audit = build_pipeline_contract_audit(run)
     checks = {item["name"]: item for item in audit["checks"]}
@@ -1797,6 +1924,7 @@ def test_pipeline_contract_fails_resident_calibrated_light_dq_when_source_dq_fai
     assert all(not light["dq_contract_ok"] for light in lights)
     assert all(not light["resident_source_dq_contract_ok"] for light in lights)
     assert all(not light["resident_dq_mask_contract_ok"] for light in lights)
+    assert checks["frame_accounting_resident_dq_ledger_contract"]["passed"] is True
 
 
 def test_pipeline_contract_synthesizes_resident_calibration_visibility_from_resident_artifacts(
@@ -1805,6 +1933,11 @@ def test_pipeline_contract_synthesizes_resident_calibration_visibility_from_resi
     run = tmp_path / "run"
     _write_resident_pipeline_run(run)
     _write_resident_native_calibration_source(run)
+    _write_resident_frame_accounting_dq_ledger_fixture(
+        run,
+        source_contract_available=False,
+        contract_sources=[],
+    )
 
     audit = build_pipeline_contract_audit(run)
     checks = {item["name"]: item for item in audit["checks"]}
@@ -1820,6 +1953,7 @@ def test_pipeline_contract_synthesizes_resident_calibration_visibility_from_resi
     assert audit["calibration"]["resident_calibrated_light_count"] == 3
     assert checks["resident_calibrated_lights_present"]["passed"] is True
     assert checks["resident_calibrated_light_contract"]["passed"] is True
+    assert checks["frame_accounting_resident_dq_ledger_contract"]["passed"] is True
 
 
 def test_pipeline_contract_cli_uses_resident_calibration_contract_json(tmp_path: Path):

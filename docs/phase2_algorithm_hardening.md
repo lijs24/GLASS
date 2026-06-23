@@ -289,6 +289,78 @@ Validation commands:
   --pipeline-contract
   C:\glass_runs\phase2_s2_gate583_frame_accounting_ledger\pipeline_contract_after_frame_accounting.json`
 
+### S2-Gate 584: Frame Accounting Resident DQ Contract
+
+Gate 584 makes the Gate583 frame-accounting resident DQ ledger an enforced
+pipeline invariant. The previous gate made the ledger visible in
+`frame_accounting.json`; this gate makes `pipeline-contract` compare that ledger
+against the resident calibrated-light DQ rows so missing rows, count drift,
+source drift, and per-frame source omissions become hard failures.
+
+Implementation:
+
+- `src/glass/report/pipeline_contract.py` adds
+  `frame_accounting_resident_dq_ledger_contract`.
+- The new state compares resident calibrated-light rows against
+  `frame_accounting.json` summary and per-frame rows:
+  - expected/accounting resident DQ contract row counts;
+  - passed/failed resident DQ contract counts;
+  - resident source-DQ and frame-mask contract row counts;
+  - missing and extra frame ids;
+  - per-frame DQ contract pass flags;
+  - summary and per-frame contract sources;
+  - summary and per-frame frame-mask sources.
+- Pipeline-contract Markdown now includes a `Frame Accounting Resident DQ
+  Ledger` section with required/present/status, row counts, sources, and failed
+  checks.
+- The default 200-light benchmark contracts now require
+  `frame_accounting_resident_dq_ledger_contract` in pipeline-contract evidence.
+
+Real 200-light evidence:
+
+- Source run:
+  `C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3`
+- Gate584 evidence directory:
+  `C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract`
+- Pixel-verified pipeline contract:
+  `C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\pipeline_contract.json`
+- Pipeline-contract status: `passed`.
+- New check: `frame_accounting_resident_dq_ledger_contract`, required `True`,
+  passed `True`.
+- Expected/accounting resident DQ rows: `200 / 200`.
+- Expected passed/failed rows: `200 / 0`.
+- Contract sources: `resident_source_dq_execution`.
+- Frame-mask sources: `resident_frame_masks`.
+- Missing/extra/failed frame ids: none.
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\acceptance_audit.json`
+- Acceptance status: `passed`.
+- Acceptance required-check proof:
+  `contract_pipeline_contract_check:frame_accounting_resident_dq_ledger_contract`
+  passed.
+- Speedup versus the WBPP black-box reference: `133.39198046200627x`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\report\pipeline_contract.py
+  tests\test_pipeline_contract.py`
+- `python -m pytest -q tests\test_pipeline_contract.py -k
+  "frame_accounting or resident_calibrated_light_dq or
+  resident_native_calibration_artifacts or synthesizes_resident_calibration"`
+- `python -m pytest -q tests\test_pipeline_contract.py`
+- `python -m pytest -q tests\test_acceptance_audit.py -k
+  "pipeline_contract or benchmark_contract or required_check"`
+- `glass pipeline-contract --run
+  C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3 --out
+  C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\pipeline_contract.json
+  --markdown
+  C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\pipeline_contract.md
+  --pixel-verify`
+- `glass acceptance-audit ... --benchmark-contract
+  benchmarks\phase2_m38_h_200_ln_on_default_contract.json
+  --pipeline-contract-json
+  C:\glass_runs\phase2_s2_gate584_frame_accounting_dq_contract\pipeline_contract.json`
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident

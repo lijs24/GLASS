@@ -114,6 +114,12 @@ def _duplicates(values: list[str]) -> list[str]:
     return sorted(duplicates)
 
 
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item)]
+
+
 def _stack_result_contract_state_from_provenance(
     provenance: Any,
     *,
@@ -1466,6 +1472,243 @@ def _frame_accounting_admission_state(frame_accounting: dict[str, Any]) -> dict[
     }
 
 
+def _frame_accounting_resident_dq_ledger_state(
+    frame_accounting: dict[str, Any],
+    resident_calibrated_light_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    summary = frame_accounting.get("summary") if isinstance(frame_accounting.get("summary"), dict) else {}
+    frames = frame_accounting.get("frames") if isinstance(frame_accounting.get("frames"), list) else []
+    embedded_light_rows = [
+        row
+        for row in resident_calibrated_light_rows
+        if isinstance(row.get("resident_dq_mask_contract"), dict)
+        and row["resident_dq_mask_contract"].get("contract_type")
+        == "resident_calibrated_light_dq_mask_contract"
+    ]
+    required = bool(embedded_light_rows)
+    if not required:
+        return {
+            "required": False,
+            "present": bool(frame_accounting),
+            "status": "not_required",
+            "passed": True,
+            "failed_checks": [],
+            "expected_rows": 0,
+            "accounting_rows": 0,
+            "missing_frame_ids": [],
+            "extra_frame_ids": [],
+            "failed_frame_ids": [],
+            "contract_sources": [],
+            "frame_mask_sources": [],
+        }
+
+    expected_frame_ids = sorted(
+        str(row.get("frame_id")) for row in embedded_light_rows if row.get("frame_id")
+    )
+    expected_count = len(embedded_light_rows)
+    expected_passed = sum(1 for row in embedded_light_rows if row.get("resident_dq_mask_contract_ok") is True)
+    expected_failed = expected_count - expected_passed
+    expected_source_rows = sum(
+        1
+        for row in embedded_light_rows
+        if isinstance(row.get("resident_source_dq_contract"), dict)
+        and row["resident_source_dq_contract"].get("available") is True
+    )
+    expected_frame_mask_rows = sum(
+        1
+        for row in embedded_light_rows
+        if isinstance(row.get("resident_frame_mask_contract"), dict)
+        and row["resident_frame_mask_contract"].get("available") is True
+    )
+    expected_sources = sorted(
+        {
+            str(source)
+            for row in embedded_light_rows
+            for source in _string_list(row["resident_dq_mask_contract"].get("contract_sources"))
+        }
+    )
+    expected_frame_mask_sources = sorted(
+        {
+            str(source)
+            for row in embedded_light_rows
+            for source in _string_list(row["resident_dq_mask_contract"].get("frame_mask_sources"))
+        }
+    )
+    if not frame_accounting:
+        return {
+            "required": True,
+            "present": False,
+            "status": "missing",
+            "passed": False,
+            "failed_checks": ["frame_accounting_missing"],
+            "expected_rows": expected_count,
+            "accounting_rows": 0,
+            "missing_frame_ids": expected_frame_ids[:20],
+            "extra_frame_ids": [],
+            "failed_frame_ids": [],
+            "contract_sources": expected_sources,
+            "frame_mask_sources": expected_frame_mask_sources,
+        }
+
+    accounting_rows = [
+        row
+        for row in frames
+        if isinstance(row, dict) and row.get("resident_dq_mask_contract_available") is True
+    ]
+    accounting_frame_ids = sorted(str(row.get("frame_id")) for row in accounting_rows if row.get("frame_id"))
+    missing_frame_ids = sorted(set(expected_frame_ids) - set(accounting_frame_ids))
+    extra_frame_ids = sorted(set(accounting_frame_ids) - set(expected_frame_ids))
+    failed_frame_ids = sorted(
+        str(row.get("frame_id"))
+        for row in accounting_rows
+        if row.get("resident_dq_mask_contract_passed") is not True and row.get("frame_id")
+    )
+    accounting_sources = sorted(
+        {
+            source
+            for row in accounting_rows
+            for source in _string_list(row.get("resident_dq_mask_contract_sources"))
+        }
+    )
+    accounting_frame_mask_sources = sorted(
+        {
+            source
+            for row in accounting_rows
+            for source in _string_list(row.get("resident_dq_frame_mask_sources"))
+        }
+    )
+    row_source_mismatches = [
+        str(row.get("frame_id"))
+        for row in accounting_rows
+        if _string_list(row.get("resident_dq_mask_contract_sources")) != expected_sources
+        and row.get("frame_id")
+    ]
+    row_frame_mask_source_mismatches = [
+        str(row.get("frame_id"))
+        for row in accounting_rows
+        if _string_list(row.get("resident_dq_frame_mask_sources")) != expected_frame_mask_sources
+        and row.get("frame_id")
+    ]
+    checks = [
+        _check(
+            "summary_row_count_matches_resident_calibration",
+            _optional_rounded_int(summary.get("resident_calibrated_light_dq_contract_rows")) == expected_count,
+            {
+                "frame_accounting_rows": summary.get("resident_calibrated_light_dq_contract_rows"),
+                "resident_calibrated_light_rows": expected_count,
+            },
+        ),
+        _check(
+            "summary_passed_count_matches_resident_calibration",
+            _optional_rounded_int(summary.get("resident_calibrated_light_dq_contract_passed")) == expected_passed,
+            {
+                "frame_accounting_passed": summary.get("resident_calibrated_light_dq_contract_passed"),
+                "resident_calibrated_light_passed": expected_passed,
+            },
+        ),
+        _check(
+            "summary_failed_count_matches_resident_calibration",
+            _optional_rounded_int(summary.get("resident_calibrated_light_dq_contract_failed")) == expected_failed,
+            {
+                "frame_accounting_failed": summary.get("resident_calibrated_light_dq_contract_failed"),
+                "resident_calibrated_light_failed": expected_failed,
+            },
+        ),
+        _check(
+            "summary_source_contract_rows_match",
+            _optional_rounded_int(summary.get("resident_source_dq_contract_rows")) == expected_source_rows,
+            {
+                "frame_accounting_source_rows": summary.get("resident_source_dq_contract_rows"),
+                "resident_calibrated_light_source_rows": expected_source_rows,
+            },
+        ),
+        _check(
+            "summary_frame_mask_contract_rows_match",
+            _optional_rounded_int(summary.get("resident_frame_mask_contract_rows")) == expected_frame_mask_rows,
+            {
+                "frame_accounting_frame_mask_rows": summary.get("resident_frame_mask_contract_rows"),
+                "resident_calibrated_light_frame_mask_rows": expected_frame_mask_rows,
+            },
+        ),
+        _check(
+            "per_frame_contract_rows_match",
+            len(accounting_rows) == expected_count and not missing_frame_ids and not extra_frame_ids,
+            {
+                "frame_accounting_rows": len(accounting_rows),
+                "resident_calibrated_light_rows": expected_count,
+                "missing_frame_ids": missing_frame_ids[:20],
+                "extra_frame_ids": extra_frame_ids[:20],
+            },
+        ),
+        _check(
+            "per_frame_contract_pass_flags_match",
+            len(failed_frame_ids) == expected_failed,
+            {
+                "frame_accounting_failed_frame_ids": failed_frame_ids[:20],
+                "resident_calibrated_light_failed_count": expected_failed,
+            },
+        ),
+        _check(
+            "contract_sources_match",
+            _string_list(summary.get("resident_dq_mask_contract_sources")) == expected_sources
+            and accounting_sources == expected_sources,
+            {
+                "frame_accounting_summary_sources": summary.get("resident_dq_mask_contract_sources"),
+                "frame_accounting_row_sources": accounting_sources,
+                "resident_calibrated_light_sources": expected_sources,
+            },
+        ),
+        _check(
+            "per_frame_contract_sources_match",
+            not row_source_mismatches,
+            {
+                "mismatched_frame_ids": row_source_mismatches[:20],
+                "resident_calibrated_light_sources": expected_sources,
+            },
+        ),
+        _check(
+            "frame_mask_sources_match",
+            _string_list(summary.get("resident_dq_frame_mask_sources")) == expected_frame_mask_sources
+            and accounting_frame_mask_sources == expected_frame_mask_sources,
+            {
+                "frame_accounting_summary_sources": summary.get("resident_dq_frame_mask_sources"),
+                "frame_accounting_row_sources": accounting_frame_mask_sources,
+                "resident_calibrated_light_sources": expected_frame_mask_sources,
+            },
+        ),
+        _check(
+            "per_frame_mask_sources_match",
+            not row_frame_mask_source_mismatches,
+            {
+                "mismatched_frame_ids": row_frame_mask_source_mismatches[:20],
+                "resident_calibrated_light_sources": expected_frame_mask_sources,
+            },
+        ),
+    ]
+    failed_checks = [item["name"] for item in checks if not item["passed"]]
+    return {
+        "required": True,
+        "present": True,
+        "status": "passed" if not failed_checks else "failed",
+        "passed": not failed_checks,
+        "failed_checks": failed_checks,
+        "checks": checks,
+        "expected_rows": expected_count,
+        "expected_passed_rows": expected_passed,
+        "expected_failed_rows": expected_failed,
+        "accounting_rows": len(accounting_rows),
+        "missing_frame_ids": missing_frame_ids[:20],
+        "extra_frame_ids": extra_frame_ids[:20],
+        "failed_frame_ids": failed_frame_ids[:20],
+        "contract_sources": expected_sources,
+        "frame_mask_sources": expected_frame_mask_sources,
+        "source_mismatch_frame_ids": row_source_mismatches[:20],
+        "frame_mask_source_mismatch_frame_ids": row_frame_mask_source_mismatches[:20],
+        "summary_contract_sources": _string_list(summary.get("resident_dq_mask_contract_sources")),
+        "summary_frame_mask_sources": _string_list(summary.get("resident_dq_frame_mask_sources")),
+    }
+
+
 def _resident_source_dq_execution_state(run_root: Path) -> dict[str, Any]:
     path = run_root / "resident_source_dq_execution.json"
     if not path.exists():
@@ -2178,6 +2421,10 @@ def build_pipeline_contract_audit(
     integration_map_rows = _integration_map_rows(integration, run_root)
     integration_engine_policy = _integration_engine_policy_state(integration, integration_rows)
     frame_accounting_admission = _frame_accounting_admission_state(frame_accounting)
+    frame_accounting_resident_dq_ledger = _frame_accounting_resident_dq_ledger_state(
+        frame_accounting,
+        resident_calibrated_light_rows,
+    )
     resident_integration_required = any(_is_resident_integration_row(row) for row in integration_rows)
     resident_frame_mask = _resident_frame_mask_state(
         run_root,
@@ -2450,6 +2697,30 @@ def build_pipeline_contract_audit(
                 "conflicts": frame_accounting_admission["integration_conflicts"],
             },
             "When frame_accounting.json is present, positive-weight integration rows must not conflict with upstream quality, registration, warp, or LN rejection state.",
+        ),
+        _check(
+            "frame_accounting_resident_dq_ledger_contract",
+            bool(frame_accounting_resident_dq_ledger["passed"]),
+            {
+                "required": frame_accounting_resident_dq_ledger["required"],
+                "present": frame_accounting_resident_dq_ledger["present"],
+                "status": frame_accounting_resident_dq_ledger["status"],
+                "expected_rows": frame_accounting_resident_dq_ledger["expected_rows"],
+                "accounting_rows": frame_accounting_resident_dq_ledger["accounting_rows"],
+                "expected_passed_rows": frame_accounting_resident_dq_ledger.get(
+                    "expected_passed_rows"
+                ),
+                "expected_failed_rows": frame_accounting_resident_dq_ledger.get(
+                    "expected_failed_rows"
+                ),
+                "failed_checks": frame_accounting_resident_dq_ledger["failed_checks"],
+                "missing_frame_ids": frame_accounting_resident_dq_ledger["missing_frame_ids"],
+                "extra_frame_ids": frame_accounting_resident_dq_ledger["extra_frame_ids"],
+                "failed_frame_ids": frame_accounting_resident_dq_ledger["failed_frame_ids"],
+                "contract_sources": frame_accounting_resident_dq_ledger["contract_sources"],
+                "frame_mask_sources": frame_accounting_resident_dq_ledger["frame_mask_sources"],
+            },
+            "Resident frame accounting must close its calibrated-light DQ ledger against resident calibration artifacts.",
         ),
     ]
     if calibration_artifact_present or resident_calibration_rows:
@@ -2863,6 +3134,7 @@ def build_pipeline_contract_audit(
             "engine_policy": integration_engine_policy,
         },
         "frame_accounting": frame_accounting_admission,
+        "frame_accounting_resident_dq_ledger": frame_accounting_resident_dq_ledger,
         "resident_source_dq_execution": resident_source_dq_execution,
         "resident_frame_masks": resident_frame_mask,
         "resident_registration_quality": resident_registration_quality,
@@ -2962,6 +3234,24 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
             f"weight `{conflict.get('integration_weight')}`, "
             f"conflicts `{conflict.get('integration_conflicts')}`"
         )
+    resident_dq_ledger = audit.get("frame_accounting_resident_dq_ledger") or {}
+    lines.extend(["", "## Frame Accounting Resident DQ Ledger", ""])
+    lines.append(
+        "- "
+        f"required `{resident_dq_ledger.get('required')}`, "
+        f"present `{resident_dq_ledger.get('present')}`, "
+        f"status `{resident_dq_ledger.get('status')}`, "
+        f"expected rows `{resident_dq_ledger.get('expected_rows')}`, "
+        f"accounting rows `{resident_dq_ledger.get('accounting_rows')}`, "
+        f"failed checks `{resident_dq_ledger.get('failed_checks')}`"
+    )
+    lines.append(
+        "- "
+        f"contract sources `{resident_dq_ledger.get('contract_sources')}`, "
+        f"frame-mask sources `{resident_dq_ledger.get('frame_mask_sources')}`, "
+        f"missing `{resident_dq_ledger.get('missing_frame_ids')}`, "
+        f"extra `{resident_dq_ledger.get('extra_frame_ids')}`"
+    )
     source_dq = audit.get("resident_source_dq_execution") or {}
     summary = source_dq.get("summary") if isinstance(source_dq.get("summary"), dict) else {}
     lines.extend(["", "## Resident Source-DQ Execution", ""])

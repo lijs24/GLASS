@@ -111,6 +111,7 @@
       "calibration_master_surface_contract",
       "resident_calibrated_light_contract",
       "resident_calibrated_light_dq_contract",
+      "frame_accounting_resident_dq_ledger_contract",
       "integration_resident_result_contract"
     ],
     "allow_failed_checks": false
