@@ -1,0 +1,81 @@
+{
+  "gate": "S2-Gate 541",
+  "title": "Explicit native-u16 plan spec cache",
+  "objective": "Extend the plan-carried simple FITS spec cache to explicit --resident-fits-read-mode native_u16_gpu so manual raw-u16 runs avoid repeated resident-run header probes.",
+  "baseline_gate": "S2-Gate 540",
+  "processing_plan": "C:\\glass_runs\\phase2_s2_gate540_plan_spec_cache\\runs_20260623_140314\\processing_plan.json",
+  "resident_run": "C:\\glass_runs\\phase2_s2_gate541_explicit_native_spec_cache\\runs_20260623_140840\\explicit_native_u16_plan_spec",
+  "code_changes": {
+    "resident_selection": "Refactors raw-u16 spec collection so guarded-auto and explicit native_u16_gpu share plan-carried SimpleFitsImageSpec cache construction.",
+    "artifact_contract": "Explicit native_u16_gpu now records checked, eligible, spec_cache_frame_count, spec_source_counts, plan_header_spec_count, and file_header_probe_count.",
+    "compatibility": "Non-native explicit modes and legacy plans without cached specs keep the previous fallback behavior."
+  },
+  "real_200_light_validation": {
+    "shell_elapsed_s": 5.3129932,
+    "internal_elapsed_s": 4.939994199958164,
+    "stage_elapsed_s": 4.936824999982491,
+    "fits_read_mode_requested": "native_u16_gpu",
+    "fits_read_mode_effective": "native_u16_gpu",
+    "resident_checked_light_frames": 200,
+    "resident_eligible_light_frames": 200,
+    "resident_spec_cache_frame_count": 200,
+    "resident_plan_header_spec_count": 200,
+    "resident_file_header_probe_count": 0,
+    "resident_spec_source_counts": {
+      "plan_header_summary": 200
+    },
+    "fits_header_spec_cache_enabled": true,
+    "fits_header_spec_cache_hit_count": 200,
+    "light_read_upload_calibrate_s": 2.59187970001949,
+    "light_read_wait_wall_s": 1.0550508994492702,
+    "light_read_worker_cumulative_s": 28.803584099630825,
+    "master_build_or_load_s": 0.36329040001146495,
+    "resident_registration_warp_s": 0.26038510049693286,
+    "resident_integration_s": 0.3075091000064276,
+    "output_write_s": 0.24750769999809563,
+    "bitwise_vs_gate540_all_maps": true,
+    "bitwise_maps": [
+      "resident_master_H.fits",
+      "resident_weight_map_H.fits",
+      "resident_coverage_map_H.fits",
+      "resident_low_rejection_map_H.fits",
+      "resident_high_rejection_map_H.fits",
+      "resident_dq_map_H.fits"
+    ]
+  },
+  "wbpp_compare": {
+    "reference": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf",
+    "compare_json": "C:\\glass_runs\\phase2_s2_gate541_explicit_native_spec_cache\\runs_20260623_140840\\explicit_native_u16_plan_spec\\compare_vs_wbpp_fastintegration_scaled_coverage190.json",
+    "compare_html": "C:\\glass_runs\\phase2_s2_gate541_explicit_native_spec_cache\\runs_20260623_140840\\explicit_native_u16_plan_spec\\compare_vs_wbpp_fastintegration_scaled_coverage190.html",
+    "shape_match": true,
+    "rms_diff": 0.0004279821839256963,
+    "abs_diff_p99": 0.0001313822576776147,
+    "coverage_fraction": 0.9892770479074376,
+    "compared_pixels": 56997300,
+    "wbpp_elapsed_s": 1092.541,
+    "glass_shell_elapsed_s": 5.3129932,
+    "shell_speedup_vs_wbpp": 205.63568573737302
+  },
+  "cuda": {
+    "available": true,
+    "device_id": 0,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "native_backend": true
+  },
+  "tests": {
+    "focused": "5 passed in 1.19s",
+    "full_pytest": "1178 passed in 42.90s"
+  },
+  "clean_room": {
+    "compliant": true,
+    "statement": "The gate uses GLASS plan metadata, GLASS timing artifacts, GLASS output hashes, and user-generated WBPP black-box output/timing. It does not inspect or reuse external implementation source."
+  },
+  "known_limitations": [
+    "The benefit applies when explicit native_u16_gpu runs use regenerated plans containing GLASS_SIMPLE_FITS_SPEC.",
+    "Explicit native_u16_gpu still requires compatible FITS inputs and the native raw-u16 CUDA method.",
+    "The larger remaining bottleneck is raw file read plus H2D/calibration overlap, not selection-time header parsing."
+  ],
+  "next_step": "Reduce Python Future/thread orchestration or move batch raw FITS reads deeper into native code while preserving bitwise 200-light outputs."
+}

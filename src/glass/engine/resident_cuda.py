@@ -727,8 +727,89 @@ def _resident_fits_read_mode_selection(
     requested_mode: str,
     raw_u16_runtime_reason: str,
 ) -> tuple[str, dict[str, Any], dict[str, SimpleFitsImageSpec]]:
-    spec_cache: dict[str, SimpleFitsImageSpec] = {}
-    spec_source_counts: dict[str, int] = {}
+    def _collect_raw_u16_specs() -> tuple[
+        dict[str, SimpleFitsImageSpec],
+        int,
+        dict[str, int],
+        list[dict[str, Any]],
+        dict[str, int],
+    ]:
+        collected_specs: dict[str, SimpleFitsImageSpec] = {}
+        collected_source_counts: dict[str, int] = {}
+        collected_reason_counts: dict[str, int] = {}
+        collected_ineligible_samples: list[dict[str, Any]] = []
+        collected_eligible_count = 0
+        for frame in light_frames:
+            spec = None
+            spec_source = "file_header_probe"
+            header_summary = frame.get("header_summary", {})
+            cached_summary = (
+                header_summary.get(SIMPLE_FITS_SPEC_SUMMARY_KEY)
+                if isinstance(header_summary, dict)
+                else None
+            )
+            if isinstance(cached_summary, dict):
+                try:
+                    spec = simple_fits_spec_from_summary(frame["path"], cached_summary)
+                    probe = native_u16_gpu_fits_eligibility_from_spec(
+                        spec,
+                        expected_shape=(int(height), int(width)),
+                    )
+                    spec_source = "plan_header_summary"
+                except (FastFitsUnsupported, TypeError, ValueError):
+                    spec = None
+            if spec is None:
+                probe, spec = native_u16_gpu_fits_eligibility_with_spec(
+                    frame["path"],
+                    expected_shape=(int(height), int(width)),
+                )
+            collected_source_counts[spec_source] = collected_source_counts.get(spec_source, 0) + 1
+            if probe["eligible"]:
+                collected_eligible_count += 1
+                if spec is not None:
+                    collected_specs[str(frame["path"])] = spec
+            else:
+                reason = str(probe.get("reason") or "unknown")
+                collected_reason_counts[reason] = collected_reason_counts.get(reason, 0) + 1
+                if len(collected_ineligible_samples) < 8:
+                    collected_ineligible_samples.append(
+                        {
+                            "frame_id": str(frame.get("id", "")),
+                            "path": str(frame.get("path", "")),
+                            "reason": reason,
+                        }
+                    )
+        return (
+            collected_specs,
+            collected_eligible_count,
+            collected_reason_counts,
+            collected_ineligible_samples,
+            collected_source_counts,
+        )
+
+    def _update_raw_selection(
+        *,
+        collected_specs: dict[str, SimpleFitsImageSpec],
+        eligible_count: int,
+        reason_counts: dict[str, int],
+        ineligible_samples: list[dict[str, Any]],
+        source_counts: dict[str, int],
+    ) -> None:
+        raw_selection.update(
+            {
+                "checked": True,
+                "checked_frame_count": len(light_frames),
+                "eligible_frame_count": int(eligible_count),
+                "fallback_reason_counts": dict(sorted(reason_counts.items())),
+                "ineligible_samples": ineligible_samples,
+                "eligible": int(eligible_count) == len(light_frames),
+                "spec_cache_frame_count": len(collected_specs),
+                "spec_source_counts": dict(sorted(source_counts.items())),
+                "plan_header_spec_count": int(source_counts.get("plan_header_summary", 0)),
+                "file_header_probe_count": int(source_counts.get("file_header_probe", 0)),
+            }
+        )
+
     raw_selection: dict[str, Any] = {
         "checked": False,
         "runtime_eligible": raw_u16_runtime_reason == "",
@@ -755,7 +836,23 @@ def _resident_fits_read_mode_selection(
     }
     if requested_mode != "auto":
         raw_selection["selected"] = requested_mode == "native_u16_gpu"
-        return requested_mode, selection, {}
+        if requested_mode != "native_u16_gpu" or raw_u16_runtime_reason:
+            return requested_mode, selection, {}
+        (
+            spec_cache,
+            eligible_count,
+            reason_counts,
+            ineligible_samples,
+            spec_source_counts,
+        ) = _collect_raw_u16_specs()
+        _update_raw_selection(
+            collected_specs=spec_cache,
+            eligible_count=eligible_count,
+            reason_counts=reason_counts,
+            ineligible_samples=ineligible_samples,
+            source_counts=spec_source_counts,
+        )
+        return requested_mode, selection, spec_cache
 
     if raw_u16_runtime_reason:
         selection["effective_mode"] = "auto"
@@ -763,65 +860,22 @@ def _resident_fits_read_mode_selection(
         selection["fallback_reason"] = raw_u16_runtime_reason
         return "auto", selection, {}
 
-    reason_counts: dict[str, int] = {}
-    ineligible_samples: list[dict[str, Any]] = []
-    eligible_count = 0
-    for frame in light_frames:
-        spec = None
-        spec_source = "file_header_probe"
-        header_summary = frame.get("header_summary", {})
-        cached_summary = (
-            header_summary.get(SIMPLE_FITS_SPEC_SUMMARY_KEY)
-            if isinstance(header_summary, dict)
-            else None
-        )
-        if isinstance(cached_summary, dict):
-            try:
-                spec = simple_fits_spec_from_summary(frame["path"], cached_summary)
-                probe = native_u16_gpu_fits_eligibility_from_spec(
-                    spec,
-                    expected_shape=(int(height), int(width)),
-                )
-                spec_source = "plan_header_summary"
-            except (FastFitsUnsupported, TypeError, ValueError):
-                spec = None
-        if spec is None:
-            probe, spec = native_u16_gpu_fits_eligibility_with_spec(
-                frame["path"],
-                expected_shape=(int(height), int(width)),
-            )
-        spec_source_counts[spec_source] = spec_source_counts.get(spec_source, 0) + 1
-        if probe["eligible"]:
-            eligible_count += 1
-            if spec is not None:
-                spec_cache[str(frame["path"])] = spec
-        else:
-            reason = str(probe.get("reason") or "unknown")
-            reason_counts[reason] = reason_counts.get(reason, 0) + 1
-            if len(ineligible_samples) < 8:
-                ineligible_samples.append(
-                    {
-                        "frame_id": str(frame.get("id", "")),
-                        "path": str(frame.get("path", "")),
-                        "reason": reason,
-                    }
-                )
-    raw_selection.update(
-        {
-            "checked": True,
-            "checked_frame_count": len(light_frames),
-            "eligible_frame_count": eligible_count,
-            "fallback_reason_counts": dict(sorted(reason_counts.items())),
-            "ineligible_samples": ineligible_samples,
-            "eligible": eligible_count == len(light_frames),
-            "spec_source_counts": dict(sorted(spec_source_counts.items())),
-            "plan_header_spec_count": int(spec_source_counts.get("plan_header_summary", 0)),
-            "file_header_probe_count": int(spec_source_counts.get("file_header_probe", 0)),
-        }
+    (
+        spec_cache,
+        eligible_count,
+        reason_counts,
+        ineligible_samples,
+        spec_source_counts,
+    ) = _collect_raw_u16_specs()
+    _update_raw_selection(
+        collected_specs=spec_cache,
+        eligible_count=eligible_count,
+        reason_counts=reason_counts,
+        ineligible_samples=ineligible_samples,
+        source_counts=spec_source_counts,
     )
     if eligible_count == len(light_frames):
         raw_selection["selected"] = True
-        raw_selection["spec_cache_frame_count"] = len(spec_cache)
         selection["effective_mode"] = "native_u16_gpu"
         return "native_u16_gpu", selection, spec_cache
     selection["effective_mode"] = "auto"

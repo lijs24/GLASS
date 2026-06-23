@@ -5886,6 +5886,17 @@ def test_cli_resident_cuda_records_native_u16_gpu_decode_backend(tmp_path: Path)
 
     assert io_pipeline["fits_read_mode"] == "native_u16_gpu"
     assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
+    selection = io_pipeline["resident_fits_auto_selection"]["raw_u16_gpu"]
+    assert selection["checked"] is True
+    assert selection["selected"] is True
+    assert selection["eligible_frame_count"] == 2
+    assert selection["spec_cache_frame_count"] == 2
+    assert selection["plan_header_spec_count"] == 2
+    assert selection["file_header_probe_count"] == 0
+    assert selection["spec_source_counts"] == {"plan_header_summary": 2}
+    assert io_pipeline["fits_header_spec_cache_enabled"] is True
+    assert io_pipeline["fits_header_spec_cache_frame_count"] == 2
+    assert io_pipeline["fits_header_spec_cache_hit_count"] == 2
     assert io_pipeline["raw_gpu_decode_enabled"] is True
     assert io_pipeline["raw_gpu_h2d_bytes"] == 2 * 24 * 24 * 2
     assert io_pipeline["raw_gpu_float32_host_bytes_avoided"] == 2 * 24 * 24 * 4

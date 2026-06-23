@@ -13976,6 +13976,58 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_540_plan_spec_cache_summary.json`.
 
+### S2-Gate 541: Explicit Native-U16 Plan Spec Cache
+
+- Closed the remaining Gate540 spec-cache gap in the explicit resident
+  raw-u16 path.
+- Completed:
+  - refactored resident raw-u16 FITS selection so guarded-auto and explicit
+    `--resident-fits-read-mode native_u16_gpu` share the same plan-carried spec
+    cache collection;
+  - explicit native-u16 mode now records `checked`, `eligible`,
+    `spec_cache_frame_count`, `spec_source_counts`, `plan_header_spec_count`,
+    and `file_header_probe_count`;
+  - explicit native-u16 mode now passes the cached specs into the prefetcher, so
+    compatible regenerated plans avoid repeated header probes during light
+    reads;
+  - kept non-native explicit modes and legacy fallback behavior unchanged;
+  - added focused resident CUDA assertions for explicit native-u16 cache hits.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate541_explicit_native_spec_cache\runs_20260623_140840\explicit_native_u16_plan_spec`;
+  - plan:
+    `C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json`;
+  - shell/internal elapsed: `5.3129932 s` / `4.939994199958164 s`;
+  - requested/effective FITS mode: `native_u16_gpu` / `native_u16_gpu`;
+  - resident checked light frames: `200`;
+  - plan-header specs used: `200`;
+  - file-header probes during resident selection: `0`;
+  - FITS spec cache hits during light read: `200`.
+- Stage timing evidence:
+  - light read/upload/calibrate: `2.59187970001949 s`;
+  - light read wait wall: `1.0550508994492702 s`;
+  - resident registration/warp: `0.26038510049693286 s`;
+  - resident integration: `0.3075091000064276 s`;
+  - output write: `0.24750769999809563 s`.
+- Numerical and WBPP validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to Gate540;
+  - coverage-masked compare against the WBPP FastIntegration black-box master:
+    RMS `0.0004279821839256963`, p99 abs diff
+    `0.0001313822576776147`, coverage fraction `0.9892770479074376`,
+    compared pixels `56997300`;
+  - shell-time speedup versus WBPP: `205.63568573737302x`.
+- Interpretation:
+  - users who explicitly pin `native_u16_gpu` now get the same plan-spec cache
+    benefit as the default guarded-auto path;
+  - this gate changes no science math or output pixels;
+  - the next larger target remains reducing Python/Future orchestration or
+    moving batch raw FITS reads deeper into native code.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_541_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_541_explicit_native_spec_cache_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:
