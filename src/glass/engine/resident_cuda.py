@@ -6138,6 +6138,51 @@ def run_resident_calibration_integration(
                 else ""
             )
             source_dq_fast_skipped_frame_count = len(light_frames) if source_dq_fast_skip_enabled else 0
+            native_path_calibration_supported = bool(
+                hasattr(stack, "calibrate_frames_fits_u16be_bzero_paths_multistream_timed")
+            )
+            native_path_calibration_env = str(
+                os.environ.get("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", "")
+            ).strip().lower()
+            native_path_calibration_policy = (
+                "env_enabled"
+                if native_path_calibration_env in {"1", "true", "yes", "on"}
+                else "env_disabled_default"
+            )
+            native_path_calibration_candidate = bool(
+                raw_u16_gpu_decode_enabled
+                and calibration_batch_enabled
+                and calibration_batch_multistream_enabled
+                and source_dq_fast_skip_enabled
+                and resident_fits_spec_cache
+            )
+            native_path_calibration_requested = bool(
+                native_path_calibration_candidate
+                and native_path_calibration_policy == "env_enabled"
+            )
+            native_path_calibration_available = bool(
+                native_path_calibration_candidate and native_path_calibration_supported
+            )
+            if not native_path_calibration_candidate:
+                if not raw_u16_gpu_decode_enabled:
+                    native_path_calibration_reason = "requires_native_u16_gpu_read_mode"
+                elif not calibration_batch_enabled:
+                    native_path_calibration_reason = "requires_batch_calibration"
+                elif not calibration_batch_multistream_enabled:
+                    native_path_calibration_reason = "requires_multistream_batch_calibration"
+                elif not source_dq_fast_skip_enabled:
+                    native_path_calibration_reason = "requires_source_dq_fast_skip"
+                else:
+                    native_path_calibration_reason = "requires_fits_header_spec_cache"
+            elif not native_path_calibration_requested:
+                native_path_calibration_reason = "env_disabled_default"
+            elif not native_path_calibration_available:
+                native_path_calibration_reason = "native_method_unavailable"
+            else:
+                native_path_calibration_reason = "env_enabled"
+            native_path_calibration_enabled = bool(
+                native_path_calibration_requested and native_path_calibration_available
+            )
             calibration_fetch_batch_frames = (
                 int(resident_calibration_batch_frames)
                 if calibration_callback_release_enabled
@@ -6150,6 +6195,7 @@ def run_resident_calibration_integration(
                 calibration_callback_release_enabled
                 and resident_h2d_mode == "pinned_ring"
                 and resident_prefetch_frames > 0
+                and not native_path_calibration_enabled
                 and calibration_fetch_batch_frames > int(resident_prefetch_frames)
             ):
                 calibration_fetch_batch_frames = int(resident_prefetch_frames)
@@ -6172,6 +6218,13 @@ def run_resident_calibration_integration(
             calibration_callback_wave_count = 0
             calibration_raw_h2d_bytes = 0
             calibration_float32_host_bytes_avoided = 0
+            native_path_calibration_batch_count = 0
+            native_path_calibration_frame_count = 0
+            native_path_calibration_file_open_s = 0.0
+            native_path_calibration_file_read_s = 0.0
+            native_path_calibration_total_s = 0.0
+            native_path_calibration_host_buffer_bytes = 0
+            native_path_calibration_wave_h2d_elapsed_s = 0.0
             prefetch_fill_blocked_no_slot_count = 0
             prefetch_release_count = 0
             prefetch_max_inflight_slots = 0
@@ -6197,7 +6250,9 @@ def run_resident_calibration_integration(
                     )
                 )
             calibration_master_group_count = len({item[0] for item in light_master_selections})
-            if not calibration_batch_enabled:
+            if native_path_calibration_enabled:
+                calibration_ready_order_reason = "native_path_calibration_direct"
+            elif not calibration_batch_enabled:
                 calibration_ready_order_reason = "batch_calibration_disabled"
             elif int(resident_prefetch_frames) <= 0:
                 calibration_ready_order_reason = "prefetch_disabled"
@@ -6217,9 +6272,10 @@ def run_resident_calibration_integration(
             calibration_ready_order_out_of_order_count = 0
             calibration_ready_order_sample: list[int] = []
             calibration_ready_order_expected_next = 0
+            light_prefetch_depth = 0 if native_path_calibration_enabled else int(resident_prefetch_frames)
             with _LightPrefetcher(
                 light_frames,
-                resident_prefetch_frames,
+                light_prefetch_depth,
                 resident_prefetch_workers,
                 pinned_ring=resident_h2d_mode == "pinned_ring",
                 height=height,
@@ -6233,7 +6289,7 @@ def run_resident_calibration_integration(
                     remaining_indices = list(range(len(light_frames)))
                     processed_count = 0
                     while remaining_indices:
-                        batch_items: list[tuple[int, dict[str, Any], np.ndarray, float]] = []
+                        batch_items: list[tuple[int, dict[str, Any], np.ndarray | None, float]] = []
                         batch_frame_starts: list[float] = []
                         while remaining_indices and len(batch_items) < calibration_fetch_batch_frames:
                             ready_select_wait_s = 0.0
@@ -6278,7 +6334,30 @@ def run_resident_calibration_integration(
                                 gc_start = perf_counter()
                                 gc.collect()
                                 gc_elapsed += perf_counter() - gc_start
-                            light, read_profile, read_wait_elapsed = light_prefetch.result(item_index)
+                            if native_path_calibration_enabled:
+                                spec = resident_fits_spec_cache.get(str(frame["path"]))
+                                header_cache_hit = spec is not None
+                                if spec is None:
+                                    spec = simple_fits_image_spec(frame["path"])
+                                    resident_fits_spec_cache[str(frame["path"])] = spec
+                                byte_count = int(spec.width) * int(spec.height) * 2
+                                light = None
+                                read_wait_elapsed = 0.0
+                                read_profile = {
+                                    "total": 0.0,
+                                    "fits_open": 0.0,
+                                    "fits_materialize_decode": 0.0,
+                                    "fits_reader_backend": "native_u16be_raw_path_calibration",
+                                    "fits_fast_supported": True,
+                                    "fits_fast_bitpix": int(spec.bitpix),
+                                    "fits_fast_scaled": True,
+                                    "fits_fast_fallback_reason": "",
+                                    "fits_header_cache_hit": bool(header_cache_hit),
+                                    "fits_raw_byte_count": int(byte_count),
+                                    "fits_gpu_decode_staging": "u16be_bzero32768",
+                                }
+                            else:
+                                light, read_profile, read_wait_elapsed = light_prefetch.result(item_index)
                             per_frame_read_worker_s.append(float(read_profile.get("total", 0.0)))
                             per_frame_fits_open_s.append(float(read_profile.get("fits_open", 0.0)))
                             per_frame_fits_materialize_decode_s.append(
@@ -6352,7 +6431,75 @@ def run_resident_calibration_integration(
                             np.nan if current_dark_exposure is None else float(current_dark_exposure)
                             for _item in batch_items
                         ]
-                        if calibration_callback_release_enabled:
+                        if native_path_calibration_enabled:
+                            batch_specs: list[SimpleFitsImageSpec] = []
+                            for _item_index, frame, _light, _exposure in batch_items:
+                                spec = resident_fits_spec_cache.get(str(frame["path"]))
+                                if spec is None:
+                                    spec = simple_fits_image_spec(frame["path"])
+                                    resident_fits_spec_cache[str(frame["path"])] = spec
+                                batch_specs.append(spec)
+                            calibration_timing = (
+                                stack.calibrate_frames_fits_u16be_bzero_paths_multistream_timed(
+                                    batch_indices,
+                                    [str(spec.path) for spec in batch_specs],
+                                    [int(spec.data_offset) for spec in batch_specs],
+                                    [int(spec.width) * int(spec.height) * 2 for spec in batch_specs],
+                                    batch_light_exposures,
+                                    batch_dark_exposures,
+                                    resident_calibration_streams,
+                                    calibration_wave_effective_frames,
+                                    asdict(policy),
+                                )
+                            )
+                            native_path_calibration_batch_count += 1
+                            native_path_calibration_frame_count += len(batch_items)
+                            native_path_calibration_file_open_s += float(
+                                calibration_timing.get("native_path_read_file_open_s", 0.0) or 0.0
+                            )
+                            native_path_calibration_file_read_s += float(
+                                calibration_timing.get("native_path_read_file_read_s", 0.0) or 0.0
+                            )
+                            native_path_calibration_total_s += float(
+                                calibration_timing.get("native_path_read_total_s", 0.0) or 0.0
+                            )
+                            native_path_calibration_host_buffer_bytes = max(
+                                native_path_calibration_host_buffer_bytes,
+                                int(calibration_timing.get("native_path_host_buffer_bytes", 0) or 0),
+                            )
+                            wave_h2d_elapsed = calibration_timing.get("wave_h2d_elapsed_s", 0.0)
+                            if isinstance(wave_h2d_elapsed, (list, tuple)):
+                                native_path_calibration_wave_h2d_elapsed_s += sum(
+                                    float(value) for value in wave_h2d_elapsed
+                                )
+                            else:
+                                native_path_calibration_wave_h2d_elapsed_s += float(
+                                    wave_h2d_elapsed or 0.0
+                                )
+                            frame_native_share = 1.0 / float(len(batch_items))
+                            native_bytes = int(calibration_timing.get("native_path_read_bytes", 0) or 0)
+                            native_bytes_share = int(native_bytes // max(1, len(batch_items)))
+                            per_frame_fits_native_file_read_s.extend(
+                                [
+                                    float(
+                                        calibration_timing.get("native_path_read_file_read_s", 0.0) or 0.0
+                                    )
+                                    * frame_native_share
+                                ]
+                                * len(batch_items)
+                            )
+                            per_frame_fits_native_decode_s.extend([0.0] * len(batch_items))
+                            per_frame_fits_native_total_s.extend(
+                                [
+                                    float(calibration_timing.get("native_path_read_total_s", 0.0) or 0.0)
+                                    * frame_native_share
+                                ]
+                                * len(batch_items)
+                            )
+                            per_frame_fits_native_bytes_read.extend(
+                                [native_bytes_share] * len(batch_items)
+                            )
+                        elif calibration_callback_release_enabled:
                             released_batch_indices: set[int] = set()
 
                             def _release_h2d_completed_indices(released_indices: list[int]) -> None:
@@ -10951,6 +11098,28 @@ def run_resident_calibration_integration(
                 if len(unique_calibration_event_modes) == 1
                 else "mixed"
             )
+            native_path_calibration_report = {
+                "native_path_calibration_candidate": bool(native_path_calibration_candidate),
+                "native_path_calibration_policy": str(native_path_calibration_policy),
+                "native_path_calibration_requested": bool(native_path_calibration_requested),
+                "native_path_calibration_available": bool(native_path_calibration_available),
+                "native_path_calibration_enabled": bool(native_path_calibration_enabled),
+                "native_path_calibration_reason": str(native_path_calibration_reason),
+                "native_path_calibration_batch_count": int(native_path_calibration_batch_count),
+                "native_path_calibration_frame_count": int(native_path_calibration_frame_count),
+                "native_path_calibration_file_open_s": float(native_path_calibration_file_open_s),
+                "native_path_calibration_file_read_s": float(native_path_calibration_file_read_s),
+                "native_path_calibration_total_s": float(native_path_calibration_total_s),
+                "native_path_calibration_host_buffer_bytes": int(native_path_calibration_host_buffer_bytes),
+                "native_path_calibration_wave_h2d_elapsed_s": float(
+                    native_path_calibration_wave_h2d_elapsed_s
+                ),
+                "native_path_calibration_host_buffer_model": (
+                    "native_pageable_lane_buffers"
+                    if native_path_calibration_enabled
+                    else None
+                ),
+            }
             registration_total = registration_timing["total"]
             registration_component_total = float(
                 sum(
@@ -11062,6 +11231,7 @@ def run_resident_calibration_integration(
                 "native_queue_read_thread_wait_count": int(
                     light_prefetch.native_queue_read_thread_wait_count
                 ),
+                **native_path_calibration_report,
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -11085,6 +11255,8 @@ def run_resident_calibration_integration(
                 "light_read_wait_wall": read_wait_total,
                 "light_master_build_or_load_in_loop": light_master_build_or_load_in_loop,
                 "light_calibration_batch_native_total": float(calibration_batch_native_total_s),
+                "light_native_path_calibration_file_read": float(native_path_calibration_file_read_s),
+                "light_native_path_calibration_total": float(native_path_calibration_total_s),
                 "light_calibrate_store": calibrate_store_timing["total"],
                 "light_calibration_batch_sync": float(calibration_batch_sync_s),
                 "light_loop_unaccounted": light_loop_unaccounted,
@@ -11180,6 +11352,7 @@ def run_resident_calibration_integration(
                 "native_queue_read_thread_wait_count": int(
                     light_prefetch.native_queue_read_thread_wait_count
                 ),
+                **native_path_calibration_report,
                 "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
                 "host_pinned_bytes": int(
                     max(prefetch_host_pinned_bytes, int(getattr(stack, "host_pinned_bytes", 0)))
@@ -11208,6 +11381,8 @@ def run_resident_calibration_integration(
                     "light_calibrate_store_total": calibrate_store_timing["total"],
                     "light_h2d_calibrate_store_total": calibrate_timing["total"],
                     "light_calibration_batch_native_total": float(calibration_batch_native_total_s),
+                    "light_native_path_calibration_file_read": float(native_path_calibration_file_read_s),
+                    "light_native_path_calibration_total": float(native_path_calibration_total_s),
                     "light_calibration_batch_stream_h2d_calibrate_store": float(calibration_batch_stream_s),
                     "light_calibration_batch_sync": float(calibration_batch_sync_s),
                     "resident_registration_warp_total": registration_total,
@@ -11437,6 +11612,8 @@ def run_resident_calibration_integration(
                         "light_calibrate_store": calibrate_store_timing["total"],
                         "light_h2d_calibrate_store": calibrate_timing["total"],
                         "light_calibration_batch_native_total": float(calibration_batch_native_total_s),
+                        "light_native_path_calibration_file_read": float(native_path_calibration_file_read_s),
+                        "light_native_path_calibration_total": float(native_path_calibration_total_s),
                         "light_calibration_batch_stream_h2d_calibrate_store": float(calibration_batch_stream_s),
                         "light_calibration_batch_sync": float(calibration_batch_sync_s),
                         "resident_registration_warp": registration_total,
@@ -11581,6 +11758,7 @@ def run_resident_calibration_integration(
                                 "reused_stack_lane_events",
                                 "reused_stack_lane_h2d_events",
                                 "reused_stack_lane_h2d_callback_events",
+                                "native_path_read_reused_stack_lane_events",
                             }
                             & set(unique_calibration_event_modes)
                         ),
@@ -11632,7 +11810,9 @@ def run_resident_calibration_integration(
                         "calibration_ready_order_sample": list(calibration_ready_order_sample),
                         "calibration_wave_enabled": bool(calibration_wave_enabled),
                         "calibration_wave_release_mode": (
-                            "callback_after_h2d_event"
+                            "native_path_read_wave_sync"
+                            if native_path_calibration_enabled
+                            else "callback_after_h2d_event"
                             if calibration_callback_release_enabled
                             else ("after_wave_sync" if calibration_wave_enabled else "after_native_batch_sync")
                         ),
@@ -11645,6 +11825,9 @@ def run_resident_calibration_integration(
                         "calibration_batch_actual_stream_count": int(calibration_batch_actual_stream_count),
                         "calibration_batch_lane_buffer_bytes": int(calibration_batch_lane_buffer_bytes),
                         "calibration_batch_mode": (
+                            "fits_u16be_bzero_native_path_read_calibration_batch"
+                            if native_path_calibration_enabled
+                            else
                             "fits_u16be_bzero_gpu_decode_callback_release_batch"
                             if raw_u16_gpu_decode_enabled
                             else
@@ -11660,6 +11843,9 @@ def run_resident_calibration_integration(
                             else "per_frame"
                         ),
                         "calibration_batch_timing_model": (
+                            "native_path_read_wave_then_h2d_gpu_decode_calibration"
+                            if native_path_calibration_enabled
+                            else
                             "multi_stream_callback_release_waves_one_final_sync"
                             if calibration_callback_release_enabled
                             else
@@ -11740,6 +11926,7 @@ def run_resident_calibration_integration(
                         "native_queue_read_thread_wait_count": int(
                             light_prefetch.native_queue_read_thread_wait_count
                         ),
+                        **native_path_calibration_report,
                         "prefetch_max_inflight_slots": int(prefetch_max_inflight_slots),
                         "prefetch_host_allocation_mode": str(light_prefetch.pinned_host_allocation_mode),
                         "prefetch_host_allocation_count": int(light_prefetch.pinned_host_allocation_count),

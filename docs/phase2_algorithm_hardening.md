@@ -14429,6 +14429,62 @@ Completed in Gate446:
   - Gate545-default hash compare:
     `C:\glass_runs\phase2_s2_gate546_inline_queue_drain\hash_compare_gate545_default.json`.
 
+### S2-Gate 547: Native Path Calibration Coordinator Probe
+
+- Continued the resident CUDA I/O/calibration mainline by adding an opt-in
+  native coordinator that reads simple FITS raw `uint16` byte ranges from file
+  paths and immediately submits H2D/decode/calibration waves to the resident
+  stack.
+- Completed:
+  - added
+    `ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_multistream_timed`;
+  - wrapped it in `glass_cuda.ResidentCalibratedStack`;
+  - wired resident CUDA to enable it only with
+    `GLASS_RESIDENT_NATIVE_PATH_CALIBRATION=1`;
+  - required raw-u16 GPU decode, batch multistream calibration, cached FITS
+    specs, and source-DQ fast skip before the path coordinator can run;
+  - recorded candidate/requested/available/enabled state, read timings, host
+    buffer bytes, frame counts, and calibration mode in resident artifacts;
+  - kept the existing default raw-u16 callback-release path unchanged.
+- Tests:
+  - focused native path/raw-u16/default tests: `3 passed in 0.68 s`;
+  - full pytest: `1186 passed in 43.62 s`.
+- Real 200-light same-session A/B:
+  - native path opt-in run:
+    `C:\glass_runs\phase2_s2_gate547_native_path_calibration\runs_20260623_153816\native_path_calibration_release`;
+  - fresh default run:
+    `C:\glass_runs\phase2_s2_gate547_native_path_calibration\runs_20260623_153838\default_release`;
+  - plan:
+    `C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json`;
+  - native path light read/upload/calibrate: `7.907601 s`;
+  - default light read/upload/calibrate: `2.572788 s`;
+  - native path registration/warp: `0.255650 s`;
+  - default registration/warp: `0.254171 s`;
+  - native path integration: `0.302695 s`;
+  - default integration: `0.327721 s`;
+  - native path recorded `native_u16be_raw_path_calibration: 200`;
+  - default recorded `native_u16be_raw: 200`.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    SHA256-identical between the native path run and the fresh default run;
+  - master SHA256:
+    `8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110`.
+- Interpretation:
+  - direct native path-read calibration is correct but slower than the current
+    default by about `3.07x` on the 200-light benchmark;
+  - the likely cause is that this prototype uses pageable native lane buffers
+    and wave-level file-read joins, losing the pinned prefetch/ready-order
+    overlap that the default and queue paths preserve;
+  - therefore it remains opt-in and must not be promoted;
+  - the next useful optimization is a pinned native read-to-calibration queue
+    that feeds completed raw buffers into H2D/calibration waves without
+    materializing Python futures or replacing pinned overlap with pageable
+    buffers.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_547_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_547_native_path_calibration_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

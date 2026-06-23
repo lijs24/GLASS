@@ -1,0 +1,87 @@
+{
+  "gate": "S2-Gate 547",
+  "title": "Native Path Calibration Coordinator Probe",
+  "date": "2026-06-23",
+  "result": "green_negative_probe_not_promoted",
+  "code_changes": [
+    "cpp/src/native_bindings.cpp",
+    "src/glass_cuda.py",
+    "src/glass/engine/resident_cuda.py",
+    "tests/test_cuda_resident_stack.py",
+    "tests/test_resident_cuda_run.py",
+    "docs/phase2_algorithm_hardening.md",
+    "docs/algorithm_sources.md"
+  ],
+  "feature_flags": {
+    "env": "GLASS_RESIDENT_NATIVE_PATH_CALIBRATION=1",
+    "default_enabled": false,
+    "reason": "real 200-light probe is correct but slower than default"
+  },
+  "tests": {
+    "focused_stack_path_raw": "2 passed in 0.34 s",
+    "focused_resident_path_default": "3 passed in 0.68 s",
+    "full_pytest": "1186 passed in 43.62 s"
+  },
+  "cuda": {
+    "available": true,
+    "device_id": 0,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "driver_version": "596.21"
+  },
+  "real_200_light": {
+    "plan": "C:\\glass_runs\\phase2_s2_gate540_plan_spec_cache\\runs_20260623_140314\\processing_plan.json",
+    "master_cache_dir": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\resident_master_cache",
+    "opt_in_run": "C:\\glass_runs\\phase2_s2_gate547_native_path_calibration\\runs_20260623_153816\\native_path_calibration_release",
+    "default_run": "C:\\glass_runs\\phase2_s2_gate547_native_path_calibration\\runs_20260623_153838\\default_release",
+    "frame_count": 200,
+    "opt_in": {
+      "calibration_batch_mode": "fits_u16be_bzero_native_path_read_calibration_batch",
+      "fits_backend_counts": {
+        "native_u16be_raw_path_calibration": 200
+      },
+      "light_read_upload_calibrate_s": 7.907601,
+      "registration_warp_s": 0.25565,
+      "integration_s": 0.302695,
+      "output_write_s": 0.229035,
+      "native_path_calibration_total_s": 4.602468,
+      "native_path_calibration_file_read_s": 17.841808,
+      "raw_gpu_h2d_bytes": 24660480000,
+      "raw_gpu_float32_host_bytes_avoided": 49320960000
+    },
+    "default": {
+      "calibration_batch_mode": "fits_u16be_bzero_gpu_decode_callback_release_batch",
+      "fits_backend_counts": {
+        "native_u16be_raw": 200
+      },
+      "light_read_upload_calibrate_s": 2.572788,
+      "registration_warp_s": 0.254171,
+      "integration_s": 0.327721,
+      "output_write_s": 0.331448,
+      "raw_gpu_h2d_bytes": 24660480000,
+      "raw_gpu_float32_host_bytes_avoided": 49320960000
+    },
+    "light_stage_slowdown_factor": 3.073553,
+    "outputs_bitwise_equal": true,
+    "sha256": {
+      "resident_master_H.fits": "8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110",
+      "resident_weight_map_H.fits": "5862111EE6F527A40671AC13F1FAA43F037C90271F872F27AF4ACF17040FBFE8",
+      "resident_coverage_map_H.fits": "B87517BE794A3B4BDCFF0D8536EE0188DA6AFA54ED2BE818BD911BA6CF1BE1B3",
+      "resident_low_rejection_map_H.fits": "F1181E0CE52A7FF77B988AFAF8A8911A1BEAF94DF54B25B0AA51014CB0D66E23",
+      "resident_high_rejection_map_H.fits": "ADB66C931C5A48D6E0D7F5C2FCBCC58481420AD4912304843A3802089050C805",
+      "resident_dq_map_H.fits": "934F661119CE18BBCAC1D369488AED4D959669C6EF614D6076D74BE06E69CCFB"
+    }
+  },
+  "interpretation": [
+    "The native path coordinator is numerically correct.",
+    "It is slower because it uses pageable native lane buffers and wave-level file-read joins.",
+    "It should remain opt-in and not be promoted.",
+    "The next substantial target is a pinned native read-to-calibration queue."
+  ],
+  "clean_room": {
+    "external_source_read": false,
+    "input_directories_modified": false,
+    "notes": "Uses GLASS-owned code, public FITS byte ranges, user data, and GLASS artifacts only."
+  }
+}

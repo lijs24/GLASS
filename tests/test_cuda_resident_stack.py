@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from astropy.io import fits
 
 from glass.cpu.calibration import calibrate_light
 from glass.cpu.cosmetic import detect_isolated_cosmetic_defects
@@ -18,6 +19,7 @@ from glass.engine.resident_source_dq import (
     source_invalid_mask_from_dq_mask,
 )
 from glass.engine.stack_engine import CPUStackEngine
+from glass.io.fits_fast import simple_fits_image_spec
 from glass.models import CalibrationPolicy
 from tests.conftest import cuda_module_or_skip
 
@@ -211,6 +213,68 @@ def test_resident_stack_calibrates_u16be_raw_on_gpu_like_cpu():
     assert timing["float32_host_bytes_avoided"] == 2 * 4 * 5 * 4
     assert np.allclose(master, cpu_master, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, np.full((4, 5), len(raw_lights), dtype=np.float32))
+
+
+def test_resident_stack_calibrates_u16be_paths_on_gpu_like_cpu(tmp_path: Path):
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+    if not hasattr(
+        module.ResidentCalibratedStack,
+        "calibrate_frames_fits_u16be_bzero_paths_multistream_timed",
+    ):
+        pytest.skip("native path-read FITS u16 calibration is not available")
+
+    physical = [
+        (np.arange(20, dtype=np.uint16).reshape(4, 5) + np.uint16(1200)),
+        (np.arange(20, dtype=np.uint16).reshape(4, 5) + np.uint16(1300)),
+    ]
+    paths = []
+    specs = []
+    for index, frame in enumerate(physical):
+        path = tmp_path / f"resident_path_read_u16_{index}.fits"
+        stored = (frame.astype(np.int32) - 32768).astype(np.int16)
+        hdu = fits.PrimaryHDU(stored)
+        hdu.header["BSCALE"] = 1.0
+        hdu.header["BZERO"] = 32768.0
+        hdu.writeto(path)
+        spec = simple_fits_image_spec(path)
+        paths.append(path)
+        specs.append(spec)
+
+    bias = np.full((4, 5), 10, dtype=np.float32)
+    dark = np.full((4, 5), 20, dtype=np.float32)
+    flat = np.full((4, 5), 2, dtype=np.float32)
+    policy = CalibrationPolicy(master_dark_includes_bias=True, dark_scaling_enabled=False, flat_floor=0.05)
+
+    stack = module.ResidentCalibratedStack(len(paths), 4, 5)
+    stack.set_calibration_masters(bias=bias, dark=dark, flat=flat)
+    timing = stack.calibrate_frames_fits_u16be_bzero_paths_multistream_timed(
+        [0, 1],
+        paths,
+        [spec.data_offset for spec in specs],
+        [spec.width * spec.height * 2 for spec in specs],
+        [60.0, 60.0],
+        [60.0, 60.0],
+        2,
+        2,
+        asdict(policy),
+    )
+
+    cpu_frames = [
+        calibrate_light(frame.astype(np.float32), bias, dark, flat, 60.0, 60.0, policy)
+        for frame in physical
+    ]
+    cpu_master = np.mean(np.stack(cpu_frames, axis=0), axis=0).astype(np.float32)
+    master, weight_map = stack.integrate_mean()
+
+    assert timing["h2d_mode"] == "fits_u16be_bzero_native_path_read_calibration_batch"
+    assert timing["source_sample_format"] == "fits_bitpix16_bzero32768_big_endian"
+    assert timing["raw_h2d_bytes"] == 2 * 4 * 5 * 2
+    assert timing["native_path_read_bytes"] == 2 * 4 * 5 * 2
+    assert timing["native_path_host_buffer_bytes"] == 2 * 4 * 5 * 2
+    assert np.allclose(master, cpu_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, np.full((4, 5), len(paths), dtype=np.float32))
 
 
 def test_resident_stack_tile_local_mean_matches_cpu_reference():

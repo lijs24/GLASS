@@ -5758,6 +5758,311 @@ class ResidentCalibratedStack {
     return out;
   }
 
+  py::dict calibrate_frames_fits_u16be_bzero_paths_multistream_timed(
+      py::object indices_obj,
+      py::object paths_obj,
+      py::object data_offsets_obj,
+      py::object byte_counts_obj,
+      py::object light_exposures_obj,
+      py::object dark_exposures_obj,
+      int stream_count,
+      int wave_frames,
+      py::object policy_obj) {
+    if (pending_calibration_) {
+      throw std::runtime_error("a resident calibration batch is already pending");
+    }
+    if (stream_count <= 0) {
+      throw std::invalid_argument("stream_count must be positive");
+    }
+    if (wave_frames <= 0) {
+      throw std::invalid_argument("wave_frames must be positive");
+    }
+    if (wave_frames > stream_count) {
+      throw std::invalid_argument("native path-read calibration requires wave_frames <= stream_count");
+    }
+    const auto indices = parse_index_sequence(indices_obj, "indices");
+    const auto paths = py::cast<std::vector<std::string>>(paths_obj);
+    const auto data_offsets = py::cast<std::vector<unsigned long long>>(data_offsets_obj);
+    const auto byte_counts = py::cast<std::vector<unsigned long long>>(byte_counts_obj);
+    const auto light_exposures = parse_float_sequence(light_exposures_obj, "light_exposures");
+    const auto dark_exposures = parse_float_sequence(dark_exposures_obj, "dark_exposures");
+    const std::size_t frame_count = indices.size();
+    if (frame_count == 0) {
+      py::dict out;
+      out["schema_version"] = 1;
+      out["h2d_mode"] = "fits_u16be_bzero_native_path_read_calibration_batch";
+      out["event_mode"] = "native_path_read_reused_stack_lane_events";
+      out["timing_model"] = "native_path_read_wave_then_h2d_gpu_decode_calibration";
+      out["source_sample_format"] = "fits_bitpix16_bzero32768_big_endian";
+      out["requested_stream_count"] = stream_count;
+      out["stream_count"] = 0;
+      out["requested_wave_frames"] = wave_frames;
+      out["wave_frames"] = 0;
+      out["wave_frames_clamped_to_stream_count"] = false;
+      out["wave_count"] = 0;
+      out["frame_count"] = 0;
+      out["raw_h2d_bytes"] = 0;
+      out["float32_host_bytes_avoided"] = 0;
+      out["native_path_read_file_open_s"] = 0.0;
+      out["native_path_read_file_read_s"] = 0.0;
+      out["native_path_read_total_s"] = 0.0;
+      out["native_path_read_bytes"] = 0;
+      out["h2d_event_sync_s"] = 0.0;
+      out["h2d_event_elapsed_s"] = 0.0;
+      out["stream_h2d_calibrate_store_s"] = 0.0;
+      out["sync_s"] = 0.0;
+      out["total_s"] = 0.0;
+      out["host_release_safe"] = true;
+      out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+      out["native_path_host_buffer_bytes"] = 0;
+      out["lane_stream_elapsed_s"] = py::list();
+      out["wave_h2d_elapsed_s"] = py::list();
+      return out;
+    }
+    if (paths.size() != frame_count ||
+        data_offsets.size() != frame_count ||
+        byte_counts.size() != frame_count ||
+        light_exposures.size() != frame_count ||
+        dark_exposures.size() != frame_count) {
+      throw std::invalid_argument(
+          "indices, paths, offsets, byte_counts, light_exposures, and dark_exposures must have the same length");
+    }
+    const std::size_t raw_frame_bytes = pixels_per_frame_ * 2u;
+    for (std::size_t i = 0; i < frame_count; ++i) {
+      require_index(indices[i]);
+      if (byte_counts[i] != static_cast<unsigned long long>(raw_frame_bytes)) {
+        throw std::invalid_argument("native path-read FITS byte count must equal height*width*2");
+      }
+    }
+
+    const std::size_t requested_wave_frames = static_cast<std::size_t>(wave_frames);
+    const std::size_t stream_limit = static_cast<std::size_t>(stream_count);
+    const std::size_t effective_wave_frames =
+        std::min<std::size_t>(std::min<std::size_t>(requested_wave_frames, stream_limit), frame_count);
+    const bool wave_frames_clamped_to_stream_count = requested_wave_frames > stream_limit;
+    const std::size_t lane_count = std::min<std::size_t>(stream_limit, effective_wave_frames);
+    ensure_calibration_lanes(lane_count);
+
+    std::vector<std::vector<unsigned char>> lane_host_buffers(lane_count);
+    for (auto& buffer : lane_host_buffers) {
+      buffer.resize(raw_frame_bytes);
+    }
+    std::vector<CalibrationParameters> params;
+    params.reserve(frame_count);
+    for (std::size_t i = 0; i < frame_count; ++i) {
+      py::object dark_exposure_obj = py::none();
+      if (std::isfinite(dark_exposures[i]) && dark_exposures[i] > 0.0f) {
+        dark_exposure_obj = py::float_(dark_exposures[i]);
+      }
+      params.push_back(calibration_parameters(light_exposures[i], dark_exposure_obj, policy_obj));
+    }
+
+    const auto total_start = Clock::now();
+    std::vector<unsigned char> lane_started(lane_count, 0);
+    std::vector<unsigned char> lane_used_in_wave(lane_count, 0);
+    std::vector<double> lane_elapsed(lane_count, 0.0);
+    std::vector<double> wave_h2d_elapsed;
+    wave_h2d_elapsed.reserve((frame_count + effective_wave_frames - 1) / effective_wave_frames);
+    double h2d_event_sync_s = 0.0;
+    double h2d_event_elapsed_s = 0.0;
+    double stream_s = 0.0;
+    double native_open_s = 0.0;
+    double native_read_s = 0.0;
+    double native_total_read_s = 0.0;
+    unsigned long long native_bytes_read = 0;
+    std::size_t wave_count = 0;
+
+    try {
+      py::gil_scoped_release release;
+      for (std::size_t wave_start = 0; wave_start < frame_count; wave_start += effective_wave_frames) {
+        const std::size_t frames_in_wave = std::min<std::size_t>(effective_wave_frames, frame_count - wave_start);
+        std::fill(lane_used_in_wave.begin(), lane_used_in_wave.end(), 0);
+        std::vector<RawFitsReadTiming> read_timings(frames_in_wave);
+        std::vector<std::string> read_errors(frames_in_wave);
+        std::vector<std::thread> read_threads;
+        read_threads.reserve(frames_in_wave);
+        const auto wave_read_start = Clock::now();
+        for (std::size_t j = 0; j < frames_in_wave; ++j) {
+          read_threads.emplace_back([&, j]() {
+            const std::size_t frame_offset = wave_start + j;
+            try {
+              read_timings[j] = read_raw_fits_bytes_into_ptr(
+                  paths[frame_offset],
+                  data_offsets[frame_offset],
+                  raw_frame_bytes,
+                  lane_host_buffers[j].data());
+            } catch (const std::exception& exc) {
+              read_errors[j] = exc.what();
+            } catch (...) {
+              read_errors[j] = "unknown native path-read calibration read error";
+            }
+          });
+        }
+        for (auto& thread : read_threads) {
+          thread.join();
+        }
+        native_total_read_s += seconds_since(wave_read_start);
+        for (std::size_t j = 0; j < frames_in_wave; ++j) {
+          if (!read_errors[j].empty()) {
+            std::ostringstream message;
+            message << "native path-read calibration failed for frame "
+                    << (wave_start + j) << " (" << paths[wave_start + j]
+                    << "): " << read_errors[j];
+            throw std::runtime_error(message.str());
+          }
+          native_open_s += read_timings[j].file_open_s;
+          native_read_s += read_timings[j].file_read_s;
+          native_bytes_read += read_timings[j].bytes_read;
+        }
+
+        double wave_elapsed_s = 0.0;
+        for (std::size_t j = 0; j < frames_in_wave; ++j) {
+          const std::size_t lane = j;
+          const std::size_t frame_offset = wave_start + j;
+          if (!lane_started[lane]) {
+            check_cuda(
+                cudaEventRecord(calibration_lane_start_events_[lane], calibration_lane_streams_[lane]),
+                "cudaEventRecord(resident native path-read lane start)");
+            lane_started[lane] = 1;
+          }
+          lane_used_in_wave[lane] = 1;
+          auto* lane_raw = reinterpret_cast<unsigned char*>(d_calibration_lane_lights_[lane]);
+          check_cuda(
+              cudaEventRecord(calibration_lane_h2d_start_events_[lane], calibration_lane_streams_[lane]),
+              "cudaEventRecord(resident native path-read lane h2d start)");
+          check_cuda(
+              cudaMemcpyAsync(
+                  lane_raw,
+                  lane_host_buffers[lane].data(),
+                  raw_frame_bytes,
+                  cudaMemcpyHostToDevice,
+                  calibration_lane_streams_[lane]),
+              "cudaMemcpyAsync(resident native path-read FITS u16 light)");
+          check_cuda(
+              cudaEventRecord(calibration_lane_h2d_events_[lane], calibration_lane_streams_[lane]),
+              "cudaEventRecord(resident native path-read lane h2d done)");
+          glass_calibrate_fits_u16be_bzero_f32_launch_stream(
+              lane_raw,
+              d_bias_,
+              d_dark_,
+              d_flat_,
+              d_stack_ + indices[frame_offset] * pixels_per_frame_,
+              pixels_per_frame_,
+              has_bias_,
+              has_dark_,
+              has_flat_,
+              params[frame_offset].master_dark_includes_bias,
+              params[frame_offset].dark_scale,
+              params[frame_offset].flat_floor,
+              params[frame_offset].pedestal,
+              calibration_lane_streams_[lane]);
+          check_cuda(
+              cudaGetLastError(),
+              "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths kernel launch");
+          check_cuda(
+              cudaEventRecord(calibration_lane_stop_events_[lane], calibration_lane_streams_[lane]),
+              "cudaEventRecord(resident native path-read lane calibration stop)");
+        }
+        const auto h2d_sync_start = Clock::now();
+        for (std::size_t lane = 0; lane < frames_in_wave; ++lane) {
+          if (lane_used_in_wave[lane]) {
+            check_cuda(
+                cudaEventSynchronize(calibration_lane_h2d_events_[lane]),
+                "cudaEventSynchronize(resident native path-read lane h2d)");
+          }
+        }
+        h2d_event_sync_s += seconds_since(h2d_sync_start);
+        for (std::size_t lane = 0; lane < frames_in_wave; ++lane) {
+          if (lane_used_in_wave[lane]) {
+            const double lane_h2d_s = cuda_event_elapsed_s(
+                calibration_lane_h2d_start_events_[lane],
+                calibration_lane_h2d_events_[lane],
+                "cudaEventElapsedTime(resident native path-read lane h2d)");
+            wave_elapsed_s = std::max(wave_elapsed_s, lane_h2d_s);
+            h2d_event_elapsed_s = std::max(h2d_event_elapsed_s, lane_h2d_s);
+          }
+        }
+        wave_h2d_elapsed.push_back(wave_elapsed_s);
+        ++wave_count;
+      }
+    } catch (...) {
+      py::gil_scoped_release release;
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          cudaStreamSynchronize(calibration_lane_streams_[lane]);
+        }
+      }
+      throw;
+    }
+
+    double sync_s = 0.0;
+    {
+      py::gil_scoped_release release;
+      const auto sync_start = Clock::now();
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          check_cuda(
+              cudaStreamSynchronize(calibration_lane_streams_[lane]),
+              "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths synchronize");
+        }
+      }
+      sync_s = seconds_since(sync_start);
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          lane_elapsed[lane] = cuda_event_elapsed_s(
+              calibration_lane_start_events_[lane],
+              calibration_lane_stop_events_[lane],
+              "cudaEventElapsedTime(resident native path-read lane calibration)");
+          stream_s = std::max(stream_s, lane_elapsed[lane]);
+        }
+      }
+    }
+    for (std::size_t index : indices) {
+      mark_loaded(index);
+    }
+    py::list lane_stream_elapsed_s;
+    for (const double value : lane_elapsed) {
+      lane_stream_elapsed_s.append(value);
+    }
+    py::list wave_h2d_elapsed_s;
+    for (const double value : wave_h2d_elapsed) {
+      wave_h2d_elapsed_s.append(value);
+    }
+
+    py::dict out = calibration_timing_dict(
+        ResidentCalibrationTiming{0.0, 0.0, stream_s, seconds_since(total_start)},
+        "fits_u16be_bzero_native_path_read_calibration_batch");
+    out["event_mode"] = "native_path_read_reused_stack_lane_events";
+    out["timing_model"] = "native_path_read_wave_then_h2d_gpu_decode_calibration";
+    out["source_sample_format"] = "fits_bitpix16_bzero32768_big_endian";
+    out["requested_stream_count"] = stream_count;
+    out["stream_count"] = static_cast<unsigned long long>(lane_count);
+    out["requested_wave_frames"] = wave_frames;
+    out["wave_frames"] = static_cast<unsigned long long>(effective_wave_frames);
+    out["wave_frames_clamped_to_stream_count"] = wave_frames_clamped_to_stream_count;
+    out["wave_count"] = static_cast<unsigned long long>(wave_count);
+    out["frame_count"] = static_cast<unsigned long long>(frame_count);
+    out["raw_h2d_bytes"] = static_cast<unsigned long long>(raw_frame_bytes * frame_count);
+    out["float32_host_bytes_avoided"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float) * frame_count);
+    out["native_path_read_file_open_s"] = native_open_s;
+    out["native_path_read_file_read_s"] = native_read_s;
+    out["native_path_read_total_s"] = native_total_read_s;
+    out["native_path_read_bytes"] = native_bytes_read;
+    out["h2d_release_s"] = h2d_event_sync_s;
+    out["h2d_event_sync_s"] = h2d_event_sync_s;
+    out["h2d_event_elapsed_s"] = h2d_event_elapsed_s;
+    out["callback_s"] = 0.0;
+    out["callback_release_count"] = 0;
+    out["stream_h2d_calibrate_store_s"] = stream_s;
+    out["sync_s"] = sync_s;
+    out["host_release_safe"] = true;
+    out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+    out["native_path_host_buffer_bytes"] = static_cast<unsigned long long>(raw_frame_bytes * lane_count);
+    out["lane_stream_elapsed_s"] = lane_stream_elapsed_s;
+    out["wave_h2d_elapsed_s"] = wave_h2d_elapsed_s;
+    return out;
+  }
+
   void apply_translation_frame(std::size_t index, int dx, int dy, float fill) {
     require_index(index);
     if (!loaded_[index]) {
@@ -16094,6 +16399,18 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("stream_count"),
           py::arg("wave_frames"),
           py::arg("release_callback"),
+          py::arg("policy") = py::none())
+      .def(
+          "calibrate_frames_fits_u16be_bzero_paths_multistream_timed",
+          &ResidentCalibratedStack::calibrate_frames_fits_u16be_bzero_paths_multistream_timed,
+          py::arg("indices"),
+          py::arg("paths"),
+          py::arg("data_offsets"),
+          py::arg("byte_counts"),
+          py::arg("light_exposures"),
+          py::arg("dark_exposures"),
+          py::arg("stream_count"),
+          py::arg("wave_frames"),
           py::arg("policy") = py::none())
       .def(
           "apply_translation_frame",
