@@ -3398,6 +3398,7 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     assert all(row["exists"] for row in route["dq_sidecars"])
     assert timing["resident_source_dq_cache"] == "generate-calibration"
     assert [row["stage"] for row in timing["stages"]] == [
+        "resident_reference_admission",
         "resident_memory_admission",
         "resident_source_dq_cache_calibration",
         "resident_calibration_integration",

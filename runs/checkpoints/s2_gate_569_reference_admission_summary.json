@@ -1,0 +1,309 @@
+{
+  "schema_version": 1,
+  "gate": "S2-Gate 569",
+  "blocked_no_reference": {
+    "run": "C:\\glass_runs\\phase2_s2_gate569_reference_admission\\runs_20260623_190017\\blocked_no_reference",
+    "exit_code": 2,
+    "shell_elapsed_s": 0.3309163,
+    "admission": {
+      "artifact_type": "resident_reference_admission",
+      "blocking": true,
+      "clean_room_note": "Project-defined resident reference admission guard over GLASS-owned reference metadata. It does not inspect external implementation source.",
+      "default_promoted_registration": true,
+      "explicit_reference_frame_id": null,
+      "external_registration_results": null,
+      "has_reference_source": false,
+      "matrix_registration": true,
+      "message": "resident reference admission failed: default resident matrix registration would use first_light_fallback; provide --reference-frame-id, precompute frame_quality.json in the run directory, provide --resident-registration-results, or use --resident-reference-fallback allow-first-light for an explicit diagnostic run.",
+      "quality_reference": {
+        "available": false,
+        "path": null,
+        "reference_frame_id": null,
+        "status": "absent"
+      },
+      "reason": "default_matrix_registration_without_reference",
+      "recommended_actions": [
+        "--reference-frame-id <frame-id-or-filename>",
+        "generate frame_quality.json before resident registration",
+        "--resident-registration-results <registration_results.json>",
+        "--resident-reference-fallback allow-first-light for diagnostic runs only"
+      ],
+      "requested_fallback_policy": "auto",
+      "resident_registration": "similarity_cuda_triangle",
+      "resident_registration_resolution": {
+        "command": "run",
+        "default": "auto",
+        "default_effective": "similarity_cuda_triangle",
+        "effective": "similarity_cuda_triangle",
+        "escape_hatch": "--resident-registration off",
+        "explicit": false,
+        "reason": "resident_cuda_default_promotes_similarity_triangle",
+        "requested": "auto",
+        "schema_version": 1,
+        "source": "resident_cuda_default"
+      },
+      "resident_registration_source": "resident_cuda_default",
+      "schema_version": 1
+    },
+    "run_state_failed_stage": "resident_reference_admission",
+    "timing_stages": [
+      {
+        "elapsed_s": 0.0003542999620549381,
+        "error": "resident reference admission failed: default resident matrix registration would use first_light_fallback; provide --reference-frame-id, precompute frame_quality.json in the run directory, provide --resident-registration-results, or use --resident-reference-fallback allow-first-light for an explicit diagnostic run.",
+        "stage": "resident_reference_admission",
+        "started_at": "2026-06-23T11:00:17+00:00",
+        "status": "failed"
+      }
+    ]
+  },
+  "explicit_reference": {
+    "run": "C:\\glass_runs\\phase2_s2_gate569_reference_admission\\runs_20260623_190027\\explicit_reference",
+    "exit_code": 0,
+    "shell_elapsed_s": 7.2193194,
+    "run_timing_total_elapsed_s": 6.866450699919369,
+    "baseline_gate567_total_elapsed_s": 6.99615249998169,
+    "delta_vs_gate567_s": -0.12970180006232113,
+    "wbpp_blackbox_elapsed_s_reference": 1092.541,
+    "speedup_vs_wbpp_blackbox": 159.11291695618368,
+    "admission": {
+      "artifact_type": "resident_reference_admission",
+      "blocking": false,
+      "clean_room_note": "Project-defined resident reference admission guard over GLASS-owned reference metadata. It does not inspect external implementation source.",
+      "default_promoted_registration": true,
+      "explicit_reference_frame_id": "LIGHT_H_0136",
+      "external_registration_results": null,
+      "has_reference_source": true,
+      "matrix_registration": true,
+      "quality_reference": {
+        "available": false,
+        "path": null,
+        "reference_frame_id": null,
+        "status": "absent"
+      },
+      "reason": "reference_admission_not_required",
+      "recommended_actions": [
+        "--reference-frame-id <frame-id-or-filename>",
+        "generate frame_quality.json before resident registration",
+        "--resident-registration-results <registration_results.json>",
+        "--resident-reference-fallback allow-first-light for diagnostic runs only"
+      ],
+      "requested_fallback_policy": "auto",
+      "resident_registration": "similarity_cuda_triangle",
+      "resident_registration_resolution": {
+        "command": "run",
+        "default": "auto",
+        "default_effective": "similarity_cuda_triangle",
+        "effective": "similarity_cuda_triangle",
+        "escape_hatch": "--resident-registration off",
+        "explicit": false,
+        "reason": "resident_cuda_default_promotes_similarity_triangle",
+        "requested": "auto",
+        "schema_version": 1,
+        "source": "resident_cuda_default"
+      },
+      "resident_registration_source": "resident_cuda_default",
+      "schema_version": 1
+    },
+    "registration_top_level": {
+      "reference_frame_id": "F000196",
+      "reference_selection_source": "explicit",
+      "quality_reference_status": "absent",
+      "transform_model": "similarity_cuda_triangle"
+    },
+    "resident_registration_reference": {
+      "reference_frame_id": "F000196",
+      "reference_selection_source": "explicit",
+      "quality_reference_status": "absent",
+      "warp_interpolation": "lanczos3",
+      "mode": "similarity_cuda_triangle"
+    },
+    "pipeline_contract_passed": true,
+    "pipeline_failed_checks": null,
+    "local_norm_contract_passed": true,
+    "local_norm_failed_checks": [],
+    "registration_quality_summary": {
+      "frame_count": 200,
+      "final_status_counts": {
+        "excluded": 7,
+        "ok": 192,
+        "reference": 1
+      },
+      "decision_status_counts": {
+        "accepted": 192,
+        "reference": 1,
+        "rejected": 7
+      },
+      "action_counts": {
+        "exclude": 7,
+        "none": 193
+      },
+      "rejected_frame_ids": [
+        "F000160",
+        "F000213",
+        "F000214",
+        "F000215",
+        "F000216",
+        "F000217",
+        "F000218"
+      ]
+    },
+    "frame_mask_summary": {
+      "frame_count": 200,
+      "active_frame_count": 193,
+      "masked_frame_count": 7,
+      "passed": true,
+      "status_counts": {
+        "active": 193,
+        "masked": 7
+      },
+      "mask_category_counts": {
+        "registration": 7,
+        "registration_quality": 7
+      },
+      "masked_frame_ids": [
+        "F000160",
+        "F000213",
+        "F000214",
+        "F000215",
+        "F000216",
+        "F000217",
+        "F000218"
+      ]
+    },
+    "frame_accounting_summary": {
+      "input_light_frames": 200,
+      "integrated_frames": 193,
+      "zero_weight_frames": 7,
+      "exception_frames": 7,
+      "registration_accepted_frames": 193,
+      "resident_calibrated_frames": 200,
+      "resident_frame_mask_active_frames": 193,
+      "resident_frame_mask_masked_frames": 7,
+      "resident_frame_mask_unaudited_frames": 0,
+      "final_status_counts": {
+        "integrated": 193,
+        "quality_rejected": 7
+      },
+      "integration_status_counts": {
+        "used": 193,
+        "zero_weight": 7
+      }
+    },
+    "output_comparison_vs_gate567": {
+      "resident_master_H.fits": {
+        "exists": true,
+        "baseline_exists": true,
+        "sha256": "c0d2fda42d0f85fe383ba24a2dbe7ef26023f860c8bbba37383b161ba4fa7d4f",
+        "baseline_sha256": "c0d2fda42d0f85fe383ba24a2dbe7ef26023f860c8bbba37383b161ba4fa7d4f",
+        "sha256_match": true,
+        "rms_abs_diff": 0.0,
+        "mean_abs_diff": 0.0,
+        "p99_abs_diff": 0.0,
+        "max_abs_diff": 0.0,
+        "shape": [
+          6422,
+          9600
+        ],
+        "baseline_shape": [
+          6422,
+          9600
+        ]
+      },
+      "resident_weight_map_H.fits": {
+        "exists": true,
+        "baseline_exists": true,
+        "sha256": "41d9adfa0e8f93beae615536037a677bc21c4c70ef7730c634ad9b96590b01b2",
+        "baseline_sha256": "41d9adfa0e8f93beae615536037a677bc21c4c70ef7730c634ad9b96590b01b2",
+        "sha256_match": true,
+        "rms_abs_diff": 0.0,
+        "mean_abs_diff": 0.0,
+        "p99_abs_diff": 0.0,
+        "max_abs_diff": 0.0,
+        "shape": [
+          6422,
+          9600
+        ],
+        "baseline_shape": [
+          6422,
+          9600
+        ]
+      },
+      "resident_coverage_map_H.fits": {
+        "exists": true,
+        "baseline_exists": true,
+        "sha256": "336178c34670ac08799640d4ed1b7462077091aaae4fc0858c9a5f08ba977523",
+        "baseline_sha256": "336178c34670ac08799640d4ed1b7462077091aaae4fc0858c9a5f08ba977523",
+        "sha256_match": true,
+        "rms_abs_diff": 0.0,
+        "mean_abs_diff": 0.0,
+        "p99_abs_diff": 0.0,
+        "max_abs_diff": 0.0,
+        "shape": [
+          6422,
+          9600
+        ],
+        "baseline_shape": [
+          6422,
+          9600
+        ]
+      },
+      "resident_low_rejection_map_H.fits": {
+        "exists": true,
+        "baseline_exists": true,
+        "sha256": "7d2187b8876c31821e7f0aec3b94ba0ab2f9107e88387466ed114e6f5fe71710",
+        "baseline_sha256": "7d2187b8876c31821e7f0aec3b94ba0ab2f9107e88387466ed114e6f5fe71710",
+        "sha256_match": true,
+        "rms_abs_diff": 0.0,
+        "mean_abs_diff": 0.0,
+        "p99_abs_diff": 0.0,
+        "max_abs_diff": 0.0,
+        "shape": [
+          6422,
+          9600
+        ],
+        "baseline_shape": [
+          6422,
+          9600
+        ]
+      },
+      "resident_high_rejection_map_H.fits": {
+        "exists": true,
+        "baseline_exists": true,
+        "sha256": "8cc323cac6e191541b4c3062fdfb7bc9d83dbdf5f9714cafff5be17f50b73198",
+        "baseline_sha256": "8cc323cac6e191541b4c3062fdfb7bc9d83dbdf5f9714cafff5be17f50b73198",
+        "sha256_match": true,
+        "rms_abs_diff": 0.0,
+        "mean_abs_diff": 0.0,
+        "p99_abs_diff": 0.0,
+        "max_abs_diff": 0.0,
+        "shape": [
+          6422,
+          9600
+        ],
+        "baseline_shape": [
+          6422,
+          9600
+        ]
+      },
+      "resident_dq_map_H.fits": {
+        "exists": true,
+        "baseline_exists": true,
+        "sha256": "123ac40d25cd2968cac8f9422b5b81ac1cec9565dfdae555292a3baafd0df3be",
+        "baseline_sha256": "123ac40d25cd2968cac8f9422b5b81ac1cec9565dfdae555292a3baafd0df3be",
+        "sha256_match": true,
+        "rms_abs_diff": 0.0,
+        "mean_abs_diff": 0.0,
+        "p99_abs_diff": 0.0,
+        "max_abs_diff": 0.0,
+        "shape": [
+          6422,
+          9600
+        ],
+        "baseline_shape": [
+          6422,
+          9600
+        ]
+      }
+    }
+  }
+}

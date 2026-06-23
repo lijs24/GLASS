@@ -292,6 +292,15 @@ class ResidentMemoryAdmissionBlocked(RuntimeError):
         self.path = path
 
 
+class ResidentReferenceAdmissionBlocked(RuntimeError):
+    """Raised when resident reference admission blocks unsafe first-light fallback."""
+
+    def __init__(self, message: str, *, admission: dict[str, Any], path: Path):
+        super().__init__(message)
+        self.admission = admission
+        self.path = path
+
+
 RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
     "manual": {},
     "throughput-v1": {
@@ -343,6 +352,12 @@ DEFAULT_RESIDENT_LOCAL_NORMALIZATION_TILE_SIZE_EFFECTIVE = 256
 DEFAULT_RESIDENT_WARP_INTERPOLATION = "auto"
 DEFAULT_RESIDENT_WARP_INTERPOLATION_EFFECTIVE = "lanczos3"
 DEFAULT_RESIDENT_WARP_INTERPOLATION_FALLBACK = "bilinear"
+DEFAULT_RESIDENT_REFERENCE_FALLBACK = "auto"
+RESIDENT_MATRIX_REGISTRATION_MODES = {
+    "similarity_cuda_catalog",
+    "similarity_cuda_triangle",
+    "external_matrix",
+}
 
 RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_prefetch_frames": "--resident-prefetch-frames",
@@ -937,6 +952,150 @@ def _resident_memory_admission_message(admission: dict[str, Any]) -> str:
         f"budget_gib={float(admission.get('budget_gib') or 0.0):.6f}, "
         f"recommended_action={admission.get('recommended_action')}"
     )
+
+
+def _resident_reference_admission_path(run: Path) -> Path:
+    return run / "resident_reference_admission.json"
+
+
+def _read_quality_reference_for_admission(run: Path) -> dict[str, Any]:
+    quality_path = run / "frame_quality.json"
+    if not quality_path.exists():
+        return {
+            "available": False,
+            "status": "absent",
+            "path": None,
+            "reference_frame_id": None,
+        }
+    try:
+        quality = read_json(quality_path)
+    except Exception as exc:
+        return {
+            "available": False,
+            "status": f"unreadable:{exc}",
+            "path": str(quality_path),
+            "reference_frame_id": None,
+        }
+    reference = quality.get("reference_frame_id") if isinstance(quality, dict) else None
+    if not reference:
+        return {
+            "available": False,
+            "status": "missing_reference_frame_id",
+            "path": str(quality_path),
+            "reference_frame_id": None,
+        }
+    return {
+        "available": True,
+        "status": "frame_quality",
+        "path": str(quality_path),
+        "reference_frame_id": str(reference),
+    }
+
+
+def _resident_reference_admission_message(admission: dict[str, Any]) -> str:
+    return (
+        "resident reference admission failed: default resident matrix registration "
+        "would use first_light_fallback; provide --reference-frame-id, precompute "
+        "frame_quality.json in the run directory, provide --resident-registration-results, "
+        "or use --resident-reference-fallback allow-first-light for an explicit diagnostic run."
+    )
+
+
+def _write_resident_reference_admission(run: Path, args: argparse.Namespace) -> Path:
+    requested_fallback = str(getattr(args, "resident_reference_fallback", DEFAULT_RESIDENT_REFERENCE_FALLBACK))
+    resident_registration = str(getattr(args, "resident_registration", "off"))
+    registration_resolution = getattr(args, "_resident_registration_resolution", None)
+    registration_source = (
+        str(registration_resolution.get("source"))
+        if isinstance(registration_resolution, dict) and registration_resolution.get("source") is not None
+        else "unknown"
+    )
+    matrix_registration = resident_registration in RESIDENT_MATRIX_REGISTRATION_MODES
+    default_promoted_registration = registration_source in {"resident_cuda_default", "explicit_auto"}
+    explicit_reference_frame_id = getattr(args, "reference_frame_id", None)
+    external_registration_results = getattr(args, "resident_registration_results", None)
+    quality_reference = _read_quality_reference_for_admission(run)
+    has_reference_source = bool(
+        explicit_reference_frame_id
+        or external_registration_results
+        or quality_reference.get("reference_frame_id")
+    )
+
+    should_block = False
+    reason = "reference_admission_not_required"
+    if matrix_registration and not has_reference_source:
+        if requested_fallback == "block-first-light":
+            should_block = True
+            reason = "explicit_block_first_light_fallback"
+        elif requested_fallback == "auto" and default_promoted_registration:
+            should_block = True
+            reason = "default_matrix_registration_without_reference"
+        elif requested_fallback == "allow-first-light":
+            reason = "explicit_first_light_fallback_allowed"
+        else:
+            reason = "explicit_registration_first_light_fallback_allowed"
+
+    admission = {
+        "schema_version": 1,
+        "artifact_type": "resident_reference_admission",
+        "requested_fallback_policy": requested_fallback,
+        "resident_registration": resident_registration,
+        "resident_registration_resolution": registration_resolution,
+        "resident_registration_source": registration_source,
+        "matrix_registration": matrix_registration,
+        "default_promoted_registration": default_promoted_registration,
+        "explicit_reference_frame_id": explicit_reference_frame_id,
+        "external_registration_results": external_registration_results,
+        "quality_reference": quality_reference,
+        "has_reference_source": has_reference_source,
+        "blocking": should_block,
+        "reason": reason,
+        "recommended_actions": [
+            "--reference-frame-id <frame-id-or-filename>",
+            "generate frame_quality.json before resident registration",
+            "--resident-registration-results <registration_results.json>",
+            "--resident-reference-fallback allow-first-light for diagnostic runs only",
+        ],
+        "clean_room_note": (
+            "Project-defined resident reference admission guard over GLASS-owned "
+            "reference metadata. It does not inspect external implementation source."
+        ),
+    }
+    if should_block:
+        admission["message"] = _resident_reference_admission_message(admission)
+    admission_path = _resident_reference_admission_path(run)
+    write_json(admission_path, admission)
+    args._resident_reference_admission = admission
+    if should_block:
+        raise ResidentReferenceAdmissionBlocked(
+            _resident_reference_admission_message(admission),
+            admission=admission,
+            path=admission_path,
+        )
+    return admission_path
+
+
+def _write_resident_reference_admission_failed_state(
+    run: Path,
+    exc: ResidentReferenceAdmissionBlocked,
+    *,
+    completed_stages: list[str] | None = None,
+) -> None:
+    state = initialize_run(run)
+    state.current_stage = "resident_reference_admission"
+    state.failed_stage = "resident_reference_admission"
+    state.completed_stages = list(completed_stages or [])
+    state.errors.append(str(exc))
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_reference_admission",
+            path=str(exc.path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    write_run_state(run, state)
 
 
 def _apply_resident_memory_admission_selection(
@@ -1705,6 +1864,17 @@ def cmd_audit(args: argparse.Namespace) -> int:
     write_json(plan_path, plan)
     if plan.executable and args.memory_mode == "resident":
         try:
+            resident_reference_admission_path = _timed_stage(
+                out,
+                timing,
+                "resident_reference_admission",
+                lambda: _write_resident_reference_admission(out, args),
+            )
+        except ResidentReferenceAdmissionBlocked as exc:
+            _write_resident_reference_admission_failed_state(out, exc, completed_stages=["scan", "plan"])
+            console.print({"status": "failed", "stage": "resident_reference_admission", "error": str(exc)})
+            return 2
+        try:
             resident_memory_admission_path = _timed_stage(
                 out,
                 timing,
@@ -1802,6 +1972,17 @@ def cmd_audit(args: argparse.Namespace) -> int:
         )
         state.artifacts.append(
             PipelineArtifact(
+                stage="resident_reference_admission",
+                path=str(resident_reference_admission_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=[],
+            )
+        )
+        if "resident_reference_admission" not in state.completed_stages:
+            state.completed_stages.insert(0, "resident_reference_admission")
+        state.artifacts.append(
+            PipelineArtifact(
                 stage="resident_memory_admission",
                 path=str(resident_memory_admission_path),
                 format="json",
@@ -1869,6 +2050,17 @@ def cmd_run(args: argparse.Namespace) -> int:
         out = Path(args.out)
         timing = _new_timing("run", args.backend, None)
         _annotate_timing_execution_defaults(timing, args)
+        try:
+            resident_reference_admission_path = _timed_stage(
+                out,
+                timing,
+                "resident_reference_admission",
+                lambda: _write_resident_reference_admission(out, args),
+            )
+        except ResidentReferenceAdmissionBlocked as exc:
+            _write_resident_reference_admission_failed_state(out, exc)
+            console.print({"status": "failed", "stage": "resident_reference_admission", "error": str(exc)})
+            return 2
         try:
             resident_memory_admission_path = _timed_stage(
                 out,
@@ -2006,6 +2198,17 @@ def cmd_run(args: argparse.Namespace) -> int:
                     source_frames=[],
                 )
             )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_reference_admission",
+                path=str(resident_reference_admission_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=[],
+            )
+        )
+        if "resident_reference_admission" not in state.completed_stages:
+            state.completed_stages.insert(0, "resident_reference_admission")
         state.artifacts.append(
             PipelineArtifact(
                 stage="resident_memory_admission",
@@ -5565,6 +5768,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="reference frame id, file name, or stem for registration",
     )
     run.add_argument(
+        "--resident-reference-fallback",
+        choices=["auto", "allow-first-light", "block-first-light"],
+        default=DEFAULT_RESIDENT_REFERENCE_FALLBACK,
+        help=(
+            "resident reference fallback policy; auto blocks first-light fallback for default-promoted "
+            "resident matrix-registration science runs, allow-first-light keeps the diagnostic escape hatch"
+        ),
+    )
+    run.add_argument(
         "--exclude-frame-id",
         action="append",
         default=[],
@@ -5971,6 +6183,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument("--resident-local-normalization-tile-size", type=int, default=512)
     audit.add_argument("--reference-frame-id")
+    audit.add_argument(
+        "--resident-reference-fallback",
+        choices=["auto", "allow-first-light", "block-first-light"],
+        default=DEFAULT_RESIDENT_REFERENCE_FALLBACK,
+        help=(
+            "resident reference fallback policy; auto blocks first-light fallback for default-promoted "
+            "resident matrix-registration science audits"
+        ),
+    )
     audit.add_argument("--exclude-frame-id", action="append", default=[])
     audit.set_defaults(func=cmd_audit)
 

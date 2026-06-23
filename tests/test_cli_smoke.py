@@ -12,6 +12,8 @@ from glass.cli import _resolve_resident_fits_read_mode_default
 from glass.cli import _resolve_resident_local_normalization_default
 from glass.cli import _resolve_resident_registration_default
 from glass.cli import _resolve_resident_warp_interpolation_default
+from glass.cli import _write_resident_reference_admission
+from glass.cli import ResidentReferenceAdmissionBlocked
 from glass.cli import build_parser
 from glass.cli import main
 from glass.engine.contracts import DQFlag
@@ -482,6 +484,119 @@ def test_run_resident_warp_interpolation_auto_keeps_tile_path_bilinear_placehold
     assert resolution["source"] == "unused_non_matrix"
 
 
+def test_run_default_resident_matrix_registration_blocks_first_light_reference_fallback(tmp_path: Path) -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", str(tmp_path)])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    _resolve_resident_registration_default(args, command="run")
+
+    with pytest.raises(ResidentReferenceAdmissionBlocked) as excinfo:
+        _write_resident_reference_admission(tmp_path, args)
+
+    admission = read_json(tmp_path / "resident_reference_admission.json")
+    assert args.resident_registration == "similarity_cuda_triangle"
+    assert admission["blocking"] is True
+    assert admission["reason"] == "default_matrix_registration_without_reference"
+    assert admission["resident_registration_source"] == "resident_cuda_default"
+    assert admission["quality_reference"]["status"] == "absent"
+    assert "--reference-frame-id <frame-id-or-filename>" in admission["recommended_actions"]
+    assert "first_light_fallback" in str(excinfo.value)
+
+
+def test_run_explicit_resident_matrix_registration_keeps_first_light_diagnostic_escape_hatch(tmp_path: Path) -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            str(tmp_path),
+            "--resident-registration",
+            "similarity_cuda_triangle",
+        ]
+    )
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    _resolve_resident_registration_default(args, command="run")
+    path = _write_resident_reference_admission(tmp_path, args)
+
+    admission = read_json(path)
+    assert admission["blocking"] is False
+    assert admission["reason"] == "explicit_registration_first_light_fallback_allowed"
+    assert admission["resident_registration_source"] == "explicit"
+
+
+def test_run_default_resident_matrix_registration_allows_quality_reference(tmp_path: Path) -> None:
+    write_json(tmp_path / "frame_quality.json", {"schema_version": 1, "reference_frame_id": "F000123"})
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", str(tmp_path)])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    _resolve_resident_registration_default(args, command="run")
+    path = _write_resident_reference_admission(tmp_path, args)
+
+    admission = read_json(path)
+    assert admission["blocking"] is False
+    assert admission["has_reference_source"] is True
+    assert admission["quality_reference"]["available"] is True
+    assert admission["quality_reference"]["reference_frame_id"] == "F000123"
+
+
+def test_run_default_resident_matrix_registration_can_explicitly_allow_first_light_fallback(tmp_path: Path) -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            str(tmp_path),
+            "--resident-reference-fallback",
+            "allow-first-light",
+        ]
+    )
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    _resolve_resident_registration_default(args, command="run")
+    path = _write_resident_reference_admission(tmp_path, args)
+
+    admission = read_json(path)
+    assert admission["blocking"] is False
+    assert admission["reason"] == "explicit_first_light_fallback_allowed"
+    assert admission["resident_registration_source"] == "resident_cuda_default"
+
+
+def test_cli_resident_run_blocks_default_first_light_reference_fallback(
+    small_fits_dataset,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_no_reference"
+    assert main(["scan", "--root", str(small_fits_dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
+
+    def fail_if_resident_compute_starts(*_args, **_kwargs):
+        raise AssertionError("resident CUDA compute should not start after reference admission failure")
+
+    monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fail_if_resident_compute_starts)
+
+    assert main(["run", "--plan", str(plan), "--out", str(run)]) == 2
+    admission = read_json(run / "resident_reference_admission.json")
+    state = read_json(run / "run_state.json")
+    timing = read_json(run / "run_timing.json")
+
+    assert admission["blocking"] is True
+    assert admission["reason"] == "default_matrix_registration_without_reference"
+    assert admission["resident_registration_source"] == "resident_cuda_default"
+    assert state["failed_stage"] == "resident_reference_admission"
+    assert state["artifacts"][0]["stage"] == "resident_reference_admission"
+    assert timing["stages"][0]["stage"] == "resident_reference_admission"
+    assert timing["stages"][0]["status"] == "failed"
+    assert not (run / "resident_memory_admission.json").exists()
+
+
 def test_run_defaults_fallback_to_tile_when_cuda_unavailable() -> None:
     args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
 
@@ -887,6 +1002,8 @@ def test_cli_resident_run_blocks_explicit_low_vram_budget(
                 "cuda",
                 "--memory-mode",
                 "resident",
+                "--resident-reference-fallback",
+                "allow-first-light",
                 "--vram-budget-gb",
                 "0.000001",
             ]
@@ -903,8 +1020,12 @@ def test_cli_resident_run_blocks_explicit_low_vram_budget(
     assert admission["reason"] == "estimated_peak_exceeds_explicit_vram_budget"
     assert state["failed_stage"] == "resident_memory_admission"
     assert state["artifacts"][0]["stage"] == "resident_memory_admission"
-    assert timing["stages"][0]["stage"] == "resident_memory_admission"
-    assert timing["stages"][0]["status"] == "failed"
+    assert [item["stage"] for item in timing["stages"]] == [
+        "resident_reference_admission",
+        "resident_memory_admission",
+    ]
+    assert timing["stages"][0]["status"] == "ok"
+    assert timing["stages"][1]["status"] == "failed"
 
 
 def test_cli_resident_run_passes_reduced_chunk_capacity_from_admission(

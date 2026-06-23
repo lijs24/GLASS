@@ -15685,6 +15685,64 @@ Completed in Gate446:
     before resident registration or block first-light fallback for default
     matrix-registration science runs with a clear diagnostic.
 
+### S2-Gate 569: Resident Reference Admission Guard
+
+- Closes the unsafe default-path gap exposed by Gate568: default-promoted
+  resident CUDA matrix registration no longer silently uses first-light fallback
+  when no explicit, external, or quality reference exists.
+- Completed:
+  - added `resident_reference_admission.json`;
+  - added `--resident-reference-fallback` with `auto`,
+    `allow-first-light`, and `block-first-light`;
+  - `auto` blocks first-light fallback only for default-promoted or explicit
+    `auto` resident matrix-registration science runs;
+  - explicit concrete registration modes still allow first-light fallback for
+    diagnostics, and `allow-first-light` is an explicit diagnostic escape hatch;
+  - reference-admission failures write `run_state.json`, `run_timing.json`,
+    and a structured artifact before any memory admission or resident CUDA
+    compute starts.
+- Tests:
+  - syntax check:
+    `.venv\Scripts\python.exe -m py_compile src\glass\cli.py
+    tests\test_cli_smoke.py`;
+  - focused reference-admission tests: `6 passed, 49 deselected in 0.54 s`;
+  - CLI smoke suite: `54 passed in 5.42 s`;
+  - resident CUDA reference/triangle smoke tests: `3 passed in 1.11 s`;
+  - full suite: `1223 passed in 45.64 s`.
+- Real 200-light validation:
+  - blocked no-reference run:
+    `C:\glass_runs\phase2_s2_gate569_reference_admission\runs_20260623_190017\blocked_no_reference`;
+  - explicit-reference run:
+    `C:\glass_runs\phase2_s2_gate569_reference_admission\runs_20260623_190027\explicit_reference`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_569_reference_admission_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | No-reference exit code | `2` |
+  | No-reference blocked stage | `resident_reference_admission` |
+  | No-reference block reason | `default_matrix_registration_without_reference` |
+  | No-reference shell elapsed | `0.3309163 s` |
+  | Explicit-reference shell elapsed | `7.2193194 s` |
+  | Explicit-reference run timing total | `6.866450699919369 s` |
+  | WBPP black-box reference elapsed | `1092.541 s` |
+  | GLASS speedup vs WBPP reference | `159.11291695618368x` |
+  | Explicit-reference admission | `passed / non-blocking` |
+  | LN contract status | `passed` |
+  | Pipeline contract status | `passed` |
+  | Active/rejected frames | `193 / 7` |
+  | Output SHA256 vs Gate567 | `all identical` |
+- Interpretation:
+  - default runs now fail fast instead of producing the divergent first-light
+    fallback master measured in Gate568;
+  - this gate changes admission policy only, not reference scoring,
+    registration fitting, warp interpolation, calibration, LN, rejection,
+    integration, DQ bits, frame admission, or output pixels;
+  - the next substantive step remains automatic quality-reference generation or
+    in-VRAM reference selection so the default path can become self-sufficient
+    without requiring `--reference-frame-id`.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1,0 +1,8 @@
+﻿{
+    "gate":  "S2-Gate 569",
+    "scenario":  "explicit_reference",
+    "out":  "C:\\glass_runs\\phase2_s2_gate569_reference_admission\\runs_20260623_190027\\explicit_reference",
+    "exit_code":  0,
+    "shell_elapsed_s":  7.2193194,
+    "created_at":  "2026-06-23T19:00:34.6402483+08:00"
+}
