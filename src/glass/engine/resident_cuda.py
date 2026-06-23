@@ -69,11 +69,14 @@ from glass.engine.resident_registration_quality import (
 from glass.engine.resident_stack_surface import build_resident_integration_stack_surface_contract
 from glass.io.fits_fast import (
     FastFitsUnsupported,
+    SIMPLE_FITS_SPEC_SUMMARY_KEY,
     SimpleFitsImageSpec,
+    native_u16_gpu_fits_eligibility_from_spec,
     native_u16_gpu_fits_eligibility_with_spec,
     read_simple_fits_image_native_direct_timed,
     read_simple_fits_image_timed,
     read_simple_fits_u16be_raw_timed,
+    simple_fits_spec_from_summary,
     simple_fits_image_spec,
 )
 from glass.io.fits_io import (
@@ -725,6 +728,7 @@ def _resident_fits_read_mode_selection(
     raw_u16_runtime_reason: str,
 ) -> tuple[str, dict[str, Any], dict[str, SimpleFitsImageSpec]]:
     spec_cache: dict[str, SimpleFitsImageSpec] = {}
+    spec_source_counts: dict[str, int] = {}
     raw_selection: dict[str, Any] = {
         "checked": False,
         "runtime_eligible": raw_u16_runtime_reason == "",
@@ -734,6 +738,9 @@ def _resident_fits_read_mode_selection(
         "checked_frame_count": 0,
         "eligible_frame_count": 0,
         "spec_cache_frame_count": 0,
+        "spec_source_counts": {},
+        "plan_header_spec_count": 0,
+        "file_header_probe_count": 0,
         "fallback_reason_counts": {},
         "ineligible_samples": [],
     }
@@ -760,10 +767,30 @@ def _resident_fits_read_mode_selection(
     ineligible_samples: list[dict[str, Any]] = []
     eligible_count = 0
     for frame in light_frames:
-        probe, spec = native_u16_gpu_fits_eligibility_with_spec(
-            frame["path"],
-            expected_shape=(int(height), int(width)),
+        spec = None
+        spec_source = "file_header_probe"
+        header_summary = frame.get("header_summary", {})
+        cached_summary = (
+            header_summary.get(SIMPLE_FITS_SPEC_SUMMARY_KEY)
+            if isinstance(header_summary, dict)
+            else None
         )
+        if isinstance(cached_summary, dict):
+            try:
+                spec = simple_fits_spec_from_summary(frame["path"], cached_summary)
+                probe = native_u16_gpu_fits_eligibility_from_spec(
+                    spec,
+                    expected_shape=(int(height), int(width)),
+                )
+                spec_source = "plan_header_summary"
+            except (FastFitsUnsupported, TypeError, ValueError):
+                spec = None
+        if spec is None:
+            probe, spec = native_u16_gpu_fits_eligibility_with_spec(
+                frame["path"],
+                expected_shape=(int(height), int(width)),
+            )
+        spec_source_counts[spec_source] = spec_source_counts.get(spec_source, 0) + 1
         if probe["eligible"]:
             eligible_count += 1
             if spec is not None:
@@ -787,6 +814,9 @@ def _resident_fits_read_mode_selection(
             "fallback_reason_counts": dict(sorted(reason_counts.items())),
             "ineligible_samples": ineligible_samples,
             "eligible": eligible_count == len(light_frames),
+            "spec_source_counts": dict(sorted(spec_source_counts.items())),
+            "plan_header_spec_count": int(spec_source_counts.get("plan_header_summary", 0)),
+            "file_header_probe_count": int(spec_source_counts.get("file_header_probe", 0)),
         }
     )
     if eligible_count == len(light_frames):

@@ -13919,6 +13919,63 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_539_prefetch24_default_summary.json`.
 
+### S2-Gate 540: Plan-Carried Simple FITS Spec Cache
+
+- Continued the Phase 2 mainline resident CUDA I/O target by removing repeated
+  FITS header probes from the hot resident run path after scan/plan has already
+  inspected the input headers.
+- Completed:
+  - added `GLASS_SIMPLE_FITS_SPEC` to FITS `header_summary` during metadata
+    scan for simple primary FITS images;
+  - recorded only header-derived fields needed for raw-u16 GPU decode:
+    BITPIX, dimensions, data offset, BSCALE, BZERO, and BLANK;
+  - taught resident guarded-auto FITS selection to build
+    `SimpleFitsImageSpec` from plan metadata first;
+  - preserved the legacy file-header probe fallback for old plans or malformed
+    cached specs;
+  - recorded `spec_source_counts`, `plan_header_spec_count`, and
+    `file_header_probe_count` in the resident FITS auto-selection artifact;
+  - added metadata and resident CUDA tests for the new cache contract.
+- Real 200-light validation:
+  - regenerated scan/plan/run root:
+    `C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314`;
+  - scan root:
+    `C:\gpwbpp_runs\final_m38_h_200\input`;
+  - manifest and plan frame count: `260`;
+  - manifest and plan simple-FITS spec count: `260`;
+  - resident run:
+    `C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\resident_default_plan_spec`;
+  - shell/internal elapsed: `5.3842802 s` / `5.024695099971723 s`;
+  - resident FITS mode: `native_u16_gpu`;
+  - light frames checked: `200`;
+  - plan-header specs used: `200`;
+  - file-header probes during resident selection: `0`;
+  - FITS spec cache hits during read: `200`.
+- Stage timing evidence:
+  - light read/upload/calibrate: `2.574674999981653 s`;
+  - light read wait wall: `1.0357539994292893 s`;
+  - resident registration/warp: `0.2546218999195844 s`;
+  - resident integration: `0.30699700000695884 s`;
+  - output write: `0.23627379996469244 s`.
+- Numerical and WBPP validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to Gate539;
+  - coverage-masked compare against the WBPP FastIntegration black-box master:
+    RMS `0.0004279821839256963`, p99 abs diff
+    `0.0001313822576776147`, coverage fraction `0.9892770479074376`,
+    compared pixels `56997300`;
+  - shell-time speedup versus WBPP: `202.9131024793249x`.
+- Interpretation:
+  - this gate moves repeated header parsing out of resident-run hot-path
+    selection for regenerated plans;
+  - it does not change pixels, frame admission, calibration, registration,
+    warp, rejection, DQ, or integration;
+  - old plans remain compatible through the legacy file-header fallback.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_540_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_540_plan_spec_cache_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

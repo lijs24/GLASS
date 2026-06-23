@@ -5,6 +5,12 @@ from typing import Any
 
 from astropy.io import fits
 
+from glass.io.fits_fast import (
+    SIMPLE_FITS_SPEC_SUMMARY_KEY,
+    FastFitsUnsupported,
+    simple_fits_image_spec,
+    simple_fits_spec_to_summary,
+)
 from glass.metadata.header_map import as_float, as_int, first_header_value, normalize_frame_type
 from glass.models import FrameRecord
 
@@ -55,6 +61,10 @@ def read_fits_metadata(path: str | Path, frame_id: str) -> FrameRecord:
     bin_x = as_int(first_header_value(header_dict, ["XBINNING", "BINX", "XBIN"]))
     bin_y = as_int(first_header_value(header_dict, ["YBINNING", "BINY", "YBIN"]))
     summary = {key: header_dict[key] for key in SUMMARY_KEYS if key in header_dict}
+    try:
+        summary[SIMPLE_FITS_SPEC_SUMMARY_KEY] = simple_fits_spec_to_summary(simple_fits_image_spec(p))
+    except FastFitsUnsupported:
+        pass
     return FrameRecord(
         id=frame_id,
         path=str(p),

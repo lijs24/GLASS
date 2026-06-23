@@ -38,6 +38,8 @@ _BITPIX_DTYPES: dict[int, str] = {
     -64: ">f8",
 }
 
+SIMPLE_FITS_SPEC_SUMMARY_KEY = "GLASS_SIMPLE_FITS_SPEC"
+
 
 def _split_value_comment(field: str) -> str:
     quoted = False
@@ -163,6 +165,74 @@ def simple_fits_image_spec(path: str | Path) -> SimpleFitsImageSpec:
     )
 
 
+def simple_fits_spec_to_summary(spec: SimpleFitsImageSpec) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "bitpix": int(spec.bitpix),
+        "width": int(spec.width),
+        "height": int(spec.height),
+        "data_offset": int(spec.data_offset),
+        "bscale": float(spec.bscale),
+        "bzero": float(spec.bzero),
+        "blank": spec.blank,
+    }
+
+
+def simple_fits_spec_from_summary(path: str | Path, summary: dict[str, Any]) -> SimpleFitsImageSpec:
+    if int(summary.get("schema_version", 0) or 0) != 1:
+        raise FastFitsUnsupported("unsupported cached simple FITS spec schema")
+    bitpix = int(summary.get("bitpix", 0) or 0)
+    dtype_name = _BITPIX_DTYPES.get(bitpix)
+    if dtype_name is None:
+        raise FastFitsUnsupported(f"unsupported cached BITPIX={bitpix}")
+    width = int(summary.get("width", 0) or 0)
+    height = int(summary.get("height", 0) or 0)
+    data_offset = int(summary.get("data_offset", -1) or -1)
+    if width <= 0 or height <= 0 or data_offset < 0:
+        raise FastFitsUnsupported("invalid cached simple FITS dimensions or data offset")
+    return SimpleFitsImageSpec(
+        path=Path(path),
+        bitpix=bitpix,
+        width=width,
+        height=height,
+        data_offset=data_offset,
+        dtype=np.dtype(dtype_name),
+        bscale=float(summary.get("bscale", 1.0) or 1.0),
+        bzero=float(summary.get("bzero", 0.0) or 0.0),
+        blank=summary.get("blank"),
+    )
+
+
+def native_u16_gpu_fits_eligibility_from_spec(
+    spec: SimpleFitsImageSpec,
+    *,
+    expected_shape: tuple[int, int] | None = None,
+) -> dict[str, Any]:
+    reason = ""
+    if expected_shape is not None and spec.shape != tuple(expected_shape):
+        reason = "shape_mismatch"
+    elif spec.bitpix != 16:
+        reason = f"bitpix_not_16:{spec.bitpix}"
+    elif spec.bscale != 1.0:
+        reason = f"bscale_not_1:{spec.bscale:g}"
+    elif spec.bzero != 32768.0:
+        reason = f"bzero_not_32768:{spec.bzero:g}"
+    elif spec.blank is not None:
+        reason = "blank_present"
+
+    return {
+        "path": str(spec.path),
+        "eligible": not bool(reason),
+        "reason": reason,
+        "bitpix": int(spec.bitpix),
+        "bscale": float(spec.bscale),
+        "bzero": float(spec.bzero),
+        "blank_present": spec.blank is not None,
+        "shape": {"height": int(spec.height), "width": int(spec.width)},
+        "data_offset": int(spec.data_offset),
+    }
+
+
 def native_u16_gpu_fits_eligibility(
     path: str | Path,
     *,
@@ -191,32 +261,7 @@ def native_u16_gpu_fits_eligibility_with_spec(
             None,
         )
 
-    reason = ""
-    if expected_shape is not None and spec.shape != tuple(expected_shape):
-        reason = "shape_mismatch"
-    elif spec.bitpix != 16:
-        reason = f"bitpix_not_16:{spec.bitpix}"
-    elif spec.bscale != 1.0:
-        reason = f"bscale_not_1:{spec.bscale:g}"
-    elif spec.bzero != 32768.0:
-        reason = f"bzero_not_32768:{spec.bzero:g}"
-    elif spec.blank is not None:
-        reason = "blank_present"
-
-    return (
-        {
-            "path": str(spec.path),
-            "eligible": not bool(reason),
-            "reason": reason,
-            "bitpix": int(spec.bitpix),
-            "bscale": float(spec.bscale),
-            "bzero": float(spec.bzero),
-            "blank_present": spec.blank is not None,
-            "shape": {"height": int(spec.height), "width": int(spec.width)},
-            "data_offset": int(spec.data_offset),
-        },
-        spec,
-    )
+    return native_u16_gpu_fits_eligibility_from_spec(spec, expected_shape=expected_shape), spec
 
 
 def _materialize_spec(spec: SimpleFitsImageSpec, dtype: Any, output: np.ndarray | None) -> np.ndarray:

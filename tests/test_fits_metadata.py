@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from glass.io.fits_fast import SIMPLE_FITS_SPEC_SUMMARY_KEY
 from glass.metadata.scanner import scan_tree
 
 
@@ -17,3 +18,8 @@ def test_scan_fits_metadata_without_pixel_load(small_fits_dataset):
     assert light["filter"] == "H"
     assert light["header_summary"]["PIERSIDE"] == "West"
     assert light["header_summary"]["OBJCTROT"] == 92.0
+    simple_spec = light["header_summary"][SIMPLE_FITS_SPEC_SUMMARY_KEY]
+    assert simple_spec["schema_version"] == 1
+    assert simple_spec["width"] == 20
+    assert simple_spec["height"] == 16
+    assert simple_spec["data_offset"] > 0

@@ -5960,6 +5960,9 @@ def test_cli_resident_cuda_auto_selects_native_u16_gpu_for_compatible_group(tmp_
     assert selection["raw_u16_gpu"]["selected"] is True
     assert selection["raw_u16_gpu"]["eligible_frame_count"] == 2
     assert selection["raw_u16_gpu"]["spec_cache_frame_count"] == 2
+    assert selection["raw_u16_gpu"]["plan_header_spec_count"] == 2
+    assert selection["raw_u16_gpu"]["file_header_probe_count"] == 0
+    assert selection["raw_u16_gpu"]["spec_source_counts"] == {"plan_header_summary": 2}
     assert selection["raw_u16_gpu"]["fallback_reason_counts"] == {}
     assert io_pipeline["fits_header_spec_cache_enabled"] is True
     assert io_pipeline["fits_header_spec_cache_frame_count"] == 2
