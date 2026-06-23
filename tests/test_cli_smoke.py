@@ -9,6 +9,7 @@ from glass.cli import _apply_resident_runtime_preset
 from glass.cli import _resolve_execution_defaults
 from glass.cli import _resolve_resident_integration_rejection_default
 from glass.cli import _resolve_resident_fits_read_mode_default
+from glass.cli import _resolve_resident_local_normalization_default
 from glass.cli import _resolve_resident_registration_default
 from glass.cli import build_parser
 from glass.cli import main
@@ -306,6 +307,94 @@ def test_run_resident_rejection_auto_keeps_tile_path_auto() -> None:
 
     assert args.memory_mode == "tile"
     assert args.integration_rejection == "auto"
+    assert resolution["requested"] == "auto"
+    assert resolution["effective"] == "auto"
+    assert resolution["source"] == "unused_non_resident"
+
+
+def test_run_resident_local_normalization_defaults_to_grid_on() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_local_normalization_default(args, command="run")
+
+    assert args.backend == "cuda"
+    assert args.memory_mode == "resident"
+    assert args.local_normalization == "on"
+    assert args.resident_local_normalization_mode == "grid_mean_std"
+    assert args.resident_local_normalization_tile_size == 256
+    assert resolution["requested"] == "auto"
+    assert resolution["effective"] == "on"
+    assert resolution["source"] == "resident_cuda_default"
+    assert resolution["escape_hatch"] == "--local-normalization off"
+    assert resolution["mode"]["effective"] == "grid_mean_std"
+    assert resolution["mode"]["source"] == "resident_cuda_default"
+    assert resolution["tile_size"]["effective"] == 256
+    assert resolution["tile_size"]["source"] == "resident_cuda_default"
+
+
+def test_run_resident_local_normalization_explicit_off_is_preserved() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--local-normalization",
+            "off",
+        ]
+    )
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_local_normalization_default(args, command="run")
+
+    assert args.local_normalization == "off"
+    assert args.resident_local_normalization_mode == "global_mean_std"
+    assert args.resident_local_normalization_tile_size == 512
+    assert resolution["requested"] == "off"
+    assert resolution["effective"] == "off"
+    assert resolution["explicit"] is True
+
+
+def test_run_resident_local_normalization_explicit_mode_and_tile_are_preserved() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-local-normalization-mode",
+            "global_mean_std",
+            "--resident-local-normalization-tile-size",
+            "1024",
+        ]
+    )
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_local_normalization_default(args, command="run")
+
+    assert args.local_normalization == "on"
+    assert args.resident_local_normalization_mode == "global_mean_std"
+    assert args.resident_local_normalization_tile_size == 1024
+    assert resolution["effective"] == "on"
+    assert resolution["mode"]["explicit"] is True
+    assert resolution["mode"]["source"] == "explicit"
+    assert resolution["tile_size"]["explicit"] is True
+    assert resolution["tile_size"]["source"] == "explicit"
+
+
+def test_run_resident_local_normalization_auto_keeps_tile_path_auto() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run", "--backend", "cpu"])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_local_normalization_default(args, command="run")
+
+    assert args.memory_mode == "tile"
+    assert args.local_normalization == "auto"
+    assert args.resident_local_normalization_mode == "global_mean_std"
+    assert args.resident_local_normalization_tile_size == 512
     assert resolution["requested"] == "auto"
     assert resolution["effective"] == "auto"
     assert resolution["source"] == "unused_non_resident"

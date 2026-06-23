@@ -15513,6 +15513,59 @@ Completed in Gate446:
     registration, warp, local-normalization, integration, CUDA kernels, DQ
     bits, frame admission, or output pixels.
 
+### S2-Gate 566: Resident Local-Normalization Default Promotion
+
+- Continues the Phase 2 default-path mainline by making resident CUDA
+  integration enable the validated in-VRAM grid local-normalization path when
+  the user leaves LN unspecified.
+- Completed:
+  - full resident CUDA integration now resolves `--local-normalization auto`
+    to `on`;
+  - default resident LN mode resolves to `grid_mean_std`;
+  - default resident grid LN tile size resolves to `256`;
+  - explicit `--local-normalization off`, explicit LN mode, and explicit tile
+    size are preserved;
+  - non-resident/tile execution leaves `auto` for the non-resident pipeline;
+  - `run_timing.json` records `resident_local_normalization_resolution`.
+- Tests:
+  - syntax check:
+    `.venv\Scripts\python.exe -m py_compile src\glass\cli.py
+    tests\test_cli_smoke.py`;
+  - focused LN default-resolution and resident smoke tests:
+    `6 passed in 0.77 s`;
+  - full suite: `1214 passed in 45.02 s`.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate566_default_resident_ln\runs_20260623_183648\default_ln`;
+  - the command intentionally omitted `--backend`, `--memory-mode`,
+    `--until-stage`, `--resident-registration`, `--integration-rejection`,
+    `--local-normalization`, `--resident-local-normalization-mode`, and
+    `--resident-local-normalization-tile-size`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_566_default_resident_ln_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `7.2923174 s` |
+  | Run timing total | `6.939177799969912 s` |
+  | Default backend/memory | `cuda / resident` |
+  | Registration requested/effective | `auto / similarity_cuda_triangle` |
+  | Rejection requested/effective | `auto / winsorized_sigma` |
+  | LN requested/effective | `auto / on` |
+  | LN mode/tile | `resident_grid_mean_std / 256` |
+  | LN contract status | `passed` |
+  | Pipeline contract status | `passed` |
+  | LN status counts | `109 ok / 83 partial / 1 reference / 7 skipped_zero_weight` |
+  | Active/rejected frames | `193 / 7` |
+  | Output SHA256 vs Gate565 | `all identical` |
+- Interpretation:
+  - this gate changes default dispatch only when the user has not explicitly
+    selected LN settings;
+  - it does not change the LN coefficient model, CUDA kernels, calibration,
+    registration, warp, rejection, integration, DQ bits, frame admission, or
+    output pixels.
+
 ## Gate Rules
 
 Each gate requires:

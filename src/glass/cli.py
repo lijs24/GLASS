@@ -336,6 +336,10 @@ DEFAULT_RESIDENT_REGISTRATION = "auto"
 DEFAULT_RESIDENT_REGISTRATION_EFFECTIVE = "similarity_cuda_triangle"
 DEFAULT_RESIDENT_INTEGRATION_REJECTION = "auto"
 DEFAULT_RESIDENT_INTEGRATION_REJECTION_EFFECTIVE = "winsorized_sigma"
+DEFAULT_RESIDENT_LOCAL_NORMALIZATION = "auto"
+DEFAULT_RESIDENT_LOCAL_NORMALIZATION_EFFECTIVE = "on"
+DEFAULT_RESIDENT_LOCAL_NORMALIZATION_MODE_EFFECTIVE = "grid_mean_std"
+DEFAULT_RESIDENT_LOCAL_NORMALIZATION_TILE_SIZE_EFFECTIVE = 256
 
 RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_prefetch_frames": "--resident-prefetch-frames",
@@ -577,6 +581,94 @@ def _resolve_resident_integration_rejection_default(
     return resolution
 
 
+def _resolve_resident_local_normalization_default(
+    args: argparse.Namespace,
+    *,
+    command: str,
+) -> dict[str, object]:
+    requested = str(getattr(args, "local_normalization", DEFAULT_RESIDENT_LOCAL_NORMALIZATION))
+    explicit = _argv_has_option(args, "--local-normalization")
+    mode_requested = str(getattr(args, "resident_local_normalization_mode", "global_mean_std"))
+    mode_explicit = _argv_has_option(args, "--resident-local-normalization-mode")
+    tile_requested = int(getattr(args, "resident_local_normalization_tile_size", 512))
+    tile_explicit = _argv_has_option(args, "--resident-local-normalization-tile-size")
+    resident_cuda_integration = (
+        getattr(args, "memory_mode", None) == "resident"
+        and getattr(args, "backend", None) == "cuda"
+        and getattr(args, "until_stage", DEFAULT_UNTIL_STAGE) == "integration"
+    )
+
+    effective = requested
+    source = "explicit" if explicit else "unused_non_resident"
+    reason = "user_explicit_local_normalization" if explicit else "non_resident_path_keeps_local_normalization_auto"
+    if requested == "auto":
+        if resident_cuda_integration:
+            effective = DEFAULT_RESIDENT_LOCAL_NORMALIZATION_EFFECTIVE
+            source = "explicit_auto" if explicit else "resident_cuda_default"
+            reason = (
+                "explicit_auto_resident_local_normalization_promotes_on"
+                if explicit
+                else "resident_cuda_default_promotes_local_normalization_on"
+            )
+        else:
+            effective = "auto"
+            source = "explicit_auto_non_resident" if explicit else "unused_non_resident"
+            reason = (
+                "explicit_auto_local_normalization_left_to_non_resident_pipeline"
+                if explicit
+                else "non_resident_path_keeps_local_normalization_auto"
+            )
+
+    mode_effective = mode_requested
+    mode_source = "explicit" if mode_explicit else "parser_default"
+    if resident_cuda_integration and effective == "on" and not mode_explicit:
+        mode_effective = DEFAULT_RESIDENT_LOCAL_NORMALIZATION_MODE_EFFECTIVE
+        mode_source = "resident_cuda_default"
+
+    tile_effective = tile_requested
+    tile_source = "explicit" if tile_explicit else "parser_default"
+    if (
+        resident_cuda_integration
+        and effective == "on"
+        and mode_effective == DEFAULT_RESIDENT_LOCAL_NORMALIZATION_MODE_EFFECTIVE
+        and not tile_explicit
+    ):
+        tile_effective = DEFAULT_RESIDENT_LOCAL_NORMALIZATION_TILE_SIZE_EFFECTIVE
+        tile_source = "resident_cuda_default"
+
+    setattr(args, "local_normalization", effective)
+    setattr(args, "resident_local_normalization_mode", mode_effective)
+    setattr(args, "resident_local_normalization_tile_size", tile_effective)
+    resolution = {
+        "schema_version": 1,
+        "command": command,
+        "requested": requested,
+        "effective": effective,
+        "explicit": explicit,
+        "source": source,
+        "reason": reason,
+        "default": DEFAULT_RESIDENT_LOCAL_NORMALIZATION,
+        "default_effective": DEFAULT_RESIDENT_LOCAL_NORMALIZATION_EFFECTIVE,
+        "escape_hatch": "--local-normalization off",
+        "mode": {
+            "requested": mode_requested,
+            "effective": mode_effective,
+            "explicit": mode_explicit,
+            "source": mode_source,
+            "default_effective": DEFAULT_RESIDENT_LOCAL_NORMALIZATION_MODE_EFFECTIVE,
+        },
+        "tile_size": {
+            "requested": tile_requested,
+            "effective": tile_effective,
+            "explicit": tile_explicit,
+            "source": tile_source,
+            "default_effective": DEFAULT_RESIDENT_LOCAL_NORMALIZATION_TILE_SIZE_EFFECTIVE,
+        },
+    }
+    args._resident_local_normalization_resolution = resolution
+    return resolution
+
+
 def _explicit_option(args: argparse.Namespace, flag: str) -> bool:
     return _argv_has_option(args, flag)
 
@@ -682,6 +774,12 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     if isinstance(rejection_resolution, dict):
         timing["resident_integration_rejection_resolution"] = rejection_resolution
     timing["integration_rejection"] = getattr(args, "integration_rejection", None)
+    local_norm_resolution = getattr(args, "_resident_local_normalization_resolution", None)
+    if isinstance(local_norm_resolution, dict):
+        timing["resident_local_normalization_resolution"] = local_norm_resolution
+    timing["local_normalization"] = getattr(args, "local_normalization", None)
+    timing["resident_local_normalization_mode"] = getattr(args, "resident_local_normalization_mode", None)
+    timing["resident_local_normalization_tile_size"] = getattr(args, "resident_local_normalization_tile_size", None)
     timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
     timing["resident_master_cache_policy"] = getattr(args, "resident_master_cache_policy", None)
     timing["resident_master_cache_dir"] = getattr(args, "resident_master_cache_dir", None)
@@ -1515,6 +1613,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     _resolve_resident_fits_read_mode_default(args, command="audit")
     _resolve_resident_registration_default(args, command="audit")
     _resolve_resident_integration_rejection_default(args, command="audit")
+    _resolve_resident_local_normalization_default(args, command="audit")
     _write_run_command(out, args)
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
@@ -1676,6 +1775,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     _resolve_resident_fits_read_mode_default(args, command="run")
     _resolve_resident_registration_default(args, command="run")
     _resolve_resident_integration_rejection_default(args, command="run")
+    _resolve_resident_local_normalization_default(args, command="run")
     _seed_run_inputs(Path(args.out), args.plan)
     _write_run_command(Path(args.out), args)
     if args.memory_mode == "resident":
