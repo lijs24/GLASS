@@ -1517,6 +1517,112 @@ def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Pa
             ],
         },
     )
+    write_json(
+        run / "resident_frame_masks.json",
+        {
+            "schema_version": 1,
+            "artifact": "resident_frame_mask_contract",
+            "backend": "cuda_resident_stack",
+            "source_stage": "resident_calibrated_stack",
+            "summary": {
+                "group_count": 1,
+                "frame_count": 3,
+                "active_frame_count": 3,
+                "masked_frame_count": 0,
+                "unknown_zero_weight_frame_count": 0,
+                "active_frame_ids": ["F1", "F2", "F3"],
+                "masked_frame_ids": [],
+                "unknown_zero_weight_frame_ids": [],
+                "mask_category_counts": {},
+                "status_counts": {"active": 3},
+                "passed": True,
+            },
+            "groups": [
+                {
+                    "schema_version": 1,
+                    "artifact": "resident_frame_mask_contract_group",
+                    "filter": "H",
+                    "registration_mode": "similarity_cuda_triangle",
+                    "integration_dispatch": "stack",
+                    "summary": {
+                        "frame_count": 3,
+                        "active_frame_count": 3,
+                        "masked_frame_count": 0,
+                        "unknown_zero_weight_frame_count": 0,
+                        "active_frame_ids": ["F1", "F2", "F3"],
+                        "masked_frame_ids": [],
+                        "unknown_zero_weight_frame_ids": [],
+                        "mask_category_counts": {},
+                        "status_counts": {"active": 3},
+                        "passed": True,
+                    },
+                    "rows": [
+                        {
+                            "frame_id": frame_id,
+                            "filter": "H",
+                            "integration_weight": 1.0,
+                            "mask_status": "active",
+                            "auditable": True,
+                            "mask_categories": [],
+                            "mask_reasons": [],
+                            "observed_zero_weight_statuses": [],
+                            "registration_status": "ok",
+                            "registration_quality_status": "accepted",
+                            "registration_quality_final_status": "accepted",
+                            "weighting_status": "unit",
+                            "local_norm_status": "ok",
+                        }
+                        for frame_id in ["F1", "F2", "F3"]
+                    ],
+                }
+            ],
+        },
+    )
+    closure_checks = [
+        "frame_mask_contract_passed",
+        "frame_mask_active_matches_output_link",
+        "active_frame_count_matches_provenance",
+        "geometric_coverage_count_matches_active",
+        "post_rejection_coverage_present",
+        "geometric_coverage_present",
+        "dq_summary_matches_provenance",
+        "active_not_greater_than_input_frame_count",
+    ]
+    write_json(
+        run / "resident_dq_pixel_closure.json",
+        {
+            "schema_version": 1,
+            "artifact": "resident_dq_pixel_closure",
+            "backend": "cuda_resident_stack",
+            "source_stage": "resident_calibrated_stack",
+            "summary": {
+                "group_count": 1,
+                "passed_group_count": 1,
+                "failed_group_count": 0,
+                "failed_groups": [],
+                "passed": True,
+                "check_counts": {name: 1 for name in closure_checks},
+                "failed_check_counts": {},
+            },
+            "groups": [
+                {
+                    "schema_version": 1,
+                    "artifact": "resident_dq_pixel_closure_group",
+                    "filter": "H",
+                    "status": "passed",
+                    "passed": True,
+                    "frame_mask_active_frame_count": 3,
+                    "frame_mask_masked_frame_count": 0,
+                    "geometric_warp_coverage_frame_count": 3,
+                    "provenance_active_frame_count": 3,
+                    "rejection": "none",
+                    "source_terms": ["post_rejection_coverage", "geometric_warp_coverage"],
+                    "sample_accounting_closure": {"status": "missing", "passed": True},
+                    "checks": [{"name": name, "passed": True, "details": {}} for name in closure_checks],
+                }
+            ],
+        },
+    )
 
     assert (
         main(

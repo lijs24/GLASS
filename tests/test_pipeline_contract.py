@@ -19,6 +19,151 @@ from glass.report.pipeline_contract import build_pipeline_contract_audit
 from glass.synthetic.generator import generate_synthetic_dataset
 
 
+def _write_resident_mask_artifacts(path: Path, *, frame_count: int = 3, active_frame_count: int = 3) -> None:
+    active = max(0, min(int(active_frame_count), int(frame_count)))
+    masked = max(0, int(frame_count) - active)
+    frame_ids = [f"F{index + 1}" for index in range(int(frame_count))]
+    active_ids = frame_ids[:active]
+    masked_ids = frame_ids[active:]
+    rows = []
+    for frame_id in active_ids:
+        rows.append(
+            {
+                "frame_id": frame_id,
+                "filter": "H",
+                "integration_weight": 1.0,
+                "mask_status": "active",
+                "auditable": True,
+                "mask_categories": [],
+                "mask_reasons": [],
+                "observed_zero_weight_statuses": [],
+                "registration_status": "ok",
+                "registration_quality_status": "accepted",
+                "registration_quality_final_status": "accepted",
+                "weighting_status": "unit",
+                "local_norm_status": "ok",
+            }
+        )
+    for frame_id in masked_ids:
+        rows.append(
+            {
+                "frame_id": frame_id,
+                "filter": "H",
+                "integration_weight": 0.0,
+                "mask_status": "masked",
+                "auditable": True,
+                "mask_categories": ["registration"],
+                "mask_reasons": ["registration_status:excluded"],
+                "observed_zero_weight_statuses": ["weighting_status:zero_weight"],
+                "registration_status": "excluded",
+                "registration_quality_status": "rejected",
+                "registration_quality_final_status": "excluded",
+                "weighting_status": "zero_weight",
+                "local_norm_status": "skipped_zero_weight",
+            }
+        )
+    group_summary = {
+        "frame_count": int(frame_count),
+        "active_frame_count": active,
+        "masked_frame_count": masked,
+        "unknown_zero_weight_frame_count": 0,
+        "active_frame_ids": active_ids,
+        "masked_frame_ids": masked_ids,
+        "unknown_zero_weight_frame_ids": [],
+        "mask_category_counts": {"registration": masked} if masked else {},
+        "status_counts": {"active": active, "masked": masked},
+        "passed": True,
+    }
+    group = {
+        "schema_version": 1,
+        "artifact": "resident_frame_mask_contract_group",
+        "filter": "H",
+        "registration_mode": "similarity_cuda_triangle",
+        "integration_dispatch": "stack",
+        "summary": group_summary,
+        "rows": rows,
+        "semantics": "test resident frame mask contract",
+    }
+    write_json(
+        path / "resident_frame_masks.json",
+        {
+            "schema_version": 1,
+            "artifact": "resident_frame_mask_contract",
+            "backend": "cuda_resident_stack",
+            "source_stage": "resident_calibrated_stack",
+            "summary": {**group_summary, "group_count": 1},
+            "groups": [group],
+            "pixel_mask_semantics": "test pixel masks remain in output maps",
+        },
+    )
+    closure_checks = [
+        "frame_mask_contract_passed",
+        "frame_mask_active_matches_output_link",
+        "active_frame_count_matches_provenance",
+        "geometric_coverage_count_matches_active",
+        "post_rejection_coverage_present",
+        "geometric_coverage_present",
+        "dq_summary_matches_provenance",
+        "rejection_sample_count_recorded",
+        "rejection_sample_count_matches",
+        "sample_accounting_closure_passed",
+        "active_not_greater_than_input_frame_count",
+    ]
+    write_json(
+        path / "resident_dq_pixel_closure.json",
+        {
+            "schema_version": 1,
+            "artifact": "resident_dq_pixel_closure",
+            "backend": "cuda_resident_stack",
+            "source_stage": "resident_calibrated_stack",
+            "summary": {
+                "group_count": 1,
+                "passed_group_count": 1,
+                "failed_group_count": 0,
+                "failed_groups": [],
+                "passed": True,
+                "check_counts": {name: 1 for name in closure_checks},
+                "failed_check_counts": {},
+            },
+            "groups": [
+                {
+                    "schema_version": 1,
+                    "artifact": "resident_dq_pixel_closure_group",
+                    "filter": "H",
+                    "status": "passed",
+                    "passed": True,
+                    "frame_mask_active_frame_count": active,
+                    "frame_mask_masked_frame_count": masked,
+                    "geometric_warp_coverage_frame_count": active,
+                    "provenance_active_frame_count": active,
+                    "rejection": "winsorized_sigma",
+                    "source_terms": [
+                        "geometric_warp_coverage",
+                        "post_rejection_coverage",
+                        "low_rejection",
+                        "high_rejection",
+                    ],
+                    "sample_accounting_closure": {
+                        "status": "passed",
+                        "passed": True,
+                        "input_valid_samples_before_rejection": 9,
+                        "valid_samples_after_rejection": 6,
+                        "rejected_samples": 3,
+                        "arithmetic_delta": 0,
+                        "arithmetic_match": True,
+                        "valid_rejection_match": True,
+                    },
+                    "checks": [
+                        {"name": name, "passed": True, "details": {}}
+                        for name in closure_checks
+                    ],
+                    "semantics": "test resident DQ pixel closure",
+                }
+            ],
+        },
+    )
+
+
 def _write_resident_pipeline_run(
     path: Path,
     *,
@@ -150,6 +295,7 @@ def _write_resident_pipeline_run(
                 ],
             },
         )
+    _write_resident_mask_artifacts(path, frame_count=3, active_frame_count=active_frame_count)
 
 
 def _write_resident_source_dq_execution_fixture(path: Path, *, passed: bool = True) -> None:
@@ -581,6 +727,63 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["required"] is True
     assert resident_contract["passed"] is True
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
+    assert checks["resident_frame_mask_admission_contract"]["passed"] is True
+    assert checks["resident_dq_pixel_closure_contract"]["passed"] is True
+    assert audit["resident_frame_masks"]["closure"]["active_frame_count"] == 3
+    assert audit["resident_dq_pixel_closure"]["closure"]["active_frame_count"] == 3
+
+
+def test_pipeline_contract_requires_resident_frame_masks_for_resident_output(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    (run / "resident_frame_masks.json").unlink()
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+
+    assert audit["passed"] is False
+    assert checks["resident_frame_mask_admission_contract"]["passed"] is False
+    assert checks["resident_frame_mask_admission_contract"]["evidence"]["required"] is True
+    assert checks["resident_frame_mask_admission_contract"]["evidence"]["exists"] is False
+
+
+def test_pipeline_contract_blocks_resident_frame_mask_accounting_drift(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run, active_frame_count=2)
+    _write_frame_accounting_fixture(run)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    evidence = checks["resident_frame_mask_admission_contract"]["evidence"]
+
+    assert audit["passed"] is False
+    assert checks["resident_frame_mask_admission_contract"]["passed"] is False
+    assert evidence["active_frame_count"] == 2
+    assert evidence["integrated_frames"] == 3
+    assert "active_count_matches_integrated_frames" in evidence["failed_checks"]
+
+
+def test_pipeline_contract_blocks_resident_dq_pixel_closure_failure(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    closure = read_json(run / "resident_dq_pixel_closure.json")
+    closure["summary"]["passed"] = False
+    closure["summary"]["failed_group_count"] = 1
+    closure["summary"]["failed_check_counts"] = {"geometric_coverage_count_matches_active": 1}
+    closure["groups"][0]["passed"] = False
+    closure["groups"][0]["status"] = "failed"
+    closure["groups"][0]["checks"][3]["passed"] = False
+    write_json(run / "resident_dq_pixel_closure.json", closure)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    evidence = checks["resident_dq_pixel_closure_contract"]["evidence"]
+
+    assert audit["passed"] is False
+    assert checks["resident_dq_pixel_closure_contract"]["passed"] is False
+    assert evidence["status"] == "failed"
+    assert evidence["failed_groups"][0]["filter"] == "H"
+    assert evidence["group_failed_checks"][0]["check"] == "geometric_coverage_count_matches_active"
 
 
 def test_pipeline_contract_respects_resident_minimal_output_map_policy(tmp_path: Path):
@@ -735,6 +938,7 @@ def test_default_resident_run_pipeline_contract_small_diagnostic_degenerate_is_n
             "frames": [],
         },
     )
+    _write_resident_mask_artifacts(run, frame_count=2, active_frame_count=1)
     state = initialize_run(run)
     state.current_stage = "integration"
 

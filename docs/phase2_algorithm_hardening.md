@@ -15320,6 +15320,55 @@ Completed in Gate446:
   - it does not change LN math, CUDA kernels, frame admission, registration,
     rejection, or output pixels.
 
+### S2-Gate 562: Resident DQ/Mask Pipeline Contract Closure
+
+- Continues the Phase 2 DQ/mask mainline by making resident frame-level mask
+  admission and resident pixel-level DQ closure mandatory parts of the default
+  resident `pipeline_contract.json`.
+- Completed:
+  - `glass pipeline-contract` now reads `resident_frame_masks.json`;
+  - resident integration outputs require the frame-mask artifact to exist;
+  - the frame-mask contract must pass, have no unaudited zero-weight frames,
+    and close against `frame_accounting.json` when frame accounting is present;
+  - `glass pipeline-contract` now reads `resident_dq_pixel_closure.json`;
+  - resident integration outputs require the pixel-closure artifact to exist;
+  - pixel closure must pass all group checks and match the frame-mask active
+    and masked frame counts;
+  - `pipeline_contract.md` now includes resident frame-mask and resident DQ
+    pixel-closure summaries.
+- Tests:
+  - syntax check:
+    `.venv\Scripts\python.exe -m py_compile
+    src\glass\report\pipeline_contract.py tests\test_pipeline_contract.py`;
+  - focused new resident DQ/mask contract tests: `5 passed in 0.26 s`;
+  - wider pipeline/resident contract suite: `43 passed in 2.26 s`;
+  - full `python -m pytest -q`: `1202 passed in 45.09 s`.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate562_resident_dq_mask_pipeline_contract\runs_20260623_181058\ln_on_dq_mask_contract`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_562_resident_dq_mask_pipeline_contract_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `7.204561699999999 s` |
+  | Run timing total | `6.844856300042011 s` |
+  | Pipeline contract status | `passed` |
+  | Resident frame-mask contract | `passed` |
+  | Resident DQ pixel closure | `passed` |
+  | Resident source-DQ execution | `passed` |
+  | Frame-accounting conflicts | `0` |
+  | Frame-mask frames/active/masked/unknown | `200 / 193 / 7 / 0` |
+  | DQ pixel-closure groups/failed | `1 / 0` |
+  | Output SHA256 vs Gate561 LN-on | `all identical` |
+- Interpretation:
+  - this gate turns already-generated resident DQ/mask artifacts into default
+    run-level acceptance checks;
+  - it does not change calibration, registration, LN, warp, rejection,
+    integration math, CUDA kernels, DQ bit definitions, frame admission, or
+    output pixels.
+
 ## Gate Rules
 
 Each gate requires:

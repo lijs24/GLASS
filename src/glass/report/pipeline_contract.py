@@ -1445,6 +1445,335 @@ def _resident_source_dq_execution_state(run_root: Path) -> dict[str, Any]:
     }
 
 
+def _resident_frame_mask_state(
+    run_root: Path,
+    *,
+    required: bool,
+    frame_accounting: dict[str, Any],
+) -> dict[str, Any]:
+    path = run_root / "resident_frame_masks.json"
+    if not path.exists():
+        status = "missing" if required else "not_present"
+        return {
+            "path": str(path),
+            "exists": False,
+            "required": bool(required),
+            "status": status,
+            "passed": not required,
+            "summary": {},
+            "groups": [],
+            "failed_groups": [],
+            "failed_checks": ["resident_frame_masks_missing"] if required else [],
+            "closure": {"status": "missing" if required else "not_required", "passed": not required},
+        }
+
+    payload = _load_json_object(path)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    raw_groups = payload.get("groups") if isinstance(payload.get("groups"), list) else []
+    groups = [group for group in raw_groups if isinstance(group, dict)]
+    accounting_summary = (
+        frame_accounting.get("summary") if isinstance(frame_accounting.get("summary"), dict) else {}
+    )
+    frame_count = _optional_rounded_int(summary.get("frame_count"))
+    active_count = _optional_rounded_int(summary.get("active_frame_count"))
+    masked_count = _optional_rounded_int(summary.get("masked_frame_count"))
+    unknown_count = _optional_rounded_int(summary.get("unknown_zero_weight_frame_count"))
+    input_light_frames = _optional_rounded_int(accounting_summary.get("input_light_frames"))
+    integrated_frames = _optional_rounded_int(accounting_summary.get("integrated_frames"))
+    zero_weight_frames = _optional_rounded_int(accounting_summary.get("zero_weight_frames"))
+    accounting_mask_active = _optional_rounded_int(accounting_summary.get("resident_frame_mask_active_frames"))
+    accounting_masked = _optional_rounded_int(accounting_summary.get("resident_frame_mask_masked_frames"))
+    accounting_unknown = _optional_rounded_int(accounting_summary.get("resident_frame_mask_unaudited_frames"))
+
+    failed_groups: list[dict[str, Any]] = []
+    for index, group in enumerate(groups):
+        group_summary = group.get("summary") if isinstance(group.get("summary"), dict) else {}
+        group_unknown = _optional_rounded_int(group_summary.get("unknown_zero_weight_frame_count"))
+        if group.get("artifact") != "resident_frame_mask_contract_group" or group_summary.get("passed") is not True or group_unknown not in {0, None}:
+            failed_groups.append(
+                {
+                    "index": index,
+                    "filter": group.get("filter"),
+                    "artifact": group.get("artifact"),
+                    "passed": group_summary.get("passed"),
+                    "unknown_zero_weight_frame_count": group_summary.get("unknown_zero_weight_frame_count"),
+                }
+            )
+
+    checks = [
+        _check(
+            "resident_frame_masks_present",
+            True,
+            {"path": str(path), "required": bool(required)},
+        ),
+        _check(
+            "artifact_type_is_resident_frame_mask_contract",
+            payload.get("artifact") == "resident_frame_mask_contract",
+            {"artifact": payload.get("artifact")},
+        ),
+        _check(
+            "summary_passed",
+            summary.get("passed") is True,
+            {"passed": summary.get("passed")},
+        ),
+        _check(
+            "groups_present",
+            bool(groups),
+            {"group_count": len(groups)},
+        ),
+        _check(
+            "group_contracts_passed",
+            not failed_groups,
+            {"failed_groups": failed_groups},
+        ),
+        _check(
+            "unknown_zero_weight_frames_zero",
+            unknown_count == 0,
+            {
+                "unknown_zero_weight_frame_count": unknown_count,
+                "unknown_zero_weight_frame_ids": (summary.get("unknown_zero_weight_frame_ids") or [])[:20],
+            },
+        ),
+    ]
+    if frame_accounting:
+        checks.extend(
+            [
+                _check(
+                    "frame_count_matches_frame_accounting_input",
+                    frame_count == input_light_frames,
+                    {
+                        "frame_mask_frame_count": frame_count,
+                        "frame_accounting_input_light_frames": input_light_frames,
+                    },
+                ),
+                _check(
+                    "active_count_matches_integrated_frames",
+                    active_count == integrated_frames,
+                    {
+                        "frame_mask_active_frame_count": active_count,
+                        "frame_accounting_integrated_frames": integrated_frames,
+                    },
+                ),
+                _check(
+                    "masked_count_matches_zero_weight_frames",
+                    masked_count == zero_weight_frames,
+                    {
+                        "frame_mask_masked_frame_count": masked_count,
+                        "frame_accounting_zero_weight_frames": zero_weight_frames,
+                    },
+                ),
+                _check(
+                    "frame_accounting_resident_mask_counts_match",
+                    (
+                        accounting_mask_active in {None, active_count}
+                        and accounting_masked in {None, masked_count}
+                        and accounting_unknown in {None, unknown_count}
+                    ),
+                    {
+                        "frame_mask_active_frame_count": active_count,
+                        "frame_mask_masked_frame_count": masked_count,
+                        "frame_mask_unknown_zero_weight_frame_count": unknown_count,
+                        "frame_accounting_resident_frame_mask_active_frames": accounting_mask_active,
+                        "frame_accounting_resident_frame_mask_masked_frames": accounting_masked,
+                        "frame_accounting_resident_frame_mask_unaudited_frames": accounting_unknown,
+                    },
+                ),
+            ]
+        )
+
+    passed = all(item["passed"] for item in checks)
+    return {
+        "path": str(path),
+        "exists": True,
+        "required": bool(required),
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "artifact": payload.get("artifact"),
+        "summary": summary,
+        "groups": [
+            {
+                "filter": group.get("filter"),
+                "artifact": group.get("artifact"),
+                "registration_mode": group.get("registration_mode"),
+                "integration_dispatch": group.get("integration_dispatch"),
+                "summary": group.get("summary") if isinstance(group.get("summary"), dict) else {},
+            }
+            for group in groups
+        ],
+        "failed_groups": failed_groups,
+        "closure": {
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "frame_count": frame_count,
+            "active_frame_count": active_count,
+            "masked_frame_count": masked_count,
+            "unknown_zero_weight_frame_count": unknown_count,
+            "input_light_frames": input_light_frames,
+            "integrated_frames": integrated_frames,
+            "zero_weight_frames": zero_weight_frames,
+        },
+        "checks": checks,
+        "failed_checks": [item["name"] for item in checks if not item["passed"]],
+    }
+
+
+def _resident_dq_pixel_closure_state(
+    run_root: Path,
+    *,
+    required: bool,
+    resident_frame_mask: dict[str, Any],
+) -> dict[str, Any]:
+    path = run_root / "resident_dq_pixel_closure.json"
+    if not path.exists():
+        status = "missing" if required else "not_present"
+        return {
+            "path": str(path),
+            "exists": False,
+            "required": bool(required),
+            "status": status,
+            "passed": not required,
+            "summary": {},
+            "groups": [],
+            "failed_groups": [],
+            "failed_checks": ["resident_dq_pixel_closure_missing"] if required else [],
+            "group_failed_checks": [],
+            "closure": {"status": "missing" if required else "not_required", "passed": not required},
+        }
+
+    payload = _load_json_object(path)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    raw_groups = payload.get("groups") if isinstance(payload.get("groups"), list) else []
+    groups = [group for group in raw_groups if isinstance(group, dict)]
+    frame_mask_summary = resident_frame_mask.get("summary") if isinstance(resident_frame_mask.get("summary"), dict) else {}
+    frame_mask_active = _optional_rounded_int(frame_mask_summary.get("active_frame_count"))
+    frame_mask_masked = _optional_rounded_int(frame_mask_summary.get("masked_frame_count"))
+
+    failed_groups: list[dict[str, Any]] = []
+    failed_checks: list[dict[str, Any]] = []
+    active_counts: list[int] = []
+    masked_counts: list[int] = []
+    for index, group in enumerate(groups):
+        group_failures: list[str] = []
+        active = _optional_rounded_int(group.get("frame_mask_active_frame_count"))
+        masked = _optional_rounded_int(group.get("frame_mask_masked_frame_count"))
+        if active is not None:
+            active_counts.append(active)
+        if masked is not None:
+            masked_counts.append(masked)
+        if group.get("artifact") != "resident_dq_pixel_closure_group":
+            group_failures.append("artifact_type")
+        if group.get("passed") is not True or group.get("status") != "passed":
+            group_failures.append("group_status")
+        for check in group.get("checks") or []:
+            if not isinstance(check, dict):
+                continue
+            if not check.get("passed"):
+                name = str(check.get("name") or "unknown")
+                group_failures.append(name)
+                failed_checks.append(
+                    {
+                        "index": index,
+                        "filter": group.get("filter"),
+                        "check": name,
+                        "details": check.get("details") if isinstance(check.get("details"), dict) else {},
+                    }
+                )
+        if group_failures:
+            failed_groups.append(
+                {
+                    "index": index,
+                    "filter": group.get("filter"),
+                    "status": group.get("status"),
+                    "failures": group_failures,
+                }
+            )
+
+    active_total = sum(active_counts) if active_counts else None
+    masked_total = sum(masked_counts) if masked_counts else None
+    checks = [
+        _check(
+            "resident_dq_pixel_closure_present",
+            True,
+            {"path": str(path), "required": bool(required)},
+        ),
+        _check(
+            "artifact_type_is_resident_dq_pixel_closure",
+            payload.get("artifact") == "resident_dq_pixel_closure",
+            {"artifact": payload.get("artifact")},
+        ),
+        _check(
+            "summary_passed",
+            summary.get("passed") is True and _optional_rounded_int(summary.get("failed_group_count")) == 0,
+            {
+                "passed": summary.get("passed"),
+                "failed_group_count": summary.get("failed_group_count"),
+                "failed_check_counts": summary.get("failed_check_counts"),
+            },
+        ),
+        _check("groups_present", bool(groups), {"group_count": len(groups)}),
+        _check("group_closures_passed", not failed_groups and not failed_checks, {"failed_groups": failed_groups, "failed_checks": failed_checks}),
+    ]
+    if resident_frame_mask.get("exists"):
+        checks.extend(
+            [
+                _check(
+                    "active_count_matches_resident_frame_mask",
+                    active_total == frame_mask_active,
+                    {
+                        "dq_closure_active_frame_count": active_total,
+                        "frame_mask_active_frame_count": frame_mask_active,
+                    },
+                ),
+                _check(
+                    "masked_count_matches_resident_frame_mask",
+                    masked_total == frame_mask_masked,
+                    {
+                        "dq_closure_masked_frame_count": masked_total,
+                        "frame_mask_masked_frame_count": frame_mask_masked,
+                    },
+                ),
+            ]
+        )
+
+    passed = all(item["passed"] for item in checks)
+    return {
+        "path": str(path),
+        "exists": True,
+        "required": bool(required),
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "artifact": payload.get("artifact"),
+        "summary": summary,
+        "groups": [
+            {
+                "filter": group.get("filter"),
+                "artifact": group.get("artifact"),
+                "status": group.get("status"),
+                "passed": group.get("passed"),
+                "frame_mask_active_frame_count": group.get("frame_mask_active_frame_count"),
+                "frame_mask_masked_frame_count": group.get("frame_mask_masked_frame_count"),
+                "geometric_warp_coverage_frame_count": group.get("geometric_warp_coverage_frame_count"),
+                "provenance_active_frame_count": group.get("provenance_active_frame_count"),
+                "sample_accounting_closure": group.get("sample_accounting_closure"),
+                "check_count": len([item for item in group.get("checks") or [] if isinstance(item, dict)]),
+            }
+            for group in groups
+        ],
+        "failed_groups": failed_groups,
+        "failed_checks": [item["name"] for item in checks if not item["passed"]],
+        "group_failed_checks": failed_checks,
+        "closure": {
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "active_frame_count": active_total,
+            "masked_frame_count": masked_total,
+            "frame_mask_active_frame_count": frame_mask_active,
+            "frame_mask_masked_frame_count": frame_mask_masked,
+        },
+        "checks": checks,
+    }
+
+
 def build_pipeline_contract_audit(
     run_dir: str | Path,
     *,
@@ -1493,6 +1822,17 @@ def build_pipeline_contract_audit(
     integration_engine_policy = _integration_engine_policy_state(integration, integration_rows)
     frame_accounting_admission = _frame_accounting_admission_state(frame_accounting)
     resident_source_dq_execution = _resident_source_dq_execution_state(run_root)
+    resident_integration_required = any(_is_resident_integration_row(row) for row in integration_rows)
+    resident_frame_mask = _resident_frame_mask_state(
+        run_root,
+        required=resident_integration_required,
+        frame_accounting=frame_accounting,
+    )
+    resident_dq_pixel_closure = _resident_dq_pixel_closure_state(
+        run_root,
+        required=resident_integration_required,
+        resident_frame_mask=resident_frame_mask,
+    )
     stack_engine_runtime_default = _stack_engine_runtime_default_state(
         calibration_master_rows=calibration_master_rows,
         integration_rows=integration_rows,
@@ -1638,6 +1978,48 @@ def build_pipeline_contract_audit(
                 ).get("materializes_calibrated_dq_cache"),
             },
             "When resident source-DQ execution evidence is present, invalid samples must be applied in memory and the contract must pass.",
+        ),
+        _check(
+            "resident_frame_mask_admission_contract",
+            bool(resident_frame_mask["passed"]),
+            {
+                "exists": resident_frame_mask["exists"],
+                "required": resident_frame_mask["required"],
+                "status": resident_frame_mask["status"],
+                "frame_count": resident_frame_mask["closure"].get("frame_count"),
+                "active_frame_count": resident_frame_mask["closure"].get("active_frame_count"),
+                "masked_frame_count": resident_frame_mask["closure"].get("masked_frame_count"),
+                "unknown_zero_weight_frame_count": resident_frame_mask["closure"].get(
+                    "unknown_zero_weight_frame_count"
+                ),
+                "input_light_frames": resident_frame_mask["closure"].get("input_light_frames"),
+                "integrated_frames": resident_frame_mask["closure"].get("integrated_frames"),
+                "zero_weight_frames": resident_frame_mask["closure"].get("zero_weight_frames"),
+                "failed_checks": resident_frame_mask["failed_checks"],
+                "failed_groups": resident_frame_mask["failed_groups"],
+            },
+            "Resident frame-level mask admission must explain every zero-weight resident frame and close against frame accounting when available.",
+        ),
+        _check(
+            "resident_dq_pixel_closure_contract",
+            bool(resident_dq_pixel_closure["passed"]),
+            {
+                "exists": resident_dq_pixel_closure["exists"],
+                "required": resident_dq_pixel_closure["required"],
+                "status": resident_dq_pixel_closure["status"],
+                "active_frame_count": resident_dq_pixel_closure["closure"].get("active_frame_count"),
+                "masked_frame_count": resident_dq_pixel_closure["closure"].get("masked_frame_count"),
+                "frame_mask_active_frame_count": resident_dq_pixel_closure["closure"].get(
+                    "frame_mask_active_frame_count"
+                ),
+                "frame_mask_masked_frame_count": resident_dq_pixel_closure["closure"].get(
+                    "frame_mask_masked_frame_count"
+                ),
+                "failed_checks": resident_dq_pixel_closure["failed_checks"],
+                "failed_groups": resident_dq_pixel_closure["failed_groups"],
+                "group_failed_checks": resident_dq_pixel_closure["group_failed_checks"],
+            },
+            "Resident pixel-level DQ closure must connect frame masks, geometric coverage, rejection maps, and DQ provenance.",
         ),
         _check(
             "integration_sample_accounting_closure",
@@ -1964,6 +2346,20 @@ def build_pipeline_contract_audit(
                 "status": resident_source_dq_execution["status"],
                 "passed": resident_source_dq_execution["passed"],
             },
+            "resident_frame_masks": {
+                "path": resident_frame_mask["path"],
+                "exists": resident_frame_mask["exists"],
+                "required": resident_frame_mask["required"],
+                "status": resident_frame_mask["status"],
+                "passed": resident_frame_mask["passed"],
+            },
+            "resident_dq_pixel_closure": {
+                "path": resident_dq_pixel_closure["path"],
+                "exists": resident_dq_pixel_closure["exists"],
+                "required": resident_dq_pixel_closure["required"],
+                "status": resident_dq_pixel_closure["status"],
+                "passed": resident_dq_pixel_closure["passed"],
+            },
         },
         "calibration": {
             "artifact_path": str(calibration_path),
@@ -2006,6 +2402,8 @@ def build_pipeline_contract_audit(
         },
         "frame_accounting": frame_accounting_admission,
         "resident_source_dq_execution": resident_source_dq_execution,
+        "resident_frame_masks": resident_frame_mask,
+        "resident_dq_pixel_closure": resident_dq_pixel_closure,
         "stack_engine_runtime_default": stack_engine_runtime_default,
         "pixel_verification": {
             "enabled": bool(pixel_verify),
@@ -2124,6 +2522,55 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
             f"invalid `{group.get('input_invalid_samples_before_rejection')}`, "
             f"applied `{group.get('applied_invalid_samples')}`, "
             f"cache `{group.get('materializes_calibrated_dq_cache')}`"
+        )
+    frame_masks = audit.get("resident_frame_masks") or {}
+    mask_closure = frame_masks.get("closure") if isinstance(frame_masks.get("closure"), dict) else {}
+    lines.extend(["", "## Resident Frame Masks", ""])
+    lines.append(
+        "- "
+        f"exists `{frame_masks.get('exists')}`, "
+        f"required `{frame_masks.get('required')}`, "
+        f"status `{frame_masks.get('status')}`, "
+        f"passed `{frame_masks.get('passed')}`, "
+        f"frames `{mask_closure.get('frame_count')}`, "
+        f"active `{mask_closure.get('active_frame_count')}`, "
+        f"masked `{mask_closure.get('masked_frame_count')}`, "
+        f"unknown `{mask_closure.get('unknown_zero_weight_frame_count')}`"
+    )
+    for group in frame_masks.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        group_summary = group.get("summary") if isinstance(group.get("summary"), dict) else {}
+        lines.append(
+            "- "
+            f"{group.get('filter')}: active `{group_summary.get('active_frame_count')}`, "
+            f"masked `{group_summary.get('masked_frame_count')}`, "
+            f"unknown `{group_summary.get('unknown_zero_weight_frame_count')}`, "
+            f"passed `{group_summary.get('passed')}`"
+        )
+    pixel_closure = audit.get("resident_dq_pixel_closure") or {}
+    pixel_closure_summary = (
+        pixel_closure.get("closure") if isinstance(pixel_closure.get("closure"), dict) else {}
+    )
+    lines.extend(["", "## Resident DQ Pixel Closure", ""])
+    lines.append(
+        "- "
+        f"exists `{pixel_closure.get('exists')}`, "
+        f"required `{pixel_closure.get('required')}`, "
+        f"status `{pixel_closure.get('status')}`, "
+        f"passed `{pixel_closure.get('passed')}`, "
+        f"active `{pixel_closure_summary.get('active_frame_count')}`, "
+        f"masked `{pixel_closure_summary.get('masked_frame_count')}`"
+    )
+    for group in pixel_closure.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        lines.append(
+            "- "
+            f"{group.get('filter')}: status `{group.get('status')}`, "
+            f"active `{group.get('frame_mask_active_frame_count')}`, "
+            f"geometric `{group.get('geometric_warp_coverage_frame_count')}`, "
+            f"checks `{group.get('check_count')}`"
         )
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
