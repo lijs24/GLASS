@@ -242,9 +242,15 @@ def resident_dq_map_host_f32_preferred() -> bool:
     mode = os.environ.get("GLASS_RESIDENT_DQ_NATIVE_HOST", "").strip().lower()
     if mode in {"1", "true", "yes", "on", "force", "native"}:
         return resident_dq_map_host_f32_available()
+    if mode in {"auto", "optimized", "optimized_native", "auto_native"}:
+        return resident_dq_map_host_f32_available() and resident_dq_map_host_f32_optimized()
     if mode in {"0", "false", "no", "off", "python", "fallback"}:
         return False
-    return resident_dq_map_host_f32_available() and resident_dq_map_host_f32_optimized()
+    # The vectorized Python resident DQ fast path is the measured default for
+    # the 200-light release benchmark.  Keep native host DQ as an explicit
+    # diagnostic/profiling path until a specialized native count-map scanner
+    # beats the Python path on the real resident pipeline.
+    return False
 
 
 def resident_dq_map_host_f32(

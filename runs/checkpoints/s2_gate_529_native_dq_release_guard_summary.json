@@ -1,0 +1,230 @@
+{
+  "root": "C:\\glass_runs\\phase2_s2_gate529_native_dq_release\\runs_20260623_115631",
+  "cases": {
+    "python_dq": {
+      "shell_elapsed_s": 6.309335,
+      "internal_elapsed_s": 5.963001099938992,
+      "resident_stage_elapsed_s": 5.96037589997286,
+      "dq_mode": "python",
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      },
+      "accepted_or_active_frames": null,
+      "raw_gpu_decode_enabled": null,
+      "calibration_release_mode_effective": null
+    },
+    "native_dq": {
+      "shell_elapsed_s": 6.893114,
+      "internal_elapsed_s": 6.527206999948248,
+      "resident_stage_elapsed_s": 6.523961499973666,
+      "dq_mode": "default",
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      },
+      "accepted_or_active_frames": null,
+      "raw_gpu_decode_enabled": null,
+      "calibration_release_mode_effective": null
+    },
+    "postchange_default": {
+      "shell_elapsed_s": 6.16666,
+      "internal_elapsed_s": 5.814741600072011,
+      "resident_stage_elapsed_s": 5.812082600023132,
+      "dq_mode": "default_postchange",
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      },
+      "accepted_or_active_frames": null,
+      "raw_gpu_decode_enabled": null,
+      "calibration_release_mode_effective": null
+    }
+  },
+  "comparisons": {
+    "python_dq_vs_native_dq": {
+      "master": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">f4",
+        "dtype_b": ">f4",
+        "diff": null
+      },
+      "weight": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">f4",
+        "dtype_b": ">f4",
+        "diff": null
+      },
+      "coverage": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">i2",
+        "dtype_b": ">i2",
+        "diff": null
+      },
+      "low_rejection": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">i2",
+        "dtype_b": ">i2",
+        "diff": null
+      },
+      "high_rejection": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">i2",
+        "dtype_b": ">i2",
+        "diff": null
+      },
+      "dq": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">i2",
+        "dtype_b": ">i2",
+        "diff": null
+      }
+    },
+    "python_dq_vs_postchange_default": {
+      "master": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">f4",
+        "dtype_b": ">f4",
+        "diff": null
+      },
+      "weight": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">f4",
+        "dtype_b": ">f4",
+        "diff": null
+      },
+      "coverage": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">i2",
+        "dtype_b": ">i2",
+        "diff": null
+      },
+      "low_rejection": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">i2",
+        "dtype_b": ">i2",
+        "diff": null
+      },
+      "high_rejection": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">i2",
+        "dtype_b": ">i2",
+        "diff": null
+      },
+      "dq": {
+        "bitwise_equal": true,
+        "same_shape": true,
+        "same_dtype": true,
+        "shape": [
+          6422,
+          9600
+        ],
+        "dtype_a": ">i2",
+        "dtype_b": ">i2",
+        "diff": null
+      }
+    }
+  },
+  "speed": {
+    "native_minus_python_shell_s": 0.5837789999999998,
+    "native_shell_ratio_vs_python": 1.09252623295482,
+    "postchange_minus_native_shell_s": -0.7264539999999995,
+    "postchange_shell_ratio_vs_native": 0.8946116370627267,
+    "postchange_minus_python_shell_s": -0.14267499999999966,
+    "native_minus_python_internal_s": 0.5642059000092559,
+    "postchange_minus_native_internal_s": -0.7124653998762369,
+    "postchange_speedup_vs_wbpp_shell": 177.16900234486738,
+    "postchange_speedup_vs_wbpp_internal": 187.8915823166535
+  },
+  "wbpp_compare": {
+    "json": "C:\\glass_runs\\phase2_s2_gate529_native_dq_release\\runs_20260623_115631\\postchange_default\\compare_vs_wbpp_fastintegration.json",
+    "html": "C:\\glass_runs\\phase2_s2_gate529_native_dq_release\\runs_20260623_115631\\postchange_default\\compare_vs_wbpp_fastintegration.html",
+    "shape_match": true,
+    "coverage_fraction": 0.9892770479074376,
+    "robust_fit_rms_fit_pixels": 4.25294994505585e-05,
+    "robust_fit_abs_diff_p99_fit_pixels": 0.00011365715225056788,
+    "robust_fit_fraction": 0.9856440392790535,
+    "speedup_vs_reference": 177.16900234486738
+  },
+  "dq_dispatch_policy_after_change": {
+    "native_available": true,
+    "native_optimized": true,
+    "default_preferred": false,
+    "native_env_override": "GLASS_RESIDENT_DQ_NATIVE_HOST=native",
+    "optimized_native_env_override": "GLASS_RESIDENT_DQ_NATIVE_HOST=auto_native",
+    "default_reason": "real 200-light Release native host DQ was slower than the vectorized Python DQ fast path"
+  },
+  "artifact_note": "resident_artifacts may contain native_host markers for unrelated native CUDA helpers; DQ dispatch evidence for this gate is the explicit env mode plus dq_dispatch_policy_after_change.default_preferred=false."
+}

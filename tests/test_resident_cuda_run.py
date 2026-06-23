@@ -994,6 +994,9 @@ def test_resident_dq_map_native_preference_honors_build_and_env(monkeypatch):
 
     monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_optimized", lambda: True)
     monkeypatch.delenv("GLASS_RESIDENT_DQ_NATIVE_HOST", raising=False)
+    assert glass_cuda.resident_dq_map_host_f32_preferred() is False
+
+    monkeypatch.setenv("GLASS_RESIDENT_DQ_NATIVE_HOST", "auto_native")
     assert glass_cuda.resident_dq_map_host_f32_preferred() is True
 
     monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_available", lambda: False)

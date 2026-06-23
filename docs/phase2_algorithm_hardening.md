@@ -13350,6 +13350,60 @@ Completed in Gate446:
   - post-fix real run:
     `C:\glass_runs\phase2_s2_gate528_wave_guard_real\runs_20260623_114527\b32_s4_w8_guarded`.
 
+### S2-Gate 529: Release Native DQ Default Guard
+
+- Returned to the DQ/mask mainline after building the native CUDA extension in
+  a true Release configuration. The Release build reports native DQ as available
+  and optimized, but the real 200-light route showed that the generic native
+  host scanner is still slower than the resident Python DQ fast path.
+- Completed:
+  - changed `glass_cuda.resident_dq_map_host_f32_preferred()` so the default DQ
+    dispatch remains the measured Python fast path even when the native host DQ
+    scanner is built with `NDEBUG`;
+  - retained `GLASS_RESIDENT_DQ_NATIVE_HOST=native` for forced diagnostics and
+    added `GLASS_RESIDENT_DQ_NATIVE_HOST=auto_native` for optimized-build
+    experiments;
+  - updated focused dispatch tests so Release native availability no longer
+    silently changes the default 200-light path.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate529_native_dq_release\runs_20260623_115631`;
+  - same M38 H-alpha 200-light plan, shared master cache, resident CUDA,
+    `similarity_cuda_triangle`, Lanczos3 warp, winsorized sigma rejection, and
+    audit maps;
+  - `python_dq` forced fallback: shell `6.309335 s`, internal
+    `5.963001099938992 s`;
+  - pre-change Release-native default: shell `6.893114 s`, internal
+    `6.527206999948248 s`;
+  - post-change default: shell `6.16666 s`, internal
+    `5.814741600072011 s`;
+  - post-change default is `0.7264539999999995 s` faster than the Release native
+    host DQ default in the same run window.
+- Numerical and black-box validation:
+  - post-change default master, weight map, coverage map, low/high rejection
+    maps, and DQ map match the forced Python DQ output bitwise;
+  - the forced native-host DQ output also matches those six maps bitwise, so
+    this gate changes dispatch policy only;
+  - GLASS-vs-WBPP compare for post-change default is shape-matched with coverage
+    fraction `0.9892770479074376`, robust-fit RMS over fit pixels
+    `4.25294994505585e-05`, p99 absolute difference
+    `0.00011365715225056788`, and robust-fit fraction `0.9856440392790535`;
+  - post-change default shell speedup versus the WBPP black-box `1092.541 s`
+    timing is `177.16900234486738x`.
+- Interpretation:
+  - Release packaging must not promote a slower generic native host DQ scanner
+    just because it was compiled with optimization flags;
+  - the current measured default remains the Python resident DQ fast path;
+  - a future native DQ promotion should be a specialized count-map scanner that
+    respects the resident fast-path preconditions and beats Python on this same
+    200-light benchmark.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_529_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_529_native_dq_release_guard_summary.json`;
+  - WBPP compare report:
+    `C:\glass_runs\phase2_s2_gate529_native_dq_release\runs_20260623_115631\postchange_default\compare_vs_wbpp_fastintegration.html`.
+
 ## Gate Rules
 
 Each gate requires:
