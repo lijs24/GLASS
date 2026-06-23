@@ -13868,6 +13868,57 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_538_compact_artifact_summary.json`.
 
+### S2-Gate 539: Resident Prefetch-24 Default Retune
+
+- Returned to the Phase 2 mainline performance target: the real 200-light
+  resident CUDA default path, specifically the I/O + upload + calibration
+  pipeline.
+- Completed:
+  - profiled the current resident default route on the M38 H-alpha 200-light
+    benchmark with the shared master cache;
+  - ran same-cache prefetch-depth probes at 16, 24, and 32 frames;
+  - promoted prefetch-24 as the default `throughput-v3-io` prefetch depth while
+    keeping 16 workers, pinned-ring H2D, queued refill, calibration batch 16,
+    4 streams, wave 4, and callback-queue release unchanged;
+  - updated the benchmark contract preset expectation and CLI/acceptance tests.
+- Probe evidence:
+  - prefetch-16 internal time: `5.083839799975976 s`;
+  - prefetch-24 internal time: `4.96331859997008 s`;
+  - prefetch-32 internal time: `5.106228700024076 s`;
+  - pinned host buffer for prefetch-24: `2.756023406982422 GiB`;
+  - pinned host buffer for prefetch-32: `3.6746978759765625 GiB`;
+  - all six resident output maps from the probes are bitwise identical to
+    Gate538.
+- Default validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate539_prefetch24_default\runs_20260623_135359\default_prefetch24`;
+  - shell/internal elapsed: `5.435113299999999 s` /
+    `5.064197100000456 s`;
+  - effective preset: `throughput-v3-io` with no explicit overrides;
+  - effective prefetch frames: `24`;
+  - light read/upload/calibrate: `2.5950499000027776 s`;
+  - resident registration/warp: `0.25548409996554255 s`;
+  - resident integration: `0.3045270000002347 s`;
+  - output write: `0.2477364999940619 s`.
+- Numerical and WBPP validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to Gate538;
+  - coverage-masked compare against the WBPP FastIntegration black-box master:
+    RMS `0.0004279821839256963`, p99 abs diff
+    `0.0001313822576776147`, coverage fraction `0.9892770479074376`,
+    compared pixels `56997300`;
+  - shell-time speedup versus WBPP: `201.01531278106017x`.
+- Interpretation:
+  - this gate is a resident scheduling retune, not a new science algorithm;
+  - it reduces default pinned RAM and avoids the slower prefetch-32 point on
+    the current 200-light benchmark;
+  - the next meaningful optimization should still target multi-buffer
+    read/upload/calibrate orchestration and resident batching, not reports.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_539_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_539_prefetch24_default_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

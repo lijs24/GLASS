@@ -1,0 +1,119 @@
+{
+  "gate": "S2-Gate 539",
+  "title": "Resident prefetch-24 default retune",
+  "baseline_gate": "S2-Gate 538",
+  "objective": "Return to the Phase 2 resident CUDA mainline by retuning the default I/O/upload/calibration prefetch depth with real 200-light evidence.",
+  "profile_run": "C:\\glass_runs\\phase2_s2_gate539_profile\\runs_20260623_134922\\current_profiled",
+  "probe_root": "C:\\glass_runs\\phase2_s2_gate539_prefetch_probe\\runs_20260623_135008",
+  "default_validation_run": "C:\\glass_runs\\phase2_s2_gate539_prefetch24_default\\runs_20260623_135359\\default_prefetch24",
+  "code_changes": {
+    "throughput_v3_io_prefetch_frames": {
+      "before": 32,
+      "after": 24
+    },
+    "unchanged": {
+      "resident_prefetch_workers": 16,
+      "resident_prefetch_refill_mode": "queued",
+      "resident_h2d_mode": "pinned_ring",
+      "resident_calibration_batch_frames": 16,
+      "resident_calibration_streams": 4,
+      "resident_calibration_wave_frames": 4,
+      "resident_calibration_release_mode": "callback_queue"
+    }
+  },
+  "prefetch_probe": [
+    {
+      "prefetch_frames": 16,
+      "internal_elapsed_s": 5.083839799975976,
+      "stage_elapsed_s": 5.081080699979793,
+      "read_upload_calibrate_s": 2.821795399999246,
+      "consumer_read_wait_s": 1.4058892998145893,
+      "native_h2d_calibrate_store_s": 0.7134202804565429,
+      "pinned_host_gib": 1.8373489379882812,
+      "bitwise_vs_gate538": true
+    },
+    {
+      "prefetch_frames": 24,
+      "internal_elapsed_s": 4.96331859997008,
+      "stage_elapsed_s": 4.960653799993452,
+      "read_upload_calibrate_s": 2.5769916000426747,
+      "consumer_read_wait_s": 1.0503995000035502,
+      "native_h2d_calibrate_store_s": 0.7738557682037355,
+      "pinned_host_gib": 2.756023406982422,
+      "bitwise_vs_gate538": true
+    },
+    {
+      "prefetch_frames": 32,
+      "internal_elapsed_s": 5.106228700024076,
+      "stage_elapsed_s": 5.103588500001933,
+      "read_upload_calibrate_s": 2.4184250000398606,
+      "consumer_read_wait_s": 0.6349372998229228,
+      "native_h2d_calibrate_store_s": 0.9352887897491455,
+      "pinned_host_gib": 3.6746978759765625,
+      "bitwise_vs_gate538": true
+    }
+  ],
+  "default_validation": {
+    "shell_elapsed_s": 5.435113299999999,
+    "internal_elapsed_s": 5.064197100000456,
+    "stage_elapsed_s": 5.061528099991847,
+    "effective_preset": "throughput-v3-io",
+    "explicit_overrides": {},
+    "prefetch_frames": 24,
+    "prefetch_workers": 16,
+    "pinned_host_bytes": 2959257600,
+    "pinned_host_gib": 2.756023406982422,
+    "light_read_upload_calibrate_s": 2.5950499000027776,
+    "light_read_wait_wall_s": 1.0576936997822486,
+    "light_read_worker_cumulative_s": 28.187955199857242,
+    "master_build_or_load_s": 0.3202941999770701,
+    "resident_registration_warp_s": 0.25548409996554255,
+    "resident_integration_s": 0.3045270000002347,
+    "output_write_s": 0.2477364999940619,
+    "bitwise_vs_gate538_all_maps": true,
+    "bitwise_maps": [
+      "resident_master_H.fits",
+      "resident_weight_map_H.fits",
+      "resident_coverage_map_H.fits",
+      "resident_low_rejection_map_H.fits",
+      "resident_high_rejection_map_H.fits",
+      "resident_dq_map_H.fits"
+    ]
+  },
+  "wbpp_compare": {
+    "reference": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf",
+    "compare_json": "C:\\glass_runs\\phase2_s2_gate539_prefetch24_default\\runs_20260623_135359\\default_prefetch24\\compare_vs_wbpp_fastintegration_scaled_coverage190.json",
+    "compare_html": "C:\\glass_runs\\phase2_s2_gate539_prefetch24_default\\runs_20260623_135359\\default_prefetch24\\compare_vs_wbpp_fastintegration_scaled_coverage190.html",
+    "shape_match": true,
+    "rms_diff": 0.0004279821839256963,
+    "abs_diff_p99": 0.0001313822576776147,
+    "coverage_fraction": 0.9892770479074376,
+    "compared_pixels": 56997300,
+    "wbpp_elapsed_s": 1092.541,
+    "glass_shell_elapsed_s": 5.435113299999999,
+    "shell_speedup_vs_wbpp": 201.01531278106017
+  },
+  "cuda": {
+    "available": true,
+    "device_id": 0,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "multi_processor_count": 188,
+    "native_backend": true
+  },
+  "tests": {
+    "focused": "7 passed in 0.26s",
+    "full_pytest": "1178 passed in 43.14s"
+  },
+  "clean_room": {
+    "compliant": true,
+    "statement": "The gate uses only GLASS timing artifacts, GLASS output hashes, and user-generated WBPP black-box output/timing. It does not inspect or reuse external implementation source."
+  },
+  "known_limitations": [
+    "This gate retunes a default scheduling knob; it is not a new science algorithm.",
+    "The read/upload/calibration pipeline remains the dominant target for larger gains.",
+    "The fastest prefetch depth may vary by storage, CPU pressure, and dataset size; explicit CLI overrides remain available."
+  ],
+  "next_step": "Implement a more material multi-buffer read/upload/calibrate optimization or deeper resident batching while preserving bitwise 200-light outputs."
+}

@@ -215,7 +215,7 @@ def _resident_runtime_preset_expectations(preset: str) -> dict[str, Any] | None:
     if preset == "throughput-v3-io":
         return {
             "h2d_mode": "pinned_ring",
-            "prefetch_frames": 32,
+            "prefetch_frames": 24,
             "prefetch_workers": 16,
             "calibration_batch_requested_frames": 16,
             "calibration_batch_requested_streams": 4,
