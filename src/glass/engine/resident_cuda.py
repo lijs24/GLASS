@@ -967,7 +967,9 @@ class _LightPrefetcher:
             self.fill_call_count += 1
             if self.executor is None:
                 return
-            while self.next_submit < len(self.light_frames) and len(self.pending) < self.depth:
+            while self.next_submit < len(self.light_frames) and (
+                len(self.inflight_slots) if self.pinned_ring else len(self.pending)
+            ) < self.depth:
                 slot: np.ndarray | None = None
                 slot_id: int | None = None
                 if self.pinned_ring:

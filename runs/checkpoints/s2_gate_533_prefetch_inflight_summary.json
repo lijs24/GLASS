@@ -1,0 +1,79 @@
+{
+  "gate": "S2-Gate 533",
+  "title": "Resident Prefetch Inflight Slot Guard",
+  "accepted_code_change": {
+    "file": "src/glass/engine/resident_cuda.py",
+    "summary": "_LightPrefetcher._fill uses actual pinned-ring inflight slot occupancy when deciding whether more frames can be submitted."
+  },
+  "focused_test": {
+    "file": "tests/test_resident_cuda_run.py",
+    "test": "test_light_prefetcher_counts_pinned_ring_inflight_slots",
+    "result": "passed"
+  },
+  "pytest": {
+    "focused_prefetch": "1 passed in 0.58s",
+    "focused_cli_runtime": "2 passed in 0.20s",
+    "focused_resident_cuda_native_u16": "1 passed in 0.46s",
+    "full": "1175 passed in 42.69s"
+  },
+  "real_200_light_validation": {
+    "plan": "C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json",
+    "master_cache": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\resident_master_cache",
+    "accepted_run": "C:\\glass_runs\\phase2_s2_gate533_prefetch_inflight_fix\\runs_20260623_134500\\default_after",
+    "baseline_run": "C:\\glass_runs\\phase2_s2_gate533_warp_chunk_ab\\runs_20260623_133500\\default_chunk8",
+    "command_common": "--backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit",
+    "before": {
+      "total_elapsed_s": 5.440552299958654,
+      "light_loop_s": 2.439363899989985,
+      "light_read_wait_wall_s": 0.6564198998385109,
+      "native_h2d_calibrate_store_s": 0.9284773674011231,
+      "prefetch_fill_blocked_no_slot_count": 31,
+      "prefetch_fill_call_count": 51,
+      "prefetch_release_refill_request_count": 50
+    },
+    "after": {
+      "shell_s": 5.795757,
+      "total_elapsed_s": 5.4339563000248745,
+      "light_loop_s": 2.423997799982317,
+      "light_read_wait_wall_s": 0.6388012003153563,
+      "native_h2d_calibrate_store_s": 0.9287956047058107,
+      "prefetch_fill_blocked_no_slot_count": 0,
+      "prefetch_fill_call_count": 51,
+      "prefetch_release_refill_request_count": 50
+    },
+    "bitwise_maps_vs_baseline": {
+      "resident_master_H.fits": true,
+      "resident_weight_map_H.fits": true,
+      "resident_coverage_map_H.fits": true,
+      "resident_low_rejection_map_H.fits": true,
+      "resident_high_rejection_map_H.fits": true,
+      "resident_dq_map_H.fits": true
+    }
+  },
+  "negative_probes_not_promoted": {
+    "calibration_schedule_probe_root": "C:\\glass_runs\\phase2_s2_gate533_mainline_ab\\runs_20260623_132500",
+    "calibration_probe_result": "batch32/streams8/wave8 and batch64/streams8/wave8 remained bitwise identical but regressed total runtime versus default.",
+    "warp_chunk_probe_root": "C:\\glass_runs\\phase2_s2_gate533_warp_chunk_ab\\runs_20260623_133500",
+    "warp_chunk_probe_result": "chunk16/chunk32/chunk64 remained bitwise identical but did not beat the native preferred chunk8 default."
+  },
+  "wbpp_reference_status": {
+    "rerun_compare": false,
+    "reason": "Gate533 output maps are bitwise identical to the current default baseline that already passed the Gate532 scaled WBPP comparison.",
+    "inherited_gate532_scaled_compare": {
+      "coverage_fraction": 0.9892770479074376,
+      "rms": 0.0004279821839256963,
+      "p99_abs": 0.0001313822576776147
+    }
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "clean_room": true,
+  "known_limitations": [
+    "Runtime win is small; this gate is a scheduling hygiene fix, not a headline speedup.",
+    "High-VRAM parameter sweeps did not identify a new default; the next large target remains resident registration/warp batching or light-loop Python orchestration."
+  ]
+}

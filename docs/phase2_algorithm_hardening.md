@@ -13574,6 +13574,64 @@ Completed in Gate446:
   - WBPP compare report:
     `C:\glass_runs\phase2_s2_gate532_master_mmap_real\runs_20260623_124500\master_mmap_default\compare_vs_wbpp_fastintegration_scaled_coverage190.html`.
 
+### S2-Gate 533: Resident Prefetch Inflight Slot Guard
+
+- Returned to the Phase 2 mainline after probing two high-VRAM scheduling
+  ideas on the real 200-light M38 H-alpha benchmark. The probes are recorded
+  but not promoted:
+  - increasing resident calibration to `batch=32/streams=8/wave=8` reduced the
+    native H2D/calibrate slice from about `0.934 s` to `0.792 s`, but increased
+    read wait and regressed total runtime;
+  - increasing Lanczos3 warp chunk capacity from the native preferred `8` to
+    `16/32/64` kept output maps bitwise identical, but regressed total runtime
+    and raised warp kernel enqueue/workspace costs.
+- Completed:
+  - changed `_LightPrefetcher._fill()` so pinned-ring capacity is checked
+    against actual occupied pinned slots (`inflight_slots`) instead of only
+    pending futures;
+  - added a regression test for the H2D window where a future has been popped
+    from `pending` but its pinned slot is still occupied until callback-release;
+  - preserved FITS reading, H2D/calibration kernels, registration, warp,
+    rejection, DQ semantics, integration, output maps, and public defaults.
+- Real 200-light validation:
+  - calibration schedule probe:
+    `C:\glass_runs\phase2_s2_gate533_mainline_ab\runs_20260623_132500`;
+  - warp chunk probe:
+    `C:\glass_runs\phase2_s2_gate533_warp_chunk_ab\runs_20260623_133500`;
+  - accepted validation run:
+    `C:\glass_runs\phase2_s2_gate533_prefetch_inflight_fix\runs_20260623_134500\default_after`;
+  - same M38 H-alpha 200-light plan, shared master cache, resident CUDA,
+    `similarity_cuda_triangle`, Lanczos3 warp, winsorized sigma rejection, and
+    audit maps.
+- Runtime evidence:
+  - before guard, current default run recorded
+    `prefetch_fill_blocked_no_slot_count=31`, internal total
+    `5.440552299958654 s`, and light loop `2.439363899989985 s`;
+  - after guard, the same default route records
+    `prefetch_fill_blocked_no_slot_count=0`, internal total
+    `5.4339563000248745 s`, shell `5.795757 s`, and light loop
+    `2.423997799982317 s`;
+  - this is a correctness/overhead guard with a small measured runtime win, not
+    a headline speedup gate.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to the current default baseline;
+  - because the maps are bitwise identical, the established Gate532 scaled
+    WBPP comparison remains applicable: coverage fraction
+    `0.9892770479074376`, RMS `0.0004279821839256963`, and p99 absolute
+    difference `0.0001313822576776147`.
+- Interpretation:
+  - the guard removes useless fill/lock/refill attempts while pinned slots are
+    still legitimately occupied by in-flight H2D callback-release work;
+  - parameter-only high-VRAM scaling is not the next mainline win for this
+    dataset; the next substantive work should target deeper resident
+    registration/warp batching or reduced Python orchestration inside the light
+    loop.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_533_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_533_prefetch_inflight_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

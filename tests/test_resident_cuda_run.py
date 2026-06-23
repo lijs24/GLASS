@@ -13,6 +13,7 @@ from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.engine.resident_cuda import (
     _apply_resident_registration_matrix_batch,
+    _LightPrefetcher,
     build_resident_memory_admission,
     _load_frame_weight_proposal,
     _load_tile_local_policy_replay,
@@ -41,6 +42,49 @@ from glass.engine.resident_cuda import (
 )
 from glass.cpu.registration import translation_matrix
 from tests.conftest import cuda_module_or_skip
+
+
+def test_light_prefetcher_counts_pinned_ring_inflight_slots(monkeypatch) -> None:
+    class FakeCuda:
+        @staticmethod
+        def host_pinned_empty_u8(byte_count: int) -> np.ndarray:
+            return np.empty(byte_count, dtype=np.uint8)
+
+    def fake_read_light_timed(path: str, slot: np.ndarray | None = None, fits_read_mode: str = "astropy"):
+        assert slot is not None
+        slot[:] = int(Path(path).stem)
+        return slot, {
+            "total": 0.0,
+            "fits_open": 0.0,
+            "fits_materialize_decode": 0.0,
+            "fits_reader_backend": "fake",
+        }
+
+    monkeypatch.setattr("glass.engine.resident_cuda._cuda_module_required", lambda: FakeCuda)
+    monkeypatch.setattr("glass.engine.resident_cuda._read_light_timed", fake_read_light_timed)
+
+    frames = [{"path": f"{index}.fits"} for index in range(3)]
+    with _LightPrefetcher(
+        frames,
+        depth=2,
+        workers=1,
+        pinned_ring=True,
+        height=1,
+        width=1,
+        release_refill_mode="immediate",
+        fits_read_mode="native_u16_gpu",
+    ) as prefetcher:
+        assert prefetcher.fill_submit_count == 2
+        prefetcher.result(0)
+
+        prefetcher._fill()
+
+        assert prefetcher.fill_blocked_no_slot_count == 0
+        assert prefetcher.fill_submit_count == 2
+
+        prefetcher.release_many([0])
+
+        assert prefetcher.fill_submit_count == 3
 
 
 def test_resident_memory_estimate_includes_chunked_warp_workspace() -> None:
