@@ -975,20 +975,38 @@ class _LightPrefetcher:
         self.workers = max(1, int(workers))
         self.pinned_ring = bool(pinned_ring and self.depth > 0)
         self.native_batch_read_candidate = bool(self.pinned_ring and fits_read_mode == "native_u16_gpu")
-        native_batch_policy = str(os.environ.get("GLASS_RESIDENT_NATIVE_BATCH_READ", "")).strip().lower()
-        self.native_batch_read_policy = (
+        self.native_queue_read_candidate = bool(self.pinned_ring and fits_read_mode == "native_u16_gpu")
+        native_queue_policy = str(os.environ.get("GLASS_RESIDENT_NATIVE_QUEUE_READ", "")).strip().lower()
+        self.native_queue_read_policy = (
             "env_enabled"
-            if native_batch_policy in {"1", "true", "yes", "on"}
+            if native_queue_policy in {"1", "true", "yes", "on"}
             else "env_disabled_default"
-            if self.native_batch_read_candidate
+            if self.native_queue_read_candidate
             else "not_candidate"
         )
+        self.native_queue_read_requested = bool(
+            self.native_queue_read_candidate and self.native_queue_read_policy == "env_enabled"
+        )
+        native_batch_policy = str(os.environ.get("GLASS_RESIDENT_NATIVE_BATCH_READ", "")).strip().lower()
+        native_batch_env_enabled = native_batch_policy in {"1", "true", "yes", "on"}
+        if self.native_queue_read_requested and native_batch_env_enabled:
+            self.native_batch_read_policy = "env_ignored_native_queue_enabled"
+        elif native_batch_env_enabled:
+            self.native_batch_read_policy = "env_enabled"
+        elif self.native_batch_read_candidate:
+            self.native_batch_read_policy = "env_disabled_default"
+        else:
+            self.native_batch_read_policy = "not_candidate"
         self.native_batch_read_requested = bool(
-            self.native_batch_read_candidate and self.native_batch_read_policy == "env_enabled"
+            self.native_batch_read_candidate
+            and not self.native_queue_read_requested
+            and self.native_batch_read_policy == "env_enabled"
         )
         self.native_batch_read_available = False
         self.native_batch_read_enabled = False
         self.native_batch_read_frames = max(1, min(4, self.workers)) if self.native_batch_read_requested else 1
+        self.native_queue_read_available = False
+        self.native_queue_read_enabled = False
         if release_refill_mode not in {"immediate", "queued", "deferred"}:
             raise ValueError("release_refill_mode must be immediate, queued, or deferred")
         if fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
@@ -1001,9 +1019,15 @@ class _LightPrefetcher:
         self.executor: ThreadPoolExecutor | None = None
         self.refill_executor: ThreadPoolExecutor | None = None
         self.refill_future: Future[None] | None = None
+        self.native_queue_executor: ThreadPoolExecutor | None = None
+        self.native_queue_future: Future[None] | None = None
+        self.native_read_queue: Any | None = None
+        self.native_queue_stopping = False
         self.lock = RLock()
-        self.pending: dict[int, Future[tuple[np.ndarray, dict[str, float]]]] = {}
+        self.pending: dict[int, Future[tuple[np.ndarray, dict[str, float]]] | None] = {}
         self.batch_result_cache: dict[int, tuple[np.ndarray, dict[str, Any]]] = {}
+        self.native_queue_result_cache: dict[int, tuple[np.ndarray, dict[str, Any]]] = {}
+        self.native_queue_pending_profiles: dict[int, dict[str, Any]] = {}
         self.pinned_slots: list[np.ndarray] = []
         self.pinned_slab: np.ndarray | None = None
         self.pinned_host_allocation_mode = "off"
@@ -1035,6 +1059,11 @@ class _LightPrefetcher:
         self.native_batch_read_worker_count = 0
         self.native_batch_read_wall_s = 0.0
         self.native_batch_read_cumulative_s = 0.0
+        self.native_queue_read_submit_count = 0
+        self.native_queue_read_completion_count = 0
+        self.native_queue_read_worker_count = 0
+        self.native_queue_read_cumulative_s = 0.0
+        self.native_queue_read_completion_wait_s = 0.0
 
     def __enter__(self) -> "_LightPrefetcher":
         if self.depth > 0:
@@ -1047,8 +1076,18 @@ class _LightPrefetcher:
                     and hasattr(glass_cuda, "read_simple_fits_raw_batch_into_u8_available")
                     and glass_cuda.read_simple_fits_raw_batch_into_u8_available()
                 )
+                self.native_queue_read_available = bool(
+                    self.native_queue_read_candidate
+                    and hasattr(glass_cuda, "raw_fits_read_queue_available")
+                    and glass_cuda.raw_fits_read_queue_available()
+                )
+                self.native_queue_read_enabled = bool(
+                    self.native_queue_read_requested and self.native_queue_read_available
+                )
                 self.native_batch_read_enabled = bool(
-                    self.native_batch_read_requested and self.native_batch_read_available
+                    self.native_batch_read_requested
+                    and self.native_batch_read_available
+                    and not self.native_queue_read_enabled
                 )
                 try:
                     if self.fits_read_mode == "native_u16_gpu":
@@ -1091,15 +1130,25 @@ class _LightPrefetcher:
                 self.free_slots = list(range(len(self.pinned_slots)))
             else:
                 self.pinned_host_allocation_mode = "disabled"
-            executor_workers = (
-                max(1, self.workers // max(1, self.native_batch_read_frames))
-                if self.native_batch_read_enabled
-                else self.workers
-            )
-            self.executor = ThreadPoolExecutor(
-                max_workers=executor_workers,
-                thread_name_prefix="glass-light-prefetch",
-            )
+            if self.native_queue_read_enabled:
+                glass_cuda = _cuda_module_required()
+                self.native_read_queue = glass_cuda.create_raw_fits_read_queue(self.workers)
+                self.native_queue_read_worker_count = self.workers
+                self.native_queue_executor = ThreadPoolExecutor(
+                    max_workers=1,
+                    thread_name_prefix="glass-native-read-queue",
+                )
+                self.native_queue_future = self.native_queue_executor.submit(self._drain_native_queue)
+            else:
+                executor_workers = (
+                    max(1, self.workers // max(1, self.native_batch_read_frames))
+                    if self.native_batch_read_enabled
+                    else self.workers
+                )
+                self.executor = ThreadPoolExecutor(
+                    max_workers=executor_workers,
+                    thread_name_prefix="glass-light-prefetch",
+                )
             if self.pinned_ring and self.release_refill_mode == "queued":
                 self.refill_executor = ThreadPoolExecutor(
                     max_workers=1,
@@ -1110,6 +1159,16 @@ class _LightPrefetcher:
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.flush_refill()
+        self.native_queue_stopping = True
+        if self.native_read_queue is not None:
+            self.native_read_queue.close()
+        if self.native_queue_future is not None:
+            self.native_queue_future.result()
+            self.native_queue_future = None
+        if self.native_queue_executor is not None:
+            self.native_queue_executor.shutdown(wait=True, cancel_futures=True)
+            self.native_queue_executor = None
+        self.native_read_queue = None
         if self.refill_executor is not None:
             self.refill_executor.shutdown(wait=True, cancel_futures=True)
             self.refill_executor = None
@@ -1117,10 +1176,99 @@ class _LightPrefetcher:
             self.executor.shutdown(wait=True, cancel_futures=True)
             self.executor = None
 
+    def _prepare_native_queue_item(
+        self,
+        index: int,
+        path: str | Path,
+        output: np.ndarray,
+        spec: SimpleFitsImageSpec | None,
+    ) -> tuple[SimpleFitsImageSpec, int, dict[str, Any]]:
+        header_cache_hit = spec is not None
+        header_start = perf_counter()
+        if spec is None:
+            spec = simple_fits_image_spec(path)
+        header_elapsed = 0.0 if header_cache_hit else perf_counter() - header_start
+        if spec.bitpix != 16:
+            raise FastFitsUnsupported("native_u16_gpu queue requires BITPIX=16 simple primary FITS")
+        if spec.bscale != 1.0 or spec.bzero != 32768.0 or spec.blank is not None:
+            raise FastFitsUnsupported("native_u16_gpu queue requires BSCALE=1, BZERO=32768, and no BLANK")
+        byte_count = int(spec.width * spec.height * 2)
+        if output.dtype != np.uint8:
+            raise ValueError("native_u16_gpu queue output buffer requires uint8")
+        if output.ndim != 1 or output.shape[0] != byte_count:
+            raise ValueError("native_u16_gpu queue output buffer must have height*width*2 bytes")
+        if not output.flags.c_contiguous:
+            raise ValueError("native_u16_gpu queue output buffer must be C-contiguous")
+        base_profile = {
+            "frame_index": int(index),
+            "header_elapsed": float(header_elapsed),
+            "header_cache_hit": bool(header_cache_hit),
+            "fits_fast_bitpix": int(spec.bitpix),
+            "fits_raw_byte_count": int(byte_count),
+        }
+        return spec, byte_count, base_profile
+
+    def _queue_completion_profile(
+        self,
+        completion: dict[str, Any],
+        base_profile: dict[str, Any],
+    ) -> dict[str, Any]:
+        native_open_s = float(completion.get("file_open_s", 0.0) or 0.0)
+        native_read_s = float(completion.get("file_read_s", 0.0) or 0.0)
+        native_total_s = float(completion.get("total_s", 0.0) or 0.0)
+        return {
+            "total": float(base_profile.get("header_elapsed", 0.0)) + native_total_s,
+            "fits_open": float(base_profile.get("header_elapsed", 0.0)) + native_open_s,
+            "fits_materialize_decode": native_read_s,
+            "fits_reader_backend": "native_u16be_raw_queue",
+            "fits_fast_supported": True,
+            "fits_fast_bitpix": int(base_profile.get("fits_fast_bitpix", 16)),
+            "fits_fast_scaled": True,
+            "fits_native_file_open_s": native_open_s,
+            "fits_native_file_read_s": native_read_s,
+            "fits_native_decode_s": 0.0,
+            "fits_native_total_s": native_total_s,
+            "fits_native_bytes_read": int(completion.get("bytes_read", 0) or 0),
+            "fits_native_backend": str(completion.get("backend", "native_u16be_raw_queue")),
+            "fits_raw_byte_count": int(base_profile.get("fits_raw_byte_count", 0) or 0),
+            "fits_gpu_decode_staging": "u16be_bzero32768",
+            "fits_header_cache_hit": bool(base_profile.get("header_cache_hit", False)),
+            "fits_native_queue_worker_count": int(completion.get("worker_count", 0) or 0),
+            "fits_native_queue_completed_count": int(completion.get("completed_count", 0) or 0),
+        }
+
+    def _drain_native_queue(self) -> None:
+        while True:
+            queue = self.native_read_queue
+            if queue is None:
+                return
+            wait_start = perf_counter()
+            completion = queue.wait_completed(0.1)
+            wait_elapsed = perf_counter() - wait_start
+            self.native_queue_read_completion_wait_s += wait_elapsed
+            if completion is None:
+                if self.native_queue_stopping:
+                    return
+                continue
+            completion_dict = dict(completion)
+            index = int(completion_dict["frame_index"])
+            with self.ready_condition:
+                base_profile = self.native_queue_pending_profiles.pop(index, {})
+                slot_id = self.inflight_slots.get(index)
+                if slot_id is None:
+                    continue
+                profile = self._queue_completion_profile(completion_dict, base_profile)
+                self.native_queue_result_cache[index] = (self.pinned_slots[slot_id], profile)
+                self.native_queue_read_completion_count += 1
+                self.native_queue_read_cumulative_s += float(profile.get("fits_native_total_s", 0.0) or 0.0)
+                self.ready_indices.add(index)
+                self.ready_queue_callback_count += 1
+                self.ready_condition.notify_all()
+
     def _fill(self) -> None:
         with self.lock:
             self.fill_call_count += 1
-            if self.executor is None:
+            if self.executor is None and not self.native_queue_read_enabled:
                 return
             while self.next_submit < len(self.light_frames) and (
                 len(self.inflight_slots) if self.pinned_ring else len(self.pending)
@@ -1134,6 +1282,37 @@ class _LightPrefetcher:
                         return
                     slot_id = self.free_slots.pop()
                     slot = self.pinned_slots[slot_id]
+                if self.native_queue_read_enabled:
+                    if slot_id is None or slot is None or self.native_read_queue is None:
+                        return
+                    frame = self.light_frames[self.next_submit]
+                    submit_index = int(self.next_submit)
+                    try:
+                        spec, byte_count, base_profile = self._prepare_native_queue_item(
+                            submit_index,
+                            frame["path"],
+                            slot,
+                            self.fits_specs_by_path.get(str(frame["path"])),
+                        )
+                        self.native_read_queue.submit(
+                            submit_index,
+                            str(spec.path),
+                            int(spec.data_offset),
+                            int(byte_count),
+                            slot,
+                        )
+                    except Exception:
+                        if slot_id is not None:
+                            self.free_slots.append(slot_id)
+                        raise
+                    self.pending[submit_index] = None
+                    self.native_queue_pending_profiles[submit_index] = base_profile
+                    self.inflight_slots[submit_index] = slot_id
+                    self.max_inflight_slots = max(self.max_inflight_slots, len(self.inflight_slots))
+                    self.fill_submit_count += 1
+                    self.native_queue_read_submit_count += 1
+                    self.next_submit += 1
+                    continue
                 if self.native_batch_read_enabled:
                     batch_items: list[tuple[int, str | Path, np.ndarray, SimpleFitsImageSpec | None]] = []
                     batch_slot_ids: list[tuple[int, int]] = []
@@ -1262,6 +1441,22 @@ class _LightPrefetcher:
             self.release_refill_deferred_count = 0
 
     def result(self, index: int) -> tuple[np.ndarray, dict[str, Any], float]:
+        if self.native_queue_read_enabled:
+            wait_start = perf_counter()
+            while True:
+                with self.ready_condition:
+                    cached = self.native_queue_result_cache.pop(index, None)
+                    if cached is not None:
+                        self.pending.pop(index, None)
+                        self.ready_indices.discard(index)
+                        return cached[0], cached[1], perf_counter() - wait_start
+                    if index not in self.pending:
+                        if self.next_submit < len(self.light_frames):
+                            break
+                        raise KeyError(f"native queue has no pending light frame {index}")
+                    self.ready_condition.wait(timeout=0.1)
+            self._fill()
+            return self.result(index)
         if self.executor is None:
             frame_path = self.light_frames[index]["path"]
             data, read_profile = _read_light_timed(
@@ -1316,7 +1511,7 @@ class _LightPrefetcher:
         candidates = {int(index) for index in indices}
         if not candidates:
             return None
-        if self.executor is None:
+        if self.executor is None and not self.native_queue_read_enabled:
             return min(candidates)
         while True:
             with self.ready_condition:
@@ -10810,6 +11005,20 @@ def run_resident_calibration_integration(
                 "native_batch_read_worker_count": int(light_prefetch.native_batch_read_worker_count),
                 "native_batch_read_wall_s": float(light_prefetch.native_batch_read_wall_s),
                 "native_batch_read_cumulative_s": float(light_prefetch.native_batch_read_cumulative_s),
+                "native_queue_read_candidate": bool(light_prefetch.native_queue_read_candidate),
+                "native_queue_read_policy": str(light_prefetch.native_queue_read_policy),
+                "native_queue_read_requested": bool(light_prefetch.native_queue_read_requested),
+                "native_queue_read_available": bool(light_prefetch.native_queue_read_available),
+                "native_queue_read_enabled": bool(light_prefetch.native_queue_read_enabled),
+                "native_queue_read_submit_count": int(light_prefetch.native_queue_read_submit_count),
+                "native_queue_read_completion_count": int(
+                    light_prefetch.native_queue_read_completion_count
+                ),
+                "native_queue_read_worker_count": int(light_prefetch.native_queue_read_worker_count),
+                "native_queue_read_cumulative_s": float(light_prefetch.native_queue_read_cumulative_s),
+                "native_queue_read_completion_wait_s": float(
+                    light_prefetch.native_queue_read_completion_wait_s
+                ),
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -10907,6 +11116,20 @@ def run_resident_calibration_integration(
                 "native_batch_read_worker_count": int(light_prefetch.native_batch_read_worker_count),
                 "native_batch_read_wall_s": float(light_prefetch.native_batch_read_wall_s),
                 "native_batch_read_cumulative_s": float(light_prefetch.native_batch_read_cumulative_s),
+                "native_queue_read_candidate": bool(light_prefetch.native_queue_read_candidate),
+                "native_queue_read_policy": str(light_prefetch.native_queue_read_policy),
+                "native_queue_read_requested": bool(light_prefetch.native_queue_read_requested),
+                "native_queue_read_available": bool(light_prefetch.native_queue_read_available),
+                "native_queue_read_enabled": bool(light_prefetch.native_queue_read_enabled),
+                "native_queue_read_submit_count": int(light_prefetch.native_queue_read_submit_count),
+                "native_queue_read_completion_count": int(
+                    light_prefetch.native_queue_read_completion_count
+                ),
+                "native_queue_read_worker_count": int(light_prefetch.native_queue_read_worker_count),
+                "native_queue_read_cumulative_s": float(light_prefetch.native_queue_read_cumulative_s),
+                "native_queue_read_completion_wait_s": float(
+                    light_prefetch.native_queue_read_completion_wait_s
+                ),
                 "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
                 "host_pinned_bytes": int(
                     max(prefetch_host_pinned_bytes, int(getattr(stack, "host_pinned_bytes", 0)))
@@ -11444,6 +11667,22 @@ def run_resident_calibration_integration(
                         "native_batch_read_worker_count": int(light_prefetch.native_batch_read_worker_count),
                         "native_batch_read_wall_s": float(light_prefetch.native_batch_read_wall_s),
                         "native_batch_read_cumulative_s": float(light_prefetch.native_batch_read_cumulative_s),
+                        "native_queue_read_candidate": bool(light_prefetch.native_queue_read_candidate),
+                        "native_queue_read_policy": str(light_prefetch.native_queue_read_policy),
+                        "native_queue_read_requested": bool(light_prefetch.native_queue_read_requested),
+                        "native_queue_read_available": bool(light_prefetch.native_queue_read_available),
+                        "native_queue_read_enabled": bool(light_prefetch.native_queue_read_enabled),
+                        "native_queue_read_submit_count": int(light_prefetch.native_queue_read_submit_count),
+                        "native_queue_read_completion_count": int(
+                            light_prefetch.native_queue_read_completion_count
+                        ),
+                        "native_queue_read_worker_count": int(light_prefetch.native_queue_read_worker_count),
+                        "native_queue_read_cumulative_s": float(
+                            light_prefetch.native_queue_read_cumulative_s
+                        ),
+                        "native_queue_read_completion_wait_s": float(
+                            light_prefetch.native_queue_read_completion_wait_s
+                        ),
                         "prefetch_max_inflight_slots": int(prefetch_max_inflight_slots),
                         "prefetch_host_allocation_mode": str(light_prefetch.pinned_host_allocation_mode),
                         "prefetch_host_allocation_count": int(light_prefetch.pinned_host_allocation_count),

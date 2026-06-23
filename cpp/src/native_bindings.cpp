@@ -19,6 +19,9 @@
 #include <memory>
 #include <thread>
 #include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
 
 namespace py = pybind11;
 
@@ -2178,6 +2181,234 @@ py::dict read_simple_fits_raw_batch_into_u8(
   result["per_frame"] = per_frame;
   return result;
 }
+
+class RawFitsReadQueue {
+ public:
+  explicit RawFitsReadQueue(int worker_count) {
+    const int requested_workers = worker_count <= 0 ? 1 : worker_count;
+    worker_count_ = std::max<std::size_t>(1u, static_cast<std::size_t>(requested_workers));
+    workers_.reserve(worker_count_);
+    for (std::size_t index = 0; index < worker_count_; ++index) {
+      workers_.emplace_back([this]() { worker_loop(); });
+    }
+  }
+
+  RawFitsReadQueue(const RawFitsReadQueue&) = delete;
+  RawFitsReadQueue& operator=(const RawFitsReadQueue&) = delete;
+
+  ~RawFitsReadQueue() {
+    close();
+  }
+
+  py::dict submit(
+      unsigned long long frame_index,
+      const std::string& path,
+      unsigned long long data_offset,
+      std::size_t byte_count,
+      py::array_t<unsigned char, py::array::c_style> output) {
+    if (byte_count == 0) {
+      throw std::invalid_argument("native raw FITS queue byte count must be non-empty");
+    }
+    const py::buffer_info info = output.request();
+    if (info.ndim != 1 || static_cast<std::size_t>(info.shape[0]) != byte_count) {
+      throw std::invalid_argument("native raw FITS queue output shape does not match byte count");
+    }
+
+    RawFitsReadJob job;
+    job.frame_index = frame_index;
+    job.path = path;
+    job.data_offset = data_offset;
+    job.byte_count = byte_count;
+    job.out = static_cast<unsigned char*>(info.ptr);
+
+    std::size_t pending_after = 0;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (closing_) {
+        throw std::runtime_error("native raw FITS queue is closed");
+      }
+      requested_bytes_ += static_cast<unsigned long long>(byte_count);
+      jobs_.push_back(std::move(job));
+      ++submitted_count_;
+      pending_after = jobs_.size() + active_count_;
+    }
+    job_condition_.notify_one();
+
+    py::dict result;
+    result["schema_version"] = 1;
+    result["backend"] = "native_u16be_raw_queue";
+    result["frame_index"] = frame_index;
+    result["pending_count"] = static_cast<unsigned long long>(pending_after);
+    result["submitted_count"] = static_cast<unsigned long long>(submitted_count_.load());
+    result["worker_count"] = static_cast<unsigned long long>(worker_count_);
+    return result;
+  }
+
+  py::object wait_completed(double timeout_s = -1.0) {
+    RawFitsReadCompletion completion;
+    bool has_completion = false;
+    bool timed_out = false;
+    {
+      py::gil_scoped_release release;
+      std::unique_lock<std::mutex> lock(mutex_);
+      const auto ready = [this]() {
+        return !completed_.empty() || (closing_ && jobs_.empty() && active_count_ == 0);
+      };
+      if (timeout_s < 0.0) {
+        completed_condition_.wait(lock, ready);
+      } else {
+        const auto timeout = std::chrono::duration<double>(timeout_s);
+        if (!completed_condition_.wait_for(lock, timeout, ready)) {
+          timed_out = true;
+        }
+      }
+      if (!timed_out && !completed_.empty()) {
+        completion = std::move(completed_.front());
+        completed_.pop_front();
+        has_completion = true;
+      }
+    }
+
+    if (timed_out) {
+      return py::none();
+    }
+    if (!has_completion) {
+      return py::none();
+    }
+    if (!completion.error.empty()) {
+      std::ostringstream message;
+      message << "native raw FITS queue read failed for frame "
+              << completion.frame_index << " (" << completion.path
+              << "): " << completion.error;
+      throw std::runtime_error(message.str());
+    }
+
+    py::dict result;
+    result["schema_version"] = 1;
+    result["backend"] = "native_u16be_raw_queue";
+    result["frame_index"] = completion.frame_index;
+    result["path"] = completion.path;
+    result["bytes_read"] = completion.timing.bytes_read;
+    result["file_open_s"] = completion.timing.file_open_s;
+    result["file_read_s"] = completion.timing.file_read_s;
+    result["decode_s"] = 0.0;
+    result["total_s"] = completion.timing.total_s;
+    result["completed_count"] = static_cast<unsigned long long>(completed_count_.load());
+    result["worker_count"] = static_cast<unsigned long long>(worker_count_);
+    return result;
+  }
+
+  py::dict stats() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    py::dict result;
+    result["schema_version"] = 1;
+    result["backend"] = "native_u16be_raw_queue";
+    result["worker_count"] = static_cast<unsigned long long>(worker_count_);
+    result["submitted_count"] = static_cast<unsigned long long>(submitted_count_.load());
+    result["completed_count"] = static_cast<unsigned long long>(completed_count_.load());
+    result["queued_count"] = static_cast<unsigned long long>(jobs_.size());
+    result["active_count"] = static_cast<unsigned long long>(active_count_);
+    result["ready_count"] = static_cast<unsigned long long>(completed_.size());
+    result["requested_bytes"] = requested_bytes_;
+    result["closed"] = closing_;
+    return result;
+  }
+
+  void close() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (closing_ && joined_) {
+        return;
+      }
+      closing_ = true;
+    }
+    job_condition_.notify_all();
+    completed_condition_.notify_all();
+    for (auto& worker : workers_) {
+      if (worker.joinable()) {
+        worker.join();
+      }
+    }
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      joined_ = true;
+    }
+    completed_condition_.notify_all();
+  }
+
+ private:
+  struct RawFitsReadJob {
+    unsigned long long frame_index = 0;
+    std::string path;
+    unsigned long long data_offset = 0;
+    std::size_t byte_count = 0;
+    unsigned char* out = nullptr;
+  };
+
+  struct RawFitsReadCompletion {
+    unsigned long long frame_index = 0;
+    std::string path;
+    RawFitsReadTiming timing;
+    std::string error;
+  };
+
+  void worker_loop() {
+    for (;;) {
+      RawFitsReadJob job;
+      {
+        std::unique_lock<std::mutex> lock(mutex_);
+        job_condition_.wait(lock, [this]() { return closing_ || !jobs_.empty(); });
+        if (jobs_.empty()) {
+          if (closing_) {
+            break;
+          }
+          continue;
+        }
+        job = std::move(jobs_.front());
+        jobs_.pop_front();
+        ++active_count_;
+      }
+
+      RawFitsReadCompletion completion;
+      completion.frame_index = job.frame_index;
+      completion.path = job.path;
+      try {
+        completion.timing = read_raw_fits_bytes_into_ptr(
+            job.path,
+            job.data_offset,
+            job.byte_count,
+            job.out);
+      } catch (const std::exception& exc) {
+        completion.error = exc.what();
+      } catch (...) {
+        completion.error = "unknown native raw FITS queue read error";
+      }
+
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        --active_count_;
+        completed_.push_back(std::move(completion));
+        ++completed_count_;
+      }
+      completed_condition_.notify_all();
+    }
+    completed_condition_.notify_all();
+  }
+
+  std::size_t worker_count_ = 1;
+  mutable std::mutex mutex_;
+  std::condition_variable job_condition_;
+  std::condition_variable completed_condition_;
+  std::deque<RawFitsReadJob> jobs_;
+  std::deque<RawFitsReadCompletion> completed_;
+  std::vector<std::thread> workers_;
+  std::size_t active_count_ = 0;
+  unsigned long long requested_bytes_ = 0;
+  std::atomic<unsigned long long> submitted_count_{0};
+  std::atomic<unsigned long long> completed_count_{0};
+  bool closing_ = false;
+  bool joined_ = false;
+};
 
 class ResidentCalibratedStack {
  public:
@@ -15442,6 +15673,19 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       py::arg("byte_counts"),
       py::arg("outputs"),
       py::arg("max_workers") = 0);
+  py::class_<RawFitsReadQueue>(m, "RawFitsReadQueue")
+      .def(py::init<int>(), py::arg("worker_count") = 1)
+      .def(
+          "submit",
+          &RawFitsReadQueue::submit,
+          py::arg("frame_index"),
+          py::arg("path"),
+          py::arg("data_offset"),
+          py::arg("byte_count"),
+          py::arg("output"))
+      .def("wait_completed", &RawFitsReadQueue::wait_completed, py::arg("timeout_s") = -1.0)
+      .def("stats", &RawFitsReadQueue::stats)
+      .def("close", &RawFitsReadQueue::close);
   m.def("smoke_add_f32", &smoke_add_f32);
   m.def("reduce_mean_tile_f32", &reduce_mean_tile_f32);
   m.def("calibrate_tile_f32", &calibrate_tile_f32);

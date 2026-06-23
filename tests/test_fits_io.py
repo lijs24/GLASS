@@ -205,6 +205,62 @@ def test_native_u16_raw_fits_batch_reader_reads_into_pinned_outputs(tmp_path):
         assert np.array_equal(physical_from_raw, physical)
 
 
+def test_native_u16_raw_fits_queue_reads_into_pinned_outputs(tmp_path):
+    module = cuda_module_or_skip()
+    if (
+        not module.native_extension_loaded()
+        or not hasattr(module, "host_pinned_empty_u8")
+        or not hasattr(module, "raw_fits_read_queue_available")
+        or not module.raw_fits_read_queue_available()
+    ):
+        pytest.skip("native uint8 queued FITS reader is not available")
+    paths = []
+    physical_frames = []
+    outputs = []
+    specs = []
+    for frame_index in range(3):
+        path = tmp_path / f"native_u16_raw_queue_{frame_index}.fits"
+        physical = (
+            np.arange(20, dtype=np.uint16).reshape(4, 5)
+            + np.uint16(2000 + frame_index * 100)
+        )
+        stored = (physical.astype(np.int32) - 32768).astype(np.int16)
+        hdu = fits.PrimaryHDU(stored)
+        hdu.header["BSCALE"] = 1.0
+        hdu.header["BZERO"] = 32768.0
+        hdu.writeto(path)
+        paths.append(path)
+        physical_frames.append(physical)
+        outputs.append(module.host_pinned_empty_u8(physical.size * 2))
+        specs.append(simple_fits_image_spec(path))
+
+    queue = module.create_raw_fits_read_queue(2)
+    try:
+        for frame_index, (spec, output) in enumerate(zip(specs, outputs, strict=True)):
+            queued = queue.submit(
+                frame_index,
+                str(spec.path),
+                int(spec.data_offset),
+                int(spec.width * spec.height * 2),
+                output,
+            )
+            assert queued["backend"] == "native_u16be_raw_queue"
+        completed = []
+        while len(completed) < len(outputs):
+            item = queue.wait_completed(1.0)
+            assert item is not None
+            completed.append(dict(item))
+    finally:
+        queue.close()
+
+    assert sorted(int(item["frame_index"]) for item in completed) == [0, 1, 2]
+    for raw, physical in zip(outputs, physical_frames, strict=True):
+        decoded = raw.reshape(physical.shape + (2,))
+        bits = (decoded[..., 0].astype(np.uint16) << np.uint16(8)) | decoded[..., 1].astype(np.uint16)
+        physical_from_raw = bits ^ np.uint16(0x8000)
+        assert np.array_equal(physical_from_raw, physical)
+
+
 def test_native_u16_gpu_fits_eligibility_is_header_only(tmp_path):
     compatible = tmp_path / "compatible_u16.fits"
     incompatible = tmp_path / "incompatible_f32.fits"

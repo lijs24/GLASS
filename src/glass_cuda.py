@@ -380,6 +380,18 @@ def read_simple_fits_raw_batch_into_u8_available() -> bool:
     return native is not None and hasattr(native, "read_simple_fits_raw_batch_into_u8")
 
 
+def raw_fits_read_queue_available() -> bool:
+    native = _native()
+    return native is not None and hasattr(native, "RawFitsReadQueue")
+
+
+def create_raw_fits_read_queue(worker_count: int = 1) -> Any:
+    native = _native()
+    if native is None or not hasattr(native, "RawFitsReadQueue"):
+        raise RuntimeError("native CUDA backend with RawFitsReadQueue is not available")
+    return native.RawFitsReadQueue(int(worker_count))
+
+
 def read_simple_fits_raw_batch_into_u8(
     paths: list[Any],
     data_offsets: list[int],

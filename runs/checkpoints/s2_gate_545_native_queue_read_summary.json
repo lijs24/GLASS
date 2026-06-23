@@ -1,0 +1,127 @@
+{
+  "gate": "S2-Gate 545",
+  "title": "Opt-in native raw FITS completion queue",
+  "status": "green",
+  "created_at_local": "2026-06-23",
+  "scope": [
+    "Add native RawFitsReadQueue pybind class with C++ worker threads and per-frame completions.",
+    "Expose Python capability and factory functions.",
+    "Wire resident CUDA pinned-ring prefetch to use the native queue only when GLASS_RESIDENT_NATIVE_QUEUE_READ=1.",
+    "Preserve ready-first scheduling with per-frame completions.",
+    "Record queue state and timing fields in resident artifacts and resident light pipeline profiles."
+  ],
+  "commands": {
+    "release_native_build": "VsDevCmd.bat -arch=x64 -host_arch=x64 && .venv/Scripts/cmake.exe -S . -B build -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_CUDA_ALLOW_UNSUPPORTED_COMPILER=ON -Dpybind11_DIR=.venv/Lib/site-packages/pybind11/share/cmake/pybind11 -DCMAKE_BUILD_TYPE=Release && .venv/Scripts/cmake.exe --build build --target _glass_cuda_native --config Release",
+    "focused_queue_tests": ".venv/Scripts/python.exe -m pytest -q tests/test_fits_io.py::test_native_u16_raw_fits_queue_reads_into_pinned_outputs tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_queue_read_is_opt_in",
+    "focused_regression_tests": ".venv/Scripts/python.exe -m pytest -q tests/test_resident_cuda_run.py::test_cli_resident_cuda_default_fits_read_mode_is_guarded_auto tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_batch_read_is_opt_in tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_queue_read_is_opt_in tests/test_fits_io.py::test_native_u16_raw_fits_batch_reader_reads_into_pinned_outputs tests/test_fits_io.py::test_native_u16_raw_fits_queue_reads_into_pinned_outputs",
+    "full_tests": ".venv/Scripts/python.exe -m pytest -q",
+    "queue_real_run": "GLASS_RESIDENT_NATIVE_QUEUE_READ=1 glass run --plan C:/glass_runs/phase2_s2_gate540_plan_spec_cache/runs_20260623_140314/processing_plan.json --out C:/glass_runs/phase2_s2_gate545_native_queue_read/runs_20260623_153000/native_queue_optin_release --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit --resident-master-cache-dir C:/glass_runs/phase2_s2_gate518_dq_stats_reuse/runs_20260623_094619/resident_master_cache",
+    "fresh_default_real_run": "glass run --plan C:/glass_runs/phase2_s2_gate540_plan_spec_cache/runs_20260623_140314/processing_plan.json --out C:/glass_runs/phase2_s2_gate545_native_queue_read/runs_20260623_153000/default_fresh_release --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit --resident-master-cache-dir C:/glass_runs/phase2_s2_gate518_dq_stats_reuse/runs_20260623_094619/resident_master_cache"
+  },
+  "tests": {
+    "queue_focused": "2 passed in 0.91s",
+    "regression_focused": "5 passed in 0.72s",
+    "full_pytest": "1183 passed in 43.31s"
+  },
+  "cuda": {
+    "available": true,
+    "device": {
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "compute_capability": "12.0",
+      "memory_total_mib": 97886,
+      "driver_version": "596.21"
+    },
+    "native_backend": true,
+    "raw_fits_read_queue_available": true
+  },
+  "real_200_light": {
+    "plan": "C:/glass_runs/phase2_s2_gate540_plan_spec_cache/runs_20260623_140314/processing_plan.json",
+    "wbpp_reference_elapsed_s": 1092.541,
+    "fresh_default": {
+      "run": "C:/glass_runs/phase2_s2_gate545_native_queue_read/runs_20260623_153000/default_fresh_release",
+      "shell_elapsed_s": 5.50113,
+      "internal_elapsed_s": 5.1318423000047915,
+      "speedup_vs_wbpp_shell": 198.60301428979136,
+      "backend_counts": {
+        "native_u16be_raw": 200
+      },
+      "timing_s": {
+        "light_read_upload_calibrate": 2.582267700054217,
+        "light_read_wait_wall": 1.1570801994530484,
+        "worker_native_fits_materialize_read_cumulative": 24.966308400000003,
+        "ready_queue_wait": 1.1537766000255942,
+        "resident_registration_warp": 0.26041499950224534,
+        "resident_integration": 0.30653419997543097,
+        "output_write": 0.324618200014811
+      },
+      "ready_queue_callbacks": 200,
+      "out_of_order_consumed_frames": 72
+    },
+    "queue_optin": {
+      "run": "C:/glass_runs/phase2_s2_gate545_native_queue_read/runs_20260623_153000/native_queue_optin_release",
+      "shell_elapsed_s": 5.378282,
+      "internal_elapsed_s": 5.01306339999428,
+      "speedup_vs_fresh_default_shell": 1.0228414947375388,
+      "delta_vs_fresh_default_shell_s": 0.12284800000000029,
+      "speedup_vs_wbpp_shell": 203.139403995551,
+      "backend_counts": {
+        "native_u16be_raw_queue": 200
+      },
+      "native_queue_read": {
+        "candidate": true,
+        "policy": "env_enabled",
+        "requested": true,
+        "available": true,
+        "enabled": true,
+        "submit_count": 200,
+        "completion_count": 200,
+        "worker_count": 16,
+        "cumulative_s": 25.481368400000004,
+        "completion_wait_s": 2.3078730992856435
+      },
+      "timing_s": {
+        "light_read_upload_calibrate": 2.5739439000026323,
+        "light_read_wait_wall": 1.184200199204497,
+        "worker_native_fits_materialize_read_cumulative": 25.3398809,
+        "ready_queue_wait": 1.1806699999724515,
+        "resident_registration_warp": 0.25813750020461157,
+        "resident_integration": 0.30349709995789453,
+        "output_write": 0.2879365000408143
+      },
+      "ready_queue_callbacks": 200,
+      "out_of_order_consumed_frames": 78
+    }
+  },
+  "numerical_validation": {
+    "queue_sha256_matches_fresh_default": true,
+    "queue_sha256_matches_gate544_default": true,
+    "matched_outputs": [
+      "resident_master_H.fits",
+      "resident_weight_map_H.fits",
+      "resident_coverage_map_H.fits",
+      "resident_low_rejection_map_H.fits",
+      "resident_high_rejection_map_H.fits",
+      "resident_dq_map_H.fits"
+    ],
+    "hash_compare_default_vs_queue": "C:/glass_runs/phase2_s2_gate545_native_queue_read/hash_compare_default_vs_queue.json",
+    "hash_compare_gate544_default": "C:/glass_runs/phase2_s2_gate545_native_queue_read/hash_compare_gate544_default.json",
+    "inherited_wbpp_compare": {
+      "rms_diff": 0.0004279821839256963,
+      "abs_diff_p99": 0.0001313822576776147,
+      "robust_fit_rms_diff": 0.000042529498303511286,
+      "coverage_fraction": 0.9892770479074376,
+      "compared_pixels": 56997300
+    }
+  },
+  "known_limitations": [
+    "Native queue read is opt-in and not promoted to default.",
+    "Same-session speedup is modest and below the best historical warm-cache default run.",
+    "The Python drain/cache handoff remains in the path.",
+    "Eligible inputs are currently simple BITPIX=16, BSCALE=1, BZERO=32768 primary-image FITS files without unsupported blank-value semantics."
+  ],
+  "next_gate": "Feed native queue completions directly into H2D/calibration wave scheduling to reduce Python drain/cache handoff while preserving ready-first scheduling.",
+  "clean_room": {
+    "compliant": true,
+    "notes": "This gate uses GLASS code, public FITS byte layout rules, user image data, and GLASS/user-generated timing artifacts. It does not inspect external implementation source or alter input data."
+  }
+}

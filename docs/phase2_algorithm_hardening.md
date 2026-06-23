@@ -14252,6 +14252,91 @@ Completed in Gate446:
   - postpatch hash compare:
     `C:\glass_runs\phase2_s2_gate544_native_batch_read\hash_compare_gate543_postpatch.json`.
 
+### S2-Gate 545: Opt-In Native Raw FITS Completion Queue
+
+- Continued the resident CUDA read/upload/calibration mainline by replacing the
+  coarse batch-future probe with an opt-in native per-frame completion queue.
+- Completed:
+  - added native pybind class `RawFitsReadQueue`;
+  - the queue owns C++ worker threads, reads simple FITS payload byte ranges
+    into caller-provided pinned `uint8` buffers, and exposes per-frame
+    completions through `wait_completed()`;
+  - added Python capability and factory functions in `glass_cuda`;
+  - added resident CUDA integration behind
+    `GLASS_RESIDENT_NATIVE_QUEUE_READ=1`;
+  - preserved ready-first scheduling because completions are per-frame rather
+    than coarse four-frame batches;
+  - recorded queue candidate/requested/available/enabled state, submit count,
+    completion count, worker count, cumulative native read time, and completion
+    wait time in resident artifacts and light pipeline profiles;
+  - added direct queue FITS tests and resident queue opt-in tests.
+- Build and tests:
+  - rebuilt `_glass_cuda_native` in Release with Visual Studio Build Tools,
+    CMake/Ninja, and CUDA enabled;
+  - CUDA device: NVIDIA RTX PRO 6000 Blackwell Workstation Edition, compute
+    capability `12.0`, VRAM `97886 MiB`, driver `596.21`;
+  - focused resident/FITS tests: `5 passed in 0.72 s`;
+  - full pytest: `1183 passed in 43.31 s`.
+- Real 200-light same-session A/B:
+  - default run:
+    `C:\glass_runs\phase2_s2_gate545_native_queue_read\runs_20260623_153000\default_fresh_release`;
+  - queue opt-in run:
+    `C:\glass_runs\phase2_s2_gate545_native_queue_read\runs_20260623_153000\native_queue_optin_release`;
+  - plan:
+    `C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json`;
+  - default shell/internal elapsed: `5.50113 s` / `5.1318423000047915 s`;
+  - queue shell/internal elapsed: `5.378282 s` / `5.01306339999428 s`;
+  - same-session queue speedup over default: `1.0228414947375388x`
+    (`0.12284800000000029 s`);
+  - queue shell-time speedup versus the recorded WBPP black-box reference
+    (`1092.541 s`): `203.139403995551x`;
+  - default shell-time speedup versus the same WBPP reference:
+    `198.60301428979136x`.
+- Queue opt-in artifact evidence:
+  - effective FITS mode: `native_u16_gpu`;
+  - backend counts: `native_u16be_raw_queue: 200`;
+  - native queue read: candidate `true`, available `true`, requested `true`,
+    enabled `true`, policy `env_enabled`;
+  - queue submits/completions/workers: `200` / `200` / `16`;
+  - queue cumulative native read time: `25.481368400000004 s`;
+  - light read/upload/calibrate: `2.5739439000026323 s`;
+  - light read wait wall: `1.184200199204497 s`;
+  - worker native FITS materialize/read cumulative: `25.3398809 s`;
+  - ready queue callbacks: `200`;
+  - ready queue wait time: `1.1806699999724515 s`;
+  - out-of-order consumed frames: `78`;
+  - resident registration/warp: `0.25813750020461157 s`;
+  - resident integration: `0.30349709995789453 s`;
+  - output write: `0.2879365000408143 s`.
+- Numerical validation:
+  - queue opt-in master, weight map, coverage map, low/high rejection maps, and
+    DQ map are SHA256-identical to the fresh default run;
+  - queue opt-in maps also match the Gate544 default hashes through the same
+    comparison chain;
+  - inherited WBPP coverage-masked comparison remains:
+    RMS `0.0004279821839256963`, p99 abs diff
+    `0.0001313822576776147`, robust-fit RMS
+    `4.2529498303511286e-05`, coverage fraction
+    `0.9892770479074376`, compared pixels `56997300`.
+- Interpretation:
+  - the per-frame native completion queue is the right shape: it preserves
+    ready-first out-of-order scheduling and removes per-frame Python Future
+    objects from the raw read path;
+  - the same-session improvement is real but modest, and still does not beat
+    the best historical Gate542/Gate543 warm-cache wall times;
+  - therefore this remains opt-in and is not promoted as a new default;
+  - the next substantial optimization should feed native queue completions
+    directly into pinned H2D/calibration wave scheduling, reducing the remaining
+    Python drain/cache handoff rather than only replacing Future submission.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_545_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_545_native_queue_read_summary.json`;
+  - same-session hash compare:
+    `C:\glass_runs\phase2_s2_gate545_native_queue_read\hash_compare_default_vs_queue.json`;
+  - Gate544 hash compare:
+    `C:\glass_runs\phase2_s2_gate545_native_queue_read\hash_compare_gate544_default.json`.
+
 ## Gate Rules
 
 Each gate requires:
