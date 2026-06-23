@@ -317,7 +317,7 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_integration_dispatch": "auto",
     },
     "throughput-v3-io": {
-        "resident_prefetch_frames": 48,
+        "resident_prefetch_frames": 32,
         "resident_prefetch_workers": 16,
         "resident_prefetch_refill_mode": "queued",
         "resident_h2d_mode": "pinned_ring",

@@ -13069,6 +13069,66 @@ Completed in Gate446:
   - external summary:
     `C:\glass_runs\phase2_s2_gate523_output_diagnostics_sample\runs_20260623_105417\gate523_output_diagnostics_sample_summary.json`.
 
+### S2-Gate 524: Resident Throughput-v3 Prefetch32 Default
+
+- Returned to the resident light read/upload/calibration bottleneck and
+  retuned the current default scheduling preset using the same 200-light M38
+  H-alpha benchmark. This gate changes orchestration defaults only; it does
+  not change calibration, registration, warp, rejection, DQ, frame admission,
+  integration, or output pixel math.
+- Completed:
+  - changed `throughput-v3-io` from `resident_prefetch_frames=48` to
+    `resident_prefetch_frames=32`;
+  - kept `resident_prefetch_workers=16`;
+  - kept calibration batch, stream, wave, and callback release settings
+    unchanged at `16/4/4/callback_queue`;
+  - updated benchmark-contract expectations for `throughput-v3-io`;
+  - updated CLI and acceptance tests for the new default.
+- Same-window prefetch-depth probe:
+  - probe root:
+    `C:\glass_runs\phase2_s2_gate524_prefetch_depth_probe\runs_20260623_110004`;
+  - all candidates used the same shared master cache, registration settings,
+    Lanczos3 warp, audit output maps, and 16 prefetch workers;
+  - prefetch 16: shell `6.869540199999999 s`, pinned host `1.8373489379882812 GiB`;
+  - prefetch 24: average shell `6.71086155 s`, pinned host `2.756023406982422 GiB`;
+  - prefetch 32: average shell `6.67240465 s`, pinned host `3.6746978759765625 GiB`;
+  - prefetch 48: average shell `7.2235844 s`, pinned host `5.512046813964844 GiB`.
+- Real default-path validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate524_prefetch32_default\runs_20260623_110233`;
+  - no explicit `--resident-prefetch-frames` was passed;
+  - `run_timing.json` recorded `resident_runtime_preset=throughput-v3-io`;
+  - preset artifact recorded `resident_prefetch_frames=32`;
+  - warm-repeat with shared master cache: internal `6.247844900004566 s`,
+    shell `6.6213798 s`;
+  - full run with per-run master cache policy: internal
+    `13.36458739999216 s`, shell `13.715893099999999 s`;
+  - versus Gate523 default-48 validation, warm-repeat shell improved by
+    `0.3746900000000002 s`, full shell improved by `0.5148215 s`, and pinned
+    host prefetch memory dropped by `1972838400` bytes
+    (`1.8373489379882812 GiB`).
+- Numerical validation:
+  - Gate524 warm-repeat master matches Gate523 warm-repeat master bitwise;
+  - Gate524 full run matches Gate524 warm-repeat master bitwise;
+  - GLASS vs WBPP black-box compare is shape-matched; robust linear fit over
+    fit pixels has RMS `0.0015009512947433384`, p99 absolute difference
+    `0.00034034321741462114`, and fit fraction `0.982980688129347`;
+  - warm shell speedup versus WBPP black-box `1092.541 s` is
+    `165.00201362863976x`.
+- Interpretation:
+  - the old 48-slot default over-prefetched for the current resident pipeline
+    and host/GPU balance;
+  - 32 slots preserved lower read wait than 24 slots while avoiding the
+    allocation and memory pressure of 48 slots;
+  - the next substantive targets remain resident registration/warp batching
+    and deeper light-pipeline overlap.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_524_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_524_prefetch32_default_summary.json`;
+  - external summary:
+    `C:\glass_runs\phase2_s2_gate524_prefetch32_default\runs_20260623_110233\gate524_prefetch32_default_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:
