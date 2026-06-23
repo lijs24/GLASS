@@ -8,6 +8,7 @@ import pytest
 from glass.cli import _apply_resident_runtime_preset
 from glass.cli import _resolve_execution_defaults
 from glass.cli import _resolve_resident_fits_read_mode_default
+from glass.cli import _resolve_resident_registration_default
 from glass.cli import build_parser
 from glass.cli import main
 from glass.engine.contracts import DQFlag
@@ -207,6 +208,56 @@ def test_run_defaults_promote_resident_cuda_when_available() -> None:
     assert resolution["requested_backend"] == "auto"
     assert resolution["requested_memory_mode"] == "resident"
     assert resolution["effective_backend"] == "cuda"
+
+
+def test_run_resident_registration_defaults_to_similarity_triangle() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_registration_default(args, command="run")
+
+    assert args.backend == "cuda"
+    assert args.memory_mode == "resident"
+    assert args.resident_registration == "similarity_cuda_triangle"
+    assert resolution["requested"] == "auto"
+    assert resolution["effective"] == "similarity_cuda_triangle"
+    assert resolution["source"] == "resident_cuda_default"
+    assert resolution["escape_hatch"] == "--resident-registration off"
+
+
+def test_run_resident_registration_explicit_off_is_preserved() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-registration",
+            "off",
+        ]
+    )
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_registration_default(args, command="run")
+
+    assert args.resident_registration == "off"
+    assert resolution["requested"] == "off"
+    assert resolution["effective"] == "off"
+    assert resolution["explicit"] is True
+
+
+def test_run_resident_registration_auto_keeps_tile_path_off() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run", "--backend", "cpu"])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_registration_default(args, command="run")
+
+    assert args.memory_mode == "tile"
+    assert args.resident_registration == "off"
+    assert resolution["requested"] == "auto"
+    assert resolution["effective"] == "off"
+    assert resolution["source"] == "unused_non_resident"
 
 
 def test_run_defaults_fallback_to_tile_when_cuda_unavailable() -> None:

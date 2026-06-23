@@ -332,6 +332,8 @@ DEFAULT_MEMORY_MODE = "resident"
 FALLBACK_MEMORY_MODE = "tile"
 DEFAULT_UNTIL_STAGE = "integration"
 DEFAULT_RESIDENT_FITS_READ_MODE = "auto"
+DEFAULT_RESIDENT_REGISTRATION = "auto"
+DEFAULT_RESIDENT_REGISTRATION_EFFECTIVE = "similarity_cuda_triangle"
 
 RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_prefetch_frames": "--resident-prefetch-frames",
@@ -479,6 +481,51 @@ def _resolve_resident_fits_read_mode_default(args: argparse.Namespace, *, comman
     return resolution
 
 
+def _resolve_resident_registration_default(args: argparse.Namespace, *, command: str) -> dict[str, object]:
+    requested = str(getattr(args, "resident_registration", DEFAULT_RESIDENT_REGISTRATION))
+    explicit = _argv_has_option(args, "--resident-registration")
+    resident_cuda_integration = (
+        getattr(args, "memory_mode", None) == "resident"
+        and getattr(args, "backend", None) == "cuda"
+        and getattr(args, "until_stage", DEFAULT_UNTIL_STAGE) == "integration"
+    )
+    effective = requested
+    source = "explicit" if explicit else "unused_non_resident"
+    reason = "user_explicit_resident_registration" if explicit else "non_resident_path_keeps_registration_off"
+    if requested == "auto":
+        if resident_cuda_integration:
+            effective = DEFAULT_RESIDENT_REGISTRATION_EFFECTIVE
+            source = "explicit_auto" if explicit else "resident_cuda_default"
+            reason = (
+                "explicit_auto_resident_registration_promotes_similarity_triangle"
+                if explicit
+                else "resident_cuda_default_promotes_similarity_triangle"
+            )
+        else:
+            effective = "off"
+            source = "explicit_auto_non_resident" if explicit else "unused_non_resident"
+            reason = (
+                "explicit_auto_resident_registration_unavailable_for_non_resident_path"
+                if explicit
+                else "non_resident_path_keeps_registration_off"
+            )
+    setattr(args, "resident_registration", effective)
+    resolution = {
+        "schema_version": 1,
+        "command": command,
+        "requested": requested,
+        "effective": effective,
+        "explicit": explicit,
+        "source": source,
+        "reason": reason,
+        "default": DEFAULT_RESIDENT_REGISTRATION,
+        "default_effective": DEFAULT_RESIDENT_REGISTRATION_EFFECTIVE,
+        "escape_hatch": "--resident-registration off",
+    }
+    args._resident_registration_resolution = resolution
+    return resolution
+
+
 def _explicit_option(args: argparse.Namespace, flag: str) -> bool:
     return _argv_has_option(args, flag)
 
@@ -576,6 +623,10 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
         timing["memory_mode_requested"] = resolution.get("requested_memory_mode")
     timing["backend"] = getattr(args, "backend", timing.get("backend"))
     timing["memory_mode"] = getattr(args, "memory_mode", timing.get("memory_mode"))
+    registration_resolution = getattr(args, "_resident_registration_resolution", None)
+    if isinstance(registration_resolution, dict):
+        timing["resident_registration_resolution"] = registration_resolution
+    timing["resident_registration"] = getattr(args, "resident_registration", None)
     timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
     timing["resident_master_cache_policy"] = getattr(args, "resident_master_cache_policy", None)
     timing["resident_master_cache_dir"] = getattr(args, "resident_master_cache_dir", None)
@@ -1407,6 +1458,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     _resolve_execution_defaults(args, capabilities, command="audit")
     _apply_resident_runtime_preset(args)
     _resolve_resident_fits_read_mode_default(args, command="audit")
+    _resolve_resident_registration_default(args, command="audit")
     _write_run_command(out, args)
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
@@ -1566,6 +1618,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
     _apply_resident_runtime_preset(args)
     _resolve_resident_fits_read_mode_default(args, command="run")
+    _resolve_resident_registration_default(args, command="run")
     _seed_run_inputs(Path(args.out), args.plan)
     _write_run_command(Path(args.out), args)
     if args.memory_mode == "resident":
@@ -5003,6 +5056,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--resident-registration",
         choices=[
+            "auto",
             "off",
             "translation_preview",
             "translation_ncc_subpixel",
@@ -5011,9 +5065,11 @@ def build_parser() -> argparse.ArgumentParser:
             "similarity_cuda_triangle",
             "external_matrix",
         ],
-        default="off",
+        default=DEFAULT_RESIDENT_REGISTRATION,
         help=(
-            "resident CUDA registration mode; translation_preview uses downsampled phase correlation, "
+            "resident CUDA registration mode; auto promotes the default full resident integration path "
+            "to similarity_cuda_triangle, off is the explicit unregistered escape hatch; "
+            "translation_preview uses downsampled phase correlation, "
             "translation_ncc_subpixel uses resident GPU NCC plus subpixel refinement, "
             "translation_star_catalog uses GPU star candidates plus pair-offset voting, "
             "similarity_cuda_catalog uses resident GPU star catalogs plus CUDA similarity refinement, "
@@ -5474,6 +5530,7 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--resident-registration",
         choices=[
+            "auto",
             "off",
             "translation_preview",
             "translation_ncc_subpixel",
@@ -5482,8 +5539,11 @@ def build_parser() -> argparse.ArgumentParser:
             "similarity_cuda_triangle",
             "external_matrix",
         ],
-        default="off",
-        help="resident CUDA registration mode for --memory-mode resident",
+        default=DEFAULT_RESIDENT_REGISTRATION,
+        help=(
+            "resident CUDA registration mode for --memory-mode resident; auto promotes full resident "
+            "integration to similarity_cuda_triangle, off is the explicit unregistered escape hatch"
+        ),
     )
     audit.add_argument(
         "--resident-registration-results",

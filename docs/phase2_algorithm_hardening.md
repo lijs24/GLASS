@@ -15421,6 +15421,52 @@ Completed in Gate446:
     local-normalization, rejection, integration, CUDA kernels, DQ bits, or
     output pixels.
 
+### S2-Gate 564: Resident Registration Default Promotion
+
+- Continues the Phase 2 default-path mainline by removing a scientific footgun:
+  resident CUDA integration no longer defaults to an unregistered stack when
+  the user leaves `--resident-registration` unspecified.
+- Completed:
+  - `--resident-registration` now defaults to `auto` for `glass run` and
+    `glass audit`;
+  - full resident CUDA integration resolves `auto` to
+    `similarity_cuda_triangle`;
+  - explicit `--resident-registration off` is preserved as the unregistered
+    escape hatch;
+  - non-resident/tile execution resolves resident registration `auto` to `off`;
+  - `run_timing.json` records `resident_registration_resolution`.
+- Tests:
+  - syntax check:
+    `.venv\Scripts\python.exe -m py_compile src\glass\cli.py
+    tests\test_cli_smoke.py`;
+  - focused default-resolution and resident smoke tests: `6 passed in 0.75 s`;
+  - full suite: `1207 passed in 45.26 s`.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate564_default_resident_registration\runs_20260623_182723\default_registration`;
+  - the command intentionally omitted `--backend`, `--memory-mode`,
+    `--until-stage`, and `--resident-registration`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_564_default_resident_registration_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `7.2844874 s` |
+  | Run timing total | `6.929089199984446 s` |
+  | Default backend/memory | `cuda / resident` |
+  | Registration requested/effective | `auto / similarity_cuda_triangle` |
+  | Pipeline contract status | `passed` |
+  | Decision statuses | `192 accepted / 1 reference / 7 rejected` |
+  | Active/rejected frames | `193 / 7` |
+  | Output SHA256 vs Gate563 | `all identical` |
+- Interpretation:
+  - this gate changes default dispatch only when the user has not explicitly
+    selected a resident registration mode;
+  - it does not change star detection thresholds, registration fitting, warp,
+    local-normalization, rejection, integration, CUDA kernels, DQ bits, frame
+    admission, or output pixels.
+
 ## Gate Rules
 
 Each gate requires:
