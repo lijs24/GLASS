@@ -6083,6 +6083,429 @@ class ResidentCalibratedStack {
     return out;
   }
 
+  py::dict calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed(
+      py::object indices_obj,
+      py::object paths_obj,
+      py::object data_offsets_obj,
+      py::object byte_counts_obj,
+      py::object light_exposures_obj,
+      py::object dark_exposures_obj,
+      int stream_count,
+      int queue_buffer_count,
+      int worker_count,
+      py::object policy_obj) {
+    if (pending_calibration_) {
+      throw std::runtime_error("a resident calibration batch is already pending");
+    }
+    if (stream_count <= 0) {
+      throw std::invalid_argument("stream_count must be positive");
+    }
+    if (queue_buffer_count <= 0) {
+      throw std::invalid_argument("queue_buffer_count must be positive");
+    }
+    if (worker_count <= 0) {
+      throw std::invalid_argument("worker_count must be positive");
+    }
+    const auto indices = parse_index_sequence(indices_obj, "indices");
+    const auto paths = py::cast<std::vector<std::string>>(paths_obj);
+    const auto data_offsets = py::cast<std::vector<unsigned long long>>(data_offsets_obj);
+    const auto byte_counts = py::cast<std::vector<unsigned long long>>(byte_counts_obj);
+    const auto light_exposures = parse_float_sequence(light_exposures_obj, "light_exposures");
+    const auto dark_exposures = parse_float_sequence(dark_exposures_obj, "dark_exposures");
+    const std::size_t frame_count = indices.size();
+    if (frame_count == 0) {
+      py::dict out;
+      out["schema_version"] = 1;
+      out["h2d_mode"] = "fits_u16be_bzero_native_completion_calibration_batch";
+      out["event_mode"] = "native_completion_queue_reused_stack_lane_events";
+      out["timing_model"] = "native_completion_queue_read_then_h2d_gpu_decode_calibration";
+      out["source_sample_format"] = "fits_bitpix16_bzero32768_big_endian";
+      out["requested_stream_count"] = stream_count;
+      out["stream_count"] = 0;
+      out["requested_queue_buffer_count"] = queue_buffer_count;
+      out["queue_buffer_count"] = 0;
+      out["requested_worker_count"] = worker_count;
+      out["worker_count"] = 0;
+      out["wave_count"] = 0;
+      out["frame_count"] = 0;
+      out["raw_h2d_bytes"] = 0;
+      out["float32_host_bytes_avoided"] = 0;
+      out["native_path_read_file_open_s"] = 0.0;
+      out["native_path_read_file_read_s"] = 0.0;
+      out["native_path_read_total_s"] = 0.0;
+      out["native_path_read_bytes"] = 0;
+      out["native_completion_read_file_open_s"] = 0.0;
+      out["native_completion_read_file_read_s"] = 0.0;
+      out["native_completion_read_total_s"] = 0.0;
+      out["native_completion_read_bytes"] = 0;
+      out["native_completion_submit_count"] = 0;
+      out["native_completion_count"] = 0;
+      out["native_completion_out_of_order_count"] = 0;
+      out["h2d_event_sync_s"] = 0.0;
+      out["h2d_event_elapsed_s"] = 0.0;
+      out["stream_h2d_calibrate_store_s"] = 0.0;
+      out["sync_s"] = 0.0;
+      out["total_s"] = 0.0;
+      out["host_release_safe"] = true;
+      out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+      out["native_path_host_buffer_bytes"] = 0;
+      out["native_path_host_buffer_model"] = "none";
+      out["native_path_host_buffer_pinned"] = false;
+      out["lane_stream_elapsed_s"] = py::list();
+      out["wave_h2d_elapsed_s"] = py::list();
+      out["native_completion_order_sample"] = py::list();
+      return out;
+    }
+    if (paths.size() != frame_count ||
+        data_offsets.size() != frame_count ||
+        byte_counts.size() != frame_count ||
+        light_exposures.size() != frame_count ||
+        dark_exposures.size() != frame_count) {
+      throw std::invalid_argument(
+          "indices, paths, offsets, byte_counts, light_exposures, and dark_exposures must have the same length");
+    }
+    const std::size_t raw_frame_bytes = pixels_per_frame_ * 2u;
+    for (std::size_t i = 0; i < frame_count; ++i) {
+      require_index(indices[i]);
+      if (byte_counts[i] != static_cast<unsigned long long>(raw_frame_bytes)) {
+        throw std::invalid_argument("native completion calibration FITS byte count must equal height*width*2");
+      }
+    }
+
+    const std::size_t lane_count =
+        std::min<std::size_t>(static_cast<std::size_t>(stream_count), frame_count);
+    const std::size_t requested_buffer_count = static_cast<std::size_t>(queue_buffer_count);
+    const std::size_t minimum_buffer_count = std::min<std::size_t>(frame_count, lane_count * 2u);
+    const std::size_t effective_buffer_count = std::min<std::size_t>(
+        frame_count,
+        std::max<std::size_t>(requested_buffer_count, minimum_buffer_count));
+    const std::size_t effective_worker_count = std::min<std::size_t>(
+        frame_count,
+        std::max<std::size_t>(1u, static_cast<std::size_t>(worker_count)));
+    ensure_calibration_lanes(lane_count);
+
+    std::vector<std::unique_ptr<unsigned char, CudaHostUCharFree>> host_buffers;
+    host_buffers.reserve(effective_buffer_count);
+    for (std::size_t buffer_index = 0; buffer_index < effective_buffer_count; ++buffer_index) {
+      unsigned char* buffer = nullptr;
+      check_cuda(
+          cudaHostAlloc(
+              reinterpret_cast<void**>(&buffer),
+              raw_frame_bytes,
+              cudaHostAllocPortable),
+          "cudaHostAlloc(resident native completion raw FITS buffer)");
+      host_buffers.emplace_back(buffer);
+    }
+
+    std::vector<CalibrationParameters> params;
+    params.reserve(frame_count);
+    for (std::size_t i = 0; i < frame_count; ++i) {
+      py::object dark_exposure_obj = py::none();
+      if (std::isfinite(dark_exposures[i]) && dark_exposures[i] > 0.0f) {
+        dark_exposure_obj = py::float_(dark_exposures[i]);
+      }
+      params.push_back(calibration_parameters(light_exposures[i], dark_exposure_obj, policy_obj));
+    }
+
+    struct CompletionJob {
+      std::size_t frame_offset = 0;
+      std::size_t buffer_index = 0;
+    };
+    struct CompletionResult {
+      std::size_t frame_offset = 0;
+      std::size_t buffer_index = 0;
+      RawFitsReadTiming timing;
+      std::string error;
+    };
+
+    const auto total_start = Clock::now();
+    std::vector<unsigned char> lane_started(lane_count, 0);
+    std::vector<double> lane_elapsed(lane_count, 0.0);
+    std::vector<double> h2d_elapsed_samples;
+    h2d_elapsed_samples.reserve(frame_count);
+    std::vector<std::size_t> completion_order_sample;
+    completion_order_sample.reserve(std::min<std::size_t>(64u, frame_count));
+    double h2d_event_sync_s = 0.0;
+    double h2d_event_elapsed_s = 0.0;
+    double stream_s = 0.0;
+    double native_open_s = 0.0;
+    double native_read_s = 0.0;
+    double native_total_read_s = 0.0;
+    unsigned long long native_bytes_read = 0;
+    unsigned long long submit_count = 0;
+    unsigned long long completion_count = 0;
+    unsigned long long out_of_order_count = 0;
+
+    std::mutex queue_mutex;
+    std::condition_variable job_condition;
+    std::condition_variable completion_condition;
+    std::deque<CompletionJob> jobs;
+    std::deque<CompletionResult> completions;
+    bool closing = false;
+    std::vector<std::thread> workers;
+    workers.reserve(effective_worker_count);
+
+    auto close_workers = [&]() {
+      {
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        closing = true;
+      }
+      job_condition.notify_all();
+      completion_condition.notify_all();
+      for (auto& worker : workers) {
+        if (worker.joinable()) {
+          worker.join();
+        }
+      }
+    };
+
+    auto submit_job = [&](std::size_t frame_offset, std::size_t buffer_index) {
+      {
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        jobs.push_back(CompletionJob{frame_offset, buffer_index});
+        ++submit_count;
+      }
+      job_condition.notify_one();
+    };
+
+    try {
+      py::gil_scoped_release release;
+      for (std::size_t worker_index = 0; worker_index < effective_worker_count; ++worker_index) {
+        workers.emplace_back([&]() {
+          for (;;) {
+            CompletionJob job;
+            {
+              std::unique_lock<std::mutex> lock(queue_mutex);
+              job_condition.wait(lock, [&]() { return closing || !jobs.empty(); });
+              if (jobs.empty()) {
+                if (closing) {
+                  break;
+                }
+                continue;
+              }
+              job = jobs.front();
+              jobs.pop_front();
+            }
+
+            CompletionResult result;
+            result.frame_offset = job.frame_offset;
+            result.buffer_index = job.buffer_index;
+            try {
+              result.timing = read_raw_fits_bytes_into_ptr(
+                  paths[job.frame_offset],
+                  data_offsets[job.frame_offset],
+                  raw_frame_bytes,
+                  host_buffers[job.buffer_index].get());
+            } catch (const std::exception& exc) {
+              result.error = exc.what();
+            } catch (...) {
+              result.error = "unknown native completion calibration read error";
+            }
+
+            {
+              std::lock_guard<std::mutex> lock(queue_mutex);
+              completions.push_back(std::move(result));
+            }
+            completion_condition.notify_one();
+          }
+        });
+      }
+
+      std::size_t next_submit = 0;
+      const std::size_t initial_submit = std::min<std::size_t>(effective_buffer_count, frame_count);
+      for (; next_submit < initial_submit; ++next_submit) {
+        submit_job(next_submit, next_submit);
+      }
+
+      std::size_t next_expected_completion = 0;
+      std::size_t launched_count = 0;
+      while (launched_count < frame_count) {
+        CompletionResult completion;
+        {
+          std::unique_lock<std::mutex> lock(queue_mutex);
+          completion_condition.wait(lock, [&]() { return !completions.empty(); });
+          completion = std::move(completions.front());
+          completions.pop_front();
+        }
+        if (!completion.error.empty()) {
+          std::ostringstream message;
+          message << "native completion calibration read failed for frame "
+                  << completion.frame_offset << " (" << paths[completion.frame_offset]
+                  << "): " << completion.error;
+          throw std::runtime_error(message.str());
+        }
+        native_open_s += completion.timing.file_open_s;
+        native_read_s += completion.timing.file_read_s;
+        native_total_read_s += completion.timing.total_s;
+        native_bytes_read += completion.timing.bytes_read;
+        ++completion_count;
+        if (completion.frame_offset != next_expected_completion) {
+          ++out_of_order_count;
+        }
+        ++next_expected_completion;
+        if (completion_order_sample.size() < 64u) {
+          completion_order_sample.push_back(completion.frame_offset);
+        }
+
+        const std::size_t lane = launched_count % lane_count;
+        if (!lane_started[lane]) {
+          check_cuda(
+              cudaEventRecord(calibration_lane_start_events_[lane], calibration_lane_streams_[lane]),
+              "cudaEventRecord(resident native completion lane start)");
+          lane_started[lane] = 1;
+        }
+        auto* lane_raw = reinterpret_cast<unsigned char*>(d_calibration_lane_lights_[lane]);
+        check_cuda(
+            cudaEventRecord(calibration_lane_h2d_start_events_[lane], calibration_lane_streams_[lane]),
+            "cudaEventRecord(resident native completion lane h2d start)");
+        check_cuda(
+            cudaMemcpyAsync(
+                lane_raw,
+                host_buffers[completion.buffer_index].get(),
+                raw_frame_bytes,
+                cudaMemcpyHostToDevice,
+                calibration_lane_streams_[lane]),
+            "cudaMemcpyAsync(resident native completion FITS u16 light)");
+        check_cuda(
+            cudaEventRecord(calibration_lane_h2d_events_[lane], calibration_lane_streams_[lane]),
+            "cudaEventRecord(resident native completion lane h2d done)");
+        glass_calibrate_fits_u16be_bzero_f32_launch_stream(
+            lane_raw,
+            d_bias_,
+            d_dark_,
+            d_flat_,
+            d_stack_ + indices[completion.frame_offset] * pixels_per_frame_,
+            pixels_per_frame_,
+            has_bias_,
+            has_dark_,
+            has_flat_,
+            params[completion.frame_offset].master_dark_includes_bias,
+            params[completion.frame_offset].dark_scale,
+            params[completion.frame_offset].flat_floor,
+            params[completion.frame_offset].pedestal,
+            calibration_lane_streams_[lane]);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_completion_queue kernel launch");
+        check_cuda(
+            cudaEventRecord(calibration_lane_stop_events_[lane], calibration_lane_streams_[lane]),
+            "cudaEventRecord(resident native completion lane calibration stop)");
+
+        const auto h2d_sync_start = Clock::now();
+        check_cuda(
+            cudaEventSynchronize(calibration_lane_h2d_events_[lane]),
+            "cudaEventSynchronize(resident native completion lane h2d)");
+        h2d_event_sync_s += seconds_since(h2d_sync_start);
+        const double lane_h2d_s = cuda_event_elapsed_s(
+            calibration_lane_h2d_start_events_[lane],
+            calibration_lane_h2d_events_[lane],
+            "cudaEventElapsedTime(resident native completion lane h2d)");
+        h2d_elapsed_samples.push_back(lane_h2d_s);
+        h2d_event_elapsed_s = std::max(h2d_event_elapsed_s, lane_h2d_s);
+
+        if (next_submit < frame_count) {
+          submit_job(next_submit, completion.buffer_index);
+          ++next_submit;
+        }
+        ++launched_count;
+      }
+      close_workers();
+    } catch (...) {
+      close_workers();
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          cudaStreamSynchronize(calibration_lane_streams_[lane]);
+        }
+      }
+      throw;
+    }
+
+    double sync_s = 0.0;
+    {
+      py::gil_scoped_release release;
+      const auto sync_start = Clock::now();
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          check_cuda(
+              cudaStreamSynchronize(calibration_lane_streams_[lane]),
+              "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_completion_queue synchronize");
+        }
+      }
+      sync_s = seconds_since(sync_start);
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          lane_elapsed[lane] = cuda_event_elapsed_s(
+              calibration_lane_start_events_[lane],
+              calibration_lane_stop_events_[lane],
+              "cudaEventElapsedTime(resident native completion lane calibration)");
+          stream_s = std::max(stream_s, lane_elapsed[lane]);
+        }
+      }
+    }
+    for (std::size_t index : indices) {
+      mark_loaded(index);
+    }
+    py::list lane_stream_elapsed_s;
+    for (const double value : lane_elapsed) {
+      lane_stream_elapsed_s.append(value);
+    }
+    py::list h2d_elapsed_s;
+    for (const double value : h2d_elapsed_samples) {
+      h2d_elapsed_s.append(value);
+    }
+    py::list order_sample;
+    for (const std::size_t value : completion_order_sample) {
+      order_sample.append(static_cast<unsigned long long>(value));
+    }
+
+    py::dict out = calibration_timing_dict(
+        ResidentCalibrationTiming{0.0, 0.0, stream_s, seconds_since(total_start)},
+        "fits_u16be_bzero_native_completion_calibration_batch");
+    out["event_mode"] = "native_completion_queue_reused_stack_lane_events";
+    out["timing_model"] = "native_completion_queue_read_then_h2d_gpu_decode_calibration";
+    out["source_sample_format"] = "fits_bitpix16_bzero32768_big_endian";
+    out["requested_stream_count"] = stream_count;
+    out["stream_count"] = static_cast<unsigned long long>(lane_count);
+    out["requested_queue_buffer_count"] = queue_buffer_count;
+    out["queue_buffer_count"] = static_cast<unsigned long long>(effective_buffer_count);
+    out["requested_worker_count"] = worker_count;
+    out["worker_count"] = static_cast<unsigned long long>(effective_worker_count);
+    out["requested_wave_frames"] = queue_buffer_count;
+    out["wave_frames"] = static_cast<unsigned long long>(effective_buffer_count);
+    out["wave_frames_clamped_to_stream_count"] = false;
+    out["wave_count"] = static_cast<unsigned long long>(completion_count);
+    out["frame_count"] = static_cast<unsigned long long>(frame_count);
+    out["raw_h2d_bytes"] = static_cast<unsigned long long>(raw_frame_bytes * frame_count);
+    out["float32_host_bytes_avoided"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float) * frame_count);
+    out["native_path_read_file_open_s"] = native_open_s;
+    out["native_path_read_file_read_s"] = native_read_s;
+    out["native_path_read_total_s"] = native_total_read_s;
+    out["native_path_read_bytes"] = native_bytes_read;
+    out["native_completion_read_file_open_s"] = native_open_s;
+    out["native_completion_read_file_read_s"] = native_read_s;
+    out["native_completion_read_total_s"] = native_total_read_s;
+    out["native_completion_read_bytes"] = native_bytes_read;
+    out["native_completion_submit_count"] = submit_count;
+    out["native_completion_count"] = completion_count;
+    out["native_completion_out_of_order_count"] = out_of_order_count;
+    out["native_completion_order_sample"] = order_sample;
+    out["h2d_release_s"] = h2d_event_sync_s;
+    out["h2d_event_sync_s"] = h2d_event_sync_s;
+    out["h2d_event_elapsed_s"] = h2d_event_elapsed_s;
+    out["callback_s"] = 0.0;
+    out["callback_release_count"] = 0;
+    out["stream_h2d_calibrate_store_s"] = stream_s;
+    out["sync_s"] = sync_s;
+    out["host_release_safe"] = true;
+    out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+    out["native_path_host_buffer_bytes"] = static_cast<unsigned long long>(raw_frame_bytes * effective_buffer_count);
+    out["native_path_host_buffer_model"] = "cuda_host_alloc_portable_pinned_completion_ring";
+    out["native_path_host_buffer_pinned"] = true;
+    out["lane_stream_elapsed_s"] = lane_stream_elapsed_s;
+    out["wave_h2d_elapsed_s"] = h2d_elapsed_s;
+    return out;
+  }
+
   void apply_translation_frame(std::size_t index, int dx, int dy, float fill) {
     require_index(index);
     if (!loaded_[index]) {
@@ -16431,6 +16854,19 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("dark_exposures"),
           py::arg("stream_count"),
           py::arg("wave_frames"),
+          py::arg("policy") = py::none())
+      .def(
+          "calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed",
+          &ResidentCalibratedStack::calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed,
+          py::arg("indices"),
+          py::arg("paths"),
+          py::arg("data_offsets"),
+          py::arg("byte_counts"),
+          py::arg("light_exposures"),
+          py::arg("dark_exposures"),
+          py::arg("stream_count"),
+          py::arg("queue_buffer_count"),
+          py::arg("worker_count"),
           py::arg("policy") = py::none())
       .def(
           "apply_translation_frame",

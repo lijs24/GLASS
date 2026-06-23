@@ -6141,12 +6141,23 @@ def run_resident_calibration_integration(
             native_path_calibration_supported = bool(
                 hasattr(stack, "calibrate_frames_fits_u16be_bzero_paths_multistream_timed")
             )
+            native_completion_calibration_supported = bool(
+                hasattr(stack, "calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed")
+            )
             native_path_calibration_env = str(
                 os.environ.get("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", "")
+            ).strip().lower()
+            native_completion_calibration_env = str(
+                os.environ.get("GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION", "")
             ).strip().lower()
             native_path_calibration_policy = (
                 "env_enabled"
                 if native_path_calibration_env in {"1", "true", "yes", "on"}
+                else "env_disabled_default"
+            )
+            native_completion_calibration_policy = (
+                "env_enabled"
+                if native_completion_calibration_env in {"1", "true", "yes", "on"}
                 else "env_disabled_default"
             )
             native_path_calibration_candidate = bool(
@@ -6156,9 +6167,18 @@ def run_resident_calibration_integration(
                 and source_dq_fast_skip_enabled
                 and resident_fits_spec_cache
             )
+            native_completion_calibration_candidate = bool(native_path_calibration_candidate)
+            native_completion_calibration_requested = bool(
+                native_completion_calibration_candidate
+                and native_completion_calibration_policy == "env_enabled"
+            )
+            native_completion_calibration_available = bool(
+                native_completion_calibration_candidate and native_completion_calibration_supported
+            )
             native_path_calibration_requested = bool(
                 native_path_calibration_candidate
                 and native_path_calibration_policy == "env_enabled"
+                and not native_completion_calibration_requested
             )
             native_path_calibration_available = bool(
                 native_path_calibration_candidate and native_path_calibration_supported
@@ -6178,10 +6198,35 @@ def run_resident_calibration_integration(
                 native_path_calibration_reason = "env_disabled_default"
             elif not native_path_calibration_available:
                 native_path_calibration_reason = "native_method_unavailable"
+            elif native_completion_calibration_requested:
+                native_path_calibration_reason = "env_ignored_native_completion_enabled"
             else:
                 native_path_calibration_reason = "env_enabled"
             native_path_calibration_enabled = bool(
                 native_path_calibration_requested and native_path_calibration_available
+            )
+            if not native_completion_calibration_candidate:
+                if not raw_u16_gpu_decode_enabled:
+                    native_completion_calibration_reason = "requires_native_u16_gpu_read_mode"
+                elif not calibration_batch_enabled:
+                    native_completion_calibration_reason = "requires_batch_calibration"
+                elif not calibration_batch_multistream_enabled:
+                    native_completion_calibration_reason = "requires_multistream_batch_calibration"
+                elif not source_dq_fast_skip_enabled:
+                    native_completion_calibration_reason = "requires_source_dq_fast_skip"
+                else:
+                    native_completion_calibration_reason = "requires_fits_header_spec_cache"
+            elif not native_completion_calibration_requested:
+                native_completion_calibration_reason = "env_disabled_default"
+            elif not native_completion_calibration_available:
+                native_completion_calibration_reason = "native_method_unavailable"
+            else:
+                native_completion_calibration_reason = "env_enabled"
+            native_completion_calibration_enabled = bool(
+                native_completion_calibration_requested and native_completion_calibration_available
+            )
+            native_direct_calibration_enabled = bool(
+                native_path_calibration_enabled or native_completion_calibration_enabled
             )
             calibration_fetch_batch_frames = (
                 int(resident_calibration_batch_frames)
@@ -6195,12 +6240,15 @@ def run_resident_calibration_integration(
                 calibration_callback_release_enabled
                 and resident_h2d_mode == "pinned_ring"
                 and resident_prefetch_frames > 0
-                and not native_path_calibration_enabled
+                and not native_direct_calibration_enabled
                 and calibration_fetch_batch_frames > int(resident_prefetch_frames)
             ):
                 calibration_fetch_batch_frames = int(resident_prefetch_frames)
                 calibration_fetch_batch_limit_source = "pinned_ring_prefetch_depth"
                 calibration_fetch_batch_clamped_to_prefetch_depth = True
+            if native_completion_calibration_enabled:
+                calibration_fetch_batch_frames = max(calibration_fetch_batch_frames, len(light_frames))
+                calibration_fetch_batch_limit_source = "native_completion_calibration_all_available_frames"
             calibration_batch_count = 0
             calibration_batch_frame_count = 0
             calibration_batch_native_total_s = 0.0
@@ -6227,6 +6275,12 @@ def run_resident_calibration_integration(
             native_path_calibration_wave_h2d_elapsed_s = 0.0
             native_path_calibration_host_buffer_model: str | None = None
             native_path_calibration_host_buffer_pinned = False
+            native_completion_calibration_submit_count = 0
+            native_completion_calibration_completion_count = 0
+            native_completion_calibration_out_of_order_count = 0
+            native_completion_calibration_worker_count = 0
+            native_completion_calibration_queue_buffer_count = 0
+            native_completion_calibration_order_sample: list[int] = []
             prefetch_fill_blocked_no_slot_count = 0
             prefetch_release_count = 0
             prefetch_max_inflight_slots = 0
@@ -6252,7 +6306,9 @@ def run_resident_calibration_integration(
                     )
                 )
             calibration_master_group_count = len({item[0] for item in light_master_selections})
-            if native_path_calibration_enabled:
+            if native_completion_calibration_enabled:
+                calibration_ready_order_reason = "native_completion_calibration_direct"
+            elif native_path_calibration_enabled:
                 calibration_ready_order_reason = "native_path_calibration_direct"
             elif not calibration_batch_enabled:
                 calibration_ready_order_reason = "batch_calibration_disabled"
@@ -6274,7 +6330,7 @@ def run_resident_calibration_integration(
             calibration_ready_order_out_of_order_count = 0
             calibration_ready_order_sample: list[int] = []
             calibration_ready_order_expected_next = 0
-            light_prefetch_depth = 0 if native_path_calibration_enabled else int(resident_prefetch_frames)
+            light_prefetch_depth = 0 if native_direct_calibration_enabled else int(resident_prefetch_frames)
             with _LightPrefetcher(
                 light_frames,
                 light_prefetch_depth,
@@ -6336,7 +6392,7 @@ def run_resident_calibration_integration(
                                 gc_start = perf_counter()
                                 gc.collect()
                                 gc_elapsed += perf_counter() - gc_start
-                            if native_path_calibration_enabled:
+                            if native_direct_calibration_enabled:
                                 spec = resident_fits_spec_cache.get(str(frame["path"]))
                                 header_cache_hit = spec is not None
                                 if spec is None:
@@ -6349,7 +6405,11 @@ def run_resident_calibration_integration(
                                     "total": 0.0,
                                     "fits_open": 0.0,
                                     "fits_materialize_decode": 0.0,
-                                    "fits_reader_backend": "native_u16be_raw_path_calibration",
+                                    "fits_reader_backend": (
+                                        "native_u16be_raw_completion_calibration"
+                                        if native_completion_calibration_enabled
+                                        else "native_u16be_raw_path_calibration"
+                                    ),
                                     "fits_fast_supported": True,
                                     "fits_fast_bitpix": int(spec.bitpix),
                                     "fits_fast_scaled": True,
@@ -6433,7 +6493,7 @@ def run_resident_calibration_integration(
                             np.nan if current_dark_exposure is None else float(current_dark_exposure)
                             for _item in batch_items
                         ]
-                        if native_path_calibration_enabled:
+                        if native_direct_calibration_enabled:
                             batch_specs: list[SimpleFitsImageSpec] = []
                             for _item_index, frame, _light, _exposure in batch_items:
                                 spec = resident_fits_spec_cache.get(str(frame["path"]))
@@ -6441,19 +6501,66 @@ def run_resident_calibration_integration(
                                     spec = simple_fits_image_spec(frame["path"])
                                     resident_fits_spec_cache[str(frame["path"])] = spec
                                 batch_specs.append(spec)
-                            calibration_timing = (
-                                stack.calibrate_frames_fits_u16be_bzero_paths_multistream_timed(
-                                    batch_indices,
-                                    [str(spec.path) for spec in batch_specs],
-                                    [int(spec.data_offset) for spec in batch_specs],
-                                    [int(spec.width) * int(spec.height) * 2 for spec in batch_specs],
-                                    batch_light_exposures,
-                                    batch_dark_exposures,
-                                    resident_calibration_streams,
-                                    calibration_wave_effective_frames,
-                                    asdict(policy),
+                            if native_completion_calibration_enabled:
+                                native_completion_queue_buffers = max(
+                                    int(resident_prefetch_frames),
+                                    int(resident_calibration_batch_frames),
+                                    int(resident_calibration_streams) * 2,
                                 )
-                            )
+                                native_completion_workers = max(
+                                    int(resident_prefetch_workers),
+                                    int(resident_calibration_streams),
+                                )
+                                calibration_timing = (
+                                    stack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed(
+                                        batch_indices,
+                                        [str(spec.path) for spec in batch_specs],
+                                        [int(spec.data_offset) for spec in batch_specs],
+                                        [int(spec.width) * int(spec.height) * 2 for spec in batch_specs],
+                                        batch_light_exposures,
+                                        batch_dark_exposures,
+                                        resident_calibration_streams,
+                                        native_completion_queue_buffers,
+                                        native_completion_workers,
+                                        asdict(policy),
+                                    )
+                                )
+                                native_completion_calibration_submit_count += int(
+                                    calibration_timing.get("native_completion_submit_count", 0) or 0
+                                )
+                                native_completion_calibration_completion_count += int(
+                                    calibration_timing.get("native_completion_count", 0) or 0
+                                )
+                                native_completion_calibration_out_of_order_count += int(
+                                    calibration_timing.get("native_completion_out_of_order_count", 0) or 0
+                                )
+                                native_completion_calibration_worker_count = max(
+                                    native_completion_calibration_worker_count,
+                                    int(calibration_timing.get("worker_count", 0) or 0),
+                                )
+                                native_completion_calibration_queue_buffer_count = max(
+                                    native_completion_calibration_queue_buffer_count,
+                                    int(calibration_timing.get("queue_buffer_count", 0) or 0),
+                                )
+                                for sample_index in list(
+                                    calibration_timing.get("native_completion_order_sample", []) or []
+                                ):
+                                    if len(native_completion_calibration_order_sample) < 64:
+                                        native_completion_calibration_order_sample.append(int(sample_index))
+                            else:
+                                calibration_timing = (
+                                    stack.calibrate_frames_fits_u16be_bzero_paths_multistream_timed(
+                                        batch_indices,
+                                        [str(spec.path) for spec in batch_specs],
+                                        [int(spec.data_offset) for spec in batch_specs],
+                                        [int(spec.width) * int(spec.height) * 2 for spec in batch_specs],
+                                        batch_light_exposures,
+                                        batch_dark_exposures,
+                                        resident_calibration_streams,
+                                        calibration_wave_effective_frames,
+                                        asdict(policy),
+                                    )
+                                )
                             native_path_calibration_batch_count += 1
                             native_path_calibration_frame_count += len(batch_items)
                             native_path_calibration_file_open_s += float(
@@ -11129,6 +11236,30 @@ def run_resident_calibration_integration(
                 "native_path_calibration_host_buffer_pinned": bool(
                     native_path_calibration_host_buffer_pinned
                 ),
+                "native_completion_calibration_candidate": bool(native_completion_calibration_candidate),
+                "native_completion_calibration_policy": str(native_completion_calibration_policy),
+                "native_completion_calibration_requested": bool(native_completion_calibration_requested),
+                "native_completion_calibration_available": bool(native_completion_calibration_available),
+                "native_completion_calibration_enabled": bool(native_completion_calibration_enabled),
+                "native_completion_calibration_reason": str(native_completion_calibration_reason),
+                "native_completion_calibration_submit_count": int(
+                    native_completion_calibration_submit_count
+                ),
+                "native_completion_calibration_completion_count": int(
+                    native_completion_calibration_completion_count
+                ),
+                "native_completion_calibration_out_of_order_count": int(
+                    native_completion_calibration_out_of_order_count
+                ),
+                "native_completion_calibration_worker_count": int(
+                    native_completion_calibration_worker_count
+                ),
+                "native_completion_calibration_queue_buffer_count": int(
+                    native_completion_calibration_queue_buffer_count
+                ),
+                "native_completion_calibration_order_sample": list(
+                    native_completion_calibration_order_sample
+                ),
             }
             registration_total = registration_timing["total"]
             registration_component_total = float(
@@ -11769,6 +11900,7 @@ def run_resident_calibration_integration(
                                 "reused_stack_lane_h2d_events",
                                 "reused_stack_lane_h2d_callback_events",
                                 "native_path_read_reused_stack_lane_events",
+                                "native_completion_queue_reused_stack_lane_events",
                             }
                             & set(unique_calibration_event_modes)
                         ),
@@ -11820,7 +11952,9 @@ def run_resident_calibration_integration(
                         "calibration_ready_order_sample": list(calibration_ready_order_sample),
                         "calibration_wave_enabled": bool(calibration_wave_enabled),
                         "calibration_wave_release_mode": (
-                            "native_path_read_wave_sync"
+                            "native_completion_queue_h2d_event"
+                            if native_completion_calibration_enabled
+                            else "native_path_read_wave_sync"
                             if native_path_calibration_enabled
                             else "callback_after_h2d_event"
                             if calibration_callback_release_enabled
@@ -11835,6 +11969,9 @@ def run_resident_calibration_integration(
                         "calibration_batch_actual_stream_count": int(calibration_batch_actual_stream_count),
                         "calibration_batch_lane_buffer_bytes": int(calibration_batch_lane_buffer_bytes),
                         "calibration_batch_mode": (
+                            "fits_u16be_bzero_native_completion_calibration_batch"
+                            if native_completion_calibration_enabled
+                            else
                             "fits_u16be_bzero_native_path_read_calibration_batch"
                             if native_path_calibration_enabled
                             else
@@ -11853,6 +11990,9 @@ def run_resident_calibration_integration(
                             else "per_frame"
                         ),
                         "calibration_batch_timing_model": (
+                            "native_completion_queue_read_then_h2d_gpu_decode_calibration"
+                            if native_completion_calibration_enabled
+                            else
                             "native_path_read_wave_then_h2d_gpu_decode_calibration"
                             if native_path_calibration_enabled
                             else

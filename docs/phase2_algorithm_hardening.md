@@ -14542,6 +14542,72 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_548_pinned_native_path_summary.json`.
 
+### S2-Gate 549: Native Completion-To-Calibration Queue Probe
+
+- Continued the resident CUDA I/O/calibration mainline by replacing the
+  Gate548 wave-level native path join with an opt-in native completion queue:
+  native worker threads read raw FITS payloads into a pinned completion ring,
+  and completed frames are submitted directly to resident H2D/decode/calibration
+  lanes without waiting for the whole read wave.
+- Completed:
+  - added
+    `ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed`;
+  - added the `glass_cuda.ResidentCalibratedStack` wrapper;
+  - added `GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION=1` as the explicit
+    opt-in experiment gate;
+  - kept the default raw-u16 callback-release path unchanged;
+  - recorded completion candidate/requested/available/enabled state, worker
+    count, pinned buffer count, submit/completion counts, out-of-order
+    completions, and completion order sample in resident artifacts;
+  - when enabled, direct calibration processes all available frames for the
+    homogeneous master group in one native call so the queue can span the full
+    200-light batch.
+- Tests:
+  - focused completion/path/default tests: `5 passed in 1.23 s`;
+  - full pytest: `1188 passed in 45.22 s`.
+- Real 200-light same-session A/B:
+  - completion calibration opt-in run:
+    `C:\glass_runs\phase2_s2_gate549_completion_calibration\runs_20260623_155714\completion_calibration_release`;
+  - fresh default run:
+    `C:\glass_runs\phase2_s2_gate549_completion_calibration\runs_20260623_155727\default_release`;
+  - completion shell elapsed: `5.500664 s`;
+  - fresh default shell elapsed: `5.481433 s`;
+  - completion light read/upload/calibrate: `2.910837 s`;
+  - fresh default light read/upload/calibrate: `2.574862 s`;
+  - completion was `2.28x` faster than Gate548 pinned path
+    (`6.625002 s`) and `2.72x` faster than Gate547 pageable path
+    (`7.907601 s`), but still `1.13x` slower than the fresh default light
+    stage;
+  - completion registration/warp: `0.253603 s`;
+  - default registration/warp: `0.254161 s`;
+  - completion integration: `0.302728 s`;
+  - default integration: `0.323021 s`;
+  - completion output write: `0.224726 s`;
+  - default output write: `0.364525 s`;
+  - completion recorded `native_u16be_raw_completion_calibration: 200`,
+    `16` workers, `24` pinned queue buffers, `200` submits/completions, and
+    `123` out-of-order completions.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    SHA256-identical between the completion run and the fresh default run;
+  - master SHA256:
+    `8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110`.
+- Interpretation:
+  - the completion-to-calibration design recovers most of the lost overlap from
+    Gate547/Gate548 and proves the direction is technically viable;
+  - it still does not beat the current default, likely because the prototype
+    synchronizes each H2D event before reusing the pinned slot and uses a single
+    main-thread completion consumer;
+  - therefore it remains opt-in and must not be promoted;
+  - the next substantial target is a deeper native scheduler that decouples
+    slot reuse from the main consumer, batches ready completions into lane waves,
+    or reuses the existing default callback-release machinery with native queue
+    completions instead of synchronizing every frame individually.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_549_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_549_completion_calibration_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

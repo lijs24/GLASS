@@ -279,6 +279,74 @@ def test_resident_stack_calibrates_u16be_paths_on_gpu_like_cpu(tmp_path: Path):
     assert np.allclose(weight_map, np.full((4, 5), len(paths), dtype=np.float32))
 
 
+def test_resident_stack_calibrates_u16be_paths_completion_queue_on_gpu_like_cpu(tmp_path: Path):
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+    if not hasattr(
+        module.ResidentCalibratedStack,
+        "calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed",
+    ):
+        pytest.skip("native completion FITS u16 calibration is not available")
+
+    physical = [
+        (np.arange(20, dtype=np.uint16).reshape(4, 5) + np.uint16(1400)),
+        (np.arange(20, dtype=np.uint16).reshape(4, 5) + np.uint16(1500)),
+    ]
+    paths = []
+    specs = []
+    for index, frame in enumerate(physical):
+        path = tmp_path / f"resident_completion_read_u16_{index}.fits"
+        stored = (frame.astype(np.int32) - 32768).astype(np.int16)
+        hdu = fits.PrimaryHDU(stored)
+        hdu.header["BSCALE"] = 1.0
+        hdu.header["BZERO"] = 32768.0
+        hdu.writeto(path)
+        spec = simple_fits_image_spec(path)
+        paths.append(path)
+        specs.append(spec)
+
+    bias = np.full((4, 5), 10, dtype=np.float32)
+    dark = np.full((4, 5), 20, dtype=np.float32)
+    flat = np.full((4, 5), 2, dtype=np.float32)
+    policy = CalibrationPolicy(master_dark_includes_bias=True, dark_scaling_enabled=False, flat_floor=0.05)
+
+    stack = module.ResidentCalibratedStack(len(paths), 4, 5)
+    stack.set_calibration_masters(bias=bias, dark=dark, flat=flat)
+    timing = stack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed(
+        [0, 1],
+        paths,
+        [spec.data_offset for spec in specs],
+        [spec.width * spec.height * 2 for spec in specs],
+        [60.0, 60.0],
+        [60.0, 60.0],
+        2,
+        4,
+        2,
+        asdict(policy),
+    )
+
+    cpu_frames = [
+        calibrate_light(frame.astype(np.float32), bias, dark, flat, 60.0, 60.0, policy)
+        for frame in physical
+    ]
+    cpu_master = np.mean(np.stack(cpu_frames, axis=0), axis=0).astype(np.float32)
+    master, weight_map = stack.integrate_mean()
+
+    assert timing["h2d_mode"] == "fits_u16be_bzero_native_completion_calibration_batch"
+    assert timing["event_mode"] == "native_completion_queue_reused_stack_lane_events"
+    assert timing["native_completion_submit_count"] == 2
+    assert timing["native_completion_count"] == 2
+    assert timing["queue_buffer_count"] == 2
+    assert timing["worker_count"] == 2
+    assert timing["native_path_host_buffer_model"] == "cuda_host_alloc_portable_pinned_completion_ring"
+    assert timing["native_path_host_buffer_pinned"] is True
+    assert timing["raw_h2d_bytes"] == 2 * 4 * 5 * 2
+    assert timing["native_path_read_bytes"] == 2 * 4 * 5 * 2
+    assert np.allclose(master, cpu_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, np.full((4, 5), len(paths), dtype=np.float32))
+
+
 def test_resident_stack_tile_local_mean_matches_cpu_reference():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):
