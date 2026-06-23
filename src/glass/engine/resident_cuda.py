@@ -13595,11 +13595,72 @@ def run_resident_calibration_integration(
             raise RuntimeError("resident CUDA calibration contract failed")
         if registration_results:
             matrix_warp_description = f"CUDA matrix {resident_warp_interpolation} warp"
+            reference_frame_ids = sorted(
+                {
+                    str(result.reference_frame_id)
+                    for result in registration_results
+                    if str(result.reference_frame_id)
+                }
+            )
+            reference_row_ids = sorted(
+                {
+                    str(result.frame_id)
+                    for result in registration_results
+                    if result.status == "reference" and str(result.frame_id)
+                }
+            )
+            selected_reference_frame_ids = reference_row_ids or reference_frame_ids
+            resident_registration_artifacts = [
+                item.get("resident_registration")
+                for item in resident_artifacts
+                if isinstance(item.get("resident_registration"), dict)
+            ]
+            reference_selection_sources = sorted(
+                {
+                    str(registration.get("reference_selection_source"))
+                    for registration in resident_registration_artifacts
+                    if registration.get("reference_selection_source") is not None
+                }
+            )
+            quality_reference_frame_ids = sorted(
+                {
+                    str(registration.get("quality_reference_frame_id"))
+                    for registration in resident_registration_artifacts
+                    if registration.get("quality_reference_frame_id") is not None
+                }
+            )
+            quality_reference_statuses = sorted(
+                {
+                    str(registration.get("quality_reference_status"))
+                    for registration in resident_registration_artifacts
+                    if registration.get("quality_reference_status") is not None
+                }
+            )
             write_json(
                 run / "registration_results.json",
                 {
                     "schema_version": 1,
                     "source_stage": "resident_calibrated_stack",
+                    "reference_frame_id": selected_reference_frame_ids[0]
+                    if len(selected_reference_frame_ids) == 1
+                    else None,
+                    "reference_frame_ids": selected_reference_frame_ids,
+                    "selected_reference_frame_id": selected_reference_frame_ids[0]
+                    if len(selected_reference_frame_ids) == 1
+                    else None,
+                    "selected_reference_frame_ids": selected_reference_frame_ids,
+                    "reference_selection_source": reference_selection_sources[0]
+                    if len(reference_selection_sources) == 1
+                    else None,
+                    "reference_selection_sources": reference_selection_sources,
+                    "quality_reference_frame_id": quality_reference_frame_ids[0]
+                    if len(quality_reference_frame_ids) == 1
+                    else None,
+                    "quality_reference_frame_ids": quality_reference_frame_ids,
+                    "quality_reference_status": quality_reference_statuses[0]
+                    if len(quality_reference_statuses) == 1
+                    else None,
+                    "quality_reference_statuses": quality_reference_statuses,
                     "transform_model": resident_registration,
                     "results": registration_results,
                     "warnings": [

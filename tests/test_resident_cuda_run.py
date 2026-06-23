@@ -5166,6 +5166,16 @@ def test_cli_resident_cuda_run_similarity_triangle_uses_quality_reference(tmp_pa
     moving = [item for item in registration["results"] if item["frame_id"] == moving_id][0]
 
     assert [item["frame_id"] for item in reference_rows] == [quality_reference_id]
+    assert registration["reference_frame_id"] == quality_reference_id
+    assert registration["reference_frame_ids"] == [quality_reference_id]
+    assert registration["selected_reference_frame_id"] == quality_reference_id
+    assert registration["selected_reference_frame_ids"] == [quality_reference_id]
+    assert registration["reference_selection_source"] == "frame_quality"
+    assert registration["reference_selection_sources"] == ["frame_quality"]
+    assert registration["quality_reference_frame_id"] == quality_reference_id
+    assert registration["quality_reference_frame_ids"] == [quality_reference_id]
+    assert registration["quality_reference_status"] == "frame_quality"
+    assert registration["quality_reference_statuses"] == ["frame_quality"]
     assert resident_registration["reference_frame_id"] == quality_reference_id
     assert resident_registration["selected_reference_frame_id"] == quality_reference_id
     assert resident_registration["reference_selection_source"] == "frame_quality"

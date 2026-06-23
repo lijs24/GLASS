@@ -15625,6 +15625,66 @@ Completed in Gate446:
     calibration, LN, rejection, integration, DQ bits, frame admission, or
     output pixels relative to the validated Gate566 run.
 
+### S2-Gate 568: Resident Reference Metadata Closure
+
+- Continues the Phase 2 registration/LN/integration completeness mainline by
+  making resident `registration_results.json` carry the selected reference
+  frame at the top level, not only inside per-frame rows and
+  `resident_artifacts.json`.
+- Completed:
+  - resident registration output now records `reference_frame_id`,
+    `reference_frame_ids`, `selected_reference_frame_id`,
+    `selected_reference_frame_ids`, `reference_selection_source`,
+    `reference_selection_sources`, `quality_reference_frame_id`,
+    `quality_reference_frame_ids`, `quality_reference_status`, and
+    `quality_reference_statuses`;
+  - single-reference resident runs expose a scalar top-level
+    `reference_frame_id` for report/compare/contract consumers;
+  - multi-group resident runs retain the reference list fields without
+    pretending a single scalar reference exists;
+  - quality-reference handoff tests now assert both resident artifact metadata
+    and top-level registration metadata.
+- Tests:
+  - syntax check:
+    `.venv\Scripts\python.exe -m py_compile
+    src\glass\engine\resident_cuda.py tests\test_resident_cuda_run.py`;
+  - focused quality-reference handoff test: `1 passed in 1.15 s`;
+  - full suite: `1218 passed in 45.17 s`.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate568_reference_metadata\runs_20260623_185147\auto_reference`;
+  - the command intentionally omitted `--reference-frame-id` in addition to
+    the default backend/memory/registration/rejection/LN/warp parameters;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_568_auto_reference_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `7.4771534 s` |
+  | Run timing total | `7.003199999977369 s` |
+  | WBPP black-box reference elapsed | `1092.541 s` |
+  | GLASS speedup vs WBPP reference | `156.00596870052698x` |
+  | Top-level reference frame | `F000061` |
+  | Reference selection source | `first_light_fallback` |
+  | Resident artifact reference frame | `F000061` |
+  | Reference metadata closure | `passed` |
+  | LN contract status | `passed` |
+  | Pipeline contract status | `passed` |
+  | Active/rejected frames | `193 / 7` |
+  | Master RMS diff vs Gate567 | `461.059927596891` |
+  | Master p99 abs diff vs Gate567 | `150.2216533660888` |
+  | Master max abs diff vs Gate567 | `82359.64892196655` |
+  | Output SHA256 vs Gate567 | `all different` |
+- Interpretation:
+  - metadata closure is fixed and the run is auditable;
+  - omitting a reference frame currently falls back to the first light when no
+    `frame_quality.json` exists, which is not safe to promote as a scientific
+    default for the 200-light benchmark;
+  - the next substantive gate should either generate/select a quality reference
+    before resident registration or block first-light fallback for default
+    matrix-registration science runs with a clear diagnostic.
+
 ## Gate Rules
 
 Each gate requires:
