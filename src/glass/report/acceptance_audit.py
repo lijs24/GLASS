@@ -971,6 +971,37 @@ def build_acceptance_audit(
     comparison = speedup.get("comparison") or {}
     gp = speedup["glass"]
 
+    contract_payload: dict[str, Any] | None = None
+    benchmark_contract_source: str | None = None
+    benchmark_contract_path: str | None = None
+    if benchmark_contract is not None:
+        contract_payload = load_benchmark_contract(benchmark_contract)
+        benchmark_contract_source = "path"
+        benchmark_contract_path = str(benchmark_contract)
+    elif benchmark_contract_profile is not None:
+        if benchmark_contract_profile != RESIDENT_CUDA_DQ_PROFILE_NAME:
+            raise ValueError(f"unsupported benchmark contract profile: {benchmark_contract_profile}")
+        contract_payload = build_resident_cuda_dq_benchmark_contract()
+        benchmark_contract_source = "profile"
+    contract_comparison = (
+        contract_payload.get("comparison")
+        if isinstance(contract_payload, dict) and isinstance(contract_payload.get("comparison"), dict)
+        else {}
+    )
+    contract_min_coverage_fraction = _numeric(contract_comparison.get("min_coverage_fraction"))
+    contract_max_rms_diff = _numeric(contract_comparison.get("max_rms_diff"))
+    contract_max_abs_diff_p99 = _numeric(contract_comparison.get("max_abs_diff_p99"))
+    effective_min_coverage_fraction = float(
+        contract_min_coverage_fraction
+        if contract_min_coverage_fraction is not None
+        else min_coverage_fraction
+    )
+    effective_max_rms_diff = contract_max_rms_diff if contract_max_rms_diff is not None else max_rms_diff
+    effective_max_abs_diff_p99 = (
+        contract_max_abs_diff_p99 if contract_max_abs_diff_p99 is not None else max_abs_diff_p99
+    )
+    threshold_source = "benchmark_contract" if contract_comparison else "arguments"
+
     rms = _numeric(comparison.get("rms_diff"))
     p99 = _numeric(comparison.get("abs_diff_p99"))
     coverage = _numeric(comparison.get("coverage_fraction"))
@@ -1014,25 +1045,34 @@ def build_acceptance_audit(
         ),
         _check(
             "minimum_coverage_fraction",
-            coverage is not None and coverage >= float(min_coverage_fraction),
-            {"actual": coverage, "required": float(min_coverage_fraction)},
+            coverage is not None and coverage >= effective_min_coverage_fraction,
+            {
+                "actual": coverage,
+                "required": effective_min_coverage_fraction,
+                "source": threshold_source,
+                "semantics": contract_comparison.get("coverage_fraction_semantics", "legacy_unspecified"),
+            },
         ),
     ]
 
-    if max_rms_diff is not None:
+    if effective_max_rms_diff is not None:
         checks.append(
             _check(
                 "maximum_rms_diff",
-                rms is not None and rms <= float(max_rms_diff),
-                {"actual": rms, "required_max": float(max_rms_diff)},
+                rms is not None and rms <= float(effective_max_rms_diff),
+                {"actual": rms, "required_max": float(effective_max_rms_diff), "source": threshold_source},
             )
         )
-    if max_abs_diff_p99 is not None:
+    if effective_max_abs_diff_p99 is not None:
         checks.append(
             _check(
                 "maximum_abs_diff_p99",
-                p99 is not None and p99 <= float(max_abs_diff_p99),
-                {"actual": p99, "required_max": float(max_abs_diff_p99)},
+                p99 is not None and p99 <= float(effective_max_abs_diff_p99),
+                {
+                    "actual": p99,
+                    "required_max": float(effective_max_abs_diff_p99),
+                    "source": threshold_source,
+                },
             )
         )
 
@@ -1314,18 +1354,6 @@ def build_acceptance_audit(
             ]
         )
 
-    contract_payload: dict[str, Any] | None = None
-    benchmark_contract_source: str | None = None
-    benchmark_contract_path: str | None = None
-    if benchmark_contract is not None:
-        contract_payload = load_benchmark_contract(benchmark_contract)
-        benchmark_contract_source = "path"
-        benchmark_contract_path = str(benchmark_contract)
-    elif benchmark_contract_profile is not None:
-        if benchmark_contract_profile != RESIDENT_CUDA_DQ_PROFILE_NAME:
-            raise ValueError(f"unsupported benchmark contract profile: {benchmark_contract_profile}")
-        contract_payload = build_resident_cuda_dq_benchmark_contract()
-        benchmark_contract_source = "profile"
     resident_determinism_payload = (
         _read_json_lenient(resident_determinism_json) if resident_determinism_json is not None else {}
     )

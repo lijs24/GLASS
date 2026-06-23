@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "name": "phase2_m38_h_200_resident_cuda_ln_on_default",
+  "description": "Regression contract for the current Phase 2 M38 H-alpha 200-light resident CUDA default path with local normalization enabled and audit output maps.",
+  "dataset_requirements": {
+    "light": 200,
+    "bias": 20,
+    "dark": 20,
+    "flat": 20,
+    "active_light_frames": 190
+  },
+  "runtime": {
+    "release_baseline_elapsed_s": 30.361440100008622,
+    "max_runtime_regression_factor": 1.3,
+    "external_reference_elapsed_s": 1092.541,
+    "min_speedup_vs_reference": 20.0
+  },
+  "comparison": {
+    "required_scale": 8.764434957115609e-06,
+    "required_offset": 0.0006274500691899127,
+    "required_min_coverage": 190,
+    "coverage_fraction_semantics": "post_rejection_coverage_map_fraction",
+    "min_coverage_fraction": 0.9,
+    "max_rms_diff": 0.01,
+    "max_abs_diff_p99": 0.01,
+    "numeric_abs_tolerance": 1.0e-12,
+    "numeric_rel_tolerance": 1.0e-9
+  },
+  "dq_provenance": {
+    "required": true,
+    "min_records": 1,
+    "required_source_schemas": [
+      "resident_dq_coverage_provenance"
+    ],
+    "required_engines": [
+      "cuda_resident_stack"
+    ],
+    "min_active_frame_count": 190,
+    "require_dq_map_path": true,
+    "require_existing_dq_map": true,
+    "require_coverage_map_path": true,
+    "required_summary_fields": [
+      "zero_coverage_pixels",
+      "partial_coverage_pixels"
+    ],
+    "required_output_dq_flags": [
+      "valid",
+      "warp_edge",
+      "low_rejected",
+      "high_rejected"
+    ],
+    "verify_dq_map_pixels": true,
+    "dq_map_verify_tile_size": 2048,
+    "dq_map_summary_tolerance_pixels": 0,
+    "dq_map_summary_match_flags": [
+      "valid",
+      "warp_edge",
+      "low_rejected",
+      "high_rejected"
+    ],
+    "verify_output_count_maps": true,
+    "count_map_verify_tile_size": 2048,
+    "count_map_positive_threshold": 0.0,
+    "coverage_map_finite_pixels_match_provenance": true,
+    "coverage_zero_pixels_match_no_data": true,
+    "allow_missing_rejection_maps_if_skipped": false,
+    "rejection_map_sum_matches_provenance": true,
+    "rejection_map_sum_tolerance_samples": 4,
+    "required_resident_artifact_map_paths": [
+      "master",
+      "weight",
+      "coverage",
+      "dq",
+      "low_rejection",
+      "high_rejection"
+    ],
+    "positive_output_dq_flags": [
+      "valid",
+      "warp_edge"
+    ],
+    "required_source_terms": [
+      "post_rejection_coverage",
+      "geometric_warp_coverage",
+      "low_rejection",
+      "high_rejection"
+    ]
+  },
+  "frame_accounting": {
+    "required": true,
+    "required_input_light_frames": 200,
+    "required_integrated_frames": 193,
+    "required_zero_weight_frames": 7,
+    "required_registration_accepted_frames": 193,
+    "min_integrated_frames": 190,
+    "required_integration_source_stage": "resident_calibrated_stack",
+    "required_final_status_counts": {
+      "integrated": 193,
+      "zero_weight": 7
+    },
+    "match_integration_frame_weights": true,
+    "match_speedup_summary": true,
+    "match_dq_active_frame_count": true,
+    "match_registration_accepted_frames": true
+  },
+  "pipeline_contract": {
+    "required": true,
+    "required_audit_type": "pipeline_invariant_contract",
+    "require_passed": true,
+    "min_check_count": 3,
+    "required_check_names": [
+      "calibration_master_surface_contract",
+      "resident_calibrated_light_contract",
+      "integration_resident_result_contract"
+    ],
+    "allow_failed_checks": false
+  },
+  "stack_engine_default_promotion": {
+    "required": true,
+    "required_audit_type": "stack_engine_default_contract",
+    "require_passed": true,
+    "require_default_promotion_ready": true,
+    "required_scope": "all",
+    "required_recommendation": "stack_engine_default_ready",
+    "max_default_gap_count": 0,
+    "max_blocker_count": 0,
+    "allow_failed_checks": false
+  },
+  "required_command_tokens": [
+    "--backend cuda",
+    "--memory-mode resident",
+    "--resident-runtime-preset throughput-v3-io",
+    "--resident-registration similarity_cuda_triangle",
+    "--integration-weighting none",
+    "--flat-floor 0.05",
+    "--resident-star-threshold 350",
+    "--resident-star-max-candidates 48",
+    "--resident-output-maps audit"
+  ]
+}

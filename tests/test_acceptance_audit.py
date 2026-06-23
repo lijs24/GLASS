@@ -2614,6 +2614,58 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     assert cumulative["timing_kind"] == "worker_cumulative"
 
 
+def test_acceptance_audit_contract_can_pin_ln_on_post_rejection_coverage(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=8.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05 --resident-output-maps audit"
+        ),
+        resident_dq=True,
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare, coverage_fraction=0.91)
+    compare_payload = read_json(compare)
+    compare_payload["comparison_region"]["glass_coverage_map"] = str(gp_run / "coverage_map.fits")
+    write_json(compare, compare_payload)
+    _write_contract(contract)
+    contract_payload = read_json(contract)
+    contract_payload["comparison"]["min_coverage_fraction"] = 0.90
+    contract_payload["comparison"]["coverage_fraction_semantics"] = "post_rejection_coverage_map_fraction"
+    contract_payload["comparison"]["max_rms_diff"] = 0.01
+    contract_payload["comparison"]["max_abs_diff_p99"] = 0.01
+    write_json(contract, contract_payload)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert checks["minimum_coverage_fraction"]["passed"] is True
+    assert checks["minimum_coverage_fraction"]["evidence"]["required"] == 0.90
+    assert checks["minimum_coverage_fraction"]["evidence"]["source"] == "benchmark_contract"
+    assert checks["contract_min_coverage_fraction"]["passed"] is True
+    assert checks["contract_min_coverage_fraction"]["evidence"]["semantics"] == (
+        "post_rejection_coverage_map_fraction"
+    )
+    assert checks["contract_coverage_fraction_semantics"]["passed"] is True
+    assert checks["contract_coverage_fraction_semantics"]["evidence"]["matched_record_count"] >= 1
+
+
 def test_acceptance_audit_accepts_default_route_evidence_for_resident_tokens(tmp_path: Path):
     manifest = tmp_path / "manifest.json"
     gp_run = tmp_path / "gp"

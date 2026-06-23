@@ -15792,6 +15792,53 @@ Completed in Gate446:
   on DQ/mask pipeline completeness, StackEngine default surfaces, and any
   future contract update that explicitly models LN-on post-rejection coverage.
 
+### S2-Gate 577: LN-On Coverage Contract Semantics
+
+- Turns the Gate576 LN-on coverage finding into an auditable benchmark contract
+  instead of relying on a one-off `--min-coverage-fraction 0.90` command-line
+  override.
+- Completed:
+  - `acceptance-audit` now lets a supplied benchmark contract provide the
+    effective top-level comparison thresholds for coverage fraction, RMS, and
+    p99 absolute difference;
+  - benchmark contracts can declare `coverage_fraction_semantics`;
+  - `contract_coverage_fraction_semantics` verifies that a declared
+    `post_rejection_coverage_map_fraction` compare uses a coverage map that is
+    backed by GLASS resident DQ provenance containing `post_rejection_coverage`;
+  - added `benchmarks/phase2_m38_h_200_ln_on_default_contract.json` for the
+    current default resident CUDA LN-on 200-light route;
+  - added unit coverage proving the contract threshold, not the CLI default,
+    drives LN-on acceptance.
+- Real 200-light validation:
+  - acceptance audit:
+    `C:\glass_runs\phase2_s2_gate577_ln_on_contract\acceptance_audit_ln_on_contract.json`;
+  - markdown:
+    `C:\glass_runs\phase2_s2_gate577_ln_on_contract\acceptance_audit_ln_on_contract.md`;
+  - benchmark contract:
+    `benchmarks\phase2_m38_h_200_ln_on_default_contract.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Acceptance status | `passed` |
+  | Acceptance checks | `108 / 0 failed` |
+  | Speedup vs WBPP | `136.9864061455573x` |
+  | Top-level coverage threshold source | `benchmark_contract` |
+  | Coverage semantics | `post_rejection_coverage_map_fraction` |
+  | Coverage190 actual / required | `0.905523489118409 / 0.90` |
+  | Matched DQ provenance records | `2` |
+  | Required DQ source terms | `post_rejection_coverage`, `geometric_warp_coverage`, `low_rejection`, `high_rejection` |
+  | Pipeline contract | `passed` |
+  | StackEngine default-promotion contract | `passed` |
+
+- Interpretation:
+  - the LN-on default benchmark now has a formal contract that explains what
+    the coverage fraction measures;
+  - the contract is not weakening numerical agreement: RMS and p99 bounds stay
+    at `0.01`, and the real run remains below both limits;
+  - future changes to DQ/mask, rejection, or LN coverage must satisfy this
+    semantic contract or update it deliberately with new evidence.
+
 ## Gate Rules
 
 Each gate requires:

@@ -582,6 +582,15 @@ def _resolve_path_maybe_relative(path_value: Any, run_root: Path) -> Path | None
     return path if path.is_absolute() else run_root / path
 
 
+def _path_key(path_value: Any) -> str:
+    if not path_value:
+        return ""
+    try:
+        return str(Path(str(path_value)).resolve(strict=False)).casefold()
+    except (OSError, ValueError):
+        return str(path_value).replace("/", "\\").casefold()
+
+
 def _dq_record_from_payload(
     payload: dict[str, Any],
     *,
@@ -1964,7 +1973,77 @@ def build_benchmark_contract_checks(
             _check(
                 "contract_min_coverage_fraction",
                 coverage_fraction is not None and required is not None and coverage_fraction >= required,
-                {"actual": coverage_fraction, "required": required},
+                {
+                    "actual": coverage_fraction,
+                    "required": required,
+                    "semantics": compare_contract.get("coverage_fraction_semantics", "legacy_unspecified"),
+                },
+            )
+        )
+    if "coverage_fraction_semantics" in compare_contract:
+        required_semantics = str(compare_contract.get("coverage_fraction_semantics") or "")
+        coverage_map_path = region.get("glass_coverage_map")
+        coverage_map_key = _path_key(coverage_map_path)
+        records = dq_provenance_records or collect_dq_provenance_records(glass_run)
+        matched_records = []
+        for record in records:
+            record_path = record.get("coverage_map_path")
+            if coverage_map_key and _path_key(record_path) != coverage_map_key:
+                continue
+            summary = record.get("summary") if isinstance(record.get("summary"), dict) else {}
+            source_terms = [str(item) for item in summary.get("source_terms") or []]
+            source_provenance = (
+                record.get("source_provenance")
+                if isinstance(record.get("source_provenance"), dict)
+                else {}
+            )
+            matched_records.append(
+                {
+                    "source_file": record.get("source_file"),
+                    "source_kind": record.get("source_kind"),
+                    "coverage_map_path": record_path,
+                    "source_schema": summary.get("source_schema"),
+                    "source_terms": source_terms,
+                    "has_post_rejection_coverage": (
+                        "post_rejection_coverage" in source_terms
+                        or isinstance(source_provenance.get("post_rejection_coverage"), dict)
+                    ),
+                    "has_geometric_warp_coverage": (
+                        "geometric_warp_coverage" in source_terms
+                        or isinstance(source_provenance.get("geometric_warp_coverage"), dict)
+                    ),
+                }
+            )
+        if required_semantics == "post_rejection_coverage_map_fraction":
+            passed = any(item["has_post_rejection_coverage"] for item in matched_records)
+            note = (
+                "coverage_fraction is interpreted as the fraction of pixels in the compare region whose "
+                "resident post-rejection coverage map is at least min_coverage"
+            )
+        elif required_semantics == "geometric_warp_coverage_map_fraction":
+            passed = any(item["has_geometric_warp_coverage"] for item in matched_records)
+            note = (
+                "coverage_fraction is interpreted as the fraction of pixels in the compare region whose "
+                "geometric warp coverage map is at least min_coverage"
+            )
+        else:
+            passed = False
+            note = "unsupported coverage_fraction_semantics"
+        checks.append(
+            _check(
+                "contract_coverage_fraction_semantics",
+                passed,
+                {
+                    "required": required_semantics,
+                    "compare_coverage_map": coverage_map_path,
+                    "matched_record_count": len(matched_records),
+                    "matched_records": matched_records,
+                    "supported": [
+                        "post_rejection_coverage_map_fraction",
+                        "geometric_warp_coverage_map_fraction",
+                    ],
+                },
+                note=note,
             )
         )
     dq_contract = contract.get("dq_provenance") or {}
