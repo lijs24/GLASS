@@ -2325,6 +2325,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     resident_calibration_contract = read_json(run / "resident_calibration_contract.json")
     local_norm_contract = read_json(run / "local_norm_contract.json")
     pipeline_contract = read_json(run / "pipeline_contract.json")
+    auto_stack_contract = read_json(run / "stack_engine_contract.json")
     assert integration["source_stage"] == "resident_calibrated_stack"
     assert integration["outputs"][0]["backend"] == "cuda_resident_stack"
     assert integration["outputs"][0]["resident_registration"] == "translation_preview"
@@ -2400,6 +2401,13 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert pipeline_checks["local_normalization_continuous_contract_audit"]["passed"] is True
     assert pipeline_contract["artifacts"]["local_norm_contract"]["attached"] is True
     assert any(item["stage"] == "pipeline_contract" for item in state["artifacts"])
+    assert auto_stack_contract["audit_type"] == "stack_engine_default_contract"
+    assert auto_stack_contract["passed"] is True
+    assert auto_stack_contract["pipeline_contract_attached"] is True
+    assert auto_stack_contract["pipeline_contract_source"] == "run_default"
+    assert auto_stack_contract["pipeline_contract_dq_ledger"]["ready"] is True
+    assert auto_stack_contract["default_promotion"]["ready"] is True
+    assert any(item["stage"] == "stack_engine_contract" for item in state["artifacts"])
     stack_contract_out = tmp_path / "stack_engine_contract.json"
     assert (
         main(
@@ -3414,10 +3422,13 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
         "resident_calibration_integration",
         "local_norm_contract",
         "pipeline_contract",
+        "stack_engine_contract",
     ]
     assert "resident_source_dq_cache_calibration" in state["completed_stages"]
     assert any(item["stage"] == "resident_source_dq_strategy" for item in state["artifacts"])
     assert any(item["stage"] == "resident_source_dq_cache" for item in state["artifacts"])
+    assert any(item["stage"] == "stack_engine_contract" for item in state["artifacts"])
+    assert (run / "stack_engine_contract.json").exists()
     assert master[4, 5] == pytest.approx(100.0)
     assert weight[4, 5] == pytest.approx(1.0)
     assert master[0, 0] == pytest.approx(100.0)

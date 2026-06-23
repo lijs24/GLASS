@@ -453,6 +453,94 @@ Validation commands:
   --markdown
   C:\glass_runs\phase2_s2_gate585_stackengine_dq_default_guard\acceptance_audit.md`
 
+### S2-Gate 586: Default Run Auto StackEngine DQ Contract
+
+Gate 586 makes the Gate585 default-readiness guard part of the normal resident
+CUDA `glass run` artifact chain. The previous gate proved the rule through an
+explicit post-run `glass stack-engine-contract` command. This gate makes a
+successful resident default run write `stack_engine_contract.json` and
+`stack_engine_contract.md` automatically after the pipeline contract is written,
+so default-path DQ readiness is self-contained in the run directory.
+
+Implementation:
+
+- `glass run --memory-mode resident` now writes contract artifacts in this
+  order after integration:
+  1. `local_norm_contract.json` when LN results exist;
+  2. `pipeline_contract.json`;
+  3. `stack_engine_contract.json`.
+- The automatic StackEngine contract uses
+  `expected_integration_engine=cuda_resident_stack` and auto-discovers the
+  just-written `pipeline_contract.json`, so the Gate585 resident DQ ledger guard
+  is enforced without a manual follow-up command.
+- `run_state.json` records `stack_engine_contract` as a run artifact.
+- A failed StackEngine contract or missing resident DQ default-readiness proof
+  now fails normal resident runs unless it is a tiny diagnostic run covered by
+  the same small-frame allowance used by the pipeline contract.
+- `glass guardrails` now builds the pipeline contract before the StackEngine
+  contract and passes the same pipeline payload into StackEngine contract
+  construction, keeping guardrails evidence consistent with default `run`.
+
+Real 200-light evidence:
+
+- Fresh Gate586 run:
+  `C:\glass_runs\phase2_s2_gate586_auto_stack_contract\default_auto_contract`
+- Hash parity versus Gate582:
+  `C:\glass_runs\phase2_s2_gate586_auto_stack_contract\hash_parity_vs_gate582.json`
+- Compare:
+  `C:\glass_runs\phase2_s2_gate586_auto_stack_contract\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate586_auto_stack_contract\acceptance_audit.json`
+- `run_state.json` artifact tail:
+  `resident_registration_health`, `local_norm_contract`, `pipeline_contract`,
+  `stack_engine_contract`.
+- Run failed stage: none.
+- Stage timing sum: `7.862576000043191 s`.
+- Automatic `stack_engine_contract` stage timing:
+  `0.026758700027130544 s`.
+- Pipeline contract: `passed`, `24` checks.
+- Frame-accounting resident DQ ledger:
+  - required: `true`;
+  - expected/accounting rows: `200 / 200`;
+  - expected passed/failed rows: `200 / 0`;
+  - contract sources: `resident_source_dq_execution`;
+  - frame-mask sources: `resident_frame_masks`.
+- StackEngine contract: `passed`.
+- StackEngine default promotion: `ready`.
+- StackEngine pipeline-contract source: `run_default`.
+- StackEngine pipeline DQ ledger ready: `true`.
+- Six integration FITS outputs were SHA256-identical to Gate582.
+- Compare versus WBPP black-box fastIntegration:
+  - speedup: `138.95458689289595x`;
+  - coverage190 fraction: `0.905523489118409`;
+  - RMS difference: `0.005340835487175878`;
+  - p99 absolute difference: `0.002133606873685496`.
+- Acceptance audit: `passed`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\cli.py tests\test_resident_cuda_run.py
+  tests\test_cli_smoke.py`
+- `python -m pytest -q tests\test_resident_cuda_run.py -k
+  "resident_cuda_run_similarity_triangle_aligns_shifted_pair"`
+- `python -m pytest -q tests\test_cli_smoke.py -k
+  "guardrails_generates_contracts_and_report"`
+- Fresh 200-light resident run:
+  `glass run --plan
+  C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json
+  --out
+  C:\glass_runs\phase2_s2_gate586_auto_stack_contract\default_auto_contract
+  --backend cuda --memory-mode resident --resident-runtime-preset
+  throughput-v3-io --integration-weighting none --flat-floor 0.05
+  --resident-star-threshold 350 --resident-star-max-candidates 48
+  --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4
+  --resident-output-maps audit --resident-master-cache-dir
+  C:\glass_runs\phase2_s2_gate518_dq_stats_reuse\runs_20260623_094619\resident_master_cache`
+- `glass compare` against the WBPP black-box fastIntegration master with the
+  Gate586 output master and coverage map.
+- `glass acceptance-audit` with the Gate586 run's automatic
+  `pipeline_contract.json` and `stack_engine_contract.json`.
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident

@@ -1644,6 +1644,47 @@ def _write_default_pipeline_contract_artifact(run: Path, state) -> Path | None:
     return pipeline_contract_path
 
 
+def _write_default_stack_engine_contract_artifact(
+    run: Path,
+    state,
+    *,
+    expected_integration_engine: str,
+) -> Path | None:
+    if not (run / "integration_results.json").exists():
+        return None
+    stack_contract_path = run / "stack_engine_contract.json"
+    stack_contract_markdown = run / "stack_engine_contract.md"
+    audit = build_stack_engine_contract_audit(
+        run,
+        scope="all",
+        expected_integration_engine=expected_integration_engine,
+    )
+    write_stack_engine_contract_audit(
+        stack_contract_path,
+        audit,
+        markdown=stack_contract_markdown,
+    )
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="stack_engine_contract",
+            path=str(stack_contract_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    promotion = audit.get("default_promotion") if isinstance(audit.get("default_promotion"), dict) else {}
+    if (not audit.get("passed") or not promotion.get("ready")) and _stack_engine_contract_failure_blocks_default_run(
+        audit
+    ):
+        state.current_stage = "stack_engine_contract"
+        state.failed_stage = "stack_engine_contract"
+        state.errors.append("default StackEngine contract failed")
+    elif not audit.get("passed") or not promotion.get("ready"):
+        state.warnings.append("default StackEngine contract failed in a non-blocking diagnostic small-frame run")
+    return stack_contract_path
+
+
 def _write_default_local_norm_contract_artifact(run: Path, state) -> Path | None:
     if not (run / "local_norm_results.json").exists():
         return None
@@ -1717,6 +1758,30 @@ def _pipeline_contract_failure_blocks_default_run(audit: dict[str, Any]) -> bool
         if failed_names != {"active_frame_count_not_degenerate"}:
             return True
     return False
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _stack_engine_contract_failure_blocks_default_run(audit: dict[str, Any]) -> bool:
+    if not audit.get("passed"):
+        return True
+    promotion = audit.get("default_promotion") if isinstance(audit.get("default_promotion"), dict) else {}
+    if promotion.get("ready") is True:
+        return False
+    resident_surface_count = _optional_int(promotion.get("resident_surface_count")) or 0
+    if resident_surface_count <= 0:
+        return True
+    ledger = promotion.get("pipeline_contract_dq_ledger")
+    ledger = ledger if isinstance(ledger, dict) else {}
+    expected_rows = _optional_int(ledger.get("expected_rows"))
+    if expected_rows is not None and expected_rows < 3:
+        return False
+    return True
 
 
 def _timed_stage(run: Path, timing: dict, stage: str, fn):
@@ -2691,6 +2756,18 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "pipeline_contract",
                 lambda: _write_default_pipeline_contract_artifact(out, state),
             )
+        stack_engine_contract_path = None
+        if pipeline_contract_path is not None and state.failed_stage is None:
+            stack_engine_contract_path = _timed_stage(
+                out,
+                timing,
+                "stack_engine_contract",
+                lambda: _write_default_stack_engine_contract_artifact(
+                    out,
+                    state,
+                    expected_integration_engine="cuda_resident_stack",
+                ),
+            )
         write_run_state(args.out, state)
         if state.failed_stage == "pipeline_contract":
             console.print(
@@ -2699,6 +2776,18 @@ def cmd_run(args: argparse.Namespace) -> int:
                     "stage": "pipeline_contract",
                     "run": str(out),
                     "pipeline_contract": str(pipeline_contract_path) if pipeline_contract_path else None,
+                }
+            )
+            return 2
+        if state.failed_stage == "stack_engine_contract":
+            console.print(
+                {
+                    "status": "failed",
+                    "stage": "stack_engine_contract",
+                    "run": str(out),
+                    "stack_engine_contract": str(stack_engine_contract_path)
+                    if stack_engine_contract_path
+                    else None,
                 }
             )
             return 2
@@ -4856,18 +4945,6 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             markdown=warp_quality_markdown,
         )
 
-    stack_audit = build_stack_engine_contract_audit(
-        run,
-        scope=args.stack_scope,
-        expected_integration_engine=args.expected_integration_engine,
-        resident_calibration_contract=resident_calibration_contract
-        if isinstance(resident_calibration_contract, dict)
-        else None,
-        resident_result_contract=resident_result_contract
-        if resident_result_contract_source == "explicit" and isinstance(resident_result_contract, dict)
-        else None,
-    )
-    write_stack_engine_contract_audit(stack_path, stack_audit, markdown=stack_markdown)
     pipeline_audit = build_pipeline_contract_audit(
         run,
         pixel_verify=args.pixel_verify,
@@ -4879,6 +4956,19 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         local_norm_contract=local_norm_contract if isinstance(local_norm_contract, dict) else None,
     )
     write_pipeline_contract_audit(pipeline_path, pipeline_audit, markdown=pipeline_markdown)
+    stack_audit = build_stack_engine_contract_audit(
+        run,
+        scope=args.stack_scope,
+        expected_integration_engine=args.expected_integration_engine,
+        resident_calibration_contract=resident_calibration_contract
+        if isinstance(resident_calibration_contract, dict)
+        else None,
+        resident_result_contract=resident_result_contract
+        if resident_result_contract_source == "explicit" and isinstance(resident_result_contract, dict)
+        else None,
+        pipeline_contract=pipeline_audit,
+    )
+    write_stack_engine_contract_audit(stack_path, stack_audit, markdown=stack_markdown)
     _write_run_report(
         run,
         report_path,

@@ -2184,6 +2184,9 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert {item["name"] for item in summary["checks"]} >= {"registration_quality", "warp_quality"}
     assert stack_contract["passed"] is True
     assert stack_contract["default_promotion"]["ready"] is True
+    assert stack_contract["pipeline_contract_attached"] is True
+    assert stack_contract["pipeline_contract_source"] == "provided"
+    assert stack_contract["default_promotion"]["pipeline_contract_dq_ledger_required"] is False
     assert pipeline_contract["passed"] is True
     pipeline_checks = {item["name"]: item for item in pipeline_contract["checks"]}
     assert pipeline_checks["local_normalization_continuous_contract_audit"]["passed"] is True
