@@ -178,6 +178,20 @@ def build_resident_light_pipeline_profile(
                 resident_io_pipeline,
                 "prefetch_ready_queue_wait_s",
             ),
+            "prefetch_ready_batch_select_policy": resident_io_pipeline.get(
+                "prefetch_ready_batch_select_policy"
+            ),
+            "prefetch_ready_batch_select_enabled": bool(
+                resident_io_pipeline.get("prefetch_ready_batch_select_enabled", False)
+            ),
+            "prefetch_ready_batch_select_count": _int_value(
+                resident_io_pipeline,
+                "prefetch_ready_batch_select_count",
+            ),
+            "prefetch_ready_batch_selected_count": _int_value(
+                resident_io_pipeline,
+                "prefetch_ready_batch_selected_count",
+            ),
             "native_batch_read_candidate": bool(
                 resident_io_pipeline.get("native_batch_read_candidate", False)
             ),

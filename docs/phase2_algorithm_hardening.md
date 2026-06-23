@@ -14877,6 +14877,67 @@ Completed in Gate446:
   - full matrix summary:
     `C:\glass_runs\phase2_s2_gate553_wave_fill_matrix\runs_20260623_163435\gate553_matrix_metrics_summary.json`.
 
+### S2-Gate 554: Opt-In Ready-First Batch Selector
+
+- Continued the resident CUDA I/O/calibration mainline by adding an opt-in
+  batch selector to the default callback-release prefetch path, instead of
+  continuing the Gate553 native completion wave-fill tuning.
+- Completed:
+  - added `GLASS_RESIDENT_READY_BATCH_SELECT=1` as an explicit profiling knob;
+  - kept the no-env default on the existing single ready-index scheduler;
+  - added `_LightPrefetcher.ready_indices_batch(...)` so already-ready
+    candidate frames can be selected up to the calibration batch limit in one
+    scheduler pass;
+  - recorded `prefetch_ready_batch_select_policy`,
+    `prefetch_ready_batch_select_enabled`,
+    `prefetch_ready_batch_select_count`, and
+    `prefetch_ready_batch_selected_count` in resident artifacts and the light
+    pipeline profile;
+  - added focused tests for direct batch selection, opt-in artifact counters,
+    and no-env default preservation.
+- Tests:
+  - focused ready-index/batch/default tests: `4 passed in 0.91 s`;
+  - resident CUDA local tests:
+    `154 passed in 9.68 s`;
+  - full pytest: `1189 passed in 44.03 s`.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate554_ready_batch_select\final_20260623_165105`;
+  - Gate553 baseline:
+    `C:\glass_runs\phase2_s2_gate553_wave_fill_matrix\runs_20260623_163435\default_release_postpatch`;
+  - default no-env run:
+    `C:\glass_runs\phase2_s2_gate554_ready_batch_select\final_20260623_165105\default_noenv`;
+  - opt-in run:
+    `C:\glass_runs\phase2_s2_gate554_ready_batch_select\final_20260623_165105\ready_batch_select_optin`;
+  - all six output FITS artifacts are SHA256-identical to the Gate553 default
+    baseline in both Gate554 runs;
+  - DQ pixel closure and StackEngine surface contract passed.
+- Timing summary:
+
+  | Run | Shell s | Resident stage s | Light read/upload/calibrate s | Registration/warp s | Batch policy | Batch selected |
+  | --- | ---: | ---: | ---: | ---: | --- | ---: |
+  | Gate553 default baseline | `5.434383` | `5.063190` | `2.556746` | `0.257933` | n/a | n/a |
+  | Gate554 default no-env | `5.429829` | `5.031444` | `2.588569` | `0.256978` | `env_disabled_default` | `0` |
+  | Gate554 opt-in | `5.306247` | `4.938021` | `2.554957` | `0.253479` | `env_enabled` | `200` |
+
+- Interpretation:
+  - the default path is preserved: no-env policy is disabled and the new
+    counters stay at `0`;
+  - the opt-in path selected all `200` lights through `13` batch-selection
+    passes and kept output pixels bitwise identical;
+  - the shell/stage result is slightly faster in this run, but the target
+    light-stage improvement is only about `0.001789 s` versus Gate553, so this
+    is useful instrumentation and a safe experiment hook, not a promoted
+    default;
+  - the next substantial optimization should reduce ready-queue wait and
+    Python/native orchestration, not just reshape selection loops.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_554_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_554_ready_batch_select_summary.json`;
+  - full metrics summary:
+    `C:\glass_runs\phase2_s2_gate554_ready_batch_select\final_20260623_165105\gate554_final_metrics_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

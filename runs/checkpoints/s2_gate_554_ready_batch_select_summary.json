@@ -1,0 +1,87 @@
+{
+  "gate": "S2-Gate 554",
+  "date": "2026-06-23",
+  "result": "green",
+  "decision": "retain_opt_in_only",
+  "env_gate": "GLASS_RESIDENT_READY_BATCH_SELECT=1",
+  "run_root": "C:\\glass_runs\\phase2_s2_gate554_ready_batch_select\\final_20260623_165105",
+  "baseline": {
+    "name": "Gate553 default baseline",
+    "path": "C:\\glass_runs\\phase2_s2_gate553_wave_fill_matrix\\runs_20260623_163435\\default_release_postpatch",
+    "shell_seconds": 5.434383,
+    "resident_stage_elapsed_s": 5.063190200016834,
+    "light_read_upload_calibrate_s": 2.556746000016574,
+    "resident_registration_warp_s": 0.2579326003906317,
+    "active_frame_count": 193,
+    "masked_frame_count": 7
+  },
+  "runs": {
+    "default_noenv": {
+      "path": "C:\\glass_runs\\phase2_s2_gate554_ready_batch_select\\final_20260623_165105\\default_noenv",
+      "shell_seconds": 5.4298293,
+      "resident_stage_elapsed_s": 5.031443500018213,
+      "light_read_upload_calibrate_s": 2.588569000014104,
+      "resident_registration_warp_s": 0.2569778003380634,
+      "prefetch_ready_batch_select_policy": "env_disabled_default",
+      "prefetch_ready_batch_select_enabled": false,
+      "prefetch_ready_batch_select_count": 0,
+      "prefetch_ready_batch_selected_count": 0,
+      "hash_match_baseline": true,
+      "surface_contract_passed": true,
+      "dq_pixel_closure_passed": true
+    },
+    "optin_ready_batch_select": {
+      "path": "C:\\glass_runs\\phase2_s2_gate554_ready_batch_select\\final_20260623_165105\\ready_batch_select_optin",
+      "shell_seconds": 5.3062474,
+      "resident_stage_elapsed_s": 4.9380213000113145,
+      "light_read_upload_calibrate_s": 2.55495699995663,
+      "resident_registration_warp_s": 0.2534792996593751,
+      "prefetch_ready_batch_select_policy": "env_enabled",
+      "prefetch_ready_batch_select_enabled": true,
+      "prefetch_ready_batch_select_count": 13,
+      "prefetch_ready_batch_selected_count": 200,
+      "hash_match_baseline": true,
+      "surface_contract_passed": true,
+      "dq_pixel_closure_passed": true
+    }
+  },
+  "comparisons": {
+    "default_noenv": {
+      "shell_delta_s_vs_baseline": -0.00455370000000066,
+      "stage_delta_s_vs_baseline": -0.0317466999986209,
+      "light_delta_s_vs_baseline": 0.03182299999753013,
+      "registration_delta_s_vs_baseline": -0.0009548000525683165
+    },
+    "optin_ready_batch_select": {
+      "shell_delta_s_vs_baseline": -0.12813560000000024,
+      "stage_delta_s_vs_baseline": -0.1251689000055194,
+      "light_delta_s_vs_baseline": -0.0017890000599436462,
+      "registration_delta_s_vs_baseline": -0.004453300731256604
+    }
+  },
+  "output_hashes": {
+    "resident_master_H.fits": "8bc069ce6858ab5e065b5d9af297c35c36d4240c13980546e43cfb480115e110",
+    "resident_weight_map_H.fits": "5862111ee6f527a40671ac13f1faa43f037c90271f872f27af4acf17040fbfe8",
+    "resident_coverage_map_H.fits": "b87517be794a3b4bdcff0d8536ee0188da6afa54ed2be818bd911ba6cf1be1b3",
+    "resident_low_rejection_map_H.fits": "f1181e0ce52a7ff77b988afaf8a8911a1beaf94df54b25b0aa51014cb0d66e23",
+    "resident_high_rejection_map_H.fits": "adb66c931c5a48d6e0d7f5c2fcbcc58481420ad4912304843a3802089050c805",
+    "resident_dq_map_H.fits": "934f661119ce18bbcac1d369488aed4d959669c6ef614d6076d74be06e69ccfb"
+  },
+  "tests": {
+    "syntax_check": "passed",
+    "focused": "4 passed in 0.91 s",
+    "resident_cuda_local": "154 passed in 9.68 s",
+    "full_pytest": "1189 passed in 44.03 s"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "clean_room": {
+    "compliant": true,
+    "notes": "GLASS-owned scheduler code and artifacts only; no external implementation source inspected; no pixel math or accepted-frame changes."
+  },
+  "next_step": "Reduce ready-queue wait or Python/native orchestration on the default resident path while preserving bitwise output identity."
+}

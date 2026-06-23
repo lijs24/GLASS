@@ -1061,6 +1061,15 @@ class _LightPrefetcher:
         self.ready_queue_callback_count = 0
         self.ready_queue_wait_count = 0
         self.ready_queue_wait_s = 0.0
+        ready_batch_policy = str(os.environ.get("GLASS_RESIDENT_READY_BATCH_SELECT", "")).strip().lower()
+        self.ready_batch_select_policy = (
+            "env_enabled"
+            if ready_batch_policy in {"1", "true", "yes", "on"}
+            else "env_disabled_default"
+        )
+        self.ready_batch_select_enabled = self.ready_batch_select_policy == "env_enabled"
+        self.ready_batch_select_count = 0
+        self.ready_batch_selected_count = 0
         self.native_batch_read_submit_count = 0
         self.native_batch_read_frame_count = 0
         self.native_batch_read_max_frame_count = 0
@@ -1571,6 +1580,57 @@ class _LightPrefetcher:
                 has_pending = any(index in candidates for index in self.pending)
             if not has_pending:
                 return None
+
+    def ready_indices_batch(self, indices: Iterable[int], limit: int) -> list[int]:
+        candidates = {int(index) for index in indices}
+        max_count = max(0, int(limit))
+        if not candidates or max_count <= 0:
+            return []
+        self.ready_batch_select_count += 1
+        if self.executor is None and not self.native_queue_read_enabled:
+            selected = sorted(candidates)[:max_count]
+            self.ready_batch_selected_count += len(selected)
+            return selected
+
+        selected: list[int] = []
+        while candidates and len(selected) < max_count:
+            with self.ready_condition:
+                ready = [
+                    index
+                    for index in sorted(candidates)
+                    if index in self.ready_indices and index in self.pending
+                ]
+                if ready:
+                    take = ready[: max_count - len(selected)]
+                    selected.extend(take)
+                    for index in take:
+                        candidates.discard(index)
+                    self.ready_batch_selected_count += len(take)
+                    if len(selected) >= max_count:
+                        return selected
+                has_pending_candidate = any(index in self.pending for index in candidates)
+                if has_pending_candidate:
+                    wait_start = perf_counter()
+                    self.ready_queue_wait_count += 1
+                    if self.native_queue_read_enabled and self.native_queue_read_drain_mode == "inline":
+                        self.ready_condition.release()
+                        try:
+                            self._consume_native_queue_completion(0.1)
+                        finally:
+                            self.ready_condition.acquire()
+                    else:
+                        self.ready_condition.wait(timeout=0.1)
+                    self.ready_queue_wait_s += perf_counter() - wait_start
+                    continue
+                if selected:
+                    return selected
+            self.flush_refill()
+            self._fill()
+            with self.lock:
+                has_pending = any(index in candidates for index in self.pending)
+            if not has_pending:
+                return selected
+        return selected
 
     def release(self, index: int) -> None:
         self.release_many([index])
@@ -6380,12 +6440,33 @@ def run_resident_calibration_integration(
                 if calibration_batch_enabled:
                     remaining_indices = list(range(len(light_frames)))
                     processed_count = 0
+                    ready_batch_queue: list[tuple[int, float]] = []
                     while remaining_indices:
                         batch_items: list[tuple[int, dict[str, Any], np.ndarray | None, float]] = []
                         batch_frame_starts: list[float] = []
                         while remaining_indices and len(batch_items) < calibration_fetch_batch_frames:
                             ready_select_wait_s = 0.0
-                            if calibration_ready_order_enabled:
+                            if calibration_ready_order_enabled and light_prefetch.ready_batch_select_enabled:
+                                if not ready_batch_queue:
+                                    ready_select_start = perf_counter()
+                                    selected_indices = light_prefetch.ready_indices_batch(
+                                        remaining_indices,
+                                        calibration_fetch_batch_frames - len(batch_items),
+                                    )
+                                    ready_select_wait_total_s = perf_counter() - ready_select_start
+                                    calibration_ready_order_select_wait_s += ready_select_wait_total_s
+                                    if selected_indices:
+                                        ready_select_wait_share_s = (
+                                            ready_select_wait_total_s / float(len(selected_indices))
+                                        )
+                                        ready_batch_queue = [
+                                            (int(selected_index), ready_select_wait_share_s)
+                                            for selected_index in selected_indices
+                                        ]
+                                if not ready_batch_queue:
+                                    break
+                                item_index, ready_select_wait_s = ready_batch_queue.pop(0)
+                            elif calibration_ready_order_enabled:
                                 ready_select_start = perf_counter()
                                 selected_index = light_prefetch.ready_index(remaining_indices)
                                 ready_select_wait_s = perf_counter() - ready_select_start
@@ -11510,6 +11591,10 @@ def run_resident_calibration_integration(
                 "prefetch_ready_queue_callback_count": int(light_prefetch.ready_queue_callback_count),
                 "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
                 "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
+                "prefetch_ready_batch_select_policy": str(light_prefetch.ready_batch_select_policy),
+                "prefetch_ready_batch_select_enabled": bool(light_prefetch.ready_batch_select_enabled),
+                "prefetch_ready_batch_select_count": int(light_prefetch.ready_batch_select_count),
+                "prefetch_ready_batch_selected_count": int(light_prefetch.ready_batch_selected_count),
                 "native_batch_read_candidate": bool(light_prefetch.native_batch_read_candidate),
                 "native_batch_read_policy": str(light_prefetch.native_batch_read_policy),
                 "native_batch_read_requested": bool(light_prefetch.native_batch_read_requested),
@@ -11631,6 +11716,10 @@ def run_resident_calibration_integration(
                 "prefetch_ready_queue_callback_count": int(light_prefetch.ready_queue_callback_count),
                 "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
                 "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
+                "prefetch_ready_batch_select_policy": str(light_prefetch.ready_batch_select_policy),
+                "prefetch_ready_batch_select_enabled": bool(light_prefetch.ready_batch_select_enabled),
+                "prefetch_ready_batch_select_count": int(light_prefetch.ready_batch_select_count),
+                "prefetch_ready_batch_selected_count": int(light_prefetch.ready_batch_selected_count),
                 "native_batch_read_candidate": bool(light_prefetch.native_batch_read_candidate),
                 "native_batch_read_policy": str(light_prefetch.native_batch_read_policy),
                 "native_batch_read_requested": bool(light_prefetch.native_batch_read_requested),
@@ -12210,6 +12299,10 @@ def run_resident_calibration_integration(
                         ),
                         "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
                         "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
+                        "prefetch_ready_batch_select_policy": str(light_prefetch.ready_batch_select_policy),
+                        "prefetch_ready_batch_select_enabled": bool(light_prefetch.ready_batch_select_enabled),
+                        "prefetch_ready_batch_select_count": int(light_prefetch.ready_batch_select_count),
+                        "prefetch_ready_batch_selected_count": int(light_prefetch.ready_batch_selected_count),
                         "native_batch_read_candidate": bool(light_prefetch.native_batch_read_candidate),
                         "native_batch_read_policy": str(light_prefetch.native_batch_read_policy),
                         "native_batch_read_requested": bool(light_prefetch.native_batch_read_requested),

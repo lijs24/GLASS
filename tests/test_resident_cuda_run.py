@@ -126,6 +126,46 @@ def test_light_prefetcher_ready_index_selects_completed_candidate(monkeypatch) -
         assert data.tolist() == [0.0]
 
 
+def test_light_prefetcher_ready_indices_batch_selects_multiple_completed_candidates(monkeypatch) -> None:
+    release_slow = Event()
+
+    def fake_read_light_timed(
+        path: str,
+        slot: np.ndarray | None = None,
+        fits_read_mode: str = "astropy",
+        fits_spec: object | None = None,
+    ):
+        index = int(Path(path).stem)
+        if index == 0:
+            assert release_slow.wait(timeout=5.0)
+        return np.asarray([index], dtype=np.float32), {
+            "total": 0.0,
+            "fits_open": 0.0,
+            "fits_materialize_decode": 0.0,
+            "fits_reader_backend": "fake",
+        }
+
+    monkeypatch.setattr("glass.engine.resident_cuda._read_light_timed", fake_read_light_timed)
+
+    frames = [{"path": f"{index}.fits"} for index in range(4)]
+    with _LightPrefetcher(frames, depth=4, workers=4) as prefetcher:
+        selected = prefetcher.ready_indices_batch([0, 1, 2, 3], 2)
+        assert len(selected) == 2
+        assert 0 not in selected
+        assert set(selected).issubset({1, 2, 3})
+        assert prefetcher.ready_batch_select_count == 1
+        assert prefetcher.ready_batch_selected_count == 2
+
+        for expected in selected:
+            data, _profile, _wait_s = prefetcher.result(expected)
+            assert data.tolist() == [float(expected)]
+
+        release_slow.set()
+        for expected in sorted({0, 1, 2, 3}.difference(selected)):
+            data, _profile, _wait_s = prefetcher.result(expected)
+            assert data.tolist() == [float(expected)]
+
+
 def test_resident_memory_estimate_includes_chunked_warp_workspace() -> None:
     frame_bytes = 72 * 80 * 4
     base_peak_bytes = (2 + 1 + 3 + 2) * frame_bytes + 2 * 4
@@ -3597,7 +3637,10 @@ def test_cli_resident_cuda_auto_release_policy_prefers_full_lanes(tmp_path: Path
     assert io_pipeline["calibration_h2d_release_count"] == 0
 
 
-def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(tmp_path: Path):
+def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(
+    tmp_path: Path,
+    monkeypatch,
+):
     cuda_module_or_skip()
     dataset = _two_light_weight_dataset(tmp_path)
     manifest = tmp_path / "manifest.json"
@@ -3606,6 +3649,7 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(tmp_path:
 
     assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
     assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    monkeypatch.setenv("GLASS_RESIDENT_READY_BATCH_SELECT", "1")
     assert main(
         [
             "run",
@@ -3656,6 +3700,11 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(tmp_path:
     assert io_pipeline["calibration_callback_release_recommended"] is False
     assert io_pipeline["calibration_h2d_release_reason"] == "explicit_callback_queue_requested"
     assert io_pipeline["calibration_fetch_batch_frames"] == 2
+    assert io_pipeline["calibration_order_mode"] == "ready_first_single_master_group"
+    assert io_pipeline["prefetch_ready_batch_select_policy"] == "env_enabled"
+    assert io_pipeline["prefetch_ready_batch_select_enabled"] is True
+    assert io_pipeline["prefetch_ready_batch_select_count"] >= 1
+    assert io_pipeline["prefetch_ready_batch_selected_count"] == 2
     assert io_pipeline["calibration_wave_effective_frames"] == 1
     assert io_pipeline["calibration_wave_release_mode"] == "callback_after_h2d_event"
     assert io_pipeline["calibration_batch_count"] == 1
@@ -3671,6 +3720,15 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(tmp_path:
     assert io_pipeline["prefetch_fill_call_count"] == 3
     assert io_pipeline["prefetch_fill_submit_count"] == 2
     assert io_pipeline["prefetch_release_fill_model"] == "batched_release_single_fill"
+    profile_knobs = resident["artifacts"][0]["resident_light_pipeline_profile"]["knobs"]
+    assert profile_knobs["prefetch_ready_batch_select_policy"] == "env_enabled"
+    assert profile_knobs["prefetch_ready_batch_select_enabled"] is True
+    assert profile_knobs["prefetch_ready_batch_select_count"] == io_pipeline[
+        "prefetch_ready_batch_select_count"
+    ]
+    assert profile_knobs["prefetch_ready_batch_selected_count"] == io_pipeline[
+        "prefetch_ready_batch_selected_count"
+    ]
 
 
 def test_cli_resident_cuda_callback_queue_clamps_fetch_batch_to_prefetch_depth(tmp_path: Path):
@@ -3736,8 +3794,14 @@ def test_cli_resident_cuda_callback_queue_clamps_fetch_batch_to_prefetch_depth(t
     assert io_pipeline["calibration_batch_count"] == 2
     assert io_pipeline["prefetch_max_inflight_slots"] == 1
     assert io_pipeline["prefetch_release_count"] == 2
+    assert io_pipeline["prefetch_ready_batch_select_policy"] == "env_disabled_default"
+    assert io_pipeline["prefetch_ready_batch_select_enabled"] is False
+    assert io_pipeline["prefetch_ready_batch_select_count"] == 0
+    assert io_pipeline["prefetch_ready_batch_selected_count"] == 0
     assert io_overlap["calibration_fetch_batch_frames"] == 1
     assert profile_knobs["calibration_fetch_batch_frames"] == 1
+    assert profile_knobs["prefetch_ready_batch_select_policy"] == "env_disabled_default"
+    assert profile_knobs["prefetch_ready_batch_select_enabled"] is False
 
 
 def test_cli_resident_cuda_callback_queue_clamps_wave_to_stream_count(tmp_path: Path):
