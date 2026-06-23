@@ -133,6 +133,10 @@ def test_resident_matching_master_cache_uses_stack_engine_contract(tmp_path: Pat
     assert cached_stats["cache_hit"] is True
     assert cached_stats["stack_engine_enabled"] is True
     assert cached_stats["cache_scope"] == "shared"
+    assert cached_stats["cache_hit_load_mode"] == "npy_mmap_readonly"
+    assert isinstance(cached_bias, np.memmap)
+    assert isinstance(cached_dark, np.memmap)
+    assert isinstance(cached_flat, np.memmap)
     assert np.allclose(cached_bias, bias)
     assert np.allclose(cached_dark, dark)
     assert np.allclose(cached_flat, flat)

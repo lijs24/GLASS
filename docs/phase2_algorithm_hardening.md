@@ -13520,6 +13520,60 @@ Completed in Gate446:
   - WBPP compare report:
     `C:\glass_runs\phase2_s2_gate531_catalog_stream8_real\runs_20260623_122624\catalog_stream8_repeat\compare_vs_wbpp_fastintegration_scaled_coverage190.html`.
 
+### S2-Gate 532: Resident Master Cache Mmap Load
+
+- Continued the Phase 2 mainline after Gate531 by returning to the real
+  200-light light-read/upload/calibration path. A full pinned prefetch probe
+  with `--resident-prefetch-frames 200` was deliberately not promoted: it
+  reduced read wait but expanded pinned host memory to about `22.97 GiB` and
+  regressed shell time to `10.692768 s`.
+- Completed:
+  - changed resident master-cache hits from eager `np.load` to
+    `np.load(..., mmap_mode="r")`;
+  - records `cache_hit_load_mode=npy_mmap_readonly` in cache-hit master stats;
+  - applied the same mmap load policy to the aggregate resident master cache
+    helper;
+  - preserved calibration formulas, master pixels, registration, warp,
+    rejection, DQ, integration, and output maps.
+- Micro-benchmark on the real M38 H-alpha shared master cache:
+  - normal `.npy` load plus `set_calibration_masters`: about `0.23-0.29 s`;
+  - read-only mmap plus `set_calibration_masters`: about `0.18-0.19 s`.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate532_master_mmap_real\runs_20260623_124500`;
+  - validation run:
+    `C:\glass_runs\phase2_s2_gate532_master_mmap_real\runs_20260623_124500\master_mmap_default`;
+  - same M38 H-alpha 200-light plan, shared master cache, resident CUDA,
+    `similarity_cuda_triangle`, Lanczos3 warp, winsorized sigma rejection, and
+    audit maps;
+  - internal runtime `5.448489899979904 s`, shell `5.819167 s`;
+  - cache-hit stats record one shared-cache hit with
+    `cache_hit_load_mode=npy_mmap_readonly`;
+  - master build/load changed from Gate531 `0.35347919998457655 s` to
+    `0.29116860002977774 s`.
+- Numerical and black-box validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to Gate531;
+  - GLASS-vs-WBPP scaled compare remains shape-matched with coverage fraction
+    `0.9892770479074376`, RMS `0.0004279821839256963`, and p99 absolute
+    difference `0.0001313822576776147`;
+  - scaled acceptance audit passed with GLASS internal speedup
+    `200.5217996281923x` versus the WBPP black-box `1092.541 s` timing.
+- Interpretation:
+  - this is a resident light-pipeline cache-hit performance gate, not a report
+    handoff gate;
+  - the full-pinned-RAM probe shows the next high-memory design should decouple
+    pageable raw RAM caching from the small pinned H2D staging ring instead of
+    simply pinning every raw frame;
+  - the next substantive targets remain two-tier raw-cache/pinned-ring
+    scheduling and bitwise-safe resident warp/integration fusion.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_532_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_532_master_mmap_summary.json`;
+  - WBPP compare report:
+    `C:\glass_runs\phase2_s2_gate532_master_mmap_real\runs_20260623_124500\master_mmap_default\compare_vs_wbpp_fastintegration_scaled_coverage190.html`.
+
 ## Gate Rules
 
 Each gate requires:

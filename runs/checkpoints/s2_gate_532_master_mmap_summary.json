@@ -1,0 +1,74 @@
+{
+  "root": "C:\\glass_runs\\phase2_s2_gate532_master_mmap_real\\runs_20260623_124500",
+  "run": "C:\\glass_runs\\phase2_s2_gate532_master_mmap_real\\runs_20260623_124500\\master_mmap_default",
+  "baseline": "C:\\glass_runs\\phase2_s2_gate531_catalog_stream8_real\\runs_20260623_122624\\catalog_stream8_repeat",
+  "shell_elapsed_s": 5.819167,
+  "internal_elapsed_s": 5.448489899979904,
+  "master_cache_hit_load_modes": {
+    "H_9600x6422_bias-G4ed2155578_dark-G59e41ba802_flat-G4f1de65e6a": "npy_mmap_readonly"
+  },
+  "master_cache_hit_count": 1,
+  "light_wall_s": 2.4374794000177644,
+  "master_build_or_load_s": 0.29116860002977774,
+  "read_wait_s": 0.6513081003213301,
+  "native_h2d_calibrate_store_s": 0.9426784,
+  "registration_wall_reported_s": 0.25282459968002513,
+  "registration_component_nested_s": 1.5266043003463798,
+  "warp_native_total_s": 0.4899063,
+  "catalog_native_total_s": 0.1363071,
+  "integration_s": 0.3034021999919787,
+  "output_write_s": 0.21976680000079796,
+  "comparisons_vs_gate531": {
+    "resident_master_H.fits": {
+      "same_shape": true,
+      "same_nan_mask": true,
+      "bitwise_equal": true
+    },
+    "resident_weight_map_H.fits": {
+      "same_shape": true,
+      "same_nan_mask": true,
+      "bitwise_equal": true
+    },
+    "resident_coverage_map_H.fits": {
+      "same_shape": true,
+      "same_nan_mask": true,
+      "bitwise_equal": true
+    },
+    "resident_low_rejection_map_H.fits": {
+      "same_shape": true,
+      "same_nan_mask": true,
+      "bitwise_equal": true
+    },
+    "resident_high_rejection_map_H.fits": {
+      "same_shape": true,
+      "same_nan_mask": true,
+      "bitwise_equal": true
+    },
+    "resident_dq_map_H.fits": {
+      "same_shape": true,
+      "same_nan_mask": true,
+      "bitwise_equal": true
+    }
+  },
+  "wbpp_compare": {
+    "path": "C:\\glass_runs\\phase2_s2_gate532_master_mmap_real\\runs_20260623_124500\\master_mmap_default\\compare_vs_wbpp_fastintegration_scaled_coverage190.json",
+    "html": "C:\\glass_runs\\phase2_s2_gate532_master_mmap_real\\runs_20260623_124500\\master_mmap_default\\compare_vs_wbpp_fastintegration_scaled_coverage190.html",
+    "shape_match": true,
+    "coverage_fraction": null,
+    "rms_diff": 0.0004279821839256963,
+    "abs_diff_p99": 0.0001313822576776147,
+    "speedup_vs_reference": null
+  },
+  "acceptance_audit": {
+    "path": "C:\\glass_runs\\phase2_s2_gate532_master_mmap_real\\runs_20260623_124500\\master_mmap_default\\acceptance_audit_scaled.json",
+    "markdown": "C:\\glass_runs\\phase2_s2_gate532_master_mmap_real\\runs_20260623_124500\\master_mmap_default\\acceptance_audit_scaled.md",
+    "status": "passed",
+    "speedup_vs_wbpp": 200.5217996281923
+  },
+  "focused_tests": [
+    "tests/test_resident_master_stack_engine.py::test_resident_matching_master_cache_uses_stack_engine_contract",
+    "tests/test_cuda_resident_stack.py::test_resident_stack_grid_star_catalog_batch_reports_native_timing",
+    "tests/test_resident_cuda_run.py::test_cli_resident_cuda_shared_master_cache_reuses_across_runs"
+  ],
+  "full_pytest": "1174 passed in 43.29s"
+}

@@ -4180,6 +4180,10 @@ def _master_cache_paths(cache: Path, key: str) -> dict[str, Path]:
     }
 
 
+def _load_cached_resident_master(path: Path) -> np.ndarray:
+    return np.load(path, mmap_mode="r")
+
+
 def _cached_master_files_complete(paths: dict[str, Path], stats: dict[str, Any]) -> bool:
     return (
         (int(stats.get("bias_count") or 0) <= 0 or paths["bias"].exists())
@@ -4742,10 +4746,11 @@ def _load_or_build_matching_masters(
                 "cache_hit": True,
                 "cache_scope": cache_scope,
                 "cache_dir": str(cache),
+                "cache_hit_load_mode": "npy_mmap_readonly",
             }
-            master_bias = np.load(paths["bias"]) if paths["bias"].exists() else None
-            master_dark = np.load(paths["dark"]) if paths["dark"].exists() else None
-            master_flat = np.load(paths["flat"]) if paths["flat"].exists() else None
+            master_bias = _load_cached_resident_master(paths["bias"]) if paths["bias"].exists() else None
+            master_dark = _load_cached_resident_master(paths["dark"]) if paths["dark"].exists() else None
+            master_flat = _load_cached_resident_master(paths["flat"]) if paths["flat"].exists() else None
             return master_bias, master_dark, master_flat, stats, stats.get("dark_exposure_s")
 
     master_bias = None
@@ -4859,7 +4864,13 @@ def _load_or_build_aggregate_masters(
     if bias_path.exists() and dark_path.exists() and flat_path.exists() and stats_path.exists():
         stats = read_json(stats_path)
         if stats.get("stack_engine_enabled") is True:
-            return np.load(bias_path), np.load(dark_path), np.load(flat_path), stats
+            stats = {**stats, "cache_hit_load_mode": "npy_mmap_readonly"}
+            return (
+                _load_cached_resident_master(bias_path),
+                _load_cached_resident_master(dark_path),
+                _load_cached_resident_master(flat_path),
+                stats,
+            )
 
     master_bias = None
     master_metrics: dict[str, dict[str, Any]] = {}
