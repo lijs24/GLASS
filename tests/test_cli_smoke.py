@@ -11,6 +11,7 @@ from glass.cli import _resolve_resident_integration_rejection_default
 from glass.cli import _resolve_resident_fits_read_mode_default
 from glass.cli import _resolve_resident_local_normalization_default
 from glass.cli import _resolve_resident_registration_default
+from glass.cli import _resolve_resident_warp_interpolation_default
 from glass.cli import build_parser
 from glass.cli import main
 from glass.engine.contracts import DQFlag
@@ -398,6 +399,87 @@ def test_run_resident_local_normalization_auto_keeps_tile_path_auto() -> None:
     assert resolution["requested"] == "auto"
     assert resolution["effective"] == "auto"
     assert resolution["source"] == "unused_non_resident"
+
+
+def test_run_resident_warp_interpolation_defaults_to_lanczos3_for_matrix_warp() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    _resolve_resident_registration_default(args, command="run")
+    resolution = _resolve_resident_warp_interpolation_default(args, command="run")
+
+    assert args.backend == "cuda"
+    assert args.memory_mode == "resident"
+    assert args.resident_registration == "similarity_cuda_triangle"
+    assert args.resident_warp_interpolation == "lanczos3"
+    assert resolution["requested"] == "auto"
+    assert resolution["effective"] == "lanczos3"
+    assert resolution["source"] == "resident_cuda_default"
+    assert resolution["matrix_registration"] is True
+    assert resolution["escape_hatch"] == "--resident-warp-interpolation bilinear"
+
+
+def test_run_resident_warp_interpolation_explicit_bilinear_is_preserved() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-warp-interpolation",
+            "bilinear",
+        ]
+    )
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    _resolve_resident_registration_default(args, command="run")
+    resolution = _resolve_resident_warp_interpolation_default(args, command="run")
+
+    assert args.resident_warp_interpolation == "bilinear"
+    assert resolution["requested"] == "bilinear"
+    assert resolution["effective"] == "bilinear"
+    assert resolution["explicit"] is True
+    assert resolution["source"] == "explicit"
+
+
+def test_run_resident_warp_interpolation_auto_without_matrix_warp_uses_bilinear_fallback() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-registration",
+            "off",
+        ]
+    )
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    _resolve_resident_registration_default(args, command="run")
+    resolution = _resolve_resident_warp_interpolation_default(args, command="run")
+
+    assert args.memory_mode == "resident"
+    assert args.resident_registration == "off"
+    assert args.resident_warp_interpolation == "bilinear"
+    assert resolution["requested"] == "auto"
+    assert resolution["effective"] == "bilinear"
+    assert resolution["matrix_registration"] is False
+
+
+def test_run_resident_warp_interpolation_auto_keeps_tile_path_bilinear_placeholder() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run", "--backend", "cpu"])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    _resolve_resident_registration_default(args, command="run")
+    resolution = _resolve_resident_warp_interpolation_default(args, command="run")
+
+    assert args.memory_mode == "tile"
+    assert args.resident_warp_interpolation == "bilinear"
+    assert resolution["requested"] == "auto"
+    assert resolution["effective"] == "bilinear"
+    assert resolution["source"] == "unused_non_matrix"
 
 
 def test_run_defaults_fallback_to_tile_when_cuda_unavailable() -> None:

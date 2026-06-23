@@ -340,6 +340,9 @@ DEFAULT_RESIDENT_LOCAL_NORMALIZATION = "auto"
 DEFAULT_RESIDENT_LOCAL_NORMALIZATION_EFFECTIVE = "on"
 DEFAULT_RESIDENT_LOCAL_NORMALIZATION_MODE_EFFECTIVE = "grid_mean_std"
 DEFAULT_RESIDENT_LOCAL_NORMALIZATION_TILE_SIZE_EFFECTIVE = 256
+DEFAULT_RESIDENT_WARP_INTERPOLATION = "auto"
+DEFAULT_RESIDENT_WARP_INTERPOLATION_EFFECTIVE = "lanczos3"
+DEFAULT_RESIDENT_WARP_INTERPOLATION_FALLBACK = "bilinear"
 
 RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_prefetch_frames": "--resident-prefetch-frames",
@@ -669,6 +672,69 @@ def _resolve_resident_local_normalization_default(
     return resolution
 
 
+def _resolve_resident_warp_interpolation_default(
+    args: argparse.Namespace,
+    *,
+    command: str,
+) -> dict[str, object]:
+    requested = str(getattr(args, "resident_warp_interpolation", DEFAULT_RESIDENT_WARP_INTERPOLATION))
+    explicit = _argv_has_option(args, "--resident-warp-interpolation")
+    resident_cuda_integration = (
+        getattr(args, "memory_mode", None) == "resident"
+        and getattr(args, "backend", None) == "cuda"
+        and getattr(args, "until_stage", DEFAULT_UNTIL_STAGE) == "integration"
+    )
+    resident_registration = str(getattr(args, "resident_registration", "off"))
+    matrix_registration = resident_registration in {
+        "similarity_cuda_catalog",
+        "similarity_cuda_triangle",
+        "external_matrix",
+    }
+
+    effective = requested
+    source = "explicit" if explicit else "unused_non_resident"
+    reason = (
+        "user_explicit_resident_warp_interpolation"
+        if explicit
+        else "non_resident_path_uses_bilinear_placeholder"
+    )
+    if requested == "auto":
+        if resident_cuda_integration and matrix_registration:
+            effective = DEFAULT_RESIDENT_WARP_INTERPOLATION_EFFECTIVE
+            source = "explicit_auto" if explicit else "resident_cuda_default"
+            reason = (
+                "explicit_auto_resident_matrix_warp_promotes_lanczos3"
+                if explicit
+                else "resident_cuda_default_promotes_matrix_warp_lanczos3"
+            )
+        else:
+            effective = DEFAULT_RESIDENT_WARP_INTERPOLATION_FALLBACK
+            source = "explicit_auto_fallback" if explicit else "unused_non_matrix"
+            reason = (
+                "explicit_auto_resident_warp_interpolation_uses_bilinear_without_matrix_warp"
+                if explicit
+                else "non_matrix_or_non_resident_path_uses_bilinear_placeholder"
+            )
+    setattr(args, "resident_warp_interpolation", effective)
+    resolution = {
+        "schema_version": 1,
+        "command": command,
+        "requested": requested,
+        "effective": effective,
+        "explicit": explicit,
+        "source": source,
+        "reason": reason,
+        "default": DEFAULT_RESIDENT_WARP_INTERPOLATION,
+        "default_effective": DEFAULT_RESIDENT_WARP_INTERPOLATION_EFFECTIVE,
+        "fallback": DEFAULT_RESIDENT_WARP_INTERPOLATION_FALLBACK,
+        "resident_registration": resident_registration,
+        "matrix_registration": matrix_registration,
+        "escape_hatch": "--resident-warp-interpolation bilinear",
+    }
+    args._resident_warp_interpolation_resolution = resolution
+    return resolution
+
+
 def _explicit_option(args: argparse.Namespace, flag: str) -> bool:
     return _argv_has_option(args, flag)
 
@@ -780,6 +846,10 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     timing["local_normalization"] = getattr(args, "local_normalization", None)
     timing["resident_local_normalization_mode"] = getattr(args, "resident_local_normalization_mode", None)
     timing["resident_local_normalization_tile_size"] = getattr(args, "resident_local_normalization_tile_size", None)
+    warp_interpolation_resolution = getattr(args, "_resident_warp_interpolation_resolution", None)
+    if isinstance(warp_interpolation_resolution, dict):
+        timing["resident_warp_interpolation_resolution"] = warp_interpolation_resolution
+    timing["resident_warp_interpolation"] = getattr(args, "resident_warp_interpolation", None)
     timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
     timing["resident_master_cache_policy"] = getattr(args, "resident_master_cache_policy", None)
     timing["resident_master_cache_dir"] = getattr(args, "resident_master_cache_dir", None)
@@ -917,7 +987,11 @@ def _write_resident_memory_admission(
         resident_warp_batch_dispatch=getattr(args, "resident_warp_batch_dispatch", "chunked"),
         resident_warp_chunk_capacity_frames=getattr(args, "resident_warp_chunk_capacity_frames", None),
         resident_integration_dispatch=getattr(args, "resident_integration_dispatch", "stack"),
-        resident_warp_interpolation=getattr(args, "resident_warp_interpolation", "bilinear"),
+        resident_warp_interpolation=getattr(
+            args,
+            "resident_warp_interpolation",
+            DEFAULT_RESIDENT_WARP_INTERPOLATION_FALLBACK,
+        ),
         local_normalization=getattr(args, "local_normalization", "auto"),
         integration_rejection=getattr(args, "integration_rejection", "auto"),
         resident_winsorized_mode=getattr(args, "resident_winsorized_mode", "fast_approx"),
@@ -1614,6 +1688,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     _resolve_resident_registration_default(args, command="audit")
     _resolve_resident_integration_rejection_default(args, command="audit")
     _resolve_resident_local_normalization_default(args, command="audit")
+    _resolve_resident_warp_interpolation_default(args, command="audit")
     _write_run_command(out, args)
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
@@ -1776,6 +1851,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     _resolve_resident_registration_default(args, command="run")
     _resolve_resident_integration_rejection_default(args, command="run")
     _resolve_resident_local_normalization_default(args, command="run")
+    _resolve_resident_warp_interpolation_default(args, command="run")
     _seed_run_inputs(Path(args.out), args.plan)
     _write_run_command(Path(args.out), args)
     if args.memory_mode == "resident":
@@ -5240,9 +5316,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-warp-interpolation",
-        choices=["bilinear", "lanczos3"],
-        default="bilinear",
-        help="resident CUDA matrix warp interpolation for similarity/external registration",
+        choices=["auto", "bilinear", "lanczos3"],
+        default=DEFAULT_RESIDENT_WARP_INTERPOLATION,
+        help=(
+            "resident CUDA matrix warp interpolation for similarity/external registration; "
+            "auto promotes the default resident CUDA matrix warp path to lanczos3, "
+            "bilinear is the explicit speed/compatibility escape hatch"
+        ),
     )
     run.add_argument(
         "--resident-warp-clamping-threshold",
@@ -5708,9 +5788,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-warp-interpolation",
-        choices=["bilinear", "lanczos3"],
-        default="bilinear",
-        help="resident CUDA matrix warp interpolation for resident audit",
+        choices=["auto", "bilinear", "lanczos3"],
+        default=DEFAULT_RESIDENT_WARP_INTERPOLATION,
+        help=(
+            "resident CUDA matrix warp interpolation for resident audit; auto promotes resident "
+            "CUDA matrix warp to lanczos3 and explicit bilinear keeps the speed/compatibility path"
+        ),
     )
     audit.add_argument("--resident-warp-clamping-threshold", type=float, default=-1.0)
     audit.add_argument(

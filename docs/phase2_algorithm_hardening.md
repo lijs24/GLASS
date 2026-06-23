@@ -15566,6 +15566,65 @@ Completed in Gate446:
     registration, warp, rejection, integration, DQ bits, frame admission, or
     output pixels.
 
+### S2-Gate 567: Resident Warp Interpolation Default Promotion
+
+- Continues the Phase 2 default-path mainline by making validated full
+  resident CUDA matrix registration use Lanczos3 warp interpolation when the
+  user leaves `--resident-warp-interpolation` unspecified.
+- Completed:
+  - `--resident-warp-interpolation` now defaults to `auto` for `glass run`
+    and `glass audit`;
+  - full resident CUDA integration with matrix registration resolves `auto`
+    to `lanczos3`;
+  - explicit `--resident-warp-interpolation bilinear` is preserved as the
+    speed/compatibility escape hatch;
+  - non-matrix and non-resident paths resolve `auto` to the bilinear
+    placeholder before lower resident code is called;
+  - `run_timing.json` records `resident_warp_interpolation_resolution`.
+- Tests:
+  - syntax check:
+    `.venv\Scripts\python.exe -m py_compile src\glass\cli.py
+    tests\test_cli_smoke.py`;
+  - focused default-resolution tests: `7 passed, 43 deselected in 0.36 s`;
+  - CLI smoke suite: `50 passed in 6.09 s`;
+  - resident triangle default-path focused test: `1 passed in 0.82 s`;
+  - full suite: `1218 passed in 45.45 s`.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate567_default_resident_warp\runs_20260623_184311\default_warp`;
+  - the command intentionally omitted `--backend`, `--memory-mode`,
+    `--until-stage`, `--resident-registration`, `--integration-rejection`,
+    `--local-normalization`, `--resident-local-normalization-mode`,
+    `--resident-local-normalization-tile-size`, and
+    `--resident-warp-interpolation`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_567_default_resident_warp_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `7.3488847 s` |
+  | Run timing total | `6.99615249998169 s` |
+  | Gate566 run timing total | `6.939177799969912 s` |
+  | WBPP black-box reference elapsed | `1092.541 s` |
+  | GLASS speedup vs WBPP reference | `156.16311965796334x` |
+  | Default backend/memory | `cuda / resident` |
+  | Registration requested/effective | `auto / similarity_cuda_triangle` |
+  | Rejection requested/effective | `auto / winsorized_sigma` |
+  | LN requested/effective | `auto / on` |
+  | Warp interpolation requested/effective | `auto / lanczos3` |
+  | Resident artifact warp interpolation | `lanczos3` |
+  | LN contract status | `passed` |
+  | Pipeline contract status | `passed` |
+  | Active/rejected frames | `193 / 7` |
+  | Output SHA256 vs Gate566 | `all identical` |
+- Interpretation:
+  - this gate changes default dispatch only when the user has not explicitly
+    selected a resident warp interpolation mode;
+  - it does not change warp kernel math, registration matrix estimation,
+    calibration, LN, rejection, integration, DQ bits, frame admission, or
+    output pixels relative to the validated Gate566 run.
+
 ## Gate Rules
 
 Each gate requires:
