@@ -1,0 +1,83 @@
+{
+  "gate": "S2-Gate 518",
+  "status": "passed",
+  "objective": "Resident DQ stats reuse in provenance",
+  "run_root": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619",
+  "profile_before_patch_run": "C:\\glass_runs\\phase2_s2_gate518_profile_current\\runs_20260623_094158\\profile_warm",
+  "profile_after_patch_run": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\profile_after_patch",
+  "warm_run": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\warm_auto",
+  "cold_run": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\cold_auto",
+  "warm_repeat_run": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\warm_repeat_auto",
+  "profile_before_patch_internal_s": 11.682714099995792,
+  "profile_after_patch_internal_s": 10.030273599957582,
+  "profile_internal_speedup_after_vs_before": 1.164745306652971,
+  "cold_internal_s": 14.709655200014822,
+  "cold_shell_s": 15.127617,
+  "warm_internal_s": 9.321247900021262,
+  "warm_shell_s": 9.754701,
+  "warm_repeat_shell_s": 9.735261,
+  "gate517_warm_internal_s": 8.503292900044471,
+  "gate517_warm_shell_s": 8.854115,
+  "wbpp_elapsed_s": 1092.541,
+  "warm_speedup_vs_wbpp_internal": 117.2097354043666,
+  "warm_speedup_vs_wbpp_shell": 112.00047033717387,
+  "timing_s": {
+    "master_build_or_load": 0.43099960003746673,
+    "light_read_upload_calibrate": 2.662712100020144,
+    "resident_registration_component_accounted": 3.8077909993264334,
+    "resident_registration_warp": 0.8559001002577133,
+    "resident_integration": 0.45532220002496615,
+    "output_write": 0.3431183000211604
+  },
+  "dq_fastpath": {
+    "precomputed_dq_stats_used": true,
+    "finite_pre_rejection_source": "geometric_warp_coverage",
+    "rejection_reduced_pixels_source": "low_high_rejection_masks",
+    "rejected_sample_count_source": "low_high_rejection_maps"
+  },
+  "cold_warm_compare": {
+    "bitwise_equal": true,
+    "rms": 0.0,
+    "max_abs": 0.0,
+    "p99_abs": 0.0
+  },
+  "wbpp_compare": {
+    "shape_match": true,
+    "rms_diff": 0.0017794216505176163,
+    "abs_diff_p99": 0.00042621337808668863,
+    "coverage_fraction": 0.960532609259836
+  },
+  "contracts": {
+    "resident_calibration": "passed",
+    "resident_result_pixel_verify": "passed",
+    "pipeline_pixel_verify": "passed",
+    "stack_engine_default_ready": "passed",
+    "acceptance_audit": "passed"
+  },
+  "tests": {
+    "focused_dq_provenance": "6 passed, 76 deselected in 0.57 s",
+    "resident_stack_engine": "100 passed in 11.21 s",
+    "full_pytest": "1161 passed in 42.64 s",
+    "doctor": "passed"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "driver": "596.21"
+  },
+  "notes": [
+    "Profiled DQ/provenance path improved, but non-profiled Gate518 warm was slower than Gate517 because registration timing varied upward.",
+    "nvidia-smi sampled 76% GPU utilization after Gate518 runs, so the end-to-end timing is recorded as contended/variable.",
+    "No calibration, registration, warp, rejection, integration, DQ flag, or output pixel semantics changed."
+  ],
+  "artifacts": {
+    "checkpoint": "runs/checkpoints/s2_gate_518_status.md",
+    "summary": "runs/checkpoints/s2_gate_518_dq_stats_reuse_summary.json",
+    "cold_warm_compare": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\cold_warm_master_compare.json",
+    "compare_json": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\warm_auto\\s2_gate_518_compare_vs_wbpp.json",
+    "compare_html": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\warm_auto\\s2_gate_518_compare_vs_wbpp.html",
+    "acceptance_audit": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\warm_auto\\phase2_contract_acceptance_audit_s2_gate_518.json"
+  }
+}

@@ -627,6 +627,54 @@ def test_resident_dq_map_marks_geometric_warp_edges_without_no_data():
     assert summary["no_data"] == 1
 
 
+def test_resident_dq_map_precomputed_stats_feed_geometric_provenance():
+    master = np.ones((2, 2), dtype=np.float32)
+    weight = np.full((2, 2), 2.0, dtype=np.float32)
+    coverage = np.array([[2.0, 1.0], [2.0, 2.0]], dtype=np.float32)
+    low = np.array([[0.0, 1.0], [0.0, 0.0]], dtype=np.float32)
+    high = np.array([[0.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    geometric = np.array([[2.0, 1.0], [0.0, 2.0]], dtype=np.float32)
+
+    dq, summary, stats = _resident_dq_map(
+        master,
+        weight,
+        coverage,
+        low,
+        high,
+        geometric_warp_coverage_map=geometric,
+        active_frame_count=2,
+        return_stats=True,
+    )
+    provenance = _resident_dq_coverage_provenance(
+        coverage,
+        low,
+        high,
+        active_frame_count=2,
+        geometric_warp_coverage_map=geometric,
+        geometric_warp_coverage_frame_count=2,
+        rejection_map_stats={
+            "low_rejection": stats["low_rejection"],
+            "high_rejection": stats["high_rejection"],
+        },
+        precomputed_dq_stats=stats,
+    )
+
+    assert dq.shape == master.shape
+    assert summary["valid"] == 1
+    assert stats["stats_source"] == "resident_dq_map_single_pass"
+    assert stats["post_rejection_coverage"]["rounded_sum"] == 7
+    assert stats["geometric_warp_coverage"]["rounded_sum"] == 5
+    assert stats["low_rejection"]["rounded_sum"] == 1
+    assert stats["high_rejection"]["rounded_sum"] == 1
+    assert stats["rejection_reduced_pixels"] == 2
+    assert provenance["precomputed_dq_stats_used"] is True
+    assert provenance["finite_pre_rejection_source"] == "geometric_warp_coverage"
+    assert provenance["geometric_partial_pixels"] == 1
+    assert provenance["geometric_full_pixels"] == 2
+    assert provenance["rejection_reduced_pixels"] == 2
+    assert provenance["rejected_sample_count"] == 2.0
+
+
 def test_resident_dq_coverage_provenance_includes_geometric_warp_coverage():
     coverage = np.full((2, 2), 2.0, dtype=np.float32)
     geometric = np.array([[2.0, 1.0], [0.0, 2.0]], dtype=np.float32)
@@ -649,6 +697,7 @@ def test_resident_dq_coverage_provenance_includes_geometric_warp_coverage():
     assert provenance["geometric_partial_pixels"] == 1
     assert provenance["geometric_full_pixels"] == 2
     assert provenance["partial_edge_inference"] == "available_from_geometric_warp_coverage"
+    assert provenance["precomputed_dq_stats_used"] is False
 
 
 def test_resident_dq_coverage_provenance_falls_back_when_source_dq_changes_samples():

@@ -1029,6 +1029,107 @@ Decision:
 - The next substantive gate should target the now-dominant warm-path costs:
   resident read/upload/calibration overlap and registration/warp residency.
 
+### S2-Gate 518: Resident DQ Stats Reuse In Provenance
+
+Gate 518 continues the DQ/mask pipeline contract work from Gate517. The goal is
+to reduce the remaining resident DQ/provenance full-frame map passes by letting
+the DQ-map construction step return reusable coverage and rejection-map
+statistics for the provenance builder. This is a runtime contract optimization,
+not a report-only gate.
+
+Implementation:
+
+- `_resident_dq_map(..., return_stats=True)` now returns an internal stats
+  payload alongside the DQ map and DQ summary.
+- The stats payload includes post-rejection coverage stats, geometric warp
+  coverage stats, geometric zero/partial/full pixel counts, low/high
+  rejection-map contract stats, and low/high rejection mask union counts.
+- `_resident_dq_coverage_provenance` accepts `precomputed_dq_stats` and uses it
+  for the source-DQ-off geometric fast path, avoiding repeat scans for
+  geometric/post coverage counts and rejection-reduced pixels.
+- The previous behavior remains the fallback for source-DQ-modified runs or
+  callers that do not pass precomputed stats.
+- `tests/test_resident_cuda_run.py` proves the precomputed stats path feeds
+  geometric provenance while preserving the old default DQ map API.
+
+Real 200-light validation:
+
+- Current HEAD pre-change profile root:
+  `C:\glass_runs\phase2_s2_gate518_profile_current\runs_20260623_094158`
+- Optimized run root:
+  `C:\glass_runs\phase2_s2_gate518_dq_stats_reuse\runs_20260623_094619`
+- Profile comparison:
+  - pre-change profiled warm internal elapsed:
+    `11.682714099995792 s`;
+  - after-patch profiled warm internal elapsed:
+    `10.030273599957582 s`;
+  - profiled speedup: `1.164745306652971x`.
+- Cold optimized audit run:
+  - internal elapsed: `14.709655200014822 s`;
+  - shell elapsed: `15.127617 s`.
+- Warm optimized audit run:
+  - internal elapsed: `9.321247900021262 s`;
+  - shell elapsed: `9.754701 s`;
+  - repeat shell elapsed: `9.735261 s`;
+  - master build/load: `0.43099960003746673 s`;
+  - light read/upload/calibrate wall: `2.662712100020144 s`;
+  - resident registration component account: `3.8077909993264334 s`;
+  - resident registration warp: `0.8559001002577133 s`;
+  - resident integration: `0.45532220002496615 s`;
+  - output write: `0.3431183000211604 s`.
+- DQ fast-path evidence:
+  - `precomputed_dq_stats_used=true`;
+  - `finite_pre_rejection_source=geometric_warp_coverage`;
+  - `rejection_reduced_pixels_source=low_high_rejection_masks`;
+  - `rejected_sample_count_source=low_high_rejection_maps`.
+- Warm vs cold master: bitwise equal, `RMS=0`, `max_abs=0`, `p99_abs=0`.
+- Warm vs WBPP:
+  - WBPP black-box elapsed: `1092.541 s`;
+  - speedup: `117.2097354043666x` by GLASS internal timing and
+    `112.00047033717387x` by conservative shell timing;
+  - RMS diff: `0.0017794216505176163`;
+  - p99 absolute diff: `0.00042621337808668863`;
+  - coverage fraction: `0.960532609259836`.
+
+Contract status:
+
+- resident calibration contract: passed;
+- resident result contract with pixel verification: passed;
+- pipeline contract with pixel verification: passed;
+- StackEngine contract: passed and default-promotion ready;
+- acceptance audit: passed.
+
+Validation commands:
+
+- `python -m ruff check src\glass\engine\resident_cuda.py
+  tests\test_resident_cuda_run.py`
+- `python -m pytest -q tests/test_resident_cuda_run.py -k
+  "dq_map or dq_coverage_provenance"`
+- `python -m pytest -q tests/test_resident_cuda_run.py
+  tests/test_resident_stack_surface.py tests/test_stack_engine_contract.py`
+- optimized real 200-light cold/warm/repeat `glass run` commands under the
+  same parent, followed by cold/warm FITS bitwise comparison and WBPP compare.
+- `glass resident-calibration-contract ... --fail-on-failed`
+- `glass resident-result-contract ... --pixel-verify --fail-on-failed`
+- `glass pipeline-contract ... --pixel-verify`
+- `glass stack-engine-contract ... --expected-integration-engine
+  cuda_resident_stack --require-default-ready`
+- `glass acceptance-audit ... --benchmark-contract
+  benchmarks/phase2_m38_h_200_audit_maps_contract.json`
+
+Decision:
+
+- Keep the DQ stats reuse path as the default resident audit behavior because
+  it preserves output pixels and DQ semantics while reducing profiled
+  DQ/provenance overhead.
+- Gate518's non-profiled end-to-end warm run is slower than Gate517 because the
+  resident registration component varied upward (`3.8078 s` versus Gate517
+  `1.9585 s`). `nvidia-smi` sampled the GPU at 76% utilization after the run,
+  so this gate records the end-to-end timing as contended/variable rather than
+  as a DQ-path regression.
+- The next substantive gate should return to resident registration/warp
+  residency or light read/upload/calibration overlap with a quieter GPU.
+
 ## Core Contracts
 
 Phase 2 must introduce or stabilize these contracts:

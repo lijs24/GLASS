@@ -2033,69 +2033,14 @@ def _count_map_dtype(frame_count: int) -> Any:
     return np.int16 if int(frame_count) <= np.iinfo(np.int16).max else np.int32
 
 
-def _resident_dq_map(
-    master: np.ndarray,
-    weight_map: np.ndarray,
-    coverage_map: np.ndarray | None,
-    low_rejection_map: np.ndarray | None,
-    high_rejection_map: np.ndarray | None,
-    geometric_warp_coverage_map: np.ndarray | None = None,
-    active_frame_count: int = 0,
-) -> tuple[np.ndarray, dict[str, int]]:
-    dq = np.zeros(np.asarray(master).shape, dtype=np.uint32)
-    master_values = np.asarray(master, dtype=np.float32)
-    weights = np.asarray(weight_map, dtype=np.float32)
-    invalid = (~np.isfinite(master_values)) | (~np.isfinite(weights)) | (weights <= 0.0)
-    if coverage_map is not None:
-        coverage = np.asarray(coverage_map, dtype=np.float32)
-        coverage_invalid = (~np.isfinite(coverage)) | (coverage <= 0.5)
-        invalid |= coverage_invalid
-        dq[coverage_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
-    if geometric_warp_coverage_map is not None:
-        geometric = np.asarray(geometric_warp_coverage_map, dtype=np.float32)
-        geometric_invalid = (~np.isfinite(geometric)) | (geometric <= 0.5)
-        invalid |= geometric_invalid
-        dq[geometric_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
-        expected_count = int(active_frame_count)
-        if expected_count > 0:
-            geometric_partial = (
-                np.isfinite(geometric)
-                & (geometric > 0.5)
-                & (geometric < float(expected_count) - 0.5)
-            )
-            dq[geometric_partial] |= np.uint32(int(DQFlag.WARP_EDGE))
-    dq[invalid] |= np.uint32(int(DQFlag.NO_DATA))
-    low_rejected_count = 0
-    if low_rejection_map is not None:
-        low = np.asarray(low_rejection_map, dtype=np.float32)
-        low_rejected = np.isfinite(low) & (low > 0.0)
-        low_rejected_count = int(np.count_nonzero(low_rejected))
-        dq[low_rejected] |= np.uint32(int(DQFlag.LOW_REJECTED))
-    high_rejected_count = 0
-    if high_rejection_map is not None:
-        high = np.asarray(high_rejection_map, dtype=np.float32)
-        high_rejected = np.isfinite(high) & (high > 0.0)
-        high_rejected_count = int(np.count_nonzero(high_rejected))
-        dq[high_rejected] |= np.uint32(int(DQFlag.HIGH_REJECTED))
-    summary = {"valid": int(np.count_nonzero(dq == 0))}
-    no_data_count = int(np.count_nonzero(invalid))
-    if no_data_count:
-        summary["no_data"] = no_data_count
-    warp_edge_count = int(np.count_nonzero((dq & np.uint32(int(DQFlag.WARP_EDGE))) != 0))
-    if warp_edge_count:
-        summary["warp_edge"] = warp_edge_count
-    if low_rejected_count:
-        summary["low_rejected"] = low_rejected_count
-    if high_rejected_count:
-        summary["high_rejected"] = high_rejected_count
-    return dq, summary
-
-
-def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:
-    values = np.asarray(data, dtype=np.float32)
+def _resident_coverage_array_stats_from_values(
+    values: np.ndarray,
+    finite_mask: np.ndarray | None = None,
+) -> dict[str, float | int]:
+    values = np.asarray(values, dtype=np.float32)
     total_pixels = int(values.size)
-    finite_mask = np.isfinite(values)
-    finite_count = int(np.count_nonzero(finite_mask))
+    finite = np.isfinite(values) if finite_mask is None else finite_mask
+    finite_count = int(np.count_nonzero(finite))
     if finite_count == 0:
         return {
             "total_pixels": total_pixels,
@@ -2105,23 +2050,24 @@ def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:
             "max": 0.0,
             "mean": 0.0,
         }
-    finite_values = values[finite_mask]
+    finite_values = values.ravel() if finite_count == values.size else values[finite]
     rounded = np.rint(finite_values)
     return {
         "total_pixels": total_pixels,
         "finite_pixels": finite_count,
         "rounded_sum": int(round(float(np.sum(rounded, dtype=np.float64)))),
-        "min": float(np.nanmin(values)),
-        "max": float(np.nanmax(values)),
-        "mean": float(np.nanmean(values)),
+        "min": float(np.min(finite_values)),
+        "max": float(np.max(finite_values)),
+        "mean": float(np.mean(finite_values)),
     }
 
 
-def _resident_count_map_array_stats(data: np.ndarray | None) -> dict[str, Any]:
-    if data is None:
-        return {"present": False}
-    values = np.asarray(data, dtype=np.float32)
-    finite = np.isfinite(values)
+def _resident_count_map_array_stats_from_values(
+    values: np.ndarray,
+    finite_mask: np.ndarray | None = None,
+) -> dict[str, Any]:
+    values = np.asarray(values, dtype=np.float32)
+    finite = np.isfinite(values) if finite_mask is None else finite_mask
     finite_count = int(np.count_nonzero(finite))
     finite_values = values.ravel() if finite_count == values.size else values[finite]
     rounded = np.rint(finite_values)
@@ -2143,6 +2089,130 @@ def _resident_count_map_array_stats(data: np.ndarray | None) -> dict[str, Any]:
         "stats_source": "resident_precomputed_count_map",
         "stats_profile": "count_map_contract_fields",
     }
+
+
+def _resident_dq_map(
+    master: np.ndarray,
+    weight_map: np.ndarray,
+    coverage_map: np.ndarray | None,
+    low_rejection_map: np.ndarray | None,
+    high_rejection_map: np.ndarray | None,
+    geometric_warp_coverage_map: np.ndarray | None = None,
+    active_frame_count: int = 0,
+    *,
+    return_stats: bool = False,
+) -> tuple[np.ndarray, dict[str, int]] | tuple[np.ndarray, dict[str, int], dict[str, Any]]:
+    dq = np.zeros(np.asarray(master).shape, dtype=np.uint32)
+    master_values = np.asarray(master, dtype=np.float32)
+    weights = np.asarray(weight_map, dtype=np.float32)
+    invalid = (~np.isfinite(master_values)) | (~np.isfinite(weights)) | (weights <= 0.0)
+    stats: dict[str, Any] = {
+        "schema_version": 1,
+        "stats_source": "resident_dq_map_single_pass",
+        "post_rejection_coverage": None,
+        "post_rejection_zero_pixels": None,
+        "geometric_warp_coverage": None,
+        "geometric_zero_pixels": None,
+        "geometric_partial_pixels": None,
+        "geometric_full_pixels": None,
+        "low_rejection": {"present": False},
+        "high_rejection": {"present": False},
+        "rejection_reduced_pixels": None,
+        "rejection_reduced_pixels_source": "unavailable",
+    }
+    if coverage_map is not None:
+        coverage = np.asarray(coverage_map, dtype=np.float32)
+        coverage_finite = np.isfinite(coverage)
+        coverage_invalid = (~coverage_finite) | (coverage <= 0.5)
+        invalid |= coverage_invalid
+        dq[coverage_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
+        stats["post_rejection_coverage"] = _resident_coverage_array_stats_from_values(
+            coverage,
+            coverage_finite,
+        )
+        stats["post_rejection_zero_pixels"] = int(
+            np.count_nonzero(coverage_finite & (coverage <= 0.5))
+        )
+    if geometric_warp_coverage_map is not None:
+        geometric = np.asarray(geometric_warp_coverage_map, dtype=np.float32)
+        geometric_finite = np.isfinite(geometric)
+        geometric_invalid = (~geometric_finite) | (geometric <= 0.5)
+        invalid |= geometric_invalid
+        dq[geometric_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
+        stats["geometric_warp_coverage"] = _resident_coverage_array_stats_from_values(
+            geometric,
+            geometric_finite,
+        )
+        stats["geometric_zero_pixels"] = int(
+            np.count_nonzero(geometric_finite & (geometric <= 0.5))
+        )
+        expected_count = int(active_frame_count)
+        if expected_count > 0:
+            geometric_partial = (
+                geometric_finite
+                & (geometric > 0.5)
+                & (geometric < float(expected_count) - 0.5)
+            )
+            dq[geometric_partial] |= np.uint32(int(DQFlag.WARP_EDGE))
+            stats["geometric_partial_pixels"] = int(np.count_nonzero(geometric_partial))
+            stats["geometric_full_pixels"] = int(
+                np.count_nonzero(geometric_finite & (geometric >= float(expected_count) - 0.5))
+            )
+        else:
+            stats["geometric_partial_pixels"] = 0
+            stats["geometric_full_pixels"] = 0
+    dq[invalid] |= np.uint32(int(DQFlag.NO_DATA))
+    low_rejected_count = 0
+    low_rejected = None
+    if low_rejection_map is not None:
+        low = np.asarray(low_rejection_map, dtype=np.float32)
+        low_finite = np.isfinite(low)
+        low_rejected = low_finite & (low > 0.0)
+        low_rejected_count = int(np.count_nonzero(low_rejected))
+        dq[low_rejected] |= np.uint32(int(DQFlag.LOW_REJECTED))
+        stats["low_rejection"] = _resident_count_map_array_stats_from_values(low, low_finite)
+    high_rejected_count = 0
+    high_rejected = None
+    if high_rejection_map is not None:
+        high = np.asarray(high_rejection_map, dtype=np.float32)
+        high_finite = np.isfinite(high)
+        high_rejected = high_finite & (high > 0.0)
+        high_rejected_count = int(np.count_nonzero(high_rejected))
+        dq[high_rejected] |= np.uint32(int(DQFlag.HIGH_REJECTED))
+        stats["high_rejection"] = _resident_count_map_array_stats_from_values(high, high_finite)
+    if low_rejected is not None and high_rejected is not None:
+        stats["rejection_reduced_pixels"] = int(np.count_nonzero(low_rejected | high_rejected))
+        stats["rejection_reduced_pixels_source"] = "low_high_rejection_masks"
+    elif low_rejected is not None:
+        stats["rejection_reduced_pixels"] = low_rejected_count
+        stats["rejection_reduced_pixels_source"] = "low_rejection_mask"
+    elif high_rejected is not None:
+        stats["rejection_reduced_pixels"] = high_rejected_count
+        stats["rejection_reduced_pixels_source"] = "high_rejection_mask"
+    summary = {"valid": int(np.count_nonzero(dq == 0))}
+    no_data_count = int(np.count_nonzero(invalid))
+    if no_data_count:
+        summary["no_data"] = no_data_count
+    warp_edge_count = int(np.count_nonzero((dq & np.uint32(int(DQFlag.WARP_EDGE))) != 0))
+    if warp_edge_count:
+        summary["warp_edge"] = warp_edge_count
+    if low_rejected_count:
+        summary["low_rejected"] = low_rejected_count
+    if high_rejected_count:
+        summary["high_rejected"] = high_rejected_count
+    if return_stats:
+        return dq, summary, stats
+    return dq, summary
+
+
+def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:
+    return _resident_coverage_array_stats_from_values(data)
+
+
+def _resident_count_map_array_stats(data: np.ndarray | None) -> dict[str, Any]:
+    if data is None:
+        return {"present": False}
+    return _resident_count_map_array_stats_from_values(data)
 
 
 def _resident_surface_contract_map_stats(
@@ -2534,9 +2604,11 @@ def _resident_dq_coverage_provenance(
     geometric_warp_coverage_frame_count: int | None = None,
     source_dq_summary: dict[str, Any] | None = None,
     rejection_map_stats: dict[str, Any] | None = None,
+    precomputed_dq_stats: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     active_count = max(0, int(active_frame_count))
     source_dq_fields = _resident_source_dq_provenance_fields(source_dq_summary)
+    dq_stats = precomputed_dq_stats if isinstance(precomputed_dq_stats, dict) else {}
     if coverage_map is None:
         provenance = {
             "available": False,
@@ -2578,7 +2650,11 @@ def _resident_dq_coverage_provenance(
         return provenance
 
     post_rejection = np.asarray(coverage_map, dtype=np.float32)
-    post_rejection_stats = _resident_coverage_array_stats(post_rejection)
+    post_rejection_stats = (
+        dict(dq_stats["post_rejection_coverage"])
+        if isinstance(dq_stats.get("post_rejection_coverage"), dict)
+        else _resident_coverage_array_stats(post_rejection)
+    )
     source_terms = ["post_rejection_coverage"]
     if low_rejection_map is not None:
         source_terms.append("low_rejection")
@@ -2591,7 +2667,11 @@ def _resident_dq_coverage_provenance(
     geometric_count = 0
     if geometric_warp_coverage_map is not None:
         geometric = np.asarray(geometric_warp_coverage_map, dtype=np.float32)
-        geometric_stats = _resident_coverage_array_stats(geometric)
+        geometric_stats = (
+            dict(dq_stats["geometric_warp_coverage"])
+            if isinstance(dq_stats.get("geometric_warp_coverage"), dict)
+            else _resident_coverage_array_stats(geometric)
+        )
         geometric_count = (
             active_count
             if geometric_warp_coverage_frame_count is None
@@ -2613,25 +2693,52 @@ def _resident_dq_coverage_provenance(
         finite_pre_rejection_stats = _resident_coverage_array_stats(finite_pre_rejection)
         finite_pre_rejection_source = "post_rejection_coverage_plus_rejection_maps"
 
-    finite_pre = np.isfinite(finite_pre_rejection)
-    finite_post = np.isfinite(post_rejection)
-    zero_pre = finite_pre & (finite_pre_rejection <= 0.5)
-    partial_pre = (
-        finite_pre
-        & (finite_pre_rejection > 0.5)
-        & (finite_pre_rejection < float(active_count) - 0.5)
-        if active_count > 0
-        else np.zeros_like(finite_pre, dtype=bool)
-    )
-    rejection_reduced = finite_pre & finite_post & (post_rejection < finite_pre_rejection - 0.5)
-    rejected_samples = finite_pre_rejection - post_rejection
-    np.maximum(rejected_samples, 0.0, out=rejected_samples)
     rejection_map_sample_count = _resident_rejection_map_sample_count(
         low_rejection_map,
         high_rejection_map,
         rejection_map_stats=rejection_map_stats,
     )
+    can_reuse_geometric_counts = bool(
+        finite_pre_rejection_source == "geometric_warp_coverage"
+        and geometric is not None
+        and dq_stats.get("stats_source") == "resident_dq_map_single_pass"
+    )
+    if can_reuse_geometric_counts:
+        zero_pre_rejection_pixels = int(dq_stats.get("geometric_zero_pixels") or 0)
+        partial_pre_rejection_pixels = int(dq_stats.get("geometric_partial_pixels") or 0)
+        post_rejection_zero_pixels = int(dq_stats.get("post_rejection_zero_pixels") or 0)
+        if dq_stats.get("rejection_reduced_pixels") is None:
+            finite_pre = np.isfinite(finite_pre_rejection)
+            finite_post = np.isfinite(post_rejection)
+            rejection_reduced_pixels = int(
+                np.count_nonzero(finite_pre & finite_post & (post_rejection < finite_pre_rejection - 0.5))
+            )
+            rejection_reduced_pixels_source = "coverage_difference"
+        else:
+            rejection_reduced_pixels = int(dq_stats.get("rejection_reduced_pixels") or 0)
+            rejection_reduced_pixels_source = str(
+                dq_stats.get("rejection_reduced_pixels_source") or "resident_dq_map_single_pass"
+            )
+    else:
+        finite_pre = np.isfinite(finite_pre_rejection)
+        finite_post = np.isfinite(post_rejection)
+        zero_pre = finite_pre & (finite_pre_rejection <= 0.5)
+        partial_pre = (
+            finite_pre
+            & (finite_pre_rejection > 0.5)
+            & (finite_pre_rejection < float(active_count) - 0.5)
+            if active_count > 0
+            else np.zeros_like(finite_pre, dtype=bool)
+        )
+        rejection_reduced = finite_pre & finite_post & (post_rejection < finite_pre_rejection - 0.5)
+        zero_pre_rejection_pixels = int(np.count_nonzero(zero_pre))
+        partial_pre_rejection_pixels = int(np.count_nonzero(partial_pre))
+        post_rejection_zero_pixels = int(np.count_nonzero(finite_post & (post_rejection <= 0.5)))
+        rejection_reduced_pixels = int(np.count_nonzero(rejection_reduced))
+        rejection_reduced_pixels_source = "coverage_difference"
     if rejection_map_sample_count is None:
+        rejected_samples = finite_pre_rejection - post_rejection
+        np.maximum(rejected_samples, 0.0, out=rejected_samples)
         rejected_sample_count = float(np.nansum(rejected_samples))
         rejected_sample_count_source = "coverage_difference"
     else:
@@ -2645,12 +2752,14 @@ def _resident_dq_coverage_provenance(
         "post_rejection_coverage": post_rejection_stats,
         "finite_pre_rejection_coverage": finite_pre_rejection_stats,
         "finite_pre_rejection_source": finite_pre_rejection_source,
-        "zero_pre_rejection_pixels": int(np.count_nonzero(zero_pre)),
-        "partial_pre_rejection_pixels": int(np.count_nonzero(partial_pre)),
-        "post_rejection_zero_pixels": int(np.count_nonzero(finite_post & (post_rejection <= 0.5))),
-        "rejection_reduced_pixels": int(np.count_nonzero(rejection_reduced)),
+        "zero_pre_rejection_pixels": zero_pre_rejection_pixels,
+        "partial_pre_rejection_pixels": partial_pre_rejection_pixels,
+        "post_rejection_zero_pixels": post_rejection_zero_pixels,
+        "rejection_reduced_pixels": rejection_reduced_pixels,
+        "rejection_reduced_pixels_source": rejection_reduced_pixels_source,
         "rejected_sample_count": rejected_sample_count,
         "rejected_sample_count_source": rejected_sample_count_source,
+        "precomputed_dq_stats_used": can_reuse_geometric_counts,
         "partial_edge_inference": "deferred",
         "note": (
             "finite_pre_rejection_coverage is coverage + low/high rejection counts. "
@@ -2660,28 +2769,36 @@ def _resident_dq_coverage_provenance(
         **source_dq_fields,
     }
     if geometric is not None:
-        finite_geometric = np.isfinite(geometric)
-        zero_geometric = finite_geometric & (geometric <= 0.5)
-        partial_geometric = (
-            finite_geometric
-            & (geometric > 0.5)
-            & (geometric < float(geometric_count) - 0.5)
-            if geometric_count > 0
-            else np.zeros_like(finite_geometric, dtype=bool)
-        )
-        full_geometric = (
-            finite_geometric & (geometric >= float(geometric_count) - 0.5)
-            if geometric_count > 0
-            else np.zeros_like(finite_geometric, dtype=bool)
-        )
+        if can_reuse_geometric_counts:
+            geometric_zero_pixels = int(dq_stats.get("geometric_zero_pixels") or 0)
+            geometric_partial_pixels = int(dq_stats.get("geometric_partial_pixels") or 0)
+            geometric_full_pixels = int(dq_stats.get("geometric_full_pixels") or 0)
+        else:
+            finite_geometric = np.isfinite(geometric)
+            zero_geometric = finite_geometric & (geometric <= 0.5)
+            partial_geometric = (
+                finite_geometric
+                & (geometric > 0.5)
+                & (geometric < float(geometric_count) - 0.5)
+                if geometric_count > 0
+                else np.zeros_like(finite_geometric, dtype=bool)
+            )
+            full_geometric = (
+                finite_geometric & (geometric >= float(geometric_count) - 0.5)
+                if geometric_count > 0
+                else np.zeros_like(finite_geometric, dtype=bool)
+            )
+            geometric_zero_pixels = int(np.count_nonzero(zero_geometric))
+            geometric_partial_pixels = int(np.count_nonzero(partial_geometric))
+            geometric_full_pixels = int(np.count_nonzero(full_geometric))
         result.update(
             {
                 "geometric_warp_coverage": dict(geometric_stats or {}),
                 "geometric_warp_coverage_frame_count": geometric_count,
                 "geometric_frame_count_matches_active": geometric_count == active_count,
-                "geometric_zero_pixels": int(np.count_nonzero(zero_geometric)),
-                "geometric_partial_pixels": int(np.count_nonzero(partial_geometric)),
-                "geometric_full_pixels": int(np.count_nonzero(full_geometric)),
+                "geometric_zero_pixels": geometric_zero_pixels,
+                "geometric_partial_pixels": geometric_partial_pixels,
+                "geometric_full_pixels": geometric_full_pixels,
                 "partial_edge_inference": "available_from_geometric_warp_coverage",
                 "note": (
                     "geometric_warp_coverage is accumulated by the resident CUDA warp path before "
@@ -9646,9 +9763,10 @@ def run_resident_calibration_integration(
             )
             dq_map = None
             dq_summary = None
+            dq_map_stats: dict[str, Any] | None = None
             dq_path = output_dir / f"resident_dq_map_{filt}.fits" if output_map_selection["dq"] else None
             if output_map_selection["dq"]:
-                dq_map, dq_summary = _resident_dq_map(
+                dq_map, dq_summary, dq_map_stats = _resident_dq_map(
                     master,
                     weight_map,
                     coverage_map,
@@ -9656,14 +9774,24 @@ def run_resident_calibration_integration(
                     high_rejection_map,
                     geometric_warp_coverage_map=geometric_warp_coverage_map,
                     active_frame_count=active_frame_count,
+                    return_stats=True,
                 )
+            dq_map_stats_payload = dq_map_stats if isinstance(dq_map_stats, dict) else {}
             rejection_map_stats = {
-                "low_rejection": _resident_count_map_array_stats(low_rejection_map)
-                if low_rejection_map is not None
-                else {"present": False},
-                "high_rejection": _resident_count_map_array_stats(high_rejection_map)
-                if high_rejection_map is not None
-                else {"present": False},
+                "low_rejection": dq_map_stats_payload.get("low_rejection")
+                if isinstance(dq_map_stats_payload.get("low_rejection"), dict)
+                else (
+                    _resident_count_map_array_stats(low_rejection_map)
+                    if low_rejection_map is not None
+                    else {"present": False}
+                ),
+                "high_rejection": dq_map_stats_payload.get("high_rejection")
+                if isinstance(dq_map_stats_payload.get("high_rejection"), dict)
+                else (
+                    _resident_count_map_array_stats(high_rejection_map)
+                    if high_rejection_map is not None
+                    else {"present": False}
+                ),
             }
             dq_coverage_provenance = _resident_dq_coverage_provenance(
                 coverage_map,
@@ -9674,6 +9802,7 @@ def run_resident_calibration_integration(
                 geometric_warp_coverage_frame_count=geometric_warp_coverage_frame_count,
                 source_dq_summary=source_dq_summary,
                 rejection_map_stats=rejection_map_stats,
+                precomputed_dq_stats=dq_map_stats,
             )
             dq_provenance_summary = dq_provenance_summary_from_resident(
                 dq_coverage_provenance,
