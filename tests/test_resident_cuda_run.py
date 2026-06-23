@@ -2323,6 +2323,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     calibration = read_json(run / "calibration_artifacts.json")
     resident_result_contract = read_json(run / "resident_result_contract.json")
     resident_calibration_contract = read_json(run / "resident_calibration_contract.json")
+    pipeline_contract = read_json(run / "pipeline_contract.json")
     assert integration["source_stage"] == "resident_calibrated_stack"
     assert integration["outputs"][0]["backend"] == "cuda_resident_stack"
     assert integration["outputs"][0]["resident_registration"] == "translation_preview"
@@ -2377,6 +2378,11 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert resident_result_contract["passed"] is True
     assert resident_result_contract["outputs"][0]["filter"] == "H"
     assert resident_result_contract["outputs"][0]["backend"] == "cuda_resident_stack"
+    assert pipeline_contract["audit_type"] == "pipeline_invariant_contract"
+    assert pipeline_contract["passed"] is True
+    pipeline_checks = {item["name"]: item for item in pipeline_contract["checks"]}
+    assert pipeline_checks["integration_resident_result_contract"]["passed"] is True
+    assert any(item["stage"] == "pipeline_contract" for item in state["artifacts"])
     stack_contract_out = tmp_path / "stack_engine_contract.json"
     assert (
         main(
@@ -3388,6 +3394,7 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
         "resident_memory_admission",
         "resident_source_dq_cache_calibration",
         "resident_calibration_integration",
+        "pipeline_contract",
     ]
     assert "resident_source_dq_cache_calibration" in state["completed_stages"]
     assert any(item["stage"] == "resident_source_dq_strategy" for item in state["artifacts"])

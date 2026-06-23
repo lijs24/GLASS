@@ -4,8 +4,9 @@ from pathlib import Path
 
 import numpy as np
 
-from glass.cli import main
+from glass.cli import _write_default_pipeline_contract_artifact, main
 from glass.engine.contracts import DQFlag
+from glass.engine.pipeline import initialize_run
 from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
     resident_rejection_descriptor,
@@ -580,6 +581,173 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["required"] is True
     assert resident_contract["passed"] is True
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
+
+
+def test_pipeline_contract_respects_resident_minimal_output_map_policy(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    integration = read_json(run / "integration_results.json")
+    output = integration["outputs"][0]
+    output["output_map_policy"] = {
+        "available": ["master"],
+        "written": ["master"],
+        "skipped": [],
+        "mode": "minimal",
+    }
+    for key in [
+        "weight_map_path",
+        "coverage_map_path",
+        "dq_map_path",
+        "low_rejection_map_path",
+        "high_rejection_map_path",
+    ]:
+        output[key] = None
+    output["dq_summary"] = None
+    write_json(run / "integration_results.json", integration)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+
+    assert audit["passed"] is True
+    assert checks["integration_output_maps_available"]["passed"] is True
+    assert checks["integration_dq_contract"]["passed"] is True
+    assert checks["integration_resident_result_contract"]["passed"] is True
+
+
+def test_pipeline_contract_accepts_resident_local_norm_group_rows(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    write_json(
+        run / "local_norm_results.json",
+        {
+            "schema_version": 1,
+            "source_stage": "resident_calibrated_stack",
+            "mode": "resident_grid_mean_std",
+            "enabled": True,
+            "crop_box": None,
+            "groups": [
+                {
+                    "filter": "H",
+                    "enabled": True,
+                    "mode": "resident_grid_mean_std",
+                    "crop_box": None,
+                    "frame_results": [
+                        {
+                            "frame_id": "F1",
+                            "reference_frame_id": "F1",
+                            "model": "resident_grid_mean_std",
+                            "status": "reference",
+                            "grid_coefficients": None,
+                        },
+                        {
+                            "frame_id": "F2",
+                            "reference_frame_id": "F1",
+                            "model": "resident_grid_mean_std",
+                            "status": "ok",
+                            "grid_coefficients": {
+                                "model": "resident_grid_pair_mean_std",
+                                "grid_rows": 1,
+                                "grid_cols": 1,
+                            },
+                        },
+                    ],
+                }
+            ],
+        },
+    )
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+
+    assert audit["passed"] is True
+    assert checks["local_normalization_contract"]["passed"] is True
+    assert checks["local_normalization_contract"]["evidence"]["row_count"] == 2
+
+
+def test_default_resident_run_writes_pipeline_contract_artifact(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run, resident_artifact_legacy_rejection_semantics=True)
+    state = initialize_run(run)
+    state.current_stage = "integration"
+
+    path = _write_default_pipeline_contract_artifact(run, state)
+
+    assert path == run / "pipeline_contract.json"
+    assert path.exists()
+    assert (run / "pipeline_contract.md").exists()
+    payload = read_json(path)
+    assert payload["passed"] is True
+    assert payload["status"] == "passed"
+    assert state.failed_stage is None
+    assert any(item.stage == "pipeline_contract" for item in state.artifacts)
+
+
+def test_default_resident_run_pipeline_contract_failure_marks_state(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(
+        run,
+        resident_artifact_legacy_rejection_semantics=True,
+        active_frame_count=0,
+    )
+    state = initialize_run(run)
+    state.current_stage = "integration"
+
+    path = _write_default_pipeline_contract_artifact(run, state)
+
+    assert path == run / "pipeline_contract.json"
+    payload = read_json(path)
+    assert payload["passed"] is False
+    assert state.current_stage == "pipeline_contract"
+    assert state.failed_stage == "pipeline_contract"
+    assert "default pipeline contract failed" in state.errors
+    assert any(item.stage == "pipeline_contract" for item in state.artifacts)
+
+
+def test_default_resident_run_pipeline_contract_small_diagnostic_degenerate_is_nonblocking(
+    tmp_path: Path,
+):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(
+        run,
+        resident_artifact_legacy_rejection_semantics=True,
+        active_frame_count=1,
+    )
+    integration = read_json(run / "integration_results.json")
+    integration["outputs"][0]["frame_count"] = 2
+    write_json(run / "integration_results.json", integration)
+    write_json(
+        run / "frame_accounting.json",
+        {
+            "schema_version": 1,
+            "artifact": "frame_accounting",
+            "summary": {
+                "input_light_frames": 2,
+                "integrated_frames": 1,
+                "zero_weight_frames": 1,
+                "integration_conflict_frames": 0,
+                "exception_frames": 1,
+                "final_status_counts": {
+                    "integrated": 1,
+                    "registration_rejected": 1,
+                },
+            },
+            "exception_frames": [],
+            "frames": [],
+        },
+    )
+    state = initialize_run(run)
+    state.current_stage = "integration"
+
+    path = _write_default_pipeline_contract_artifact(run, state)
+
+    assert path == run / "pipeline_contract.json"
+    payload = read_json(path)
+    assert payload["passed"] is False
+    assert state.failed_stage is None
+    assert state.errors == []
+    assert state.warnings == [
+        "default pipeline contract failed in a non-blocking diagnostic small-frame run"
+    ]
 
 
 def test_pipeline_contract_passes_resident_source_dq_execution_contract(tmp_path: Path):

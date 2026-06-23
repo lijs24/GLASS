@@ -849,6 +849,87 @@ def _write_resident_source_dq_cache_route(run: Path, args: argparse.Namespace) -
     return route_path
 
 
+def _write_default_pipeline_contract_artifact(run: Path, state) -> Path | None:
+    if not (run / "integration_results.json").exists() or not (run / "resident_artifacts.json").exists():
+        return None
+    pipeline_contract_path = run / "pipeline_contract.json"
+    pipeline_contract_markdown = run / "pipeline_contract.md"
+    audit = build_pipeline_contract_audit(run)
+    write_pipeline_contract_audit(
+        pipeline_contract_path,
+        audit,
+        markdown=pipeline_contract_markdown,
+    )
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="pipeline_contract",
+            path=str(pipeline_contract_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    if not audit.get("passed") and _pipeline_contract_failure_blocks_default_run(audit):
+        state.current_stage = "pipeline_contract"
+        state.failed_stage = "pipeline_contract"
+        state.errors.append("default pipeline contract failed")
+    elif not audit.get("passed"):
+        state.warnings.append("default pipeline contract failed in a non-blocking diagnostic small-frame run")
+    return pipeline_contract_path
+
+
+def _pipeline_contract_failure_blocks_default_run(audit: dict[str, Any]) -> bool:
+    failed_checks = {
+        str(item.get("name"))
+        for item in audit.get("checks") or []
+        if isinstance(item, dict) and not item.get("passed")
+    }
+    if failed_checks != {"integration_resident_result_contract"}:
+        return True
+    frame_accounting = audit.get("frame_accounting") if isinstance(audit.get("frame_accounting"), dict) else {}
+    if frame_accounting.get("present") is not True:
+        return True
+    try:
+        input_light_frames = int(frame_accounting.get("input_light_frames"))
+    except (TypeError, ValueError):
+        return True
+    if input_light_frames >= 3:
+        return True
+
+    outputs = (audit.get("integration") or {}).get("outputs") if isinstance(audit.get("integration"), dict) else []
+    outputs = outputs if isinstance(outputs, list) else []
+    failed_resident_outputs = []
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        resident_contract = output.get("resident_result_contract")
+        if not isinstance(resident_contract, dict):
+            continue
+        if resident_contract.get("required") and resident_contract.get("passed") is not True:
+            failed_resident_outputs.append(resident_contract)
+    if not failed_resident_outputs:
+        return True
+    for resident_contract in failed_resident_outputs:
+        contract = resident_contract.get("contract") if isinstance(resident_contract.get("contract"), dict) else {}
+        output_rows = contract.get("outputs") if isinstance(contract.get("outputs"), list) else []
+        direct_checks = contract.get("checks") if isinstance(contract.get("checks"), list) else []
+        failed_names = {
+            str(check.get("name"))
+            for output in output_rows
+            if isinstance(output, dict)
+            for check in output.get("checks") or []
+            if isinstance(check, dict) and not check.get("passed")
+        }
+        failed_names.update(
+            str(check.get("name"))
+            for check in direct_checks
+            if isinstance(check, dict) and not check.get("passed")
+        )
+        if failed_names != {"active_frame_count_not_degenerate"}:
+            return True
+    return False
+
+
 def _timed_stage(run: Path, timing: dict, stage: str, fn):
     record = {"stage": stage, "started_at": now_iso(), "status": "running"}
     start = perf_counter()
@@ -1632,7 +1713,25 @@ def cmd_run(args: argparse.Namespace) -> int:
                 source_frames=[],
             )
         )
+        pipeline_contract_path = None
+        if (out / "integration_results.json").exists() and (out / "resident_artifacts.json").exists():
+            pipeline_contract_path = _timed_stage(
+                out,
+                timing,
+                "pipeline_contract",
+                lambda: _write_default_pipeline_contract_artifact(out, state),
+            )
         write_run_state(args.out, state)
+        if state.failed_stage == "pipeline_contract":
+            console.print(
+                {
+                    "status": "failed",
+                    "stage": "pipeline_contract",
+                    "run": str(out),
+                    "pipeline_contract": str(pipeline_contract_path) if pipeline_contract_path else None,
+                }
+            )
+            return 2
         console.print(f"Resident CUDA run complete through {state.current_stage}: {args.out}")
         return 0
     implemented_stages = {

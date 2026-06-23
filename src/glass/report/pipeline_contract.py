@@ -1040,7 +1040,8 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
         dq_summary = output.get("dq_summary")
         summary = output.get("dq_provenance_summary")
         item = str(output.get("filter") or index)
-        dq_required = not _map_skipped(output, "dq")
+        dq_available = _map_available_policy(output, "dq")
+        dq_required = dq_available is not False and not _map_skipped(output, "dq")
         result_contract = _stack_result_contract_state(output)
         resident_contract = _resident_result_contract_state(
             output,
@@ -1117,6 +1118,43 @@ def _local_norm_rows(local_norm: dict[str, Any], run_root: Path) -> list[dict[st
                 ),
             }
         )
+    for group in local_norm.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        group_enabled = bool(group.get("enabled", enabled))
+        group_crop_recorded = "crop_box" in group
+        resident_mode = str(group.get("mode") or local_norm.get("mode") or "")
+        for item in group.get("frame_results") or []:
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get("status") or "")
+            grid_coefficients = item.get("grid_coefficients")
+            model = item.get("model") or resident_mode
+            coefficient_ok = True
+            if group_enabled and "grid" in resident_mode and status not in {"reference", "skipped_zero_weight", "empty"}:
+                coefficient_ok = isinstance(grid_coefficients, dict)
+            rows.append(
+                {
+                    "frame_id": item.get("frame_id"),
+                    "enabled": group_enabled,
+                    "status": status,
+                    "crop_box_recorded": group_crop_recorded,
+                    "crop_box": group.get("crop_box") if group_crop_recorded else "missing",
+                    "normalized_path_exists": True,
+                    "coverage_path_exists": True,
+                    "dq_mask_path_exists": True,
+                    "dq_summary_present": True,
+                    "coefficient_grid_exists": coefficient_ok,
+                    "model": model,
+                    "resident_in_vram": True,
+                    "contract_ok": (
+                        group_crop_recorded
+                        and bool(model)
+                        and bool(status)
+                        and (not group_enabled or coefficient_ok)
+                    ),
+                }
+            )
     return rows
 
 

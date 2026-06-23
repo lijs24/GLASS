@@ -1,0 +1,118 @@
+{
+  "gate": "S2-Gate 559",
+  "run": "C:\\glass_runs\\phase2_s2_gate559_pipeline_contract_default\\runs_20260623_174914\\default_contract",
+  "baseline_run": "C:\\glass_runs\\phase2_s2_gate557_remaining_set\\runs_20260623_171847\\default_remaining_set",
+  "shell_elapsed_s": 5.3690378,
+  "run_timing_total_elapsed_s": 5.012140900071245,
+  "run_timing_stages": [
+    {
+      "elapsed_s": 0.003122400026768446,
+      "stage": "resident_memory_admission",
+      "started_at": "2026-06-23T09:49:14+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 4.9870452000177465,
+      "stage": "resident_calibration_integration",
+      "started_at": "2026-06-23T09:49:14+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.021973300026729703,
+      "stage": "pipeline_contract",
+      "started_at": "2026-06-23T09:49:19+00:00",
+      "status": "ok"
+    }
+  ],
+  "pipeline_contract_exists": true,
+  "pipeline_contract_markdown_exists": true,
+  "pipeline_contract_passed": true,
+  "pipeline_contract_failed_checks": null,
+  "run_state_failed_stage": null,
+  "run_state_warnings": [
+    "resident CUDA mode is a high-VRAM calibration plus integration path; resident CUDA triangle descriptor similarity matrices are estimated and applied in VRAM"
+  ],
+  "run_state_pipeline_contract_artifact": true,
+  "frame_accounting": {
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "zero_weight_frames": 7,
+    "exception_frames": 7,
+    "status": "passed"
+  },
+  "resident_active_frame_count": 193,
+  "resident_zero_weight_frame_count": 7,
+  "output_comparison": [
+    {
+      "key": "master_path",
+      "new_path": "C:\\glass_runs\\phase2_s2_gate559_pipeline_contract_default\\runs_20260623_174914\\default_contract\\integration\\resident_master_H.fits",
+      "base_path": "C:\\glass_runs\\phase2_s2_gate557_remaining_set\\runs_20260623_171847\\default_remaining_set\\integration\\resident_master_H.fits",
+      "sha256_equal": true,
+      "new_sha256": "8bc069ce6858ab5e065b5d9af297c35c36d4240c13980546e43cfb480115e110",
+      "base_sha256": "8bc069ce6858ab5e065b5d9af297c35c36d4240c13980546e43cfb480115e110",
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "shape": [
+        6422,
+        9600
+      ]
+    },
+    {
+      "key": "weight_map_path",
+      "new_path": "C:\\glass_runs\\phase2_s2_gate559_pipeline_contract_default\\runs_20260623_174914\\default_contract\\integration\\resident_weight_map_H.fits",
+      "base_path": "C:\\glass_runs\\phase2_s2_gate557_remaining_set\\runs_20260623_171847\\default_remaining_set\\integration\\resident_weight_map_H.fits",
+      "sha256_equal": true,
+      "new_sha256": "5862111ee6f527a40671ac13f1faa43f037c90271f872f27af4acf17040fbfe8",
+      "base_sha256": "5862111ee6f527a40671ac13f1faa43f037c90271f872f27af4acf17040fbfe8",
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "shape": [
+        6422,
+        9600
+      ]
+    },
+    {
+      "key": "coverage_map_path",
+      "new_path": "C:\\glass_runs\\phase2_s2_gate559_pipeline_contract_default\\runs_20260623_174914\\default_contract\\integration\\resident_coverage_map_H.fits",
+      "base_path": "C:\\glass_runs\\phase2_s2_gate557_remaining_set\\runs_20260623_171847\\default_remaining_set\\integration\\resident_coverage_map_H.fits",
+      "sha256_equal": true,
+      "new_sha256": "b87517be794a3b4bdcff0d8536ee0188da6afa54ed2be818bd911ba6cf1be1b3",
+      "base_sha256": "b87517be794a3b4bdcff0d8536ee0188da6afa54ed2be818bd911ba6cf1be1b3",
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "shape": [
+        6422,
+        9600
+      ]
+    },
+    {
+      "key": "low_rejection_map_path",
+      "new_path": "C:\\glass_runs\\phase2_s2_gate559_pipeline_contract_default\\runs_20260623_174914\\default_contract\\integration\\resident_low_rejection_map_H.fits",
+      "base_path": "C:\\glass_runs\\phase2_s2_gate557_remaining_set\\runs_20260623_171847\\default_remaining_set\\integration\\resident_low_rejection_map_H.fits",
+      "sha256_equal": true,
+      "new_sha256": "f1181e0ce52a7ff77b988afaf8a8911a1beaf94df54b25b0aa51014cb0d66e23",
+      "base_sha256": "f1181e0ce52a7ff77b988afaf8a8911a1beaf94df54b25b0aa51014cb0d66e23",
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "shape": [
+        6422,
+        9600
+      ]
+    },
+    {
+      "key": "high_rejection_map_path",
+      "new_path": "C:\\glass_runs\\phase2_s2_gate559_pipeline_contract_default\\runs_20260623_174914\\default_contract\\integration\\resident_high_rejection_map_H.fits",
+      "base_path": "C:\\glass_runs\\phase2_s2_gate557_remaining_set\\runs_20260623_171847\\default_remaining_set\\integration\\resident_high_rejection_map_H.fits",
+      "sha256_equal": true,
+      "new_sha256": "adb66c931c5a48d6e0d7f5c2fcbcc58481420ad4912304843a3802089050c805",
+      "base_sha256": "adb66c931c5a48d6e0d7f5c2fcbcc58481420ad4912304843a3802089050c805",
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "shape": [
+        6422,
+        9600
+      ]
+    }
+  ],
+  "all_output_sha256_equal_to_gate557": true
+}

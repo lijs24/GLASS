@@ -15152,6 +15152,71 @@ Completed in Gate446:
   - speedup summary:
     `runs\benchmarks\m38_wbpp_speedup_summary_gate558_current_full.json`.
 
+### S2-Gate 559: Default Resident Pipeline Contract Artifact
+
+- Continued the Phase 2 mainline by moving the DQ/mask and StackEngine
+  pipeline contract into the default resident CUDA `glass run` path.
+- Completed:
+  - `glass run --memory-mode resident` now writes
+    `pipeline_contract.json` and `pipeline_contract.md` automatically after a
+    resident integration run has produced `integration_results.json` and
+    `resident_artifacts.json`;
+  - the generated contract is attached to `run_state.json` as a
+    `pipeline_contract` artifact;
+  - contract generation is recorded in `run_timing.json` as its own stage on
+    real resident runs;
+  - a blocking failed contract marks `failed_stage=pipeline_contract` and
+    returns a non-zero CLI status instead of silently allowing a bad resident
+    result to look complete;
+  - two-light diagnostic runs whose only contract failure is the expected
+    `active_frame_count_not_degenerate` resident-result warning remain
+    non-blocking, but still write the failed contract and a `run_state`
+    warning.
+- Tests:
+  - syntax check: `python -m py_compile src\glass\cli.py
+    tests\test_pipeline_contract.py tests\test_resident_cuda_run.py`;
+  - focused contract edge and resident CUDA regression tests:
+    `10 passed in 1.59 s`;
+  - pipeline/resident contract suite:
+    `tests/test_pipeline_contract.py tests/test_resident_result_contract.py
+    tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_smoke
+    tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_generates_source_dq_cache_route`:
+    `54 passed in 2.19 s`;
+  - full pytest: `1194 passed in 44.43 s`.
+- Real 200-light validation:
+  - GLASS run:
+    `C:\glass_runs\phase2_s2_gate559_pipeline_contract_default\runs_20260623_174914\default_contract`;
+  - baseline run for bitwise output comparison:
+    `C:\glass_runs\phase2_s2_gate557_remaining_set\runs_20260623_171847\default_remaining_set`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_559_pipeline_contract_default_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `5.3690378 s` |
+  | Run timing total | `5.012140900071245 s` |
+  | Resident integration stage | `4.9870452000177465 s` |
+  | Pipeline contract stage | `0.021973300026729703 s` |
+  | Pipeline contract status | `passed` |
+  | Input/integrated/zero-weight frames | `200 / 193 / 7` |
+  | Output SHA256 vs Gate557 | `all identical` |
+  | Master/weight/coverage/rejection numeric diff vs Gate557 | `max_abs=0`, `rms=0` |
+
+- Interpretation:
+  - this gate is an engineering completeness gate, not a pixel-algorithm or
+    micro-optimization gate;
+  - the default resident CUDA path now self-audits its DQ/mask, StackEngine,
+    sample-accounting, frame-accounting, calibration, LN-disabled, and
+    integration contracts;
+  - the added audit does not change science outputs or admitted frame masks.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_559_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_559_pipeline_contract_default_summary.json`;
+  - default run contract:
+    `C:\glass_runs\phase2_s2_gate559_pipeline_contract_default\runs_20260623_174914\default_contract\pipeline_contract.json`.
+
 ## Gate Rules
 
 Each gate requires:
