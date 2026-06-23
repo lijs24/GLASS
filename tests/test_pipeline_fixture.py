@@ -175,6 +175,32 @@ def test_integration_auto_keeps_stack_engine_default_when_cuda_is_available(
     assert np.allclose(read_fits_data(run / "integration" / "master_H.fits"), 4.0)
 
 
+def test_integration_cuda_backend_keeps_stack_engine_default_without_policy(
+    tmp_path: Path,
+    monkeypatch,
+):
+    _install_fake_integration_cuda(monkeypatch)
+    run, plan = _write_registered_integration_fixture(tmp_path)
+
+    payload = integrate_registered_frames(run, plan_path=plan, backend="cuda", tile_size=2)
+
+    assert payload["integration_engine_policy"]["default_engine"] == "stack_engine_cpu"
+    assert payload["integration_engine_policy"]["backend"] == "cuda"
+    assert payload["integration_engine_policy"]["cuda_available"] is True
+    assert payload["integration_engine_policy"]["cuda_fast_path_eligible"] is True
+    assert payload["integration_engine_policy"]["allow_cuda_streaming_accumulator_fast_path"] is False
+    assert payload["integration_engine_policy"]["explicit_cuda_fast_path"] is False
+    assert payload["integration_engine_policy"]["cuda_fast_path_policy_required"] is True
+    assert (
+        payload["integration_engine_policy"]["reason"]
+        == "cuda_backend_stack_engine_default_requires_fast_path_policy"
+    )
+    assert all(output["backend"] == "cpu" for output in payload["outputs"])
+    assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in payload["outputs"])
+    assert all(output["stack_engine_enabled"] for output in payload["outputs"])
+    assert np.allclose(read_fits_data(run / "integration" / "master_H.fits"), 4.0)
+
+
 def test_integration_cuda_fast_path_requires_explicit_policy(
     tmp_path: Path,
     monkeypatch,
@@ -188,6 +214,31 @@ def test_integration_cuda_fast_path_requires_explicit_policy(
     payload = integrate_registered_frames(run, plan_path=plan, backend="auto", tile_size=2)
 
     assert payload["integration_engine_policy"]["default_engine"] == "stack_engine_cpu"
+    assert payload["integration_engine_policy"]["allow_cuda_streaming_accumulator_fast_path"] is True
+    assert payload["integration_engine_policy"]["explicit_cuda_fast_path"] is True
+    assert payload["integration_engine_policy"]["reason"] == "explicit_cuda_fast_path_requested"
+    assert all(output["backend"] == "cuda" for output in payload["outputs"])
+    assert all(
+        output["tile_stack_mode"] == "cuda_streaming_accumulator_fast_path"
+        for output in payload["outputs"]
+    )
+    assert all(not output["stack_engine_enabled"] for output in payload["outputs"])
+    assert np.allclose(read_fits_data(run / "integration" / "master_H.fits"), 4.0)
+
+
+def test_integration_cuda_backend_fast_path_still_requires_policy(
+    tmp_path: Path,
+    monkeypatch,
+):
+    _install_fake_integration_cuda(monkeypatch)
+    run, plan = _write_registered_integration_fixture(
+        tmp_path,
+        allow_cuda_fast_path=True,
+    )
+
+    payload = integrate_registered_frames(run, plan_path=plan, backend="cuda", tile_size=2)
+
+    assert payload["integration_engine_policy"]["backend"] == "cuda"
     assert payload["integration_engine_policy"]["allow_cuda_streaming_accumulator_fast_path"] is True
     assert payload["integration_engine_policy"]["explicit_cuda_fast_path"] is True
     assert payload["integration_engine_policy"]["reason"] == "explicit_cuda_fast_path_requested"

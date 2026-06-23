@@ -652,6 +652,97 @@ Interpretation:
   coverage, real 200-light regression, or resident CUDA performance/numerical
   consistency work.
 
+### S2-Gate 588: Non-Resident CUDA Fast Path Requires Policy Opt-In
+
+Gate 588 tightens the non-resident light-integration default path. Earlier
+Phase 2 gates made `backend=auto` stay on `stack_engine_cpu`, but an explicit
+non-resident `--backend cuda` could still bypass StackEngine and use the older
+CUDA streaming accumulator whenever rejection was `none`. That made the
+StackEngine default path depend on a runtime backend flag rather than on an
+explicit scientific policy.
+
+Implementation:
+
+- `_integration_engine_selection()` now treats
+  `IntegrationPolicy.allow_cuda_streaming_accumulator_fast_path=true` as the
+  only opt-in for the non-resident CUDA streaming accumulator fast path.
+- `--backend cuda` alone no longer disables StackEngine in non-resident/tile
+  integration. When CUDA is available and rejection is `none`, the run records:
+  - `backend="cuda"`;
+  - `actual_backend="cpu"`;
+  - `tile_stack_mode="stack_engine_cpu"`;
+  - `use_stack_engine=true`;
+  - `cuda_fast_path_policy_required=true`;
+  - `reason="cuda_backend_stack_engine_default_requires_fast_path_policy"`.
+- If the plan policy explicitly sets
+  `allow_cuda_streaming_accumulator_fast_path=true`, the older CUDA streaming
+  accumulator remains available as an audited diagnostic/experimental path.
+- Resident CUDA `cuda_resident_stack` execution is unchanged.
+
+Synthetic CLI validation:
+
+- Synthetic run:
+  `C:\glass_runs\phase2_s2_gate588_stackengine_fastpath_policy\synthetic_cuda_backend_stackengine\run`
+- Command shape: generated a small synthetic dataset, then ran non-resident
+  `glass run --backend cuda --memory-mode tile --until-stage integration`.
+- Result:
+  - integration top-level policy `default_engine=stack_engine_cpu`;
+  - requested `backend=cuda`;
+  - actual backend `cpu`;
+  - `tile_stack_mode=stack_engine_cpu`;
+  - `stack_engine_enabled=true`;
+  - DQ provenance schema `stack_engine_dq_provenance`;
+  - pipeline contract passed.
+
+Real 200-light resident regression:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate588_stackengine_fastpath_policy\default_resident_regression`
+- Hash parity versus Gate587:
+  `C:\glass_runs\phase2_s2_gate588_stackengine_fastpath_policy\hash_parity_vs_gate587.json`
+- Compare:
+  `C:\glass_runs\phase2_s2_gate588_stackengine_fastpath_policy\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate588_stackengine_fastpath_policy\acceptance_audit.json`
+- Stage timing sum: `7.859594299807213 s`.
+- Pipeline contract: `passed`, `24` checks.
+- StackEngine contract: `passed`, default-promotion ready.
+- Warp-quality contract: `passed`, `9` checks.
+- Six integration FITS outputs were SHA256-identical to Gate587.
+- Compare versus WBPP black-box fastIntegration:
+  - GLASS time: `7.859594299807213 s`;
+  - WBPP black-box reference time: `1092.541 s`;
+  - speedup: `139.00730219965664x`;
+  - coverage190 fraction: `0.905523489118409`;
+  - RMS difference: `0.005340835487175878`;
+  - p99 absolute difference: `0.002133606873685496`.
+- Acceptance audit: `passed`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\engine\integration.py
+  tests\test_pipeline_fixture.py`
+- `python -m pytest -q tests\test_pipeline_fixture.py -k
+  "integration_auto_keeps_stack_engine_default_when_cuda_is_available or
+  integration_cuda_backend_keeps_stack_engine_default_without_policy or
+  integration_cuda_fast_path_requires_explicit_policy or
+  integration_cuda_backend_fast_path_still_requires_policy"`
+- `python -m pytest -q tests\test_pipeline_contract.py -k
+  "nonresident_cuda_fast_path or integration_default_engine_policy or
+  stack_engine_runtime_default"`
+- Synthetic CLI run and `glass pipeline-contract` listed above.
+- Fresh 200-light resident regression run and `glass acceptance-audit` listed
+  above.
+
+Interpretation:
+
+- this is a real execution-path hardening gate, not a reporting gate:
+  non-resident light integration now defaults to StackEngine even under
+  `--backend cuda`;
+- the older CUDA streaming accumulator is still present but requires an
+  explicit plan-level policy opt-in, making it auditable rather than implicit;
+- resident CUDA all-VRAM performance and output pixels are unchanged.
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident
@@ -6268,8 +6359,9 @@ integration where applicable.
   when CUDA is importable and rejection is `none`.
 - Add `IntegrationPolicy.allow_cuda_streaming_accumulator_fast_path`, defaulting
   to `false`, so the older non-resident CUDA streaming accumulator can only
-  bypass StackEngine when explicitly requested by policy, or when the user
-  explicitly chooses `--backend cuda`.
+  bypass StackEngine when explicitly requested by policy. At the time of
+  Gate278, an explicit `--backend cuda` also selected the fast path; S2-Gate
+  588 tightened that rule so the plan policy is now the only opt-in.
 - Record an `integration_engine_policy` artifact summary and per-output
   `engine_selection` details so reports/contracts can audit why a run used
   StackEngine or the explicit CUDA fast path.

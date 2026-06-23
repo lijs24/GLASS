@@ -138,15 +138,15 @@ def _integration_engine_selection(
 ) -> dict[str, Any]:
     cuda_available = cuda_module is not None
     cuda_fast_path_eligible = cuda_available and rejection == "none"
-    explicit_cuda_fast_path = (
-        backend == "cuda"
-        or _bool_policy(policy, "allow_cuda_streaming_accumulator_fast_path", False)
-    )
+    allow_cuda_fast_path = _bool_policy(policy, "allow_cuda_streaming_accumulator_fast_path", False)
+    explicit_cuda_fast_path = allow_cuda_fast_path
     use_cuda_fast_path = cuda_fast_path_eligible and explicit_cuda_fast_path
     if use_cuda_fast_path:
         reason = "explicit_cuda_fast_path_requested"
     elif cuda_available and rejection != "none":
         reason = "stack_engine_required_for_rejection"
+    elif cuda_available and backend == "cuda" and not allow_cuda_fast_path:
+        reason = "cuda_backend_stack_engine_default_requires_fast_path_policy"
     elif cuda_available and not explicit_cuda_fast_path:
         reason = "stack_engine_default_requires_explicit_cuda_fast_path"
     elif backend == "cuda":
@@ -166,9 +166,8 @@ def _integration_engine_selection(
         "cuda_available": cuda_available,
         "cuda_fast_path_eligible": cuda_fast_path_eligible,
         "explicit_cuda_fast_path": explicit_cuda_fast_path,
-        "allow_cuda_streaming_accumulator_fast_path": _bool_policy(
-            policy, "allow_cuda_streaming_accumulator_fast_path", False
-        ),
+        "allow_cuda_streaming_accumulator_fast_path": allow_cuda_fast_path,
+        "cuda_fast_path_policy_required": bool(cuda_available and rejection == "none"),
         "rejection": rejection,
         "reason": reason,
     }
