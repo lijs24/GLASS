@@ -15743,6 +15743,55 @@ Completed in Gate446:
     in-VRAM reference selection so the default path can become self-sufficient
     without requiring `--reference-frame-id`.
 
+### S2-Gate 576: Default LN-On 200-Light A/B Validation
+
+- Returns to the Phase 2 mainline after the resident reference-health gates by
+  validating the current default resident CUDA path on the real M38 H-alpha
+  200-light dataset against the stored WBPP black-box output.
+- The validated run is the current safe default with CPU reference scout,
+  resident CUDA, shared resident master cache, LN on, winsorized rejection,
+  audit output maps, and the default `throughput-v3-io` runtime preset.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate575_cuda_calibrated_reference_health\default_safe_auto_should_pass`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate575_cuda_calibrated_reference_health\default_safe_auto_should_pass\compare_vs_wbpp_fastintegration_scaled_coverage190.json`;
+  - acceptance audit:
+    `C:\glass_runs\phase2_s2_gate575_cuda_calibrated_reference_health\default_safe_auto_should_pass\acceptance_audit_ln_on_default.json`;
+  - StackEngine contract:
+    `C:\glass_runs\phase2_s2_gate575_cuda_calibrated_reference_health\default_safe_auto_should_pass\stack_engine_contract.json`;
+  - speedup summary:
+    `runs\benchmarks\m38_wbpp_speedup_summary_gate576_ln_on_default.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Run timing total | `7.975543199805543 s` |
+  | WBPP black-box reference elapsed | `1092.541 s` |
+  | Speedup vs WBPP reference | `136.9864061455573x` |
+  | Active/rejected frames | `193 / 7` |
+  | Reference scout backend/reference | `cpu / F000225` |
+  | Master SHA256 | `3c5f942f3be7fe629c6be55c1e2d14a94b8f23128c057384f03df8f09a38333d` |
+  | Compare shape match | `true` |
+  | Coverage190 compared pixels | `52171830` |
+  | Coverage190 fraction after border crop | `0.905523489118409` |
+  | RMS diff vs WBPP | `0.005340835487175878` |
+  | p99 abs diff vs WBPP | `0.002133606873685496` |
+  | Acceptance audit | `passed` |
+  | StackEngine contract | `passed` |
+  | Pipeline contract | `passed` |
+
+- The default LN-on post-rejection coverage fraction at `min_coverage=190` is
+  lower than the old LN-off parity contract. An explicit `F000162` center-frame
+  probe produced nearly the same coverage190 fraction, so this is not primarily
+  a reference-center issue. It is a consequence of the current LN-on +
+  winsorized rejection/default map semantics. The numerical comparison still
+  passes the RMS and p99 bounds used for the default LN-on acceptance audit.
+- This gate does not change algorithms or promote a new tuning knob. It records
+  the current default path as green and keeps the next substantive work focused
+  on DQ/mask pipeline completeness, StackEngine default surfaces, and any
+  future contract update that explicitly models LN-on post-rejection coverage.
+
 ## Gate Rules
 
 Each gate requires:
