@@ -6022,6 +6022,10 @@ def test_cli_resident_cuda_native_u16_path_calibration_is_opt_in(tmp_path: Path,
     assert io_pipeline["native_path_calibration_batch_count"] >= 1
     assert io_pipeline["native_path_calibration_frame_count"] == 2
     assert io_pipeline["native_path_calibration_host_buffer_bytes"] == 2 * 24 * 24 * 2
+    assert io_pipeline["native_path_calibration_host_buffer_model"] == (
+        "cuda_host_alloc_portable_pinned_lane_buffers"
+    )
+    assert io_pipeline["native_path_calibration_host_buffer_pinned"] is True
     assert io_pipeline["fits_backend_counts"]["native_u16be_raw_path_calibration"] == 2
     assert io_pipeline["native_batch_read_enabled"] is False
     assert io_pipeline["native_queue_read_enabled"] is False

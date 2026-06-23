@@ -6225,6 +6225,8 @@ def run_resident_calibration_integration(
             native_path_calibration_total_s = 0.0
             native_path_calibration_host_buffer_bytes = 0
             native_path_calibration_wave_h2d_elapsed_s = 0.0
+            native_path_calibration_host_buffer_model: str | None = None
+            native_path_calibration_host_buffer_pinned = False
             prefetch_fill_blocked_no_slot_count = 0
             prefetch_release_count = 0
             prefetch_max_inflight_slots = 0
@@ -6466,6 +6468,15 @@ def run_resident_calibration_integration(
                             native_path_calibration_host_buffer_bytes = max(
                                 native_path_calibration_host_buffer_bytes,
                                 int(calibration_timing.get("native_path_host_buffer_bytes", 0) or 0),
+                            )
+                            timing_host_buffer_model = str(
+                                calibration_timing.get("native_path_host_buffer_model", "") or ""
+                            )
+                            if timing_host_buffer_model:
+                                native_path_calibration_host_buffer_model = timing_host_buffer_model
+                            native_path_calibration_host_buffer_pinned = bool(
+                                native_path_calibration_host_buffer_pinned
+                                or calibration_timing.get("native_path_host_buffer_pinned", False)
                             )
                             wave_h2d_elapsed = calibration_timing.get("wave_h2d_elapsed_s", 0.0)
                             if isinstance(wave_h2d_elapsed, (list, tuple)):
@@ -11114,10 +11125,9 @@ def run_resident_calibration_integration(
                 "native_path_calibration_wave_h2d_elapsed_s": float(
                     native_path_calibration_wave_h2d_elapsed_s
                 ),
-                "native_path_calibration_host_buffer_model": (
-                    "native_pageable_lane_buffers"
-                    if native_path_calibration_enabled
-                    else None
+                "native_path_calibration_host_buffer_model": native_path_calibration_host_buffer_model,
+                "native_path_calibration_host_buffer_pinned": bool(
+                    native_path_calibration_host_buffer_pinned
                 ),
             }
             registration_total = registration_timing["total"]

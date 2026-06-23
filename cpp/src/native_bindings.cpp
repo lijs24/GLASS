@@ -41,6 +41,14 @@ struct CudaUCharFree {
   }
 };
 
+struct CudaHostUCharFree {
+  void operator()(unsigned char* ptr) const noexcept {
+    if (ptr != nullptr) {
+      (void)cudaFreeHost(ptr);
+    }
+  }
+};
+
 struct CudaUllFree {
   void operator()(unsigned long long* ptr) const noexcept {
     if (ptr != nullptr) {
@@ -5815,6 +5823,8 @@ class ResidentCalibratedStack {
       out["host_release_safe"] = true;
       out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
       out["native_path_host_buffer_bytes"] = 0;
+      out["native_path_host_buffer_model"] = "none";
+      out["native_path_host_buffer_pinned"] = false;
       out["lane_stream_elapsed_s"] = py::list();
       out["wave_h2d_elapsed_s"] = py::list();
       return out;
@@ -5843,9 +5853,17 @@ class ResidentCalibratedStack {
     const std::size_t lane_count = std::min<std::size_t>(stream_limit, effective_wave_frames);
     ensure_calibration_lanes(lane_count);
 
-    std::vector<std::vector<unsigned char>> lane_host_buffers(lane_count);
-    for (auto& buffer : lane_host_buffers) {
-      buffer.resize(raw_frame_bytes);
+    std::vector<std::unique_ptr<unsigned char, CudaHostUCharFree>> lane_host_buffers;
+    lane_host_buffers.reserve(lane_count);
+    for (std::size_t lane = 0; lane < lane_count; ++lane) {
+      unsigned char* buffer = nullptr;
+      check_cuda(
+          cudaHostAlloc(
+              reinterpret_cast<void**>(&buffer),
+              raw_frame_bytes,
+              cudaHostAllocPortable),
+          "cudaHostAlloc(resident native path-read raw FITS lane buffer)");
+      lane_host_buffers.emplace_back(buffer);
     }
     std::vector<CalibrationParameters> params;
     params.reserve(frame_count);
@@ -5890,7 +5908,7 @@ class ResidentCalibratedStack {
                   paths[frame_offset],
                   data_offsets[frame_offset],
                   raw_frame_bytes,
-                  lane_host_buffers[j].data());
+                  lane_host_buffers[j].get());
             } catch (const std::exception& exc) {
               read_errors[j] = exc.what();
             } catch (...) {
@@ -5933,7 +5951,7 @@ class ResidentCalibratedStack {
           check_cuda(
               cudaMemcpyAsync(
                   lane_raw,
-                  lane_host_buffers[lane].data(),
+                  lane_host_buffers[lane].get(),
                   raw_frame_bytes,
                   cudaMemcpyHostToDevice,
                   calibration_lane_streams_[lane]),
@@ -6058,6 +6076,8 @@ class ResidentCalibratedStack {
     out["host_release_safe"] = true;
     out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
     out["native_path_host_buffer_bytes"] = static_cast<unsigned long long>(raw_frame_bytes * lane_count);
+    out["native_path_host_buffer_model"] = "cuda_host_alloc_portable_pinned_lane_buffers";
+    out["native_path_host_buffer_pinned"] = true;
     out["lane_stream_elapsed_s"] = lane_stream_elapsed_s;
     out["wave_h2d_elapsed_s"] = wave_h2d_elapsed_s;
     return out;

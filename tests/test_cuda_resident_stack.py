@@ -273,6 +273,8 @@ def test_resident_stack_calibrates_u16be_paths_on_gpu_like_cpu(tmp_path: Path):
     assert timing["raw_h2d_bytes"] == 2 * 4 * 5 * 2
     assert timing["native_path_read_bytes"] == 2 * 4 * 5 * 2
     assert timing["native_path_host_buffer_bytes"] == 2 * 4 * 5 * 2
+    assert timing["native_path_host_buffer_model"] == "cuda_host_alloc_portable_pinned_lane_buffers"
+    assert timing["native_path_host_buffer_pinned"] is True
     assert np.allclose(master, cpu_master, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, np.full((4, 5), len(paths), dtype=np.float32))
 

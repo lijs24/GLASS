@@ -1,0 +1,92 @@
+{
+  "gate": "S2-Gate 548",
+  "title": "Pinned Native Path Calibration Probe",
+  "date": "2026-06-23",
+  "result": "green_negative_probe_not_promoted",
+  "code_changes": [
+    "cpp/src/native_bindings.cpp",
+    "src/glass/engine/resident_cuda.py",
+    "tests/test_cuda_resident_stack.py",
+    "tests/test_resident_cuda_run.py",
+    "docs/phase2_algorithm_hardening.md",
+    "docs/algorithm_sources.md"
+  ],
+  "feature_flags": {
+    "env": "GLASS_RESIDENT_NATIVE_PATH_CALIBRATION=1",
+    "default_enabled": false,
+    "reason": "pinned native path is correct but remains slower than default"
+  },
+  "tests": {
+    "focused_resident_path_default": "3 passed in 1.06 s",
+    "full_pytest": "1186 passed in 44.08 s"
+  },
+  "cuda": {
+    "available": true,
+    "device_id": 0,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "driver_version": "596.21"
+  },
+  "real_200_light": {
+    "plan": "C:\\glass_runs\\phase2_s2_gate540_plan_spec_cache\\runs_20260623_140314\\processing_plan.json",
+    "master_cache_dir": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\resident_master_cache",
+    "pinned_native_path_run": "C:\\glass_runs\\phase2_s2_gate548_pinned_native_path_calibration\\runs_20260623_154626\\pinned_native_path_release",
+    "default_run": "C:\\glass_runs\\phase2_s2_gate548_pinned_native_path_calibration\\runs_20260623_154643\\default_release",
+    "frame_count": 200,
+    "pinned_native_path": {
+      "shell_elapsed_s": 9.187321,
+      "calibration_batch_mode": "fits_u16be_bzero_native_path_read_calibration_batch",
+      "fits_backend_counts": {
+        "native_u16be_raw_path_calibration": 200
+      },
+      "native_path_host_buffer_model": "cuda_host_alloc_portable_pinned_lane_buffers",
+      "native_path_host_buffer_pinned": true,
+      "light_read_upload_calibrate_s": 6.625002,
+      "registration_warp_s": 0.256614,
+      "integration_s": 0.305583,
+      "output_write_s": 0.219301,
+      "native_path_calibration_total_s": 4.60169,
+      "native_path_calibration_file_read_s": 17.798358,
+      "native_path_calibration_wave_h2d_elapsed_s": 0.565367,
+      "raw_gpu_h2d_bytes": 24660480000,
+      "raw_gpu_float32_host_bytes_avoided": 49320960000
+    },
+    "default": {
+      "shell_elapsed_s": 5.495093,
+      "calibration_batch_mode": "fits_u16be_bzero_gpu_decode_callback_release_batch",
+      "fits_backend_counts": {
+        "native_u16be_raw": 200
+      },
+      "light_read_upload_calibrate_s": 2.586849,
+      "registration_warp_s": 0.253927,
+      "integration_s": 0.343677,
+      "output_write_s": 0.360092,
+      "raw_gpu_h2d_bytes": 24660480000,
+      "raw_gpu_float32_host_bytes_avoided": 49320960000
+    },
+    "light_stage_slowdown_factor": 2.5610316,
+    "shell_slowdown_factor": 1.6719137,
+    "improvement_vs_gate547_pageable_native_path_factor": 1.1935998,
+    "outputs_bitwise_equal": true,
+    "sha256": {
+      "resident_master_H.fits": "8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110",
+      "resident_weight_map_H.fits": "5862111EE6F527A40671AC13F1FAA43F037C90271F872F27AF4ACF17040FBFE8",
+      "resident_coverage_map_H.fits": "B87517BE794A3B4BDCFF0D8536EE0188DA6AFA54ED2BE818BD911BA6CF1BE1B3",
+      "resident_low_rejection_map_H.fits": "F1181E0CE52A7FF77B988AFAF8A8911A1BEAF94DF54B25B0AA51014CB0D66E23",
+      "resident_high_rejection_map_H.fits": "ADB66C931C5A48D6E0D7F5C2FCBCC58481420AD4912304843A3802089050C805",
+      "resident_dq_map_H.fits": "934F661119CE18BBCAC1D369488AED4D959669C6EF614D6076D74BE06E69CCFB"
+    }
+  },
+  "interpretation": [
+    "Pinned native path staging improves the Gate547 pageable native path.",
+    "It is still much slower than the default resident raw-u16 pinned prefetch/callback-release path.",
+    "The remaining issue is wave-level read joins and loss of ready-order overlap, not just pageable memory.",
+    "The next substantial target is a pinned native completion-to-calibration queue."
+  ],
+  "clean_room": {
+    "external_source_read": false,
+    "input_directories_modified": false,
+    "notes": "Uses GLASS-owned code, public FITS byte ranges, user data, and GLASS artifacts only."
+  }
+}

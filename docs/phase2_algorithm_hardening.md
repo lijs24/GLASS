@@ -14485,6 +14485,63 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_547_native_path_calibration_summary.json`.
 
+### S2-Gate 548: Pinned Native Path Calibration Probe
+
+- Continued the Gate547 native path coordinator probe by replacing pageable
+  per-lane raw FITS staging buffers with scoped `cudaHostAllocPortable` pinned
+  lane buffers.
+- Completed:
+  - added a native `CudaHostUCharFree` RAII deleter for temporary pinned byte
+    buffers;
+  - changed the opt-in native path coordinator to read raw FITS bytes directly
+    into pinned lane buffers;
+  - recorded `native_path_host_buffer_model` and
+    `native_path_host_buffer_pinned` in native timing and resident artifacts;
+  - added focused tests proving the path reports pinned lane buffers and still
+    matches CPU/default output.
+- Tests:
+  - focused native path/default tests: `3 passed in 1.06 s`;
+  - full pytest: `1186 passed in 44.08 s`.
+- Real 200-light same-session A/B:
+  - pinned native path opt-in run:
+    `C:\glass_runs\phase2_s2_gate548_pinned_native_path_calibration\runs_20260623_154626\pinned_native_path_release`;
+  - fresh default run:
+    `C:\glass_runs\phase2_s2_gate548_pinned_native_path_calibration\runs_20260623_154643\default_release`;
+  - pinned native path shell elapsed: `9.187321 s`;
+  - fresh default shell elapsed: `5.495093 s`;
+  - pinned native path light read/upload/calibrate: `6.625002 s`;
+  - default light read/upload/calibrate: `2.586849 s`;
+  - pinned native path improved over Gate547 pageable native path
+    (`7.907601 s`) by about `1.19x`, but remained `2.56x` slower than the
+    fresh default light stage;
+  - pinned native path registration/warp: `0.256614 s`;
+  - default registration/warp: `0.253927 s`;
+  - pinned native path integration: `0.305583 s`;
+  - default integration: `0.343677 s`;
+  - pinned native path recorded `native_u16be_raw_path_calibration: 200` and
+    `cuda_host_alloc_portable_pinned_lane_buffers`;
+  - default recorded `native_u16be_raw: 200`.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    SHA256-identical between the pinned native path run and the fresh default
+    run;
+  - master SHA256:
+    `8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110`.
+- Interpretation:
+  - pinned staging helps, but not nearly enough to make the native path
+    coordinator competitive;
+  - the dominant loss is the wave-level read-join scheduling model and loss of
+    the default pinned prefetch/ready-order overlap;
+  - this path remains opt-in and must not be promoted;
+  - the next gate should implement a true pinned native completion-to-calibration
+    queue, where native workers fill pinned raw buffers and completed buffers
+    feed H2D/decode/calibration waves without waiting for an entire read wave
+    or materializing per-frame Python futures.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_548_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_548_pinned_native_path_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:
