@@ -745,3 +745,32 @@ The safe default CPU scout path remains unchanged, does not write
 `resident_reference_health.json`, and preserves the same resident master hash.
 This gate still does not promote CUDA reference scouting to default; it adds
 stronger early evidence for explicit CUDA-scout experiments.
+
+## S2-Gate 575 CUDA Calibrated Resident Reference Diagnostic
+
+S2-Gate 575 adds an optional CUDA-side calibrated-sample diagnostic to
+`resident_reference_health.json`. When CUDA is available and a matching
+resident master cache is supplied, GLASS now runs the same bounded calibrated
+reference-health crop through `calibrate_tile_f32` and then through the CUDA
+grid/top-NMS catalog primitive. The result is recorded as
+`cuda_calibrated_crosscheck`.
+
+This check is deliberately diagnostic-only in this gate:
+
+- it records `available`, `status`, `enforced = false`, thresholds, top
+  candidates, and failed CUDA-calibrated checks;
+- it is not appended to `effective_checks`;
+- it cannot turn a passing default run into a failing run;
+- it gives the next real 200-light A/B gate GPU-side evidence without
+  promoting the CUDA reference scout prematurely.
+
+The CLI exposes diagnostic thresholds:
+
+- `--resident-reference-health-cuda-calibrated-min-star-ratio 0.75`;
+- `--resident-reference-health-cuda-calibrated-max-rank-fraction 0.25`.
+
+On the real bad explicit CUDA scout probe, the CPU-calibrated Gate574 evidence
+already blocks the run before resident compute. Gate575 adds CUDA-calibrated
+diagnostics to the same artifact when the local CUDA extension and resident
+master cache are available, while the safe default CPU-scout path remains
+unchanged.

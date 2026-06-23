@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,8 @@ DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO = 0.85
 DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION = 0.25
 DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MIN_STAR_RATIO = 0.75
 DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MAX_RANK_FRACTION = 0.25
+DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MIN_STAR_RATIO = 0.75
+DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MAX_RANK_FRACTION = 0.25
 
 _SUPPORTED_ACTIONS = {"auto", "off", "warn", "fail"}
 
@@ -128,6 +131,20 @@ def _load_master_arrays(cache_set: dict[str, Any]) -> tuple[np.ndarray, np.ndarr
     )
 
 
+def _cuda_reference_health_available() -> tuple[bool, str]:
+    try:
+        import glass_cuda
+    except Exception as exc:
+        return False, f"import_failed:{type(exc).__name__}: {exc}"
+    if not getattr(glass_cuda, "cuda_available", lambda: False)():
+        return False, "cuda_unavailable"
+    if not hasattr(glass_cuda, "calibrate_tile_f32"):
+        return False, "missing_calibrate_tile_f32"
+    if not hasattr(glass_cuda, "star_grid_top_nms_candidates_f32"):
+        return False, "missing_star_grid_top_nms_candidates_f32"
+    return True, "available"
+
+
 def _calibration_policy(plan: dict[str, Any], *, flat_floor: float | None, cache_stats: dict[str, Any]) -> CalibrationPolicy:
     calibration_plan = plan.get("calibration_plan") if isinstance(plan.get("calibration_plan"), dict) else {}
     policy_payload = (
@@ -218,6 +235,114 @@ def _calibrated_crosscheck_row(
         "fwhm_px": star_metrics["fwhm_median_px"],
         "eccentricity": star_metrics["eccentricity_median"],
         "star_metrics": star_metrics,
+        "sample_origin_xy": [x0, y0],
+        "sample_shape": [int(sample.shape[0]), int(sample.shape[1])],
+        "sample_stride": stride,
+        "sample_side": sample_side,
+    }
+
+
+def _cuda_calibrated_crosscheck_row(
+    scout_row: dict[str, Any],
+    *,
+    frame: dict[str, Any],
+    master_bias: np.ndarray,
+    master_dark: np.ndarray,
+    master_flat: np.ndarray,
+    dark_exposure_s: float | None,
+    policy: CalibrationPolicy,
+    threshold_sigma: float,
+    max_stars: int,
+) -> dict[str, Any]:
+    import glass_cuda
+
+    origin = scout_row.get("sample_origin_xy") if isinstance(scout_row.get("sample_origin_xy"), list) else [0, 0]
+    sample_shape = scout_row.get("sample_shape") if isinstance(scout_row.get("sample_shape"), list) else [1, 1]
+    stride = max(1, int(scout_row.get("sample_stride") or 1))
+    sample_side = max(1, int(scout_row.get("sample_side") or max(sample_shape)))
+    x0 = int(origin[0])
+    y0 = int(origin[1])
+    path = Path(str(frame["path"]))
+    with FitsImageReader(path) as reader:
+        crop_width = min(int(reader.width) - x0, sample_side)
+        crop_height = min(int(reader.height) - y0, sample_side)
+        light = reader.read_tile(y0, y0 + crop_height, x0, x0 + crop_width)
+    bias = np.asarray(master_bias[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
+    dark = np.asarray(master_dark[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
+    flat = np.asarray(master_flat[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
+    calibrated = np.asarray(
+        glass_cuda.calibrate_tile_f32(
+            light,
+            bias,
+            dark,
+            flat,
+            float(frame.get("exposure_s") or 0.0),
+            dark_exposure_s,
+            asdict(policy),
+        ),
+        dtype=np.float32,
+    )
+    sample = calibrated[::stride, ::stride]
+    stats = robust_background(sample)
+    threshold = float(stats.median) + float(threshold_sigma) * max(float(stats.noise), 1.0e-6)
+    height, width = sample.shape
+    grid_cols = max(1, min(16, int(np.ceil(width / 64.0))))
+    grid_rows = max(1, min(12, int(np.ceil(height / 64.0))))
+    min_separation = max(2.0, float(min(height, width)) / 32.0)
+    catalog = glass_cuda.star_grid_top_nms_candidates_f32(
+        sample,
+        threshold,
+        grid_cols,
+        grid_rows,
+        4,
+        int(max_stars),
+        min_separation,
+    )
+    stored_count = int(catalog.get("stored_count") or 0)
+    detected_count = int(catalog.get("count") or 0)
+    flux = np.asarray(catalog.get("flux", []), dtype=np.float32)
+    finite_flux = flux[np.isfinite(flux)]
+    peak_snr_values = np.maximum(finite_flux - np.float32(stats.median), 0.0) / np.float32(
+        max(float(stats.noise), 1.0e-6)
+    )
+    peak_snr_values = peak_snr_values[np.isfinite(peak_snr_values)]
+    peak_snr = float(np.median(peak_snr_values)) if peak_snr_values.size else 0.0
+    flux_median = float(np.median(finite_flux)) if finite_flux.size else 0.0
+    weight, components = combined_quality_weight(
+        star_count=stored_count,
+        star_snr=peak_snr,
+        fwhm_px=None,
+        eccentricity=None,
+        background_rms=stats.rms,
+        saturation_fraction=0.0,
+    )
+    return {
+        "frame_id": str(scout_row.get("frame_id")),
+        "source_path": str(path),
+        "metric_source": "resident_reference_health_cuda_calibrated_sample_v1",
+        "star_count": stored_count,
+        "detected_count": detected_count,
+        "quality_score": weight,
+        "weight_components": components,
+        "background_median": stats.median,
+        "background_rms": stats.rms,
+        "background_mad": stats.mad,
+        "noise_mad": stats.noise,
+        "snr": peak_snr,
+        "fwhm_px": None,
+        "eccentricity": None,
+        "flux_median": flux_median,
+        "threshold": threshold,
+        "catalog_diagnostics": {
+            "catalog_model": "cuda_calibrate_tile_f32_then_star_grid_top_nms_candidates_f32",
+            "grid_cols": grid_cols,
+            "grid_rows": grid_rows,
+            "candidates_per_cell": 4,
+            "max_output_candidates": int(max_stars),
+            "min_separation_px": min_separation,
+            "catalog_sort_mode": str(catalog.get("catalog_sort_mode", "unavailable")),
+            "catalog_topk_mode": str(catalog.get("catalog_topk_mode", "unavailable")),
+        },
         "sample_origin_xy": [x0, y0],
         "sample_shape": [int(sample.shape[0]), int(sample.shape[1])],
         "sample_stride": stride,
@@ -376,6 +501,174 @@ def _calibrated_crosscheck(
     }
 
 
+def _cuda_calibrated_crosscheck(
+    plan: dict[str, Any],
+    scout: dict[str, Any],
+    *,
+    master_cache_dir: str | Path | None,
+    flat_floor: float | None,
+    reference_frame_id: str,
+    min_star_ratio: float,
+    max_rank_fraction: float,
+) -> dict[str, Any]:
+    available, reason = _cuda_reference_health_available()
+    if not available:
+        return {
+            "status": "unavailable",
+            "available": False,
+            "reason": reason,
+            "checks": [],
+            "failed_checks": [],
+        }
+    scout_rows = _frame_quality_rows(scout)
+    frames_by_id = _plan_frames_by_id(plan)
+    first_row = scout_rows[0] if scout_rows else {}
+    first_frame = frames_by_id.get(str(first_row.get("frame_id")))
+    shape_value = first_row.get("full_shape") if isinstance(first_row.get("full_shape"), list) else None
+    shape = (int(shape_value[0]), int(shape_value[1])) if shape_value and len(shape_value) >= 2 else None
+    filter_name = None if first_frame is None or first_frame.get("filter") is None else str(first_frame.get("filter"))
+    cache_sets = _candidate_master_cache_sets(master_cache_dir, filter_name=filter_name, shape=shape)
+    if not cache_sets:
+        return {
+            "status": "unavailable",
+            "available": False,
+            "reason": "matching_resident_master_cache_not_found",
+            "master_cache_dir": None if master_cache_dir is None else str(master_cache_dir),
+            "filter": filter_name,
+            "shape": None if shape is None else {"height": shape[0], "width": shape[1]},
+            "checks": [],
+            "failed_checks": [],
+        }
+    cache_set = cache_sets[0]
+    stats = cache_set["stats"]
+    master_bias, master_dark, master_flat = _load_master_arrays(cache_set)
+    policy = _calibration_policy(plan, flat_floor=flat_floor, cache_stats=stats)
+    dark_exposure = None if stats.get("dark_exposure_s") is None else float(stats.get("dark_exposure_s"))
+    rows: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    for scout_row in scout_rows:
+        frame = frames_by_id.get(str(scout_row.get("frame_id")))
+        if frame is None:
+            errors.append({"frame_id": scout_row.get("frame_id"), "error": "missing_frame_in_plan"})
+            continue
+        try:
+            rows.append(
+                _cuda_calibrated_crosscheck_row(
+                    scout_row,
+                    frame=frame,
+                    master_bias=master_bias,
+                    master_dark=master_dark,
+                    master_flat=master_flat,
+                    dark_exposure_s=dark_exposure,
+                    policy=policy,
+                    threshold_sigma=float(scout.get("threshold_sigma") or 5.0),
+                    max_stars=int(scout.get("max_stars") or 300),
+                )
+            )
+        except Exception as exc:
+            errors.append({"frame_id": scout_row.get("frame_id"), "error": str(exc)})
+    ranked = sorted(
+        rows,
+        key=lambda row: (
+            int(row.get("star_count") or 0),
+            float(row.get("flux_median") or 0.0),
+            float(row.get("quality_score") or 0.0),
+            -float(row.get("background_rms") or 0.0),
+        ),
+        reverse=True,
+    )
+    cuda_reference_frame_id = str(ranked[0]["frame_id"]) if ranked else ""
+    selected_row = next((row for row in ranked if str(row.get("frame_id")) == reference_frame_id), None)
+    reference_row = next((row for row in ranked if str(row.get("frame_id")) == cuda_reference_frame_id), None)
+    selected_rank = ranked.index(selected_row) + 1 if selected_row in ranked else None
+    rank_fraction = (
+        (float(selected_rank) - 1.0) / float(max(len(ranked) - 1, 1))
+        if selected_rank is not None and ranked
+        else None
+    )
+    selected_star_count = int(selected_row.get("star_count") or 0) if selected_row is not None else 0
+    reference_star_count = int(reference_row.get("star_count") or 0) if reference_row is not None else 0
+    star_ratio = (
+        float(selected_star_count) / float(reference_star_count)
+        if reference_star_count > 0
+        else (1.0 if selected_star_count > 0 else 0.0)
+    )
+    checks = [
+        {
+            "name": "cuda_calibrated_crosscheck_measured_frames",
+            "passed": bool(rows),
+            "evidence": {"measured_frame_count": len(rows), "error_count": len(errors)},
+        },
+        {
+            "name": "selected_reference_present_in_cuda_calibrated_crosscheck",
+            "passed": selected_row is not None,
+            "evidence": {"reference_frame_id": reference_frame_id, "present": selected_row is not None},
+        },
+        {
+            "name": "selected_reference_cuda_calibrated_star_ratio",
+            "passed": star_ratio >= float(min_star_ratio),
+            "evidence": {
+                "selected_cuda_calibrated_star_count": selected_star_count,
+                "cuda_calibrated_reference_star_count": reference_star_count,
+                "star_ratio": star_ratio,
+                "min_star_ratio": float(min_star_ratio),
+            },
+        },
+        {
+            "name": "selected_reference_cuda_calibrated_rank_fraction",
+            "passed": rank_fraction is not None and rank_fraction <= float(max_rank_fraction),
+            "evidence": {
+                "selected_cuda_calibrated_rank": selected_rank,
+                "cuda_calibrated_measured_frame_count": len(ranked),
+                "rank_fraction": rank_fraction,
+                "max_rank_fraction": float(max_rank_fraction),
+            },
+        },
+    ]
+    raw_passed = all(item["passed"] for item in checks)
+    return {
+        "status": "passed" if raw_passed else "failed",
+        "available": True,
+        "passed": raw_passed,
+        "enforced": False,
+        "master_cache": {
+            "cache_dir": cache_set.get("cache_dir"),
+            "cache_key": cache_set.get("cache_key"),
+            "stats_path": cache_set.get("stats_path"),
+            "filter": stats.get("filter"),
+            "shape": stats.get("shape"),
+            "flat_floor": float(policy.flat_floor),
+            "dark_exposure_s": dark_exposure,
+            "master_dark_includes_bias": bool(policy.master_dark_includes_bias),
+        },
+        "summary": {
+            "reference_frame_id": reference_frame_id,
+            "cuda_calibrated_reference_frame_id": cuda_reference_frame_id,
+            "selected_cuda_calibrated_rank": selected_rank,
+            "cuda_calibrated_measured_frame_count": len(ranked),
+            "selected_cuda_calibrated_star_count": selected_star_count,
+            "cuda_calibrated_reference_star_count": reference_star_count,
+            "selected_cuda_calibrated_star_ratio": star_ratio,
+            "selected_cuda_calibrated_rank_fraction": rank_fraction,
+        },
+        "top_reference_candidates": [
+            {
+                "frame_id": row.get("frame_id"),
+                "star_count": row.get("star_count"),
+                "detected_count": row.get("detected_count"),
+                "quality_score": row.get("quality_score"),
+                "flux_median": row.get("flux_median"),
+                "background_rms": row.get("background_rms"),
+            }
+            for row in ranked[:10]
+        ],
+        "checks": checks,
+        "failed_checks": [item["name"] for item in checks if not item["passed"]],
+        "error_count": len(errors),
+        "errors": errors[:25],
+    }
+
+
 def build_resident_reference_health(
     plan_path: str | Path,
     run_dir: str | Path,
@@ -385,6 +678,8 @@ def build_resident_reference_health(
     max_cpu_rank_fraction: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
     calibrated_min_star_ratio: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MIN_STAR_RATIO,
     calibrated_max_rank_fraction: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MAX_RANK_FRACTION,
+    cuda_calibrated_min_star_ratio: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MIN_STAR_RATIO,
+    cuda_calibrated_max_rank_fraction: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MAX_RANK_FRACTION,
     master_cache_dir: str | Path | None = None,
     flat_floor: float | None = None,
 ) -> dict[str, Any]:
@@ -396,6 +691,10 @@ def build_resident_reference_health(
         raise ValueError("resident reference health calibrated min star ratio must be non-negative")
     if not 0.0 <= float(calibrated_max_rank_fraction) <= 1.0:
         raise ValueError("resident reference health calibrated max rank fraction must be in [0, 1]")
+    if float(cuda_calibrated_min_star_ratio) < 0.0:
+        raise ValueError("resident reference health CUDA calibrated min star ratio must be non-negative")
+    if not 0.0 <= float(cuda_calibrated_max_rank_fraction) <= 1.0:
+        raise ValueError("resident reference health CUDA calibrated max rank fraction must be in [0, 1]")
 
     run = Path(run_dir)
     scout_path = run / "resident_reference_scout.json"
@@ -518,6 +817,15 @@ def build_resident_reference_health(
         max_rank_fraction=float(calibrated_max_rank_fraction),
         enabled=enabled,
     )
+    cuda_calibrated = _cuda_calibrated_crosscheck(
+        plan,
+        scout,
+        master_cache_dir=master_cache_dir,
+        flat_floor=flat_floor,
+        reference_frame_id=reference_frame_id,
+        min_star_ratio=float(cuda_calibrated_min_star_ratio),
+        max_rank_fraction=float(cuda_calibrated_max_rank_fraction),
+    )
     calibrated_checks = calibrated.get("checks") if isinstance(calibrated.get("checks"), list) else []
     effective_checks = list(checks)
     if calibrated.get("available"):
@@ -543,6 +851,8 @@ def build_resident_reference_health(
             "max_cpu_rank_fraction": float(max_cpu_rank_fraction),
             "calibrated_min_star_ratio": float(calibrated_min_star_ratio),
             "calibrated_max_rank_fraction": float(calibrated_max_rank_fraction),
+            "cuda_calibrated_min_star_ratio": float(cuda_calibrated_min_star_ratio),
+            "cuda_calibrated_max_rank_fraction": float(cuda_calibrated_max_rank_fraction),
         },
         "summary": {
             "reference_frame_id": reference_frame_id,
@@ -569,6 +879,22 @@ def build_resident_reference_health(
                 if isinstance(calibrated.get("summary"), dict)
                 else None
             ),
+            "cuda_calibrated_available": bool(cuda_calibrated.get("available")),
+            "cuda_calibrated_reference_frame_id": (
+                cuda_calibrated.get("summary", {}).get("cuda_calibrated_reference_frame_id")
+                if isinstance(cuda_calibrated.get("summary"), dict)
+                else None
+            ),
+            "selected_cuda_calibrated_star_ratio": (
+                cuda_calibrated.get("summary", {}).get("selected_cuda_calibrated_star_ratio")
+                if isinstance(cuda_calibrated.get("summary"), dict)
+                else None
+            ),
+            "selected_cuda_calibrated_rank_fraction": (
+                cuda_calibrated.get("summary", {}).get("selected_cuda_calibrated_rank_fraction")
+                if isinstance(cuda_calibrated.get("summary"), dict)
+                else None
+            ),
         },
         "cpu_crosscheck": {
             "artifact_type": cpu_crosscheck.get("artifact_type"),
@@ -590,6 +916,7 @@ def build_resident_reference_health(
             ],
         },
         "calibrated_crosscheck": calibrated,
+        "cuda_calibrated_crosscheck": cuda_calibrated,
         "checks": checks,
         "effective_checks": effective_checks,
         "failed_checks": failed_checks,

@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from glass.cpu.calibration import calibrate_light
 from glass.cli import _apply_resident_runtime_preset
 from glass.cli import _resolve_execution_defaults
 from glass.cli import _resolve_resident_integration_rejection_default
@@ -23,6 +24,7 @@ from glass.engine.resident_registration_health import build_resident_registratio
 from glass.engine.resident_reference_scout import write_resident_reference_scout
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
+from glass.models import CalibrationPolicy
 from tests.conftest import cuda_module_or_skip
 
 
@@ -1125,7 +1127,11 @@ def test_resident_reference_health_blocks_cuda_reference_cpu_crosscheck_miss(
 
 def test_resident_reference_health_records_calibrated_master_cache_crosscheck(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import glass_cuda
+
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: False)
     dataset = tmp_path / "dataset"
     _write_two_light_reference_scout_dataset(dataset)
     manifest = tmp_path / "manifest.json"
@@ -1150,9 +1156,98 @@ def test_resident_reference_health_records_calibrated_master_cache_crosscheck(
     assert calibrated["summary"]["selected_calibrated_rank"] == 1
 
 
+def test_resident_reference_health_cuda_calibrated_crosscheck_is_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import glass_cuda
+
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "reference_health_cuda_calibrated_diagnostic"
+    cache_dir = tmp_path / "resident_master_cache"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    weak_id = _light_frame_id_by_stem(plan, "light_001")
+    strong_id = _light_frame_id_by_stem(plan, "light_002")
+    _write_cuda_reference_scout_from_cpu_scout(plan, run, reference_frame_id=weak_id)
+    _write_reference_health_master_cache(cache_dir)
+
+    def fake_calibrate_tile(light, bias, dark, flat, light_exposure_s, dark_exposure_s, policy_payload):
+        policy = CalibrationPolicy()
+        if isinstance(policy_payload, dict):
+            for key, value in policy_payload.items():
+                if hasattr(policy, key):
+                    setattr(policy, key, value)
+        return calibrate_light(light, bias, dark, flat, light_exposure_s, dark_exposure_s, policy)
+
+    def fake_grid_catalog(
+        data,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell,
+        max_output_candidates,
+        min_separation_px,
+    ):
+        image = np.asarray(data, dtype=np.float32)
+        ys, xs = np.nonzero(image > float(threshold))
+        flux = image[ys, xs].astype(np.float32)
+        order = np.argsort(-flux, kind="stable")[: int(max_output_candidates)]
+        return {
+            "count": int(len(xs)),
+            "stored_count": int(len(order)),
+            "grid_cols": int(grid_cols),
+            "grid_rows": int(grid_rows),
+            "candidates_per_cell": int(candidates_per_cell),
+            "grid_capacity": int(grid_cols) * int(grid_rows) * int(candidates_per_cell),
+            "max_output_candidates": int(max_output_candidates),
+            "min_separation_px": float(min_separation_px),
+            "catalog_sort_mode": "fake_cuda_test",
+            "catalog_topk_mode": "fake_cuda_test",
+            "x": xs[order].astype(np.float32),
+            "y": ys[order].astype(np.float32),
+            "flux": flux[order].astype(np.float32),
+        }
+
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: True)
+    monkeypatch.setattr(glass_cuda, "calibrate_tile_f32", fake_calibrate_tile)
+    monkeypatch.setattr(glass_cuda, "star_grid_top_nms_candidates_f32", fake_grid_catalog)
+
+    health = build_resident_reference_health(
+        plan,
+        run,
+        min_cpu_star_ratio=0.0,
+        max_cpu_rank_fraction=1.0,
+        calibrated_min_star_ratio=0.0,
+        calibrated_max_rank_fraction=1.0,
+        master_cache_dir=cache_dir,
+        flat_floor=0.05,
+    )
+
+    cuda_calibrated = health["cuda_calibrated_crosscheck"]
+    assert health["passed"] is True
+    assert health["blocking"] is False
+    assert health["summary"]["reference_frame_id"] == weak_id
+    assert health["summary"]["calibrated_reference_frame_id"] == strong_id
+    assert cuda_calibrated["available"] is True
+    assert cuda_calibrated["enforced"] is False
+    assert cuda_calibrated["status"] == "failed"
+    assert cuda_calibrated["summary"]["reference_frame_id"] == weak_id
+    assert cuda_calibrated["summary"]["cuda_calibrated_reference_frame_id"] == strong_id
+    assert "selected_reference_cuda_calibrated_star_ratio" in cuda_calibrated["failed_checks"]
+    assert "selected_reference_cuda_calibrated_star_ratio" not in health["failed_checks"]
+
+
 def test_resident_reference_health_calibrated_crosscheck_can_block_when_raw_thresholds_are_loose(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import glass_cuda
+
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: False)
     dataset = tmp_path / "dataset"
     _write_two_light_reference_scout_dataset(dataset)
     manifest = tmp_path / "manifest.json"

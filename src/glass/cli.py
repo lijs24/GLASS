@@ -32,6 +32,8 @@ from glass.engine.resident_reference_scout import (
 from glass.engine.resident_reference_health import (
     DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MAX_RANK_FRACTION,
     DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MIN_STAR_RATIO,
+    DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MAX_RANK_FRACTION,
+    DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MIN_STAR_RATIO,
     DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE,
     DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
     DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
@@ -1100,6 +1102,15 @@ def _resident_reference_health_message(health: dict[str, Any]) -> str:
             f"calibrated_star_ratio={float(summary.get('selected_calibrated_star_ratio') or 0.0):.3f}, "
             f"calibrated_rank_fraction={float(summary.get('selected_calibrated_rank_fraction') or 0.0):.3f}"
         )
+    cuda_calibrated = ""
+    if summary.get("cuda_calibrated_available"):
+        cuda_calibrated = (
+            f", cuda_calibrated_reference={summary.get('cuda_calibrated_reference_frame_id')}, "
+            f"cuda_calibrated_star_ratio="
+            f"{float(summary.get('selected_cuda_calibrated_star_ratio') or 0.0):.3f}, "
+            f"cuda_calibrated_rank_fraction="
+            f"{float(summary.get('selected_cuda_calibrated_rank_fraction') or 0.0):.3f}"
+        )
     return (
         "resident reference health gate failed"
         f": reference={summary.get('reference_frame_id')}, "
@@ -1109,6 +1120,7 @@ def _resident_reference_health_message(health: dict[str, Any]) -> str:
         f"cpu_rank={summary.get('selected_cpu_rank')}/{summary.get('cpu_measured_frame_count')}, "
         f"required_rank_fraction<={thresholds.get('max_cpu_rank_fraction')}"
         f"{calibrated}"
+        f"{cuda_calibrated}"
     )
 
 
@@ -1157,6 +1169,16 @@ def _write_resident_reference_health(
             args,
             "resident_reference_health_calibrated_max_rank_fraction",
             DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MAX_RANK_FRACTION,
+        ),
+        cuda_calibrated_min_star_ratio=getattr(
+            args,
+            "resident_reference_health_cuda_calibrated_min_star_ratio",
+            DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MIN_STAR_RATIO,
+        ),
+        cuda_calibrated_max_rank_fraction=getattr(
+            args,
+            "resident_reference_health_cuda_calibrated_max_rank_fraction",
+            DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MAX_RANK_FRACTION,
         ),
         master_cache_dir=getattr(args, "resident_master_cache_dir", None),
         flat_floor=getattr(args, "flat_floor", None),
@@ -6283,6 +6305,24 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-reference-health-cuda-calibrated-min-star-ratio",
+        type=float,
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MIN_STAR_RATIO,
+        help=(
+            "diagnostic-only CUDA calibrated-sample minimum star-count ratio recorded in reference health "
+            "when CUDA and a matching resident master cache are available"
+        ),
+    )
+    run.add_argument(
+        "--resident-reference-health-cuda-calibrated-max-rank-fraction",
+        type=float,
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MAX_RANK_FRACTION,
+        help=(
+            "diagnostic-only CUDA calibrated-sample maximum rank fraction recorded in reference health "
+            "when CUDA and a matching resident master cache are available"
+        ),
+    )
+    run.add_argument(
         "--exclude-frame-id",
         action="append",
         default=[],
@@ -6790,6 +6830,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MAX_RANK_FRACTION,
         help="maximum calibrated-sample rank fraction for audit CUDA scout references when cache is available",
+    )
+    audit.add_argument(
+        "--resident-reference-health-cuda-calibrated-min-star-ratio",
+        type=float,
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MIN_STAR_RATIO,
+        help="diagnostic-only CUDA calibrated-sample minimum star-count ratio for audit reference health",
+    )
+    audit.add_argument(
+        "--resident-reference-health-cuda-calibrated-max-rank-fraction",
+        type=float,
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MAX_RANK_FRACTION,
+        help="diagnostic-only CUDA calibrated-sample maximum rank fraction for audit reference health",
     )
     audit.add_argument("--exclude-frame-id", action="append", default=[])
     audit.set_defaults(func=cmd_audit)
