@@ -12944,6 +12944,71 @@ Completed in Gate446:
   - external summary:
     `C:\glass_runs\phase2_s2_gate521_python_dq_fastpath\runs_20260623_102649\gate521_python_dq_fastpath_summary.json`.
 
+### S2-Gate 522: Resident DQ Int16 Runtime Map
+
+- Continued the DQ/mask contract hardening line without changing science
+  pixels, frame admission, registration, warp, winsorized rejection, or
+  integration formulas.
+- Completed:
+  - added a checked runtime DQ dtype path for the resident Python DQ fallback;
+  - kept direct helper behavior at `uint32` by default for compatibility;
+  - routed the resident pipeline DQ bitfield through `int16`, matching the
+    existing FITS DQ artifact dtype;
+  - removed count-map rounding from the DQ output writer path, because DQ is a
+    bitfield artifact rather than a count map;
+  - recorded `dq_map_runtime_dtype` in resident and integration artifacts.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate522_dq_int16_runtime\runs_20260623_104044`;
+  - input: M38 H-alpha plan with `200` light frames; active integration frame
+    count remained `193`;
+  - warm-repeat with shared master cache: internal `7.029533999972045 s`,
+    shell `7.3860233 s`;
+  - full run with per-run master cache policy: internal
+    `12.840817800024524 s`, shell `13.2148972 s`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - measured speedup: `147.92005868706102x` by warm shell timing and
+    `82.67573318770184x` by full shell timing.
+- Profile evidence:
+  - profile:
+    `C:\glass_runs\phase2_s2_gate522_dq_int16_runtime\runs_20260623_104044\warm_profile_int16.prof`;
+  - `_resident_dq_map` cumulative time: `1.3252872 s`, compared with Gate521
+    `1.3696953 s`;
+  - `_write_resident_outputs` cumulative time: `0.2833296 s`, compared with
+    Gate521 profile `0.388811 s`;
+  - `_count_map_for_write` no longer contributes meaningful time to DQ output
+    and appears only for the true count maps.
+- DQ/mask validation:
+  - `dq_map_runtime_dtype` is `int16` in warm, warm-repeat, full, and profile
+    resident artifacts;
+  - Gate522 DQ map matches Gate521 DQ map exactly with `0` differing pixels;
+  - resident result contract passed;
+  - DQ pixel closure passed.
+- Numerical validation:
+  - Gate522 warm-repeat master matches Gate521 warm-repeat master bitwise;
+  - Gate522 full run matches Gate522 warm-repeat master bitwise;
+  - current GLASS vs WBPP black-box compare is shape-matched; robust linear
+    fit over fit pixels has RMS `0.0015009512947433384`, p99 absolute
+    difference `0.00034034321741462114`, and fit fraction
+    `0.982980688129347`.
+- Interpretation:
+  - this is a DQ/mask memory and artifact-contract gate, not a broad
+    end-to-end speedup claim;
+  - for the `9600x6422` DQ map, runtime storage drops from `246604800` bytes
+    as `uint32` to `123302400` bytes as `int16`, saving about `117.59 MiB`;
+  - the component profile moved in the intended direction, while warm/full
+    end-to-end timings remained close enough to Gate521 that they are treated
+    as normal run-to-run variance;
+  - the next substantive targets return to the 200-light A/B line: resident
+    light-pipeline overlap, resident registration/warp batching, and numerical
+    agreement evidence.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_522_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_522_dq_int16_runtime_summary.json`;
+  - external summary:
+    `C:\glass_runs\phase2_s2_gate522_dq_int16_runtime\runs_20260623_104044\gate522_dq_int16_runtime_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

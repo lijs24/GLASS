@@ -2159,6 +2159,16 @@ def _resident_finite_count_map_array_stats_from_values(
     }
 
 
+def _resident_dq_flag_dtype(dtype: Any) -> np.dtype:
+    target = np.dtype(dtype)
+    if not np.issubdtype(target, np.integer):
+        raise ValueError("resident DQ map dtype must be an integer type")
+    max_flag = max(int(flag) for flag in DQFlag)
+    if max_flag > np.iinfo(target).max:
+        raise ValueError(f"resident DQ map dtype {target.name} cannot store DQFlag bits up to {max_flag}")
+    return target
+
+
 def _resident_dq_map_python(
     master: np.ndarray,
     weight_map: np.ndarray,
@@ -2170,8 +2180,14 @@ def _resident_dq_map_python(
     *,
     return_stats: bool = False,
     assume_finite_count_maps: bool = False,
+    dq_dtype: Any = np.uint32,
 ) -> tuple[np.ndarray, dict[str, int]] | tuple[np.ndarray, dict[str, int], dict[str, Any]]:
-    dq = np.zeros(np.asarray(master).shape, dtype=np.uint32)
+    dq_dtype = _resident_dq_flag_dtype(dq_dtype)
+    no_data_bit = dq_dtype.type(int(DQFlag.NO_DATA))
+    warp_edge_bit = dq_dtype.type(int(DQFlag.WARP_EDGE))
+    low_rejected_bit = dq_dtype.type(int(DQFlag.LOW_REJECTED))
+    high_rejected_bit = dq_dtype.type(int(DQFlag.HIGH_REJECTED))
+    dq = np.zeros(np.asarray(master).shape, dtype=dq_dtype)
     master_values = np.asarray(master, dtype=np.float32)
     weights = np.asarray(weight_map, dtype=np.float32)
     invalid = (~np.isfinite(master_values)) | (~np.isfinite(weights)) | (weights <= 0.0)
@@ -2198,7 +2214,7 @@ def _resident_dq_map_python(
             else (~coverage_finite) | (coverage <= 0.5)
         )
         invalid |= coverage_invalid
-        dq[coverage_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
+        dq[coverage_invalid] |= warp_edge_bit
         stats["post_rejection_coverage"] = (
             _resident_finite_count_coverage_stats(coverage)
             if assume_finite_count_maps
@@ -2221,7 +2237,7 @@ def _resident_dq_map_python(
             else (~geometric_finite) | (geometric <= 0.5)
         )
         invalid |= geometric_invalid
-        dq[geometric_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
+        dq[geometric_invalid] |= warp_edge_bit
         stats["geometric_warp_coverage"] = (
             _resident_finite_count_coverage_stats(geometric)
             if assume_finite_count_maps
@@ -2240,7 +2256,7 @@ def _resident_dq_map_python(
             geometric_partial = (geometric > 0.5) & (geometric < float(expected_count) - 0.5)
             if not assume_finite_count_maps:
                 geometric_partial &= geometric_finite
-            dq[geometric_partial] |= np.uint32(int(DQFlag.WARP_EDGE))
+            dq[geometric_partial] |= warp_edge_bit
             stats["geometric_partial_pixels"] = int(np.count_nonzero(geometric_partial))
             stats["geometric_full_pixels"] = int(
                 np.count_nonzero(geometric >= float(expected_count) - 0.5)
@@ -2250,7 +2266,7 @@ def _resident_dq_map_python(
         else:
             stats["geometric_partial_pixels"] = 0
             stats["geometric_full_pixels"] = 0
-    dq[invalid] |= np.uint32(int(DQFlag.NO_DATA))
+    dq[invalid] |= no_data_bit
     low_rejected_count = 0
     low_rejected = None
     if low_rejection_map is not None:
@@ -2258,7 +2274,7 @@ def _resident_dq_map_python(
         low_finite = None if assume_finite_count_maps else np.isfinite(low)
         low_rejected = low > 0.0 if assume_finite_count_maps else low_finite & (low > 0.0)
         low_rejected_count = int(np.count_nonzero(low_rejected))
-        dq[low_rejected] |= np.uint32(int(DQFlag.LOW_REJECTED))
+        dq[low_rejected] |= low_rejected_bit
         stats["low_rejection"] = (
             _resident_finite_count_map_array_stats_from_values(
                 low,
@@ -2274,7 +2290,7 @@ def _resident_dq_map_python(
         high_finite = None if assume_finite_count_maps else np.isfinite(high)
         high_rejected = high > 0.0 if assume_finite_count_maps else high_finite & (high > 0.0)
         high_rejected_count = int(np.count_nonzero(high_rejected))
-        dq[high_rejected] |= np.uint32(int(DQFlag.HIGH_REJECTED))
+        dq[high_rejected] |= high_rejected_bit
         stats["high_rejection"] = (
             _resident_finite_count_map_array_stats_from_values(
                 high,
@@ -2296,7 +2312,7 @@ def _resident_dq_map_python(
     no_data_count = int(np.count_nonzero(invalid))
     if no_data_count:
         summary["no_data"] = no_data_count
-    warp_edge_count = int(np.count_nonzero((dq & np.uint32(int(DQFlag.WARP_EDGE))) != 0))
+    warp_edge_count = int(np.count_nonzero((dq & warp_edge_bit) != 0))
     if warp_edge_count:
         summary["warp_edge"] = warp_edge_count
     if low_rejected_count:
@@ -2319,6 +2335,7 @@ def _resident_dq_map(
     *,
     return_stats: bool = False,
     assume_finite_count_maps: bool = False,
+    dq_dtype: Any = np.uint32,
 ) -> tuple[np.ndarray, dict[str, int]] | tuple[np.ndarray, dict[str, int], dict[str, Any]]:
     if return_stats:
         import glass_cuda
@@ -2343,6 +2360,7 @@ def _resident_dq_map(
         active_frame_count,
         return_stats=return_stats,
         assume_finite_count_maps=assume_finite_count_maps,
+        dq_dtype=dq_dtype,
     )
 
 
@@ -9917,6 +9935,7 @@ def run_resident_calibration_integration(
                     active_frame_count=active_frame_count,
                     return_stats=True,
                     assume_finite_count_maps=True,
+                    dq_dtype=np.int16,
                 )
             dq_map_stats_payload = dq_map_stats if isinstance(dq_map_stats, dict) else {}
             rejection_map_stats = {
@@ -10018,7 +10037,6 @@ def run_resident_calibration_integration(
                             "DQFLAGS": "NO_DATA,WARP_EDGE,LOW_REJECTED,HIGH_REJECTED",
                         },
                         "dtype": np.int16,
-                        "round_counts": True,
                     }
                 )
             if coverage_map is not None and coverage_path is not None:
@@ -10400,6 +10418,7 @@ def run_resident_calibration_integration(
                     "low_rejection_map_path": None if low_rejection_path is None else str(low_rejection_path),
                     "high_rejection_map_path": None if high_rejection_path is None else str(high_rejection_path),
                     "dq_map_path": None if dq_path is None else str(dq_path),
+                    "dq_map_runtime_dtype": None if dq_map is None else str(np.asarray(dq_map).dtype),
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
@@ -11723,6 +11742,7 @@ def run_resident_calibration_integration(
                     "low_rejection_map_path": None if low_rejection_path is None else str(low_rejection_path),
                     "high_rejection_map_path": None if high_rejection_path is None else str(high_rejection_path),
                     "dq_map_path": None if dq_path is None else str(dq_path),
+                    "dq_map_runtime_dtype": None if dq_map is None else str(np.asarray(dq_map).dtype),
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,

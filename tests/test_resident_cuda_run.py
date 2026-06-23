@@ -816,6 +816,72 @@ def test_resident_dq_map_finite_count_map_fast_path_matches_strict_python(monkey
         assert fast_section == strict_section
 
 
+def test_resident_dq_map_int16_dtype_matches_default_uint32(monkeypatch):
+    import glass_cuda
+
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_preferred", lambda: False)
+
+    master = np.arange(12, dtype=np.float32).reshape(3, 4) + 1.0
+    weight = np.ones((3, 4), dtype=np.float32)
+    weight[0, 2] = 0.0
+    coverage = np.array(
+        [[3.0, 2.0, 1.0, 0.0], [3.0, 3.0, 3.0, 2.0], [2.0, 1.0, 3.0, 3.0]],
+        dtype=np.float32,
+    )
+    low = np.zeros((3, 4), dtype=np.float32)
+    high = np.zeros((3, 4), dtype=np.float32)
+    low[0, 1] = 1.0
+    high[2, 0] = 2.0
+
+    default_dq, default_summary, default_stats = _resident_dq_map(
+        master,
+        weight,
+        coverage,
+        low,
+        high,
+        active_frame_count=3,
+        return_stats=True,
+        assume_finite_count_maps=True,
+    )
+    compact_dq, compact_summary, compact_stats = _resident_dq_map(
+        master,
+        weight,
+        coverage,
+        low,
+        high,
+        active_frame_count=3,
+        return_stats=True,
+        assume_finite_count_maps=True,
+        dq_dtype=np.int16,
+    )
+
+    assert default_dq.dtype == np.uint32
+    assert compact_dq.dtype == np.int16
+    assert np.array_equal(compact_dq.astype(np.uint32), default_dq)
+    assert compact_summary == default_summary
+    assert compact_stats == default_stats
+
+
+def test_resident_dq_map_rejects_too_small_dtype(monkeypatch):
+    import glass_cuda
+
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_preferred", lambda: False)
+
+    master = np.ones((2, 2), dtype=np.float32)
+    weight = np.ones((2, 2), dtype=np.float32)
+
+    with pytest.raises(ValueError, match="cannot store DQFlag bits"):
+        _resident_dq_map(
+            master,
+            weight,
+            None,
+            None,
+            None,
+            return_stats=True,
+            dq_dtype=np.uint8,
+        )
+
+
 def test_resident_dq_map_dispatch_uses_python_when_native_not_preferred(monkeypatch):
     import glass_cuda
 
