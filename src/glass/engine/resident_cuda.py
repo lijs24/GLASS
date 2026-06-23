@@ -7139,10 +7139,15 @@ def run_resident_calibration_integration(
                     _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE,
                 )
                 plan_transform_model = str(registration_policy.get("transform_model") or "translation")
+                triangle_translation_refine_policy_source = (
+                    "plan"
+                    if "cuda_triangle_translation_refine" in registration_policy
+                    else "default_similarity_triangle_off"
+                )
                 triangle_translation_refine_enabled = _policy_bool(
                     registration_policy,
                     "cuda_triangle_translation_refine",
-                    plan_transform_model == "translation",
+                    False,
                 )
                 triangle_translation_refine_tolerance_px = _policy_float(
                     registration_policy,
@@ -8697,6 +8702,39 @@ def run_resident_calibration_integration(
                                 else:
                                     integration_matrices[index] = matrix
                                     pending_triangle_warp_matrix = matrix
+                                triangle_centroid_warning_mode = "disabled"
+                                triangle_centroid_warning_background = "disabled"
+                                triangle_centroid_warning_reference_status = "disabled"
+                                triangle_centroid_warning_moving_status = "disabled"
+                                if triangle_centroid_refine_enabled:
+                                    triangle_centroid_warning_background = triangle_centroid_background_mode
+                                    native_centroid_catalog = has_top_nms_catalog_centroid or (
+                                        use_grid_catalog
+                                        and (
+                                            has_grid_nms_catalog_centroid
+                                            or has_grid_nms_catalog_deterministic_centroid
+                                        )
+                                    )
+                                    if moving_centroid_summary is not None:
+                                        triangle_centroid_warning_mode = str(
+                                            moving_centroid_summary.get("mode", "disabled")
+                                        )
+                                        triangle_centroid_warning_moving_status = str(
+                                            moving_centroid_summary.get("status", "disabled")
+                                        )
+                                    elif native_centroid_catalog:
+                                        triangle_centroid_warning_mode = (
+                                            "resident_gpu_global_mean_centroid"
+                                            if triangle_centroid_background_mode == "global_mean"
+                                            else "resident_gpu_window_centroid"
+                                        )
+                                        triangle_centroid_warning_moving_status = "native_catalog"
+                                    if reference_centroid_summary is not None:
+                                        triangle_centroid_warning_reference_status = str(
+                                            reference_centroid_summary.get("status", "disabled")
+                                        )
+                                    elif native_centroid_catalog:
+                                        triangle_centroid_warning_reference_status = "native_catalog"
                                 warnings.extend(
                                     [
                                         f"triangle_threshold_mode={threshold_mode}",
@@ -8769,6 +8807,8 @@ def run_resident_calibration_integration(
                                         f"triangle_pixel_ncc={selected_pixel_ncc:.6g}",
                                         "triangle_translation_refine_enabled="
                                         + str(bool(triangle_translation_refine_enabled)).lower(),
+                                        "triangle_translation_refine_policy_source="
+                                        + str(triangle_translation_refine_policy_source),
                                         "triangle_translation_refine_status="
                                         + (
                                             str(translation_refine.get("status"))
@@ -8809,27 +8849,13 @@ def run_resident_calibration_integration(
                                         ),
                                         "triangle_centroid_refine_enabled="
                                         + str(bool(triangle_centroid_refine_enabled)).lower(),
-                                        "triangle_centroid_refine_mode="
-                                        + (
-                                            str((moving_centroid_summary or {}).get("mode", "disabled"))
-                                            if triangle_centroid_refine_enabled
-                                            else "disabled"
-                                        ),
+                                        "triangle_centroid_refine_mode=" + triangle_centroid_warning_mode,
                                         "triangle_centroid_refine_background="
-                                        + (
-                                            str(
-                                                (moving_centroid_summary or {}).get(
-                                                    "background_mode",
-                                                    triangle_centroid_background_mode,
-                                                )
-                                            )
-                                            if triangle_centroid_refine_enabled
-                                            else "disabled"
-                                        ),
+                                        + triangle_centroid_warning_background,
                                         "triangle_centroid_refine_reference_status="
-                                        + str((reference_centroid_summary or {}).get("status", "disabled")),
+                                        + triangle_centroid_warning_reference_status,
                                         "triangle_centroid_refine_moving_status="
-                                        + str((moving_centroid_summary or {}).get("status", "disabled")),
+                                        + triangle_centroid_warning_moving_status,
                                         "triangle_centroid_refine_reference_count="
                                         + str(int((reference_centroid_summary or {}).get("refined_count", 0) or 0)),
                                         "triangle_centroid_refine_moving_count="
@@ -10936,6 +10962,9 @@ def run_resident_calibration_integration(
                             and triangle_translation_refine_enabled
                         ),
                         "triangle_translation_refine_plan_transform_model": plan_transform_model
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_translation_refine_policy_source": triangle_translation_refine_policy_source
                         if resident_registration == "similarity_cuda_triangle"
                         else None,
                         "triangle_translation_refine_tolerance_px": float(

@@ -1,0 +1,206 @@
+{
+  "gate": "S2-Gate 525",
+  "title": "Resident triangle translation-refine default bypass",
+  "created_at": "2026-06-23",
+  "change_summary": [
+    "similarity_cuda_triangle no longer implicitly enables triangle translation refine from transform_model=translation",
+    "plans can still explicitly set cuda_triangle_translation_refine=true to recover the previous path",
+    "resident artifacts and per-frame warnings record triangle_translation_refine_policy_source"
+  ],
+  "cleanup_check": {
+    "c_free_gib_before_gate": 407.44,
+    "repo_size_gib": 2.37,
+    "glass_runs_gib": 114.175,
+    "gpwbpp_runs_gib": 83.686,
+    "cleanup_performed": false,
+    "note": "C: had enough space; kept C:\\gpwbpp_runs\\final_m38_h_200 intact for the 200-light A/B dataset."
+  },
+  "runs": {
+    "probe_default_before_change": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate525_translation_refine_probe\\runs_20260623_111012\\default",
+      "shell_elapsed_s": 7.504382,
+      "fine_component_accounted_total_s": 2.0375031999793367,
+      "fine_triangle_frame_total_s": 0.5572236001607962,
+      "fine_triangle_translation_refine_s": 0.07604939973680303,
+      "fine_triangle_warp_native_batch_s": 0.4912203,
+      "triangle_translation_refine": true,
+      "triangle_translation_refine_policy_source": null,
+      "triangle_translation_refine_applied_count": 0,
+      "triangle_translation_refine_rejected_count": 191,
+      "triangle_translation_refine_skipped_count": 8,
+      "triangle_translation_refine_max_correction_px_observed": 14193.157546549643
+    },
+    "probe_explicit_off_before_change": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate525_translation_refine_probe\\runs_20260623_111012\\translation_refine_off",
+      "shell_elapsed_s": 7.26101,
+      "fine_component_accounted_total_s": 1.9181911999629557,
+      "fine_triangle_frame_total_s": 0.4396870994823985,
+      "fine_triangle_translation_refine_s": null,
+      "fine_triangle_warp_native_batch_s": 0.4892305,
+      "triangle_translation_refine": false,
+      "triangle_translation_refine_policy_source": null,
+      "triangle_translation_refine_applied_count": 0,
+      "triangle_translation_refine_rejected_count": 0,
+      "triangle_translation_refine_skipped_count": 0,
+      "triangle_translation_refine_max_correction_px_observed": 0.0
+    },
+    "post_change_default": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate525_translation_refine_default\\runs_20260623_111012\\default",
+      "shell_elapsed_s": 6.75901,
+      "fine_component_accounted_total_s": 1.90622570034715,
+      "fine_triangle_frame_total_s": 0.414915100147482,
+      "fine_triangle_translation_refine_s": null,
+      "fine_triangle_warp_native_batch_s": 0.490999,
+      "triangle_translation_refine": false,
+      "triangle_translation_refine_policy_source": "default_similarity_triangle_off",
+      "triangle_translation_refine_applied_count": 0,
+      "triangle_translation_refine_rejected_count": 0,
+      "triangle_translation_refine_skipped_count": 0,
+      "triangle_translation_refine_max_correction_px_observed": 0.0
+    },
+    "gate524_warm_repeat": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate524_prefetch32_default\\runs_20260623_110233\\warm_repeat_auto",
+      "shell_elapsed_s": 6.6213798,
+      "fine_component_accounted_total_s": 1.9681131000539125,
+      "fine_triangle_frame_total_s": 0.47922859975369647,
+      "fine_triangle_translation_refine_s": 0.048052200058009475,
+      "fine_triangle_warp_native_batch_s": 0.4898847,
+      "triangle_translation_refine": true,
+      "triangle_translation_refine_policy_source": null,
+      "triangle_translation_refine_applied_count": 0,
+      "triangle_translation_refine_rejected_count": 191,
+      "triangle_translation_refine_skipped_count": 8,
+      "triangle_translation_refine_max_correction_px_observed": 14193.157546549643
+    }
+  },
+  "comparisons": {
+    "post_change_default_vs_probe_off": {
+      "resident_master_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_weight_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_coverage_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_low_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_high_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_dq_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      }
+    },
+    "post_change_default_vs_probe_default_before_change": {
+      "resident_master_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_weight_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_coverage_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_low_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_high_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_dq_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      }
+    },
+    "post_change_default_vs_gate524_warm_repeat": {
+      "resident_master_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_weight_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_coverage_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_low_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_high_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_dq_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      }
+    },
+    "gate524_vs_wbpp_reference": {
+      "robust_fit_rms": 0.0015009512947433384,
+      "robust_fit_p99_abs": 0.00034034321741462114,
+      "fit_fraction": 0.982980688129347,
+      "wbpp_blackbox_elapsed_s": 1092.541,
+      "gate524_warm_shell_speedup": 165.00201362863976,
+      "note": "Gate525 output is bitwise identical to Gate524, so the WBPP comparison metrics carry forward."
+    }
+  },
+  "interpretation": [
+    "The old default spent CPU orchestration time attempting a translation-only post-step that was applied to zero frames on the 200-light benchmark.",
+    "Bypassing it by default improves the resident registration component without changing accepted matrices or output maps.",
+    "The next larger target remains resident registration/warp batching and host/device orchestration, not further report-only gates."
+  ],
+  "clean_room": "Only GLASS code, GLASS artifacts, and user-generated WBPP black-box outputs were used; no official PixInsight/WBPP/PJSR source was accessed."
+}

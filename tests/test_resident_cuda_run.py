@@ -4458,12 +4458,15 @@ def test_cli_resident_cuda_triangle_default_uses_gpu_centroid_without_pixel_refi
     assert resident_registration["triangle_pixel_refine_batch_mode"] == "off"
     assert resident_registration["triangle_pixel_refine_metric_workload_model"] == "off"
     assert resident_registration["triangle_pixel_refine_workspace_bytes"] == 0
-    assert resident_registration["triangle_translation_refine"] is True
+    assert resident_registration["triangle_translation_refine"] is False
+    assert resident_registration["triangle_translation_refine_policy_source"] == "default_similarity_triangle_off"
     assert resident_registration["triangle_centroid_refine"] is True
     assert resident_registration["triangle_centroid_refine_mode"] == "resident_gpu_global_mean_centroid"
     assert resident_registration["triangle_centroid_refine_background"] == "global_mean"
-    assert resident_registration["triangle_centroid_refine_catalog_count"] >= 2
-    assert resident_registration["triangle_centroid_refine_star_count"] > 0
+    assert "centroid_global_mean" in resident_registration["triangle_catalog_timing_model"]
+    assert resident_registration["triangle_catalog_native_centroid_refine_s"] >= 0.0
+    assert resident_registration["triangle_centroid_refine_catalog_count"] == 0
+    assert resident_registration["triangle_centroid_refine_star_count"] == 0
     assert resident_registration["triangle_catalog_grid_auto"] is True
     assert resident_registration["triangle_catalog_selector"] == "resident_grid_top_nms"
     assert resident_registration["triangle_catalog_batch"] is True
@@ -4477,6 +4480,8 @@ def test_cli_resident_cuda_triangle_default_uses_gpu_centroid_without_pixel_refi
     assert "triangle_centroid_refine_enabled=true" in moving["warnings"]
     assert "triangle_centroid_refine_mode=resident_gpu_global_mean_centroid" in moving["warnings"]
     assert "triangle_centroid_refine_background=global_mean" in moving["warnings"]
+    assert "triangle_translation_refine_enabled=false" in moving["warnings"]
+    assert "triangle_translation_refine_policy_source=default_similarity_triangle_off" in moving["warnings"]
     assert "triangle_catalog_grid_auto=true" in moving["warnings"]
     assert "triangle_star_grid_cols=8" in moving["warnings"]
     assert "triangle_star_grid_rows=8" in moving["warnings"]
@@ -4485,6 +4490,53 @@ def test_cli_resident_cuda_triangle_default_uses_gpu_centroid_without_pixel_refi
     assert abs(moving["matrix"][1][2] - 2.0) < 0.5
     assert all("triangle_pixel_refine_mode=" not in warning for warning in moving["warnings"])
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
+
+    explicit_run = tmp_path / "tri_explicit_translation_refine"
+    plan_payload.setdefault("registration_policy", {})["cuda_triangle_translation_refine"] = True
+    write_json(plan, plan_payload)
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(explicit_run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_triangle",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-triangle-nms-scan-candidates",
+            "96",
+            "--resident-triangle-nms-min-separation-px",
+            "2.0",
+            "--reference-frame-id",
+            "light_001",
+        ]
+    ) == 0
+    explicit_registration = read_json(explicit_run / "registration_results.json")
+    explicit_resident = read_json(explicit_run / "resident_artifacts.json")
+    explicit_resident_registration = explicit_resident["artifacts"][0]["resident_registration"]
+    explicit_moving = [item for item in explicit_registration["results"] if item["status"] != "reference"][0]
+    assert explicit_resident_registration["triangle_translation_refine"] is True
+    assert explicit_resident_registration["triangle_translation_refine_policy_source"] == "plan"
+    assert "triangle_translation_refine_enabled=true" in explicit_moving["warnings"]
+    assert "triangle_translation_refine_policy_source=plan" in explicit_moving["warnings"]
 
 
 def test_cli_resident_cuda_run_similarity_triangle_uses_quality_reference(tmp_path: Path):

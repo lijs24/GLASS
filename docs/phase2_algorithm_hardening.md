@@ -13129,6 +13129,61 @@ Completed in Gate446:
   - external summary:
     `C:\glass_runs\phase2_s2_gate524_prefetch32_default\runs_20260623_110233\gate524_prefetch32_default_summary.json`.
 
+### S2-Gate 525: Resident Triangle Translation-Refine Default Bypass
+
+- Returned to the resident registration/warp line and removed a measured
+  no-op from the default `similarity_cuda_triangle` path. This gate changes
+  only the default policy for the Python-side triangle translation-refine
+  post-step; it does not change star catalog generation, triangle descriptor
+  fitting, transform matrices, warp kernels, rejection, DQ semantics,
+  integration, or output pixels.
+- Completed:
+  - changed resident triangle translation refinement from implicit-on when
+    `transform_model=translation` to default-off for
+    `similarity_cuda_triangle`;
+  - preserved the previous behavior when the processing plan explicitly sets
+    `cuda_triangle_translation_refine: true`;
+  - added `triangle_translation_refine_policy_source` to resident artifacts and
+    per-frame warnings;
+  - corrected per-frame centroid warnings so the default-bypass path still
+    records the native GPU centroid catalog mode.
+- Real 200-light validation:
+  - probe root:
+    `C:\glass_runs\phase2_s2_gate525_translation_refine_probe\runs_20260623_111012`;
+  - default-before-change probe: shell `7.504382 s`,
+    `triangle_translation_refine=true`, `191` rejected, `8` skipped, `0`
+    applied;
+  - explicit-off probe: shell `7.26101 s`,
+    `triangle_translation_refine=false`;
+  - post-change default run:
+    `C:\glass_runs\phase2_s2_gate525_translation_refine_default\runs_20260623_111012\default`,
+    shell `6.75901 s`;
+  - registration fine component moved from Gate524
+    `1.9681131000539125 s` to `1.90622570034715 s`;
+  - the measured translation-refine component disappeared from the post-change
+    default profile.
+- Numerical validation:
+  - post-change default master, weight map, coverage map, low/high rejection
+    maps, and DQ map match the explicit-off probe bitwise;
+  - post-change default outputs also match Gate524 warm-repeat outputs bitwise;
+  - because the output is bitwise identical to Gate524, the GLASS-vs-WBPP
+    robust-fit evidence remains RMS `0.0015009512947433384`, p99 absolute
+    difference `0.00034034321741462114`, fit fraction
+    `0.982980688129347`, and warm-shell speedup versus WBPP remains at least
+    the Gate524 `165.00201362863976x` reference.
+- Cleanup check:
+  - C: free space before this gate was about `407.44 GiB`;
+  - the repository itself was about `2.37 GiB`;
+  - generated run directories were the large consumers:
+    `C:\glass_runs` about `114.175 GiB`, `C:\gpwbpp_runs` about
+    `83.686 GiB`;
+  - no cleanup was required, and `C:\gpwbpp_runs\final_m38_h_200` was kept
+    intact for the 200-light A/B plan and inputs.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_525_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_525_translation_refine_bypass_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:
