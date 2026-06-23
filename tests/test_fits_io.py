@@ -9,6 +9,7 @@ from glass.io.fits_fast import (
     native_u16_gpu_fits_eligibility,
     read_simple_fits_image,
     read_simple_fits_image_native_direct_timed,
+    read_simple_fits_u16be_raw_batch_timed,
     read_simple_fits_u16be_raw_timed,
     simple_fits_image_spec,
 )
@@ -152,6 +153,56 @@ def test_native_u16_raw_fits_reader_reads_into_pinned_output(tmp_path):
     assert np.array_equal(physical_from_raw, physical)
     assert np.array_equal(cached_raw, raw)
     assert np.allclose(read_fits_data(path), physical.astype(np.float32))
+
+
+def test_native_u16_raw_fits_batch_reader_reads_into_pinned_outputs(tmp_path):
+    module = cuda_module_or_skip()
+    if (
+        not module.native_extension_loaded()
+        or not hasattr(module, "host_pinned_empty_u8")
+        or not hasattr(module, "read_simple_fits_raw_batch_into_u8")
+    ):
+        pytest.skip("native uint8 batch FITS reader is not available")
+    paths = []
+    physical_frames = []
+    outputs = []
+    specs = []
+    for frame_index in range(2):
+        path = tmp_path / f"native_u16_raw_batch_{frame_index}.fits"
+        physical = (
+            np.arange(20, dtype=np.uint16).reshape(4, 5)
+            + np.uint16(1000 + frame_index * 100)
+        )
+        stored = (physical.astype(np.int32) - 32768).astype(np.int16)
+        hdu = fits.PrimaryHDU(stored)
+        hdu.header["BSCALE"] = 1.0
+        hdu.header["BZERO"] = 32768.0
+        hdu.writeto(path)
+        paths.append(path)
+        physical_frames.append(physical)
+        outputs.append(module.host_pinned_empty_u8(physical.size * 2))
+        specs.append(simple_fits_image_spec(path))
+
+    raw_outputs, profiles, batch_profile = read_simple_fits_u16be_raw_batch_timed(
+        paths,
+        outputs,
+        specs=specs,
+        max_workers=2,
+    )
+
+    assert raw_outputs == outputs
+    assert batch_profile["fits_reader_backend"] == "native_u16be_raw_batch"
+    assert batch_profile["fits_native_batch_frame_count"] == 2
+    assert batch_profile["fits_native_batch_worker_count"] == 2
+    assert batch_profile["fits_header_cache_hit_count"] == 2
+    for raw, profile, physical in zip(raw_outputs, profiles, physical_frames, strict=True):
+        decoded = raw.reshape(physical.shape + (2,))
+        bits = (decoded[..., 0].astype(np.uint16) << np.uint16(8)) | decoded[..., 1].astype(np.uint16)
+        physical_from_raw = bits ^ np.uint16(0x8000)
+        assert profile["fits_reader_backend"] == "native_u16be_raw_batch"
+        assert profile["fits_header_cache_hit"] is True
+        assert profile["fits_native_batch_frame_count"] == 2
+        assert np.array_equal(physical_from_raw, physical)
 
 
 def test_native_u16_gpu_fits_eligibility_is_header_only(tmp_path):

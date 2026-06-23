@@ -375,6 +375,45 @@ def read_simple_fits_raw_into_u8(
     return dict(result)
 
 
+def read_simple_fits_raw_batch_into_u8_available() -> bool:
+    native = _native()
+    return native is not None and hasattr(native, "read_simple_fits_raw_batch_into_u8")
+
+
+def read_simple_fits_raw_batch_into_u8(
+    paths: list[Any],
+    data_offsets: list[int],
+    byte_counts: list[int],
+    outputs: list[Any],
+    max_workers: int = 0,
+) -> dict[str, Any]:
+    native = _native()
+    if native is None or not hasattr(native, "read_simple_fits_raw_batch_into_u8"):
+        raise RuntimeError("native CUDA backend with read_simple_fits_raw_batch_into_u8 is not available")
+    if not (len(paths) == len(data_offsets) == len(byte_counts) == len(outputs)):
+        raise ValueError("native FITS raw batch read inputs must have matching lengths")
+    output_arrays = []
+    for byte_count, output in zip(byte_counts, outputs, strict=True):
+        output_array = np.asarray(output)
+        if output_array.dtype != np.uint8:
+            raise ValueError("native FITS raw batch output buffers must be uint8")
+        if output_array.ndim != 1:
+            raise ValueError("native FITS raw batch output buffers must be 1D byte arrays")
+        if output_array.shape[0] != int(byte_count):
+            raise ValueError("native FITS raw batch output buffer size must match byte count")
+        if not output_array.flags.c_contiguous:
+            raise ValueError("native FITS raw batch output buffers must be C-contiguous")
+        output_arrays.append(output_array)
+    result = native.read_simple_fits_raw_batch_into_u8(
+        [str(path) for path in paths],
+        [int(offset) for offset in data_offsets],
+        [int(byte_count) for byte_count in byte_counts],
+        output_arrays,
+        int(max_workers),
+    )
+    return dict(result)
+
+
 def smoke_add_f32(a: Any, b: Any) -> np.ndarray:
     native = _native()
     if native is not None:

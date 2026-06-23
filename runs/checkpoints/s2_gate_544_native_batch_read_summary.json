@@ -1,0 +1,130 @@
+{
+  "gate": "S2-Gate 544",
+  "title": "Opt-in native raw FITS batch read",
+  "status": "green",
+  "created_at_local": "2026-06-23",
+  "scope": [
+    "Add native multi-file simple FITS raw payload read into caller-provided uint8 buffers.",
+    "Expose Python capability and wrapper functions.",
+    "Wire resident CUDA pinned-ring prefetch to use the batch reader only when GLASS_RESIDENT_NATIVE_BATCH_READ=1.",
+    "Record resident artifact/profile fields for native batch-read candidate/requested/available/enabled state and timings.",
+    "Keep default resident path on per-frame native u16 raw reads because the opt-in batch probe did not produce a robust speed win."
+  ],
+  "commands": {
+    "release_native_build": "VsDevCmd.bat -arch=x64 -host_arch=x64 && .venv/Scripts/cmake.exe -S . -B build -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_CUDA_ALLOW_UNSUPPORTED_COMPILER=ON -Dpybind11_DIR=.venv/Lib/site-packages/pybind11/share/cmake/pybind11 -DCMAKE_BUILD_TYPE=Release && .venv/Scripts/cmake.exe --build build --target _glass_cuda_native --config Release",
+    "focused_tests": ".venv/Scripts/python.exe -m pytest -q tests/test_fits_io.py::test_native_u16_raw_fits_batch_reader_reads_into_pinned_outputs tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_batch_read_is_opt_in tests/test_resident_cuda_run.py::test_cli_resident_cuda_default_fits_read_mode_is_guarded_auto",
+    "full_tests": ".venv/Scripts/python.exe -m pytest -q",
+    "default_real_run_postpatch": "glass run --plan C:/glass_runs/phase2_s2_gate540_plan_spec_cache/runs_20260623_140314/processing_plan.json --out C:/glass_runs/phase2_s2_gate544_native_batch_read/runs_20260623_151200/default_batch_disabled_release_postpatch --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit --resident-master-cache-dir C:/glass_runs/phase2_s2_gate518_dq_stats_reuse/runs_20260623_094619/resident_master_cache",
+    "optin_real_run": "GLASS_RESIDENT_NATIVE_BATCH_READ=1 glass run --plan C:/glass_runs/phase2_s2_gate540_plan_spec_cache/runs_20260623_140314/processing_plan.json --out C:/glass_runs/phase2_s2_gate544_native_batch_read/runs_20260623_150008/optin_batch_release --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit --resident-master-cache-dir C:/glass_runs/phase2_s2_gate518_dq_stats_reuse/runs_20260623_094619/resident_master_cache"
+  },
+  "tests": {
+    "focused": "3 passed in 0.69s",
+    "full_pytest": "1181 passed in 43.12s",
+    "diff_check": "passed with line-ending warnings only"
+  },
+  "cuda": {
+    "available": true,
+    "device": {
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "compute_capability": "12.0",
+      "memory_total_mib": 97886,
+      "driver_version": "596.21"
+    },
+    "native_backend": true,
+    "native_batch_read_available": true
+  },
+  "real_200_light": {
+    "plan": "C:/glass_runs/phase2_s2_gate540_plan_spec_cache/runs_20260623_140314/processing_plan.json",
+    "wbpp_reference_elapsed_s": 1092.541,
+    "default_postpatch": {
+      "run": "C:/glass_runs/phase2_s2_gate544_native_batch_read/runs_20260623_151200/default_batch_disabled_release_postpatch",
+      "shell_elapsed_s": 5.4165,
+      "internal_elapsed_s": 5.05357400001958,
+      "speedup_vs_wbpp_shell": 201.70608326410041,
+      "effective_fits_read_mode": "native_u16_gpu",
+      "native_batch_read": {
+        "candidate": true,
+        "policy": "env_disabled_default",
+        "requested": false,
+        "available": true,
+        "enabled": false,
+        "submit_count": 0,
+        "frame_count": 0
+      },
+      "timing_s": {
+        "light_read_upload_calibrate": 2.5875532999634743,
+        "light_read_wait_wall": 1.1672238007886335,
+        "worker_native_fits_materialize_read_cumulative": 25.1334456,
+        "ready_queue_wait": 1.1639879997819662,
+        "resident_registration_warp": 0.2566100999247283,
+        "resident_integration": 0.30122170003596693,
+        "output_write": 0.25494139996590093
+      },
+      "ready_queue_callbacks": 200,
+      "calibration_order_mode": "ready_first_single_master_group",
+      "out_of_order_consumed_frames": 64
+    },
+    "optin_batch_release": {
+      "run": "C:/glass_runs/phase2_s2_gate544_native_batch_read/runs_20260623_150008/optin_batch_release",
+      "shell_elapsed_s": 5.417102,
+      "internal_elapsed_s": 5.041782399988733,
+      "speedup_vs_wbpp_shell": 201.68366776184018,
+      "effective_fits_read_mode": "native_u16_gpu",
+      "native_batch_read": {
+        "candidate": true,
+        "policy": "env_enabled",
+        "requested": true,
+        "available": true,
+        "enabled": true,
+        "submit_count": 50,
+        "frame_count": 200,
+        "worker_count": 4,
+        "wall_s": 6.926075100000002,
+        "cumulative_s": 25.1844458
+      },
+      "timing_s": {
+        "light_read_upload_calibrate": 2.5618579000001773,
+        "light_read_wait_wall": 1.1645216990727931,
+        "worker_native_fits_materialize_read_cumulative": 25.158863399999998,
+        "ready_queue_wait": 1.1621246997383423,
+        "resident_registration_warp": 0.2569261001772247,
+        "resident_integration": 0.30355480004800484,
+        "output_write": 0.3197410000138916
+      },
+      "ready_queue_callbacks": 200,
+      "calibration_order_mode": "ready_first_single_master_group",
+      "out_of_order_consumed_frames": 0
+    }
+  },
+  "numerical_validation": {
+    "default_postpatch_sha256_matches_gate543": true,
+    "optin_release_sha256_matches_gate543": true,
+    "matched_outputs": [
+      "resident_master_H.fits",
+      "resident_weight_map_H.fits",
+      "resident_coverage_map_H.fits",
+      "resident_low_rejection_map_H.fits",
+      "resident_high_rejection_map_H.fits",
+      "resident_dq_map_H.fits"
+    ],
+    "hash_compare_postpatch": "C:/glass_runs/phase2_s2_gate544_native_batch_read/hash_compare_gate543_postpatch.json",
+    "inherited_wbpp_compare": {
+      "rms_diff": 0.0004279821839256963,
+      "abs_diff_p99": 0.0001313822576776147,
+      "robust_fit_rms_diff": 0.000042529498303511286,
+      "coverage_fraction": 0.9892770479074376,
+      "compared_pixels": 56997300
+    }
+  },
+  "known_limitations": [
+    "The batch reader is a coarse batch-future integration and currently removes ready-first out-of-order scheduling freedom.",
+    "Default remains disabled until a streaming native completion queue or direct native read-to-calibration feed demonstrates a repeatable speed win.",
+    "Only simple BITPIX=16, BSCALE=1, BZERO=32768 primary-image FITS payloads are eligible for this fast path.",
+    "Debug native builds are not valid for performance evidence."
+  ],
+  "next_gate": "Native per-frame completion queue or direct native read-to-calibration streams that preserve ready-first scheduling while reducing Python/Future orchestration.",
+  "clean_room": {
+    "compliant": true,
+    "notes": "This gate uses GLASS code, public FITS structure, user image data, and GLASS/user-generated timing artifacts. It does not inspect external implementation source or alter input data."
+  }
+}

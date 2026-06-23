@@ -178,6 +178,43 @@ def build_resident_light_pipeline_profile(
                 resident_io_pipeline,
                 "prefetch_ready_queue_wait_s",
             ),
+            "native_batch_read_candidate": bool(
+                resident_io_pipeline.get("native_batch_read_candidate", False)
+            ),
+            "native_batch_read_policy": resident_io_pipeline.get("native_batch_read_policy"),
+            "native_batch_read_requested": bool(
+                resident_io_pipeline.get("native_batch_read_requested", False)
+            ),
+            "native_batch_read_available": bool(
+                resident_io_pipeline.get("native_batch_read_available", False)
+            ),
+            "native_batch_read_enabled": bool(
+                resident_io_pipeline.get("native_batch_read_enabled", False)
+            ),
+            "native_batch_read_submit_count": _int_value(
+                resident_io_pipeline,
+                "native_batch_read_submit_count",
+            ),
+            "native_batch_read_frame_count": _int_value(
+                resident_io_pipeline,
+                "native_batch_read_frame_count",
+            ),
+            "native_batch_read_max_frame_count": _int_value(
+                resident_io_pipeline,
+                "native_batch_read_max_frame_count",
+            ),
+            "native_batch_read_worker_count": _int_value(
+                resident_io_pipeline,
+                "native_batch_read_worker_count",
+            ),
+            "native_batch_read_wall_s": _float_value(
+                resident_io_pipeline,
+                "native_batch_read_wall_s",
+            ),
+            "native_batch_read_cumulative_s": _float_value(
+                resident_io_pipeline,
+                "native_batch_read_cumulative_s",
+            ),
             "prefetch_fill_blocked_no_slot_count": _int_value(
                 resident_io_pipeline,
                 "prefetch_fill_blocked_no_slot_count",

@@ -435,3 +435,106 @@ def read_simple_fits_u16be_raw_timed(
         "fits_gpu_decode_staging": "u16be_bzero32768",
         "fits_header_cache_hit": header_cache_hit,
     }
+
+
+def read_simple_fits_u16be_raw_batch_timed(
+    paths: list[str | Path],
+    outputs: list[np.ndarray],
+    specs: list[SimpleFitsImageSpec | None] | None = None,
+    max_workers: int = 0,
+) -> tuple[list[np.ndarray], list[dict[str, Any]], dict[str, Any]]:
+    total_start = perf_counter()
+    if len(paths) != len(outputs):
+        raise ValueError("native_u16_gpu batch paths and outputs must have matching lengths")
+    if not paths:
+        raise ValueError("native_u16_gpu batch requires at least one frame")
+    if specs is None:
+        specs = [None for _path in paths]
+    if len(specs) != len(paths):
+        raise ValueError("native_u16_gpu batch specs must match paths")
+
+    resolved_specs: list[SimpleFitsImageSpec] = []
+    header_cache_hits: list[bool] = []
+    header_elapsed = 0.0
+    byte_counts: list[int] = []
+    for path, output, spec in zip(paths, outputs, specs, strict=True):
+        header_cache_hit = spec is not None
+        if spec is None:
+            open_start = perf_counter()
+            spec = simple_fits_image_spec(path)
+            header_elapsed += perf_counter() - open_start
+        if spec.bitpix != 16:
+            raise FastFitsUnsupported("native_u16_gpu requires BITPIX=16 simple primary FITS")
+        if spec.bscale != 1.0 or spec.bzero != 32768.0 or spec.blank is not None:
+            raise FastFitsUnsupported("native_u16_gpu requires BSCALE=1, BZERO=32768, and no BLANK")
+        byte_count = int(spec.width * spec.height * 2)
+        if output.dtype != np.uint8:
+            raise ValueError("native_u16_gpu FITS raw batch output buffers require uint8")
+        if output.ndim != 1 or output.shape[0] != byte_count:
+            raise ValueError("native_u16_gpu FITS raw batch output buffers must have height*width*2 bytes")
+        if not output.flags.c_contiguous:
+            raise ValueError("native_u16_gpu FITS raw batch output buffers must be C-contiguous")
+        resolved_specs.append(spec)
+        header_cache_hits.append(header_cache_hit)
+        byte_counts.append(byte_count)
+
+    import glass_cuda
+
+    native = glass_cuda.read_simple_fits_raw_batch_into_u8(
+        [spec.path for spec in resolved_specs],
+        [spec.data_offset for spec in resolved_specs],
+        byte_counts,
+        outputs,
+        max_workers=max_workers,
+    )
+    native_per_frame = list(native.get("per_frame", []) or [])
+    total_elapsed = perf_counter() - total_start
+    batch_profile = {
+        "total": total_elapsed,
+        "fits_open": header_elapsed + float(native.get("file_open_s", 0.0) or 0.0),
+        "fits_materialize_decode": float(native.get("file_read_s", 0.0) or 0.0),
+        "fits_reader_backend": "native_u16be_raw_batch",
+        "fits_fast_supported": True,
+        "fits_native_file_open_s": float(native.get("file_open_s", 0.0) or 0.0),
+        "fits_native_file_read_s": float(native.get("file_read_s", 0.0) or 0.0),
+        "fits_native_decode_s": float(native.get("decode_s", 0.0) or 0.0),
+        "fits_native_total_s": float(native.get("total_s", 0.0) or 0.0),
+        "fits_native_cumulative_total_s": float(native.get("cumulative_total_s", 0.0) or 0.0),
+        "fits_native_bytes_read": int(native.get("bytes_read", 0) or 0),
+        "fits_native_backend": str(native.get("backend", "native_u16be_raw_batch")),
+        "fits_native_batch_frame_count": int(native.get("frame_count", len(paths)) or 0),
+        "fits_native_batch_worker_count": int(native.get("worker_count", 0) or 0),
+        "fits_header_cache_hit_count": int(sum(1 for hit in header_cache_hits if hit)),
+    }
+    frame_profiles: list[dict[str, Any]] = []
+    for index, (spec, byte_count, header_cache_hit) in enumerate(
+        zip(resolved_specs, byte_counts, header_cache_hits, strict=True)
+    ):
+        native_item = native_per_frame[index] if index < len(native_per_frame) else {}
+        native_open_s = float(native_item.get("file_open_s", 0.0) or 0.0)
+        native_read_s = float(native_item.get("file_read_s", 0.0) or 0.0)
+        native_total_s = float(native_item.get("total_s", 0.0) or 0.0)
+        frame_profiles.append(
+            {
+                "total": native_total_s,
+                "fits_open": native_open_s,
+                "fits_materialize_decode": native_read_s,
+                "fits_reader_backend": "native_u16be_raw_batch",
+                "fits_fast_supported": True,
+                "fits_fast_bitpix": int(spec.bitpix),
+                "fits_fast_scaled": True,
+                "fits_native_file_open_s": native_open_s,
+                "fits_native_file_read_s": native_read_s,
+                "fits_native_decode_s": 0.0,
+                "fits_native_total_s": native_total_s,
+                "fits_native_bytes_read": int(native_item.get("bytes_read", byte_count) or 0),
+                "fits_native_backend": "native_u16be_raw_batch",
+                "fits_raw_byte_count": byte_count,
+                "fits_gpu_decode_staging": "u16be_bzero32768",
+                "fits_header_cache_hit": header_cache_hit,
+                "fits_native_batch_frame_count": len(paths),
+                "fits_native_batch_worker_count": batch_profile["fits_native_batch_worker_count"],
+                "fits_native_batch_wall_s": batch_profile["fits_native_total_s"],
+            }
+        )
+    return outputs, frame_profiles, batch_profile

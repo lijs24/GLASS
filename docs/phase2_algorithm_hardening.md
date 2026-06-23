@@ -14161,6 +14161,97 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_543_completion_queue_summary.json`.
 
+### S2-Gate 544: Opt-In Native Raw FITS Batch Read
+
+- Continued the resident CUDA read/upload/calibration mainline by adding a
+  native multi-file raw FITS payload reader, but kept it opt-in because the
+  real 200-light result did not show a robust default-path speed win.
+- Completed:
+  - added native pybind API
+    `read_simple_fits_raw_batch_into_u8(paths, data_offsets, byte_counts,
+    outputs, max_workers)` for simple primary-image FITS payload reads into
+    caller-provided `uint8` buffers;
+  - added Python capability/wrapper functions in `glass_cuda` and a
+    `read_simple_fits_u16be_raw_batch_timed` helper in the FITS fast-I/O layer;
+  - integrated the batch reader into the resident pinned-ring prefetcher behind
+    `GLASS_RESIDENT_NATIVE_BATCH_READ=1`;
+  - recorded native batch read candidate/requested/available/enabled state,
+    submit count, frame count, worker count, wall time, and cumulative time in
+    resident artifacts and light pipeline profiles;
+  - preserved the default resident path as per-frame native `u16` raw reads
+    because coarse four-frame batch futures remove ready-first out-of-order
+    scheduling without producing a material wall-time improvement;
+  - added focused tests for direct batch reads and resident opt-in behavior.
+- Build and capability:
+  - rebuilt `_glass_cuda_native` in Release with Visual Studio Build Tools,
+    CMake/Ninja, and CUDA enabled;
+  - CUDA device: NVIDIA RTX PRO 6000 Blackwell Workstation Edition, compute
+    capability `12.0`, VRAM `97886 MiB`, driver `596.21`;
+  - native batch read capability was available after the Release rebuild.
+- Real 200-light default validation after the final artifact-field patch:
+  - run:
+    `C:\glass_runs\phase2_s2_gate544_native_batch_read\runs_20260623_151200\default_batch_disabled_release_postpatch`;
+  - plan:
+    `C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json`;
+  - shell/internal elapsed: `5.4165 s` / `5.05357400001958 s`;
+  - effective FITS mode: `native_u16_gpu`;
+  - native batch read: candidate `true`, available `true`, requested `false`,
+    enabled `false`, policy `env_disabled_default`;
+  - calibration order mode: `ready_first_single_master_group`;
+  - out-of-order consumed frames: `64`;
+  - ready queue callbacks: `200`;
+  - ready queue wait time: `1.1639879997819662 s`;
+  - light read/upload/calibrate: `2.5875532999634743 s`;
+  - light read wait wall: `1.1672238007886335 s`;
+  - worker native FITS materialize/read cumulative: `25.1334456 s`;
+  - resident registration/warp: `0.2566100999247283 s`;
+  - resident integration: `0.30122170003596693 s`;
+  - output write: `0.25494139996590093 s`;
+  - shell-time speedup versus the recorded WBPP black-box reference
+    (`1092.541 s`): `201.70608326410041x`.
+- Real 200-light opt-in probe:
+  - run:
+    `C:\glass_runs\phase2_s2_gate544_native_batch_read\runs_20260623_150008\optin_batch_release`;
+  - enabled by `GLASS_RESIDENT_NATIVE_BATCH_READ=1`;
+  - shell/internal elapsed: `5.417102 s` / `5.041782399988733 s`;
+  - native batch read: candidate `true`, available `true`, requested `true`,
+    enabled `true`, policy `env_enabled`;
+  - backend counts: `native_u16be_raw_batch: 200`;
+  - batch submits/frames/workers: `50` / `200` / `4`;
+  - batch wall/cumulative read time: `6.926075100000002 s` /
+    `25.1844458 s`;
+  - out-of-order consumed frames dropped to `0`, confirming the coarse batch
+    future currently works against ready-first scheduling freedom;
+  - shell-time speedup versus the recorded WBPP black-box reference:
+    `201.68366776184018x`.
+- Numerical and WBPP validation:
+  - the postpatch default master, weight map, coverage map, low/high rejection
+    maps, and DQ map are SHA256-identical to Gate543;
+  - the opt-in batch run produced the same six SHA256 hashes as Gate543 in the
+    earlier Release probe;
+  - because the outputs are bitwise-identical to the Gate543/default reference,
+    the established coverage-masked WBPP comparison still applies:
+    RMS `0.0004279821839256963`, p99 abs diff
+    `0.0001313822576776147`, robust-fit RMS
+    `4.2529498303511286e-05`, coverage fraction
+    `0.9892770479074376`, compared pixels `56997300`.
+- Interpretation:
+  - the native batch API is useful infrastructure and proves the C++ side can
+    read multiple simple FITS payloads into pinned buffers safely;
+  - the first resident integration is deliberately not promoted because it is a
+    coarse batch future over the existing Python scheduler, not a streaming
+    native completion queue;
+  - the next substantial optimization should replace coarse batch futures with
+    a native per-frame completion queue or direct native read-to-calibration
+    stream feeding, preserving ready-first frame consumption while reducing
+    Python/Future orchestration.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_544_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_544_native_batch_read_summary.json`;
+  - postpatch hash compare:
+    `C:\glass_runs\phase2_s2_gate544_native_batch_read\hash_compare_gate543_postpatch.json`.
+
 ## Gate Rules
 
 Each gate requires:

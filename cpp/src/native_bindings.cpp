@@ -18,6 +18,7 @@
 #include <fstream>
 #include <memory>
 #include <thread>
+#include <atomic>
 
 namespace py = pybind11;
 
@@ -1991,6 +1992,190 @@ py::dict read_simple_fits_raw_into_u8(
   result["file_read_s"] = read_s;
   result["decode_s"] = 0.0;
   result["total_s"] = std::chrono::duration<double>(total_stop - total_start).count();
+  return result;
+}
+
+struct RawFitsReadTiming {
+  double file_open_s = 0.0;
+  double file_read_s = 0.0;
+  double total_s = 0.0;
+  unsigned long long bytes_read = 0;
+};
+
+RawFitsReadTiming read_raw_fits_bytes_into_ptr(
+    const std::string& path,
+    unsigned long long data_offset,
+    std::size_t byte_count,
+    unsigned char* out) {
+  using Clock = std::chrono::steady_clock;
+  const auto total_start = Clock::now();
+  const auto open_start = Clock::now();
+  std::ifstream stream(path, std::ios::binary);
+  if (!stream) {
+    throw std::runtime_error("failed to open FITS image for raw native batch read: " + path);
+  }
+  stream.seekg(static_cast<std::streamoff>(data_offset), std::ios::beg);
+  if (!stream) {
+    throw std::runtime_error("failed to seek FITS raw image data offset");
+  }
+  const auto open_stop = Clock::now();
+  double read_s = 0.0;
+  constexpr std::size_t chunk_bytes = 8u << 20;
+  std::size_t done = 0;
+  while (done < byte_count) {
+    const std::size_t count = std::min(chunk_bytes, byte_count - done);
+    const auto read_start = Clock::now();
+    stream.read(reinterpret_cast<char*>(out + done), static_cast<std::streamsize>(count));
+    const auto read_stop = Clock::now();
+    if (stream.gcount() != static_cast<std::streamsize>(count)) {
+      throw std::runtime_error("truncated FITS image data during raw native batch read");
+    }
+    read_s += std::chrono::duration<double>(read_stop - read_start).count();
+    done += count;
+  }
+  const auto total_stop = Clock::now();
+
+  RawFitsReadTiming timing;
+  timing.file_open_s = std::chrono::duration<double>(open_stop - open_start).count();
+  timing.file_read_s = read_s;
+  timing.total_s = std::chrono::duration<double>(total_stop - total_start).count();
+  timing.bytes_read = static_cast<unsigned long long>(byte_count);
+  return timing;
+}
+
+py::dict read_simple_fits_raw_batch_into_u8(
+    const std::vector<std::string>& paths,
+    const std::vector<unsigned long long>& data_offsets,
+    const std::vector<std::size_t>& byte_counts,
+    py::sequence outputs,
+    int max_workers) {
+  const std::size_t frame_count = paths.size();
+  if (frame_count == 0) {
+    throw std::invalid_argument("native raw FITS batch requires at least one frame");
+  }
+  if (data_offsets.size() != frame_count || byte_counts.size() != frame_count) {
+    throw std::invalid_argument("native raw FITS batch inputs must have matching lengths");
+  }
+  if (static_cast<std::size_t>(py::len(outputs)) != frame_count) {
+    throw std::invalid_argument("native raw FITS batch output count must match input count");
+  }
+
+  struct BatchJob {
+    std::string path;
+    unsigned long long data_offset = 0;
+    std::size_t byte_count = 0;
+    unsigned char* out = nullptr;
+    RawFitsReadTiming timing;
+    std::string error;
+  };
+
+  std::vector<py::array_t<unsigned char, py::array::c_style>> output_refs;
+  output_refs.reserve(frame_count);
+  std::vector<BatchJob> jobs;
+  jobs.reserve(frame_count);
+  unsigned long long requested_bytes = 0;
+  for (std::size_t index = 0; index < frame_count; ++index) {
+    if (byte_counts[index] == 0) {
+      throw std::invalid_argument("native raw FITS batch byte counts must be non-empty");
+    }
+    py::array_t<unsigned char, py::array::c_style> output =
+        py::cast<py::array_t<unsigned char, py::array::c_style>>(outputs[index]);
+    const py::buffer_info info = output.request();
+    if (info.ndim != 1 || static_cast<std::size_t>(info.shape[0]) != byte_counts[index]) {
+      throw std::invalid_argument("native raw FITS batch output shape does not match byte count");
+    }
+    output_refs.push_back(output);
+    BatchJob job;
+    job.path = paths[index];
+    job.data_offset = data_offsets[index];
+    job.byte_count = byte_counts[index];
+    job.out = static_cast<unsigned char*>(info.ptr);
+    requested_bytes += static_cast<unsigned long long>(byte_counts[index]);
+    jobs.push_back(job);
+  }
+
+  const int requested_workers = max_workers <= 0 ? static_cast<int>(frame_count) : max_workers;
+  const std::size_t worker_count = std::max<std::size_t>(
+      1u,
+      std::min<std::size_t>(static_cast<std::size_t>(requested_workers), frame_count));
+  using Clock = std::chrono::steady_clock;
+  const auto total_start = Clock::now();
+  {
+    py::gil_scoped_release release;
+    std::atomic<std::size_t> next_job{0};
+    std::vector<std::thread> threads;
+    threads.reserve(worker_count);
+    for (std::size_t worker = 0; worker < worker_count; ++worker) {
+      threads.emplace_back([&jobs, &next_job, frame_count]() {
+        for (;;) {
+          const std::size_t index = next_job.fetch_add(1);
+          if (index >= frame_count) {
+            break;
+          }
+          try {
+            jobs[index].timing = read_raw_fits_bytes_into_ptr(
+                jobs[index].path,
+                jobs[index].data_offset,
+                jobs[index].byte_count,
+                jobs[index].out);
+          } catch (const std::exception& exc) {
+            jobs[index].error = exc.what();
+          } catch (...) {
+            jobs[index].error = "unknown native raw FITS batch read error";
+          }
+        }
+      });
+    }
+    for (auto& thread : threads) {
+      thread.join();
+    }
+  }
+  const auto total_stop = Clock::now();
+
+  for (std::size_t index = 0; index < frame_count; ++index) {
+    if (!jobs[index].error.empty()) {
+      std::ostringstream message;
+      message << "native raw FITS batch read failed for frame " << index
+              << " (" << jobs[index].path << "): " << jobs[index].error;
+      throw std::runtime_error(message.str());
+    }
+  }
+
+  double open_s = 0.0;
+  double read_s = 0.0;
+  double cumulative_total_s = 0.0;
+  unsigned long long bytes_read = 0;
+  py::list per_frame;
+  for (std::size_t index = 0; index < frame_count; ++index) {
+    const RawFitsReadTiming& timing = jobs[index].timing;
+    open_s += timing.file_open_s;
+    read_s += timing.file_read_s;
+    cumulative_total_s += timing.total_s;
+    bytes_read += timing.bytes_read;
+    py::dict item;
+    item["index"] = static_cast<unsigned long long>(index);
+    item["path"] = jobs[index].path;
+    item["bytes_read"] = timing.bytes_read;
+    item["file_open_s"] = timing.file_open_s;
+    item["file_read_s"] = timing.file_read_s;
+    item["decode_s"] = 0.0;
+    item["total_s"] = timing.total_s;
+    per_frame.append(item);
+  }
+
+  py::dict result;
+  result["schema_version"] = 1;
+  result["backend"] = "native_u16be_raw_batch";
+  result["frame_count"] = static_cast<unsigned long long>(frame_count);
+  result["worker_count"] = static_cast<unsigned long long>(worker_count);
+  result["bytes_requested"] = requested_bytes;
+  result["bytes_read"] = bytes_read;
+  result["file_open_s"] = open_s;
+  result["file_read_s"] = read_s;
+  result["decode_s"] = 0.0;
+  result["total_s"] = std::chrono::duration<double>(total_stop - total_start).count();
+  result["cumulative_total_s"] = cumulative_total_s;
+  result["per_frame"] = per_frame;
   return result;
 }
 
@@ -15249,6 +15434,14 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       py::arg("data_offset"),
       py::arg("byte_count"),
       py::arg("output"));
+  m.def(
+      "read_simple_fits_raw_batch_into_u8",
+      &read_simple_fits_raw_batch_into_u8,
+      py::arg("paths"),
+      py::arg("data_offsets"),
+      py::arg("byte_counts"),
+      py::arg("outputs"),
+      py::arg("max_workers") = 0);
   m.def("smoke_add_f32", &smoke_add_f32);
   m.def("reduce_mean_tile_f32", &reduce_mean_tile_f32);
   m.def("calibrate_tile_f32", &calibrate_tile_f32);

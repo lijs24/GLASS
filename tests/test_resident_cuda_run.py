@@ -5919,7 +5919,11 @@ def test_cli_resident_cuda_records_native_u16_gpu_decode_backend(tmp_path: Path)
     source_dq = artifact["source_dq_summary"]
 
     assert io_pipeline["fits_read_mode"] == "native_u16_gpu"
-    assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
+    native_raw_count = io_pipeline["fits_backend_counts"].get(
+        "native_u16be_raw",
+        0,
+    ) + io_pipeline["fits_backend_counts"].get("native_u16be_raw_batch", 0)
+    assert native_raw_count == 2
     selection = io_pipeline["resident_fits_auto_selection"]["raw_u16_gpu"]
     assert selection["checked"] is True
     assert selection["selected"] is True
@@ -5932,6 +5936,10 @@ def test_cli_resident_cuda_records_native_u16_gpu_decode_backend(tmp_path: Path)
     assert io_pipeline["fits_header_spec_cache_frame_count"] == 2
     assert io_pipeline["fits_header_spec_cache_hit_count"] == 2
     assert io_pipeline["raw_gpu_decode_enabled"] is True
+    assert io_pipeline["native_batch_read_candidate"] is True
+    assert io_pipeline["native_batch_read_policy"] == "env_disabled_default"
+    assert io_pipeline["native_batch_read_requested"] is False
+    assert io_pipeline["native_batch_read_enabled"] is False
     assert io_pipeline["raw_gpu_h2d_bytes"] == 2 * 24 * 24 * 2
     assert io_pipeline["raw_gpu_float32_host_bytes_avoided"] == 2 * 24 * 24 * 4
     assert io_pipeline["source_dq_fast_skip_enabled"] is True
@@ -5945,6 +5953,65 @@ def test_cli_resident_cuda_records_native_u16_gpu_decode_backend(tmp_path: Path)
     assert source_dq["rows"] == []
     assert io_pipeline["calibration_batch_mode"] == "fits_u16be_bzero_gpu_decode_callback_release_batch"
     assert artifact["resident_frame_mask_contract"]["summary"]["unknown_zero_weight_frame_count"] == 0
+
+
+def test_cli_resident_cuda_native_u16_batch_read_is_opt_in(tmp_path: Path, monkeypatch) -> None:
+    module = cuda_module_or_skip()
+    if (
+        not hasattr(
+            module.ResidentCalibratedStack,
+            "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed",
+        )
+        or not hasattr(module, "read_simple_fits_raw_batch_into_u8")
+    ):
+        pytest.skip("native u16 GPU batch decode resident path is not available")
+    dataset = _u16_gpu_decode_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_native_u16_gpu_batch_read"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    monkeypatch.setenv("GLASS_RESIDENT_NATIVE_BATCH_READ", "1")
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-fits-read-mode",
+            "native_u16_gpu",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    io_pipeline = read_json(run / "resident_artifacts.json")["artifacts"][0]["resident_io_pipeline"]
+    assert io_pipeline["native_batch_read_candidate"] is True
+    assert io_pipeline["native_batch_read_policy"] == "env_enabled"
+    assert io_pipeline["native_batch_read_requested"] is True
+    assert io_pipeline["native_batch_read_available"] is True
+    assert io_pipeline["native_batch_read_enabled"] is True
+    assert io_pipeline["native_batch_read_frame_count"] == 2
+    assert io_pipeline["native_batch_read_submit_count"] >= 1
+    assert io_pipeline["fits_backend_counts"]["native_u16be_raw_batch"] == 2
 
 
 def test_cli_resident_cuda_auto_selects_native_u16_gpu_for_compatible_group(tmp_path: Path):
@@ -5995,7 +6062,11 @@ def test_cli_resident_cuda_auto_selects_native_u16_gpu_for_compatible_group(tmp_
     assert io_pipeline["fits_read_mode"] == "auto"
     assert io_pipeline["fits_read_mode_requested"] == "auto"
     assert io_pipeline["fits_read_mode_effective"] == "native_u16_gpu"
-    assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
+    native_raw_count = io_pipeline["fits_backend_counts"].get(
+        "native_u16be_raw",
+        0,
+    ) + io_pipeline["fits_backend_counts"].get("native_u16be_raw_batch", 0)
+    assert native_raw_count == 2
     assert io_pipeline["raw_gpu_decode_enabled"] is True
     assert io_pipeline["raw_gpu_h2d_bytes"] == 2 * 24 * 24 * 2
     assert selection["policy"] == "guarded_auto"
@@ -6063,7 +6134,11 @@ def test_cli_resident_cuda_default_fits_read_mode_is_guarded_auto(tmp_path: Path
     assert io_pipeline["fits_read_mode"] == "auto"
     assert io_pipeline["fits_read_mode_requested"] == "auto"
     assert io_pipeline["fits_read_mode_effective"] == "native_u16_gpu"
-    assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
+    native_raw_count = io_pipeline["fits_backend_counts"].get(
+        "native_u16be_raw",
+        0,
+    ) + io_pipeline["fits_backend_counts"].get("native_u16be_raw_batch", 0)
+    assert native_raw_count == 2
     assert io_pipeline["fits_header_spec_cache_enabled"] is True
     assert io_pipeline["fits_header_spec_cache_frame_count"] == 2
     assert io_pipeline["fits_header_spec_cache_hit_count"] == 2
