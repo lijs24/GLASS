@@ -163,6 +163,49 @@ def _write_minimal_cuda_reference_scout(run: Path, *, reference_frame_id: str) -
     return scout_path
 
 
+def _write_cuda_reference_scout_from_cpu_scout(plan: Path, run: Path, *, reference_frame_id: str) -> Path:
+    scout_path = write_resident_reference_scout(plan, run, sample_stride=1, max_frames=0, catalog_backend="cpu")
+    scout = read_json(scout_path)
+    scout["catalog_backend_requested"] = "cuda"
+    scout["catalog_backend"] = "cuda"
+    scout["catalog_backend_resolution"] = {"requested": "cuda", "effective": "cuda", "cuda_status": "unit_test"}
+    scout["reference_frame_id"] = reference_frame_id
+    for row in scout.get("frame_quality", []):
+        row["catalog_backend"] = "cuda"
+    write_json(scout_path, scout)
+    quality = dict(scout)
+    quality["artifact_type"] = "frame_quality"
+    quality["source_artifact"] = str(scout_path)
+    write_json(run / "frame_quality.json", quality)
+    return scout_path
+
+
+def _write_reference_health_master_cache(cache_dir: Path, *, shape: tuple[int, int] = (32, 32)) -> Path:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = "H_32x32_bias-test_dark-test_flat-test_unit"
+    np.save(cache_dir / f"{key}_master_bias.npy", np.full(shape, 100.0, dtype=np.float32))
+    np.save(cache_dir / f"{key}_master_dark.npy", np.full(shape, 110.0, dtype=np.float32))
+    np.save(cache_dir / f"{key}_master_flat.npy", np.ones(shape, dtype=np.float32))
+    stats_path = cache_dir / f"{key}_master_stats.json"
+    write_json(
+        stats_path,
+        {
+            "cache_key": key,
+            "cache_dir": str(cache_dir),
+            "cache_fingerprint": "unit",
+            "filter": "H",
+            "shape": {"height": shape[0], "width": shape[1]},
+            "bias_count": 1,
+            "dark_count": 1,
+            "flat_count": 1,
+            "dark_exposure_s": 60.0,
+            "master_dark_includes_bias": True,
+            "flat_normalization": {"flat_floor": 0.05},
+        },
+    )
+    return stats_path
+
+
 def _write_uniform_no_star_dataset(root: Path) -> None:
     shape = (16, 20)
     specs = [
@@ -1078,6 +1121,69 @@ def test_resident_reference_health_blocks_cuda_reference_cpu_crosscheck_miss(
     assert health["summary"]["reference_frame_id"] == weak_id
     assert health["summary"]["cpu_reference_frame_id"] == strong_id
     assert "selected_reference_cpu_star_ratio" in health["failed_checks"]
+
+
+def test_resident_reference_health_records_calibrated_master_cache_crosscheck(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "reference_health_calibrated"
+    cache_dir = tmp_path / "resident_master_cache"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    strong_id = _light_frame_id_by_stem(plan, "light_002")
+    _write_cuda_reference_scout_from_cpu_scout(plan, run, reference_frame_id=strong_id)
+    _write_reference_health_master_cache(cache_dir)
+
+    health = build_resident_reference_health(plan, run, master_cache_dir=cache_dir, flat_floor=0.05)
+
+    calibrated = health["calibrated_crosscheck"]
+    assert health["passed"] is True
+    assert calibrated["available"] is True
+    assert calibrated["status"] == "passed"
+    assert calibrated["master_cache"]["cache_dir"] == str(cache_dir)
+    assert calibrated["summary"]["reference_frame_id"] == strong_id
+    assert calibrated["summary"]["calibrated_reference_frame_id"] == strong_id
+    assert calibrated["summary"]["selected_calibrated_rank"] == 1
+
+
+def test_resident_reference_health_calibrated_crosscheck_can_block_when_raw_thresholds_are_loose(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "reference_health_calibrated_fail"
+    cache_dir = tmp_path / "resident_master_cache"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    weak_id = _light_frame_id_by_stem(plan, "light_001")
+    strong_id = _light_frame_id_by_stem(plan, "light_002")
+    _write_cuda_reference_scout_from_cpu_scout(plan, run, reference_frame_id=weak_id)
+    _write_reference_health_master_cache(cache_dir)
+
+    health = build_resident_reference_health(
+        plan,
+        run,
+        min_cpu_star_ratio=0.0,
+        max_cpu_rank_fraction=1.0,
+        calibrated_min_star_ratio=0.75,
+        calibrated_max_rank_fraction=0.25,
+        master_cache_dir=cache_dir,
+        flat_floor=0.05,
+    )
+
+    calibrated = health["calibrated_crosscheck"]
+    assert health["passed"] is False
+    assert health["blocking"] is True
+    assert calibrated["available"] is True
+    assert calibrated["summary"]["reference_frame_id"] == weak_id
+    assert calibrated["summary"]["calibrated_reference_frame_id"] == strong_id
+    assert "selected_reference_calibrated_star_ratio" in health["failed_checks"]
 
 
 def test_cli_resident_run_blocks_bad_cuda_reference_before_compute(

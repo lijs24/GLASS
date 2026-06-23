@@ -3,14 +3,23 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
+from glass.cpu.calibration import calibrate_light
+from glass.cpu.metrics import combined_quality_weight, summarize_stars
+from glass.cpu.star_detect import detect_stars, robust_background
 from glass.engine.resident_reference_scout import build_resident_reference_scout
+from glass.io.fits_io import FitsImageReader
 from glass.io.json_io import read_json
+from glass.models import CalibrationPolicy
 from glass.models import now_iso
 
 
 DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE = "auto"
 DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO = 0.85
 DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION = 0.25
+DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MIN_STAR_RATIO = 0.75
+DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MAX_RANK_FRACTION = 0.25
 
 _SUPPORTED_ACTIONS = {"auto", "off", "warn", "fail"}
 
@@ -43,6 +52,330 @@ def _frame_quality_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
+def _plan_frames_by_id(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    frames = plan.get("frames") if isinstance(plan.get("frames"), list) else []
+    return {
+        str(frame.get("id")): frame
+        for frame in frames
+        if isinstance(frame, dict) and frame.get("id") is not None
+    }
+
+
+def _shape_from_stats(stats: dict[str, Any]) -> tuple[int | None, int | None]:
+    shape = stats.get("shape") if isinstance(stats.get("shape"), dict) else {}
+    try:
+        height = int(shape.get("height"))
+        width = int(shape.get("width"))
+    except (TypeError, ValueError):
+        return None, None
+    return height, width
+
+
+def _candidate_master_cache_sets(
+    master_cache_dir: str | Path | None,
+    *,
+    filter_name: str | None,
+    shape: tuple[int, int] | None,
+) -> list[dict[str, Any]]:
+    if master_cache_dir is None:
+        return []
+    cache_dir = Path(master_cache_dir)
+    if not cache_dir.exists():
+        return []
+    candidates: list[dict[str, Any]] = []
+    for stats_path in sorted(cache_dir.glob("*_master_stats.json")):
+        try:
+            stats = read_json(stats_path)
+        except Exception:
+            continue
+        if not isinstance(stats, dict):
+            continue
+        stats_filter = None if stats.get("filter") is None else str(stats.get("filter"))
+        if filter_name is not None and stats_filter not in {None, str(filter_name)}:
+            continue
+        stats_height, stats_width = _shape_from_stats(stats)
+        if shape is not None and (stats_height, stats_width) != shape:
+            continue
+        cache_key = str(stats.get("cache_key") or "")
+        if not cache_key:
+            continue
+        set_dir = Path(str(stats.get("cache_dir") or cache_dir))
+        files = {
+            "bias": set_dir / f"{cache_key}_master_bias.npy",
+            "dark": set_dir / f"{cache_key}_master_dark.npy",
+            "flat": set_dir / f"{cache_key}_master_flat.npy",
+        }
+        if not all(path.exists() for path in files.values()):
+            continue
+        candidates.append(
+            {
+                "stats_path": str(stats_path),
+                "stats": stats,
+                "cache_dir": str(set_dir),
+                "cache_key": cache_key,
+                "files": {key: str(path) for key, path in files.items()},
+            }
+        )
+    return candidates
+
+
+def _load_master_arrays(cache_set: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    files = cache_set.get("files") if isinstance(cache_set.get("files"), dict) else {}
+    return (
+        np.load(str(files["bias"]), mmap_mode="r"),
+        np.load(str(files["dark"]), mmap_mode="r"),
+        np.load(str(files["flat"]), mmap_mode="r"),
+    )
+
+
+def _calibration_policy(plan: dict[str, Any], *, flat_floor: float | None, cache_stats: dict[str, Any]) -> CalibrationPolicy:
+    calibration_plan = plan.get("calibration_plan") if isinstance(plan.get("calibration_plan"), dict) else {}
+    policy_payload = (
+        calibration_plan.get("calibration_policy")
+        if isinstance(calibration_plan.get("calibration_policy"), dict)
+        else {}
+    )
+    policy = CalibrationPolicy(**policy_payload)
+    if flat_floor is not None:
+        policy.flat_floor = float(flat_floor)
+    else:
+        flat_norm = cache_stats.get("flat_normalization") if isinstance(cache_stats.get("flat_normalization"), dict) else {}
+        if flat_norm.get("flat_floor") is not None:
+            policy.flat_floor = float(flat_norm["flat_floor"])
+    if cache_stats.get("master_dark_includes_bias") is not None:
+        policy.master_dark_includes_bias = bool(cache_stats.get("master_dark_includes_bias"))
+    return policy
+
+
+def _calibrated_crosscheck_row(
+    scout_row: dict[str, Any],
+    *,
+    frame: dict[str, Any],
+    master_bias: np.ndarray,
+    master_dark: np.ndarray,
+    master_flat: np.ndarray,
+    dark_exposure_s: float | None,
+    policy: CalibrationPolicy,
+    threshold_sigma: float,
+    max_stars: int,
+) -> dict[str, Any]:
+    origin = scout_row.get("sample_origin_xy") if isinstance(scout_row.get("sample_origin_xy"), list) else [0, 0]
+    sample_shape = scout_row.get("sample_shape") if isinstance(scout_row.get("sample_shape"), list) else [1, 1]
+    stride = max(1, int(scout_row.get("sample_stride") or 1))
+    sample_side = max(1, int(scout_row.get("sample_side") or max(sample_shape)))
+    x0 = int(origin[0])
+    y0 = int(origin[1])
+    path = Path(str(frame["path"]))
+    with FitsImageReader(path) as reader:
+        crop_width = min(int(reader.width) - x0, sample_side)
+        crop_height = min(int(reader.height) - y0, sample_side)
+        light = reader.read_tile(y0, y0 + crop_height, x0, x0 + crop_width)
+    bias = np.asarray(master_bias[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
+    dark = np.asarray(master_dark[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
+    flat = np.asarray(master_flat[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
+    calibrated = calibrate_light(
+        light,
+        bias,
+        dark,
+        flat,
+        float(frame.get("exposure_s") or 0.0),
+        dark_exposure_s,
+        policy,
+    )
+    sample = calibrated[::stride, ::stride]
+    stats = robust_background(sample)
+    stars = detect_stars(
+        sample,
+        threshold_sigma=float(threshold_sigma),
+        max_stars=int(max_stars),
+        background=stats.median,
+        noise=stats.noise,
+        window_radius=2,
+        min_separation_px=2.0,
+    )
+    star_metrics = summarize_stars(stars)
+    snr = float(star_metrics["star_snr_median"] or 0.0)
+    weight, components = combined_quality_weight(
+        star_count=len(stars),
+        star_snr=snr,
+        fwhm_px=star_metrics["fwhm_median_px"],
+        eccentricity=star_metrics["eccentricity_median"],
+        background_rms=stats.rms,
+        saturation_fraction=0.0,
+    )
+    return {
+        "frame_id": str(scout_row.get("frame_id")),
+        "source_path": str(path),
+        "metric_source": "resident_reference_health_calibrated_sample_v1",
+        "star_count": len(stars),
+        "quality_score": weight,
+        "weight_components": components,
+        "background_median": stats.median,
+        "background_rms": stats.rms,
+        "background_mad": stats.mad,
+        "noise_mad": stats.noise,
+        "snr": snr,
+        "fwhm_px": star_metrics["fwhm_median_px"],
+        "eccentricity": star_metrics["eccentricity_median"],
+        "star_metrics": star_metrics,
+        "sample_origin_xy": [x0, y0],
+        "sample_shape": [int(sample.shape[0]), int(sample.shape[1])],
+        "sample_stride": stride,
+        "sample_side": sample_side,
+    }
+
+
+def _calibrated_crosscheck(
+    plan: dict[str, Any],
+    scout: dict[str, Any],
+    *,
+    master_cache_dir: str | Path | None,
+    flat_floor: float | None,
+    reference_frame_id: str,
+    min_star_ratio: float,
+    max_rank_fraction: float,
+    enabled: bool,
+) -> dict[str, Any]:
+    scout_rows = _frame_quality_rows(scout)
+    frames_by_id = _plan_frames_by_id(plan)
+    first_row = scout_rows[0] if scout_rows else {}
+    first_frame = frames_by_id.get(str(first_row.get("frame_id")))
+    shape_value = first_row.get("full_shape") if isinstance(first_row.get("full_shape"), list) else None
+    shape = (int(shape_value[0]), int(shape_value[1])) if shape_value and len(shape_value) >= 2 else None
+    filter_name = None if first_frame is None or first_frame.get("filter") is None else str(first_frame.get("filter"))
+    cache_sets = _candidate_master_cache_sets(master_cache_dir, filter_name=filter_name, shape=shape)
+    if not cache_sets:
+        return {
+            "status": "unavailable",
+            "available": False,
+            "reason": "matching_resident_master_cache_not_found",
+            "master_cache_dir": None if master_cache_dir is None else str(master_cache_dir),
+            "filter": filter_name,
+            "shape": None if shape is None else {"height": shape[0], "width": shape[1]},
+            "checks": [],
+            "failed_checks": [],
+        }
+    cache_set = cache_sets[0]
+    stats = cache_set["stats"]
+    master_bias, master_dark, master_flat = _load_master_arrays(cache_set)
+    policy = _calibration_policy(plan, flat_floor=flat_floor, cache_stats=stats)
+    dark_exposure = None if stats.get("dark_exposure_s") is None else float(stats.get("dark_exposure_s"))
+    rows: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    for scout_row in scout_rows:
+        frame = frames_by_id.get(str(scout_row.get("frame_id")))
+        if frame is None:
+            errors.append({"frame_id": scout_row.get("frame_id"), "error": "missing_frame_in_plan"})
+            continue
+        try:
+            rows.append(
+                _calibrated_crosscheck_row(
+                    scout_row,
+                    frame=frame,
+                    master_bias=master_bias,
+                    master_dark=master_dark,
+                    master_flat=master_flat,
+                    dark_exposure_s=dark_exposure,
+                    policy=policy,
+                    threshold_sigma=float(scout.get("threshold_sigma") or 5.0),
+                    max_stars=int(scout.get("max_stars") or 300),
+                )
+            )
+        except Exception as exc:
+            errors.append({"frame_id": scout_row.get("frame_id"), "error": str(exc)})
+    ranked = sorted(rows, key=_selection_key, reverse=True)
+    calibrated_reference_frame_id = str(ranked[0]["frame_id"]) if ranked else ""
+    selected_row = next((row for row in ranked if str(row.get("frame_id")) == reference_frame_id), None)
+    reference_row = next((row for row in ranked if str(row.get("frame_id")) == calibrated_reference_frame_id), None)
+    selected_rank = ranked.index(selected_row) + 1 if selected_row in ranked else None
+    rank_fraction = (
+        (float(selected_rank) - 1.0) / float(max(len(ranked) - 1, 1))
+        if selected_rank is not None and ranked
+        else None
+    )
+    selected_star_count = int(selected_row.get("star_count") or 0) if selected_row is not None else 0
+    reference_star_count = int(reference_row.get("star_count") or 0) if reference_row is not None else 0
+    star_ratio = (
+        float(selected_star_count) / float(reference_star_count)
+        if reference_star_count > 0
+        else (1.0 if selected_star_count > 0 else 0.0)
+    )
+    checks = [
+        {
+            "name": "calibrated_crosscheck_measured_frames",
+            "passed": bool(rows),
+            "evidence": {"measured_frame_count": len(rows), "error_count": len(errors)},
+        },
+        {
+            "name": "selected_reference_present_in_calibrated_crosscheck",
+            "passed": selected_row is not None,
+            "evidence": {"reference_frame_id": reference_frame_id, "present": selected_row is not None},
+        },
+        {
+            "name": "selected_reference_calibrated_star_ratio",
+            "passed": not enabled or star_ratio >= float(min_star_ratio),
+            "evidence": {
+                "selected_calibrated_star_count": selected_star_count,
+                "calibrated_reference_star_count": reference_star_count,
+                "star_ratio": star_ratio,
+                "min_star_ratio": float(min_star_ratio),
+            },
+        },
+        {
+            "name": "selected_reference_calibrated_rank_fraction",
+            "passed": not enabled
+            or (rank_fraction is not None and rank_fraction <= float(max_rank_fraction)),
+            "evidence": {
+                "selected_calibrated_rank": selected_rank,
+                "calibrated_measured_frame_count": len(ranked),
+                "rank_fraction": rank_fraction,
+                "max_rank_fraction": float(max_rank_fraction),
+            },
+        },
+    ]
+    raw_passed = all(item["passed"] for item in checks)
+    return {
+        "status": "passed" if raw_passed else "failed",
+        "available": True,
+        "passed": raw_passed,
+        "master_cache": {
+            "cache_dir": cache_set.get("cache_dir"),
+            "cache_key": cache_set.get("cache_key"),
+            "stats_path": cache_set.get("stats_path"),
+            "filter": stats.get("filter"),
+            "shape": stats.get("shape"),
+            "flat_floor": float(policy.flat_floor),
+            "dark_exposure_s": dark_exposure,
+            "master_dark_includes_bias": bool(policy.master_dark_includes_bias),
+        },
+        "summary": {
+            "reference_frame_id": reference_frame_id,
+            "calibrated_reference_frame_id": calibrated_reference_frame_id,
+            "selected_calibrated_rank": selected_rank,
+            "calibrated_measured_frame_count": len(ranked),
+            "selected_calibrated_star_count": selected_star_count,
+            "calibrated_reference_star_count": reference_star_count,
+            "selected_calibrated_star_ratio": star_ratio,
+            "selected_calibrated_rank_fraction": rank_fraction,
+        },
+        "top_reference_candidates": [
+            {
+                "frame_id": row.get("frame_id"),
+                "star_count": row.get("star_count"),
+                "quality_score": row.get("quality_score"),
+                "fwhm_px": row.get("fwhm_px"),
+                "eccentricity": row.get("eccentricity"),
+                "background_rms": row.get("background_rms"),
+            }
+            for row in ranked[:10]
+        ],
+        "checks": checks,
+        "failed_checks": [item["name"] for item in checks if not item["passed"]],
+        "error_count": len(errors),
+        "errors": errors[:25],
+    }
+
+
 def build_resident_reference_health(
     plan_path: str | Path,
     run_dir: str | Path,
@@ -50,11 +383,19 @@ def build_resident_reference_health(
     requested_action: str = DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE,
     min_cpu_star_ratio: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
     max_cpu_rank_fraction: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
+    calibrated_min_star_ratio: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MIN_STAR_RATIO,
+    calibrated_max_rank_fraction: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MAX_RANK_FRACTION,
+    master_cache_dir: str | Path | None = None,
+    flat_floor: float | None = None,
 ) -> dict[str, Any]:
     if float(min_cpu_star_ratio) < 0.0:
         raise ValueError("resident reference health min CPU star ratio must be non-negative")
     if not 0.0 <= float(max_cpu_rank_fraction) <= 1.0:
         raise ValueError("resident reference health max CPU rank fraction must be in [0, 1]")
+    if float(calibrated_min_star_ratio) < 0.0:
+        raise ValueError("resident reference health calibrated min star ratio must be non-negative")
+    if not 0.0 <= float(calibrated_max_rank_fraction) <= 1.0:
+        raise ValueError("resident reference health calibrated max rank fraction must be in [0, 1]")
 
     run = Path(run_dir)
     scout_path = run / "resident_reference_scout.json"
@@ -88,6 +429,9 @@ def build_resident_reference_health(
     scout = read_json(scout_path)
     if not isinstance(scout, dict):
         raise ValueError(f"resident reference scout is not a JSON object: {scout_path}")
+    plan = read_json(plan_path)
+    if not isinstance(plan, dict):
+        raise ValueError(f"processing plan is not a JSON object: {plan_path}")
     scout_backend = str(scout.get("catalog_backend") or "")
     action = resolve_resident_reference_health_action(requested_action, scout_backend=scout_backend)
     enabled = action in {"warn", "fail"}
@@ -164,10 +508,24 @@ def build_resident_reference_health(
             },
         },
     ]
-    raw_passed = all(item["passed"] for item in checks)
+    calibrated = _calibrated_crosscheck(
+        plan,
+        scout,
+        master_cache_dir=master_cache_dir,
+        flat_floor=flat_floor,
+        reference_frame_id=reference_frame_id,
+        min_star_ratio=float(calibrated_min_star_ratio),
+        max_rank_fraction=float(calibrated_max_rank_fraction),
+        enabled=enabled,
+    )
+    calibrated_checks = calibrated.get("checks") if isinstance(calibrated.get("checks"), list) else []
+    effective_checks = list(checks)
+    if calibrated.get("available"):
+        effective_checks.extend(item for item in calibrated_checks if isinstance(item, dict))
+    raw_passed = all(item["passed"] for item in effective_checks)
     passed = raw_passed or action == "warn"
     status = "disabled" if action == "off" else ("passed" if raw_passed else "warning" if action == "warn" else "failed")
-    failed_checks = [item["name"] for item in checks if not item["passed"]]
+    failed_checks = [item["name"] for item in effective_checks if not item["passed"]]
     return {
         "schema_version": 1,
         "artifact_type": "resident_reference_health",
@@ -183,6 +541,8 @@ def build_resident_reference_health(
         "thresholds": {
             "min_cpu_star_ratio": float(min_cpu_star_ratio),
             "max_cpu_rank_fraction": float(max_cpu_rank_fraction),
+            "calibrated_min_star_ratio": float(calibrated_min_star_ratio),
+            "calibrated_max_rank_fraction": float(calibrated_max_rank_fraction),
         },
         "summary": {
             "reference_frame_id": reference_frame_id,
@@ -193,6 +553,22 @@ def build_resident_reference_health(
             "cpu_reference_star_count": cpu_reference_star_count,
             "selected_cpu_star_ratio": star_ratio,
             "selected_cpu_rank_fraction": rank_fraction,
+            "calibrated_available": bool(calibrated.get("available")),
+            "calibrated_reference_frame_id": (
+                calibrated.get("summary", {}).get("calibrated_reference_frame_id")
+                if isinstance(calibrated.get("summary"), dict)
+                else None
+            ),
+            "selected_calibrated_star_ratio": (
+                calibrated.get("summary", {}).get("selected_calibrated_star_ratio")
+                if isinstance(calibrated.get("summary"), dict)
+                else None
+            ),
+            "selected_calibrated_rank_fraction": (
+                calibrated.get("summary", {}).get("selected_calibrated_rank_fraction")
+                if isinstance(calibrated.get("summary"), dict)
+                else None
+            ),
         },
         "cpu_crosscheck": {
             "artifact_type": cpu_crosscheck.get("artifact_type"),
@@ -213,7 +589,9 @@ def build_resident_reference_health(
                 for row in ranked[:10]
             ],
         },
+        "calibrated_crosscheck": calibrated,
         "checks": checks,
+        "effective_checks": effective_checks,
         "failed_checks": failed_checks,
         "recommended_actions": [
             "use the default CPU resident reference scout",

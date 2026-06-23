@@ -711,3 +711,37 @@ scout reference `F000215` before resident compute starts:
 The safe default path remains CPU-scout based and is not slowed by this gate.
 It continues to pass resident registration health with `193/200` accepted light
 frames and the same master hash as the previous safe default runs.
+
+## S2-Gate 574 Calibrated Resident Reference Health
+
+S2-Gate 574 extends `resident_reference_health` with an opportunistic calibrated
+cross-check. If `--resident-master-cache-dir` points to a complete resident
+master cache matching the sampled light frame filter and shape, GLASS memory
+maps the matching master bias, dark, and flat arrays, calibrates the same
+bounded center crops used by the reference scout, and runs the CPU star detector
+on those calibrated samples before resident CUDA compute begins.
+
+The calibrated check is only active when the early reference-health gate itself
+is active. It does not require a cache to exist; if no matching cache is present,
+the artifact records `calibrated_crosscheck.status = unavailable` and preserves
+the Gate573 raw-light decision. When a cache is available, the default
+thresholds are:
+
+- `--resident-reference-health-calibrated-min-star-ratio 0.75`;
+- `--resident-reference-health-calibrated-max-rank-fraction 0.25`.
+
+On the real 200-light benchmark with the shared resident master cache, the bad
+explicit CUDA scout reference `F000215` is rejected before resident compute with
+both raw and calibrated evidence:
+
+- raw CPU scout reference: `F000225`;
+- raw selected star ratio: `40/51 = 0.784`;
+- calibrated reference: `F000079`;
+- calibrated selected star ratio: `13/30 = 0.433`;
+- calibrated selected rank: `54/64`;
+- calibrated selected rank fraction: `0.841`.
+
+The safe default CPU scout path remains unchanged, does not write
+`resident_reference_health.json`, and preserves the same resident master hash.
+This gate still does not promote CUDA reference scouting to default; it adds
+stronger early evidence for explicit CUDA-scout experiments.
