@@ -1,0 +1,284 @@
+{
+  "gate": 521,
+  "name": "resident python DQ finite count-map fast path",
+  "root": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649",
+  "warm_auto": {
+    "output_dir": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\warm_auto",
+    "shell_elapsed_s": 7.3532715,
+    "internal_total_elapsed_s": 7.000280999985989,
+    "resident_stage_elapsed_s": 6.997694300021976,
+    "light_read_upload_calibrate_s": 2.5628596000024118,
+    "master_build_or_load_s": 0.4101360000204295,
+    "light_loop_unaccounted_s": 0.6214717999100685,
+    "resident_registration_component_accounted_s": 1.9609769998557784,
+    "resident_registration_warp_s": 0.470653000054881,
+    "resident_integration_s": 0.3053735999856144,
+    "output_write_s": 0.28677950002020225,
+    "estimated_peak_gib": 49.608429938554764,
+    "input_frame_count": 200,
+    "active_integrated_frame_count": 193,
+    "dq_precomputed_stats_used": true,
+    "surface_count_map_stats_profiles": [
+      {
+        "name": "low_rejection_map_counts_are_valid",
+        "stats_profile": "resident_finite_integer_count_map_fast_path"
+      },
+      {
+        "name": "high_rejection_map_counts_are_valid",
+        "stats_profile": "resident_finite_integer_count_map_fast_path"
+      }
+    ]
+  },
+  "warm_repeat_auto": {
+    "output_dir": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\warm_repeat_auto",
+    "shell_elapsed_s": 7.3675961,
+    "internal_total_elapsed_s": 6.949569999938831,
+    "resident_stage_elapsed_s": 6.9462257999693975,
+    "light_read_upload_calibrate_s": 2.5365960000199266,
+    "master_build_or_load_s": 0.4130350000341423,
+    "light_loop_unaccounted_s": 0.6184785998193547,
+    "resident_registration_component_accounted_s": 1.9651179000898742,
+    "resident_registration_warp_s": 0.4798763999133371,
+    "resident_integration_s": 0.3037732999655418,
+    "output_write_s": 0.28862879995722324,
+    "estimated_peak_gib": 49.608429938554764,
+    "input_frame_count": 200,
+    "active_integrated_frame_count": 193,
+    "dq_precomputed_stats_used": true,
+    "surface_count_map_stats_profiles": [
+      {
+        "name": "low_rejection_map_counts_are_valid",
+        "stats_profile": "resident_finite_integer_count_map_fast_path"
+      },
+      {
+        "name": "high_rejection_map_counts_are_valid",
+        "stats_profile": "resident_finite_integer_count_map_fast_path"
+      }
+    ]
+  },
+  "full_run_cache_policy_run": {
+    "output_dir": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\full_run_cache_policy_run",
+    "shell_elapsed_s": 11.8054857,
+    "internal_total_elapsed_s": 11.440295899985358,
+    "resident_stage_elapsed_s": 11.437016999989282,
+    "light_read_upload_calibrate_s": 7.0381644000299275,
+    "master_build_or_load_s": 4.9143362999893725,
+    "light_loop_unaccounted_s": 0.6096421991824172,
+    "resident_registration_component_accounted_s": 1.9516434999660401,
+    "resident_registration_warp_s": 0.46883930003969,
+    "resident_integration_s": 0.3076442999881692,
+    "output_write_s": 0.2805090000038035,
+    "estimated_peak_gib": 49.608429938554764,
+    "input_frame_count": 200,
+    "active_integrated_frame_count": 193,
+    "dq_precomputed_stats_used": true,
+    "surface_count_map_stats_profiles": [
+      {
+        "name": "low_rejection_map_counts_are_valid",
+        "stats_profile": "resident_finite_integer_count_map_fast_path"
+      },
+      {
+        "name": "high_rejection_map_counts_are_valid",
+        "stats_profile": "resident_finite_integer_count_map_fast_path"
+      }
+    ]
+  },
+  "warm_profile_after": {
+    "output_dir": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\warm_profile_after",
+    "shell_elapsed_s": 8.2198142,
+    "internal_total_elapsed_s": 7.637228499981575,
+    "resident_stage_elapsed_s": 7.632183999987319,
+    "light_read_upload_calibrate_s": 2.6813243000069633,
+    "master_build_or_load_s": 0.4077996999840252,
+    "light_loop_unaccounted_s": 0.7634246995439753,
+    "resident_registration_component_accounted_s": 1.99110449959758,
+    "resident_registration_warp_s": 0.5541078004753217,
+    "resident_integration_s": 0.30484230001457036,
+    "output_write_s": 0.3888069000095129,
+    "estimated_peak_gib": 49.608429938554764,
+    "input_frame_count": 200,
+    "active_integrated_frame_count": 193,
+    "dq_precomputed_stats_used": true,
+    "surface_count_map_stats_profiles": [
+      {
+        "name": "low_rejection_map_counts_are_valid",
+        "stats_profile": "resident_finite_integer_count_map_fast_path"
+      },
+      {
+        "name": "high_rejection_map_counts_are_valid",
+        "stats_profile": "resident_finite_integer_count_map_fast_path"
+      }
+    ]
+  },
+  "compare_gate521_vs_gate520": {
+    "report_html": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\compare_gate521_vs_gate520.html",
+    "report_json": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\compare_gate521_vs_gate520.json",
+    "shape_match": true,
+    "rms_diff": 0.0,
+    "abs_diff_p99": 0.0,
+    "max_abs_diff": 0.0,
+    "robust_fit_available": true,
+    "robust_fit_rms": 0.0,
+    "robust_fit_p99": 0.0,
+    "robust_fit_pixels": 61034688,
+    "robust_fit_fraction": 0.99
+  },
+  "compare_full_run_vs_warm_repeat": {
+    "report_html": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\compare_full_run_vs_warm_repeat.html",
+    "report_json": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\compare_full_run_vs_warm_repeat.json",
+    "shape_match": true,
+    "rms_diff": 0.0,
+    "abs_diff_p99": 0.0,
+    "max_abs_diff": 0.0,
+    "robust_fit_available": true,
+    "robust_fit_rms": 0.0,
+    "robust_fit_p99": 0.0,
+    "robust_fit_pixels": 61034688,
+    "robust_fit_fraction": 0.99
+  },
+  "compare_current_vs_wbpp": {
+    "report_html": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\compare_current_vs_wbpp.html",
+    "report_json": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\compare_current_vs_wbpp.json",
+    "shape_match": true,
+    "rms_diff": 332.62365364501113,
+    "abs_diff_p99": 183.66340633344575,
+    "max_abs_diff": 67463.81672418118,
+    "robust_fit_available": true,
+    "robust_fit_rms": 0.0015009512947433384,
+    "robust_fit_p99": 0.00034034321741462114,
+    "robust_fit_pixels": 60601939,
+    "robust_fit_fraction": 0.982980688129347
+  },
+  "profile_before_gate521": {
+    "profile_path": "C:\\glass_runs\\phase2_s2_gate521_profile_current\\runs_20260623_102405\\warm_profile_current.prof",
+    "resident_dq_map": [
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2208,
+        "function": "_resident_dq_map",
+        "calls": 1,
+        "tottime_s": 0.012849300000000001,
+        "cumtime_s": 2.0067628
+      },
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2094,
+        "function": "_resident_dq_map_python",
+        "calls": 1,
+        "tottime_s": 1.2454436,
+        "cumtime_s": 1.9938585000000002
+      }
+    ],
+    "resident_count_map_stats": [
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2065,
+        "function": "_resident_count_map_array_stats_from_values",
+        "calls": 2,
+        "tottime_s": 0.43397250000000004,
+        "cumtime_s": 0.5368080000000001
+      }
+    ],
+    "resident_coverage_stats": [
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2036,
+        "function": "_resident_coverage_array_stats_from_values",
+        "calls": 3,
+        "tottime_s": 0.11545230000000001,
+        "cumtime_s": 0.29778960000000004
+      },
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2244,
+        "function": "_resident_coverage_array_stats",
+        "calls": 1,
+        "tottime_s": 0.005938400000000001,
+        "cumtime_s": 0.1164386
+      }
+    ]
+  },
+  "profile_after_gate521": {
+    "profile_path": "C:\\glass_runs\\phase2_s2_gate521_python_dq_fastpath\\runs_20260623_102649\\warm_profile_after.prof",
+    "resident_dq_map": [
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2311,
+        "function": "_resident_dq_map",
+        "calls": 1,
+        "tottime_s": 0.0087402,
+        "cumtime_s": 1.3696953
+      },
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2162,
+        "function": "_resident_dq_map_python",
+        "calls": 1,
+        "tottime_s": 1.0156990000000001,
+        "cumtime_s": 1.3608941
+      }
+    ],
+    "resident_count_map_stats": [],
+    "resident_finite_count_map_stats": [
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2116,
+        "function": "_resident_finite_count_map_array_stats_from_values",
+        "calls": 2,
+        "tottime_s": 0.11572220000000001,
+        "cumtime_s": 0.2009698
+      }
+    ],
+    "resident_coverage_stats": [
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2349,
+        "function": "_resident_coverage_array_stats",
+        "calls": 1,
+        "tottime_s": 0.0074644,
+        "cumtime_s": 0.1181269
+      },
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2036,
+        "function": "_resident_coverage_array_stats_from_values",
+        "calls": 1,
+        "tottime_s": 0.0496764,
+        "cumtime_s": 0.11066250000000001
+      }
+    ],
+    "resident_finite_coverage_stats": [
+      {
+        "file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\src\\glass\\engine\\resident_cuda.py",
+        "line": 2065,
+        "function": "_resident_finite_count_coverage_stats",
+        "calls": 2,
+        "tottime_s": 6.65e-05,
+        "cumtime_s": 0.1192951
+      }
+    ]
+  },
+  "wbpp_reference": {
+    "elapsed_s": 1092.541
+  },
+  "speedup_vs_wbpp": {
+    "warm_repeat_internal_x": 157.20987054013648,
+    "warm_repeat_shell_x": 148.29002366185625,
+    "full_internal_x": 95.49936553663775,
+    "full_shell_x": 92.54519701802695
+  },
+  "gate520_baseline": {
+    "warm_repeat_shell_s": 8.173170299999999,
+    "warm_repeat_internal_s": 7.791562700003851,
+    "full_shell_s": 12.7043354,
+    "full_internal_s": 12.324912499985658,
+    "profile_resident_dq_map_s": 2.0067628
+  },
+  "gate521_improvement_vs_gate520": {
+    "warm_repeat_shell_s_saved": 0.8055741999999988,
+    "warm_repeat_internal_s_saved": 0.8419927000650205,
+    "full_shell_s_saved": 0.8988496999999995,
+    "full_internal_s_saved": 0.8846166000002995,
+    "profile_resident_dq_map_s_saved": 0.6370675000000001
+  }
+}

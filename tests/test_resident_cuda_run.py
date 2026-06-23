@@ -746,6 +746,76 @@ def test_resident_dq_map_native_host_matches_python_when_available():
     assert stats["rejection_reduced_pixels_source"] == expected_stats["rejection_reduced_pixels_source"]
 
 
+def test_resident_dq_map_finite_count_map_fast_path_matches_strict_python(monkeypatch):
+    import glass_cuda
+
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_preferred", lambda: False)
+
+    master = np.array(
+        [[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0], [9.0, 10.0, 11.0, 12.0]],
+        dtype=np.float32,
+    )
+    weight = np.array(
+        [[2.0, 2.0, 0.0, 2.0], [2.0, 2.0, 2.0, 2.0], [2.0, 2.0, 2.0, 2.0]],
+        dtype=np.float32,
+    )
+    coverage = np.array(
+        [[3.0, 2.0, 1.0, 0.0], [3.0, 3.0, 3.0, 2.0], [2.0, 1.0, 3.0, 3.0]],
+        dtype=np.float32,
+    )
+    geometric = np.array(
+        [[3.0, 2.0, 1.0, 0.0], [3.0, 3.0, 3.0, 3.0], [2.0, 1.0, 3.0, 3.0]],
+        dtype=np.float32,
+    )
+    low = np.array(
+        [[0.0, 1.0, 0.0, 0.0], [2.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]],
+        dtype=np.float32,
+    )
+    high = np.array(
+        [[0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 0.0], [3.0, 0.0, 0.0, 0.0]],
+        dtype=np.float32,
+    )
+
+    strict_dq, strict_summary, strict_stats = _resident_dq_map_python(
+        master,
+        weight,
+        coverage,
+        low,
+        high,
+        geometric_warp_coverage_map=geometric,
+        active_frame_count=3,
+        return_stats=True,
+    )
+    fast_dq, fast_summary, fast_stats = _resident_dq_map(
+        master,
+        weight,
+        coverage,
+        low,
+        high,
+        geometric_warp_coverage_map=geometric,
+        active_frame_count=3,
+        return_stats=True,
+        assume_finite_count_maps=True,
+    )
+
+    assert np.array_equal(fast_dq, strict_dq)
+    assert fast_summary == strict_summary
+    assert fast_stats["post_rejection_coverage"] == strict_stats["post_rejection_coverage"]
+    assert fast_stats["post_rejection_zero_pixels"] == strict_stats["post_rejection_zero_pixels"]
+    assert fast_stats["geometric_warp_coverage"] == strict_stats["geometric_warp_coverage"]
+    assert fast_stats["geometric_zero_pixels"] == strict_stats["geometric_zero_pixels"]
+    assert fast_stats["geometric_partial_pixels"] == strict_stats["geometric_partial_pixels"]
+    assert fast_stats["geometric_full_pixels"] == strict_stats["geometric_full_pixels"]
+    assert fast_stats["rejection_reduced_pixels"] == strict_stats["rejection_reduced_pixels"]
+    assert fast_stats["rejection_reduced_pixels_source"] == strict_stats["rejection_reduced_pixels_source"]
+    for section in ("low_rejection", "high_rejection"):
+        strict_section = dict(strict_stats[section])
+        fast_section = dict(fast_stats[section])
+        assert fast_section.pop("stats_profile") == "resident_finite_integer_count_map_fast_path"
+        strict_section.pop("stats_profile")
+        assert fast_section == strict_section
+
+
 def test_resident_dq_map_dispatch_uses_python_when_native_not_preferred(monkeypatch):
     import glass_cuda
 

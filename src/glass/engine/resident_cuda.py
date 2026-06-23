@@ -2062,6 +2062,28 @@ def _resident_coverage_array_stats_from_values(
     }
 
 
+def _resident_finite_count_coverage_stats(values: np.ndarray) -> dict[str, float | int]:
+    values = np.asarray(values, dtype=np.float32)
+    total_pixels = int(values.size)
+    if total_pixels == 0:
+        return {
+            "total_pixels": 0,
+            "finite_pixels": 0,
+            "rounded_sum": 0,
+            "min": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+        }
+    return {
+        "total_pixels": total_pixels,
+        "finite_pixels": total_pixels,
+        "rounded_sum": int(round(float(np.sum(values, dtype=np.float64)))),
+        "min": float(np.min(values)),
+        "max": float(np.max(values)),
+        "mean": float(np.mean(values)),
+    }
+
+
 def _resident_count_map_array_stats_from_values(
     values: np.ndarray,
     finite_mask: np.ndarray | None = None,
@@ -2091,6 +2113,52 @@ def _resident_count_map_array_stats_from_values(
     }
 
 
+def _resident_finite_count_map_array_stats_from_values(
+    values: np.ndarray,
+    *,
+    positive_count: int | None = None,
+    negative_count: int | None = None,
+) -> dict[str, Any]:
+    values = np.asarray(values, dtype=np.float32)
+    total_pixels = int(values.size)
+    if total_pixels == 0:
+        minimum = None
+        maximum = None
+        rounded_sum = 0
+        positive_pixels = 0
+        negative_pixels = 0
+    else:
+        minimum = float(np.min(values))
+        maximum = float(np.max(values))
+        rounded_sum = int(round(float(np.sum(np.maximum(values, 0.0), dtype=np.float64))))
+        positive_pixels = (
+            int(positive_count)
+            if positive_count is not None
+            else int(np.count_nonzero(values > 0.0))
+        )
+        negative_pixels = (
+            int(negative_count)
+            if negative_count is not None
+            else int(np.count_nonzero(values < 0.0))
+        )
+    return {
+        "present": True,
+        "shape": list(values.shape),
+        "dtype": str(values.dtype),
+        "finite_pixels": total_pixels,
+        "nonfinite_pixels": 0,
+        "min": minimum,
+        "max": maximum,
+        "rounded_sum": rounded_sum,
+        "positive_pixels": positive_pixels,
+        "zero_or_less_pixels": int(total_pixels - positive_pixels),
+        "negative_pixels": negative_pixels,
+        "fractional_pixels": 0,
+        "stats_source": "resident_precomputed_count_map",
+        "stats_profile": "resident_finite_integer_count_map_fast_path",
+    }
+
+
 def _resident_dq_map_python(
     master: np.ndarray,
     weight_map: np.ndarray,
@@ -2101,6 +2169,7 @@ def _resident_dq_map_python(
     active_frame_count: int = 0,
     *,
     return_stats: bool = False,
+    assume_finite_count_maps: bool = False,
 ) -> tuple[np.ndarray, dict[str, int]] | tuple[np.ndarray, dict[str, int], dict[str, Any]]:
     dq = np.zeros(np.asarray(master).shape, dtype=np.uint32)
     master_values = np.asarray(master, dtype=np.float32)
@@ -2122,41 +2191,61 @@ def _resident_dq_map_python(
     }
     if coverage_map is not None:
         coverage = np.asarray(coverage_map, dtype=np.float32)
-        coverage_finite = np.isfinite(coverage)
-        coverage_invalid = (~coverage_finite) | (coverage <= 0.5)
+        coverage_finite = None if assume_finite_count_maps else np.isfinite(coverage)
+        coverage_invalid = (
+            coverage <= 0.5
+            if assume_finite_count_maps
+            else (~coverage_finite) | (coverage <= 0.5)
+        )
         invalid |= coverage_invalid
         dq[coverage_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
-        stats["post_rejection_coverage"] = _resident_coverage_array_stats_from_values(
-            coverage,
-            coverage_finite,
+        stats["post_rejection_coverage"] = (
+            _resident_finite_count_coverage_stats(coverage)
+            if assume_finite_count_maps
+            else _resident_coverage_array_stats_from_values(
+                coverage,
+                coverage_finite,
+            )
         )
-        stats["post_rejection_zero_pixels"] = int(
-            np.count_nonzero(coverage_finite & (coverage <= 0.5))
+        stats["post_rejection_zero_pixels"] = (
+            int(np.count_nonzero(coverage_invalid))
+            if assume_finite_count_maps
+            else int(np.count_nonzero(coverage_finite & (coverage <= 0.5)))
         )
     if geometric_warp_coverage_map is not None:
         geometric = np.asarray(geometric_warp_coverage_map, dtype=np.float32)
-        geometric_finite = np.isfinite(geometric)
-        geometric_invalid = (~geometric_finite) | (geometric <= 0.5)
+        geometric_finite = None if assume_finite_count_maps else np.isfinite(geometric)
+        geometric_invalid = (
+            geometric <= 0.5
+            if assume_finite_count_maps
+            else (~geometric_finite) | (geometric <= 0.5)
+        )
         invalid |= geometric_invalid
         dq[geometric_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
-        stats["geometric_warp_coverage"] = _resident_coverage_array_stats_from_values(
-            geometric,
-            geometric_finite,
+        stats["geometric_warp_coverage"] = (
+            _resident_finite_count_coverage_stats(geometric)
+            if assume_finite_count_maps
+            else _resident_coverage_array_stats_from_values(
+                geometric,
+                geometric_finite,
+            )
         )
-        stats["geometric_zero_pixels"] = int(
-            np.count_nonzero(geometric_finite & (geometric <= 0.5))
+        stats["geometric_zero_pixels"] = (
+            int(np.count_nonzero(geometric_invalid))
+            if assume_finite_count_maps
+            else int(np.count_nonzero(geometric_finite & (geometric <= 0.5)))
         )
         expected_count = int(active_frame_count)
         if expected_count > 0:
-            geometric_partial = (
-                geometric_finite
-                & (geometric > 0.5)
-                & (geometric < float(expected_count) - 0.5)
-            )
+            geometric_partial = (geometric > 0.5) & (geometric < float(expected_count) - 0.5)
+            if not assume_finite_count_maps:
+                geometric_partial &= geometric_finite
             dq[geometric_partial] |= np.uint32(int(DQFlag.WARP_EDGE))
             stats["geometric_partial_pixels"] = int(np.count_nonzero(geometric_partial))
             stats["geometric_full_pixels"] = int(
-                np.count_nonzero(geometric_finite & (geometric >= float(expected_count) - 0.5))
+                np.count_nonzero(geometric >= float(expected_count) - 0.5)
+                if assume_finite_count_maps
+                else np.count_nonzero(geometric_finite & (geometric >= float(expected_count) - 0.5))
             )
         else:
             stats["geometric_partial_pixels"] = 0
@@ -2166,20 +2255,34 @@ def _resident_dq_map_python(
     low_rejected = None
     if low_rejection_map is not None:
         low = np.asarray(low_rejection_map, dtype=np.float32)
-        low_finite = np.isfinite(low)
-        low_rejected = low_finite & (low > 0.0)
+        low_finite = None if assume_finite_count_maps else np.isfinite(low)
+        low_rejected = low > 0.0 if assume_finite_count_maps else low_finite & (low > 0.0)
         low_rejected_count = int(np.count_nonzero(low_rejected))
         dq[low_rejected] |= np.uint32(int(DQFlag.LOW_REJECTED))
-        stats["low_rejection"] = _resident_count_map_array_stats_from_values(low, low_finite)
+        stats["low_rejection"] = (
+            _resident_finite_count_map_array_stats_from_values(
+                low,
+                positive_count=low_rejected_count,
+            )
+            if assume_finite_count_maps
+            else _resident_count_map_array_stats_from_values(low, low_finite)
+        )
     high_rejected_count = 0
     high_rejected = None
     if high_rejection_map is not None:
         high = np.asarray(high_rejection_map, dtype=np.float32)
-        high_finite = np.isfinite(high)
-        high_rejected = high_finite & (high > 0.0)
+        high_finite = None if assume_finite_count_maps else np.isfinite(high)
+        high_rejected = high > 0.0 if assume_finite_count_maps else high_finite & (high > 0.0)
         high_rejected_count = int(np.count_nonzero(high_rejected))
         dq[high_rejected] |= np.uint32(int(DQFlag.HIGH_REJECTED))
-        stats["high_rejection"] = _resident_count_map_array_stats_from_values(high, high_finite)
+        stats["high_rejection"] = (
+            _resident_finite_count_map_array_stats_from_values(
+                high,
+                positive_count=high_rejected_count,
+            )
+            if assume_finite_count_maps
+            else _resident_count_map_array_stats_from_values(high, high_finite)
+        )
     if low_rejected is not None and high_rejected is not None:
         stats["rejection_reduced_pixels"] = int(np.count_nonzero(low_rejected | high_rejected))
         stats["rejection_reduced_pixels_source"] = "low_high_rejection_masks"
@@ -2215,6 +2318,7 @@ def _resident_dq_map(
     active_frame_count: int = 0,
     *,
     return_stats: bool = False,
+    assume_finite_count_maps: bool = False,
 ) -> tuple[np.ndarray, dict[str, int]] | tuple[np.ndarray, dict[str, int], dict[str, Any]]:
     if return_stats:
         import glass_cuda
@@ -2238,6 +2342,7 @@ def _resident_dq_map(
         geometric_warp_coverage_map,
         active_frame_count,
         return_stats=return_stats,
+        assume_finite_count_maps=assume_finite_count_maps,
     )
 
 
@@ -9811,6 +9916,7 @@ def run_resident_calibration_integration(
                     geometric_warp_coverage_map=geometric_warp_coverage_map,
                     active_frame_count=active_frame_count,
                     return_stats=True,
+                    assume_finite_count_maps=True,
                 )
             dq_map_stats_payload = dq_map_stats if isinstance(dq_map_stats, dict) else {}
             rejection_map_stats = {

@@ -12868,6 +12868,82 @@ Completed in Gate446:
   - external summary:
     `C:\glass_runs\phase2_s2_gate520_adaptive_dq_dispatch\runs_20260623_101337\gate520_adaptive_dq_dispatch_summary.json`.
 
+### S2-Gate 521: Resident Python DQ Count-Map Fast Path
+
+- Returned to a profile-driven runtime gate after Gate520. The next current-main
+  profile showed audit-mode `_resident_dq_map` still consumed `2.0067628 s`
+  through the Python fallback, with additional coverage/rejection count-map
+  scans inside the DQ/provenance path.
+- Completed:
+  - added strict-preserving finite count-map helpers for GLASS-generated
+    resident coverage and rejection count maps;
+  - added `assume_finite_count_maps` to the resident DQ Python fallback and
+    defaulted it to false for direct helper use;
+  - enabled the finite count-map fast path only at the resident pipeline DQ-map
+    construction point, where coverage, geometric coverage, and rejection maps
+    are produced by GLASS resident CUDA kernels;
+  - kept the strict fallback semantics for arbitrary arrays, including NaN and
+    fractional count-map handling;
+  - added focused equivalence tests proving the fast path matches the strict
+    Python DQ path on finite integer count maps.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate521_python_dq_fastpath\runs_20260623_102649`;
+  - input: M38 H-alpha plan with `200` light frames and the existing
+    calibration groups; active integration frame count remained `193`;
+  - warm-repeat with shared master cache: internal `6.949569999938831 s`,
+    shell `7.3675961 s`;
+  - full run with per-run master cache policy: internal
+    `11.440295899985358 s`, shell `11.8054857 s`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - measured speedup: `157.20987054013648x` by warm internal timing,
+    `148.29002366185625x` by warm shell timing, `95.49936553663775x` by full
+    internal timing, and `92.54519701802695x` by full shell timing.
+- Profile evidence:
+  - before Gate521, profile root:
+    `C:\glass_runs\phase2_s2_gate521_profile_current\runs_20260623_102405`;
+  - `_resident_dq_map` cumulative time before: `2.0067628 s`;
+  - after Gate521, profile:
+    `C:\glass_runs\phase2_s2_gate521_python_dq_fastpath\runs_20260623_102649\warm_profile_after.prof`;
+  - `_resident_dq_map` cumulative time after: `1.3696953 s`;
+  - direct profiled DQ-map saving: `0.6370675000000001 s`.
+- Regression recovery versus Gate520:
+  - warm-repeat shell time improved by `0.8055741999999988 s`;
+  - warm-repeat internal time improved by `0.8419927000650205 s`;
+  - full-run shell time improved by `0.8988496999999995 s`;
+  - full-run internal time improved by `0.8846166000002995 s`;
+  - current warm-repeat master matches Gate520 warm-repeat bitwise;
+  - full per-run-cache master matches warm-repeat bitwise.
+- DQ/mask validation:
+  - resident result contract passed;
+  - DQ pixel closure summary passed;
+  - resident surface contract passed;
+  - surface-contract low/high rejection checks record
+    `stats_profile="resident_finite_integer_count_map_fast_path"`;
+  - rejection sample sum and DQ low/high pixel counts still match provenance.
+- Numerical validation:
+  - Gate521 vs Gate520 compare is shape-matched with RMS `0.0`, p99 absolute
+    difference `0.0`, and max absolute difference `0.0`;
+  - full run vs warm-repeat compare is also bitwise identical;
+  - current GLASS vs WBPP black-box compare is shape-matched; robust linear
+    fit over fit pixels has RMS `0.0015009512947433384`, p99 absolute
+    difference `0.00034034321741462114`, and fit fraction
+    `0.982980688129347`.
+- Interpretation:
+  - this is a DQ/mask contract performance gate for the resident audit path,
+    not a science-pixel change;
+  - arbitrary arrays still use strict finite/fractional handling by default;
+  - the finite count-map fast path relies on the resident CUDA contract that
+    coverage and rejection maps are finite integer-valued count maps;
+  - after this gate, the next substantive targets remain native/GPU DQ map
+    construction and resident registration/warp synchronization.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_521_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_521_python_dq_fastpath_summary.json`;
+  - external summary:
+    `C:\glass_runs\phase2_s2_gate521_python_dq_fastpath\runs_20260623_102649\gate521_python_dq_fastpath_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:
