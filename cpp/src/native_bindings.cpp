@@ -14891,6 +14891,14 @@ py::tuple resident_dq_map_host_f32(
   return py::make_tuple(dq, summary, stats);
 }
 
+bool resident_dq_map_host_f32_optimized() {
+#ifdef NDEBUG
+  return true;
+#else
+  return false;
+#endif
+}
+
 PYBIND11_MODULE(_glass_cuda_native, m) {
   m.doc() = "Native CUDA backend for GLASS";
   m.def("cuda_available", &cuda_available);
@@ -15101,6 +15109,7 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       py::arg("high_rejection_map"),
       py::arg("geometric_warp_coverage_map") = py::none(),
       py::arg("active_frame_count") = 0);
+  m.def("resident_dq_map_host_f32_optimized", &resident_dq_map_host_f32_optimized);
   py::class_<ResidentCalibratedStack>(m, "ResidentCalibratedStack")
       .def(py::init<std::size_t, std::size_t, std::size_t>())
       .def_property_readonly("frame_count", &ResidentCalibratedStack::frame_count)

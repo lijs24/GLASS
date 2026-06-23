@@ -2219,7 +2219,7 @@ def _resident_dq_map(
     if return_stats:
         import glass_cuda
 
-        if glass_cuda.resident_dq_map_host_f32_available():
+        if glass_cuda.resident_dq_map_host_f32_preferred():
             return glass_cuda.resident_dq_map_host_f32(
                 master,
                 weight_map,

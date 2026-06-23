@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import importlib
+import os
 import shutil
 import subprocess
 from time import perf_counter
@@ -228,6 +229,22 @@ def host_pinned_empty_u8(byte_count: int) -> np.ndarray:
 def resident_dq_map_host_f32_available() -> bool:
     native = _native()
     return native is not None and hasattr(native, "resident_dq_map_host_f32")
+
+
+def resident_dq_map_host_f32_optimized() -> bool:
+    native = _native()
+    if native is None or not hasattr(native, "resident_dq_map_host_f32_optimized"):
+        return False
+    return bool(native.resident_dq_map_host_f32_optimized())
+
+
+def resident_dq_map_host_f32_preferred() -> bool:
+    mode = os.environ.get("GLASS_RESIDENT_DQ_NATIVE_HOST", "").strip().lower()
+    if mode in {"1", "true", "yes", "on", "force", "native"}:
+        return resident_dq_map_host_f32_available()
+    if mode in {"0", "false", "no", "off", "python", "fallback"}:
+        return False
+    return resident_dq_map_host_f32_available() and resident_dq_map_host_f32_optimized()
 
 
 def resident_dq_map_host_f32(

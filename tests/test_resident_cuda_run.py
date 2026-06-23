@@ -746,6 +746,95 @@ def test_resident_dq_map_native_host_matches_python_when_available():
     assert stats["rejection_reduced_pixels_source"] == expected_stats["rejection_reduced_pixels_source"]
 
 
+def test_resident_dq_map_dispatch_uses_python_when_native_not_preferred(monkeypatch):
+    import glass_cuda
+
+    master = np.ones((2, 2), dtype=np.float32)
+    weight = np.ones((2, 2), dtype=np.float32)
+    coverage = np.ones((2, 2), dtype=np.float32)
+
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_preferred", lambda: False)
+
+    def fail_native(*_args, **_kwargs):
+        raise AssertionError("native DQ path should not be called when it is not preferred")
+
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32", fail_native)
+
+    dq, summary, stats = _resident_dq_map(
+        master,
+        weight,
+        coverage,
+        None,
+        None,
+        active_frame_count=1,
+        return_stats=True,
+    )
+
+    assert np.array_equal(dq, np.zeros((2, 2), dtype=np.uint32))
+    assert summary == {"valid": 4}
+    assert stats["stats_source"] == "resident_dq_map_single_pass"
+    assert "stats_backend" not in stats
+
+
+def test_resident_dq_map_native_preference_honors_build_and_env(monkeypatch):
+    import glass_cuda
+
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_available", lambda: True)
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_optimized", lambda: False)
+    monkeypatch.delenv("GLASS_RESIDENT_DQ_NATIVE_HOST", raising=False)
+
+    assert glass_cuda.resident_dq_map_host_f32_preferred() is False
+
+    monkeypatch.setenv("GLASS_RESIDENT_DQ_NATIVE_HOST", "native")
+    assert glass_cuda.resident_dq_map_host_f32_preferred() is True
+
+    monkeypatch.setenv("GLASS_RESIDENT_DQ_NATIVE_HOST", "python")
+    assert glass_cuda.resident_dq_map_host_f32_preferred() is False
+
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_optimized", lambda: True)
+    monkeypatch.delenv("GLASS_RESIDENT_DQ_NATIVE_HOST", raising=False)
+    assert glass_cuda.resident_dq_map_host_f32_preferred() is True
+
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_available", lambda: False)
+    monkeypatch.setenv("GLASS_RESIDENT_DQ_NATIVE_HOST", "native")
+    assert glass_cuda.resident_dq_map_host_f32_preferred() is False
+
+
+def test_resident_dq_map_dispatch_uses_native_when_preferred(monkeypatch):
+    import glass_cuda
+
+    master = np.ones((2, 2), dtype=np.float32)
+    weight = np.ones((2, 2), dtype=np.float32)
+    expected_dq = np.full((2, 2), int(DQFlag.WARP_EDGE), dtype=np.uint32)
+    expected_summary = {"valid": 0, "warp_edge": 4}
+    expected_stats = {
+        "schema_version": 1,
+        "stats_source": "resident_dq_map_single_pass",
+        "stats_backend": "native_host",
+    }
+
+    monkeypatch.setattr(glass_cuda, "resident_dq_map_host_f32_preferred", lambda: True)
+    monkeypatch.setattr(
+        glass_cuda,
+        "resident_dq_map_host_f32",
+        lambda *_args, **_kwargs: (expected_dq, expected_summary, expected_stats),
+    )
+
+    dq, summary, stats = _resident_dq_map(
+        master,
+        weight,
+        None,
+        None,
+        None,
+        active_frame_count=1,
+        return_stats=True,
+    )
+
+    assert dq is expected_dq
+    assert summary is expected_summary
+    assert stats is expected_stats
+
+
 def test_resident_dq_coverage_provenance_includes_geometric_warp_coverage():
     coverage = np.full((2, 2), 2.0, dtype=np.float32)
     geometric = np.array([[2.0, 1.0], [0.0, 2.0]], dtype=np.float32)

@@ -12802,6 +12802,72 @@ Completed in Gate446:
   - summary:
     `C:\glass_runs\phase2_s2_gate519_native_dq_ab\runs_20260623_100321\gate519_native_dq_real_ab_summary.json`.
 
+### S2-Gate 520: Adaptive Native DQ Dispatch
+
+- Returned immediately to the real 200-light A/B path after profiling Gate519.
+  The profile showed the locally built native extension was a Debug build and
+  `_resident_dq_map` spent about `5.089 s` inside the native host DQ scanner,
+  making the newly added native path slower than the Python vectorized fallback.
+- Completed:
+  - added `_glass_cuda_native.resident_dq_map_host_f32_optimized()`, returning
+    true only for optimized native builds;
+  - added `glass_cuda.resident_dq_map_host_f32_optimized()` and
+    `glass_cuda.resident_dq_map_host_f32_preferred()`;
+  - changed resident `_resident_dq_map(..., return_stats=True)` to use the
+    native host scanner only when it is both available and preferred;
+  - added `GLASS_RESIDENT_DQ_NATIVE_HOST` override values so diagnostics can
+    force `native` or `python` without changing code;
+  - kept the exact Python fallback DQ contract and added focused dispatch tests
+    for fallback, native, optimized-build, and environment override behavior.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate520_adaptive_dq_dispatch\runs_20260623_101337`;
+  - input: M38 H-alpha plan with `200` light frames and the existing
+    calibration groups; active integration frame count remained `193`;
+  - warm-repeat with shared master cache: internal `7.791562700003851 s`,
+    shell `8.173170299999999 s`;
+  - full run with per-run master cache policy: internal
+    `12.324912499985658 s`, shell `12.7043354 s`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - measured speedup: `140.22103678886648x` by warm internal timing,
+    `133.67407748741024x` by warm shell timing, `88.6449295280004x` by full
+    internal timing, and `85.99749342259966x` by full shell timing.
+- Latest component timings from warm-repeat:
+  - light read/upload/calibration: `2.543628500017803 s`;
+  - master build/load: `0.4103774999966845 s`;
+  - resident registration component: `1.9564012999345504 s`;
+  - resident registration warp: `0.4721331001492217 s`;
+  - resident integration: `0.3027429000358097 s`;
+  - output write: `0.31818489998113364 s`;
+  - estimated peak VRAM: `49.608429938554764 GiB`;
+  - `dq_precomputed_stats_used=true`, `dq_native_preferred=false` for the local
+    Debug native build.
+- Regression recovery versus Gate519:
+  - warm-repeat shell time improved by `3.0260962000000013 s`
+    (`37.02475402965728%` faster);
+  - full-run shell time improved by `2.9291234 s`
+    (`23.056093119204025%` faster);
+  - current warm-repeat master matches Gate519 bitwise;
+  - full per-run-cache master matches warm-repeat bitwise.
+- Numerical validation:
+  - current GLASS vs WBPP black-box compare is shape-matched;
+  - robust linear fit over fit pixels has RMS `0.0015009512947433384`, p99
+    absolute difference `0.00034034321741462114`, and fit fraction
+    `0.982980688129347`.
+- Interpretation:
+  - this is a DQ/mask dispatch and runtime-adaptation gate, not a science-pixel
+    change;
+  - optimized native host DQ remains available for Release builds, while Debug
+    or unoptimized native builds automatically keep the faster Python fallback;
+  - the next substantive targets remain resident light-pipeline overlap and
+    resident registration/warp batching/residency.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_520_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_520_adaptive_dq_dispatch_summary.json`;
+  - external summary:
+    `C:\glass_runs\phase2_s2_gate520_adaptive_dq_dispatch\runs_20260623_101337\gate520_adaptive_dq_dispatch_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:
