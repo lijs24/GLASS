@@ -34,6 +34,16 @@ def _as_weight(value: Any) -> float | None:
         return None
 
 
+def _dict_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _contract_sources(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item)]
+
+
 def _registration_rows(registration: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not registration:
         return []
@@ -236,6 +246,9 @@ def _exception_frames(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "quality_gate_status": row.get("quality_gate_status"),
                 "resident_frame_mask_status": row.get("resident_frame_mask_status"),
                 "resident_frame_mask_categories": row.get("resident_frame_mask_categories"),
+                "resident_dq_mask_contract_status": row.get("resident_dq_mask_contract_status"),
+                "resident_dq_mask_contract_passed": row.get("resident_dq_mask_contract_passed"),
+                "resident_dq_mask_contract_sources": row.get("resident_dq_mask_contract_sources"),
                 "registration_status": row.get("registration_status"),
                 "warp_status": row.get("warp_status"),
                 "local_norm_status": row.get("local_norm_status"),
@@ -325,6 +338,13 @@ def build_frame_accounting(
             resident_stack_index = calibration_row.get("resident_stack_index")
             resident_output_index = calibration_row.get("resident_output_index")
             resident_master_path = calibration_row.get("resident_master_path")
+            resident_source_dq_contract = _dict_or_empty(calibration_row.get("source_dq_contract"))
+            resident_calibrated_light_frame_mask_contract = _dict_or_empty(
+                calibration_row.get("frame_mask_contract")
+            )
+            resident_dq_mask_contract = _dict_or_empty(
+                calibration_row.get("resident_dq_mask_contract")
+            )
             _extend_unique(warnings, calibration_row.get("warnings", []))
         elif has_resident_integration:
             calibration_status = "resident_in_vram"
@@ -333,6 +353,9 @@ def build_frame_accounting(
             resident_stack_index = None
             resident_output_index = None
             resident_master_path = None
+            resident_source_dq_contract = {}
+            resident_calibrated_light_frame_mask_contract = {}
+            resident_dq_mask_contract = {}
         elif calibration:
             calibration_status = "missing"
             calibration_source_stage = None
@@ -340,6 +363,9 @@ def build_frame_accounting(
             resident_stack_index = None
             resident_output_index = None
             resident_master_path = None
+            resident_source_dq_contract = {}
+            resident_calibrated_light_frame_mask_contract = {}
+            resident_dq_mask_contract = {}
             _append_unique(reasons, "missing calibrated-light artifact")
         else:
             calibration_status = "not_run"
@@ -348,6 +374,36 @@ def build_frame_accounting(
             resident_stack_index = None
             resident_output_index = None
             resident_master_path = None
+            resident_source_dq_contract = {}
+            resident_calibrated_light_frame_mask_contract = {}
+            resident_dq_mask_contract = {}
+
+        resident_source_dq_contract_available = bool(resident_source_dq_contract.get("available"))
+        resident_calibrated_light_frame_mask_contract_available = bool(
+            resident_calibrated_light_frame_mask_contract.get("available")
+        )
+        resident_dq_mask_contract_available = bool(
+            resident_dq_mask_contract.get("contract_type")
+            == "resident_calibrated_light_dq_mask_contract"
+        )
+        resident_dq_mask_contract_passed = (
+            bool(resident_dq_mask_contract.get("passed"))
+            if resident_dq_mask_contract_available
+            else None
+        )
+        resident_dq_mask_contract_status = (
+            resident_dq_mask_contract.get("status")
+            if resident_dq_mask_contract_available
+            else "missing"
+            if resident_native_calibration
+            else "not_applicable"
+        )
+        resident_dq_mask_contract_sources = _contract_sources(
+            resident_dq_mask_contract.get("contract_sources")
+        )
+        resident_dq_frame_mask_sources = _contract_sources(
+            resident_dq_mask_contract.get("frame_mask_sources")
+        )
 
         quality_row = quality_by_id.get(frame_id)
         if quality_row:
@@ -476,6 +532,27 @@ def build_frame_accounting(
                 "resident_stack_index": resident_stack_index,
                 "resident_output_index": resident_output_index,
                 "resident_master_path": resident_master_path,
+                "resident_source_dq_contract_available": resident_source_dq_contract_available,
+                "resident_source_dq_contract_passed": (
+                    bool(resident_source_dq_contract.get("passed"))
+                    if resident_source_dq_contract_available
+                    else None
+                ),
+                "resident_source_dq_contract_status": resident_source_dq_contract.get("status"),
+                "resident_source_dq_execution_route": resident_source_dq_contract.get("execution_route"),
+                "resident_dq_mask_contract_available": resident_dq_mask_contract_available,
+                "resident_dq_mask_contract_status": resident_dq_mask_contract_status,
+                "resident_dq_mask_contract_passed": resident_dq_mask_contract_passed,
+                "resident_dq_mask_contract_sources": resident_dq_mask_contract_sources,
+                "resident_dq_frame_mask_sources": resident_dq_frame_mask_sources,
+                "resident_calibrated_light_frame_mask_contract_available": (
+                    resident_calibrated_light_frame_mask_contract_available
+                ),
+                "resident_calibrated_light_frame_mask_contract_passed": (
+                    bool(resident_calibrated_light_frame_mask_contract.get("passed"))
+                    if resident_calibrated_light_frame_mask_contract_available
+                    else None
+                ),
                 "quality_gate_status": quality_gate_status,
                 "reference_candidate": reference_candidate,
                 "quality_score": quality_score,
@@ -501,6 +578,9 @@ def build_frame_accounting(
     final_counts = _status_counts(rows, "final_status")
     integration_counts = _status_counts(rows, "integration_status")
     exceptions = _exception_frames(rows)
+    resident_dq_mask_contract_rows = [
+        row for row in rows if row.get("resident_dq_mask_contract_available") is True
+    ]
     summary = {
         "input_light_frames": len(rows),
         "calibrated_frames": sum(1 for row in rows if row["calibration_status"] == "calibrated"),
@@ -511,6 +591,35 @@ def build_frame_accounting(
         "calibration_artifact_type": calibration_artifact_type,
         "calibration_master_count": calibration_master_count,
         "resident_calibrated_light_ledger_rows": resident_calibrated_light_ledger_count,
+        "resident_calibrated_light_dq_contract_rows": len(resident_dq_mask_contract_rows),
+        "resident_calibrated_light_dq_contract_passed": sum(
+            1 for row in resident_dq_mask_contract_rows if row["resident_dq_mask_contract_passed"] is True
+        ),
+        "resident_calibrated_light_dq_contract_failed": sum(
+            1 for row in resident_dq_mask_contract_rows if row["resident_dq_mask_contract_passed"] is not True
+        ),
+        "resident_source_dq_contract_rows": sum(
+            1 for row in rows if row["resident_source_dq_contract_available"] is True
+        ),
+        "resident_frame_mask_contract_rows": sum(
+            1
+            for row in rows
+            if row["resident_calibrated_light_frame_mask_contract_available"] is True
+        ),
+        "resident_dq_mask_contract_sources": sorted(
+            {
+                source
+                for row in resident_dq_mask_contract_rows
+                for source in row["resident_dq_mask_contract_sources"]
+            }
+        ),
+        "resident_dq_frame_mask_sources": sorted(
+            {
+                source
+                for row in resident_dq_mask_contract_rows
+                for source in row["resident_dq_frame_mask_sources"]
+            }
+        ),
         "quality_accepted_frames": sum(
             1 for row in rows if row["quality_gate_status"] == "accepted"
         ),
@@ -555,6 +664,7 @@ def build_frame_accounting(
             "integration": bool(integration),
             "resident": bool(resident),
             "resident_frame_masks": bool(resident_frame_masks),
+            "resident_calibrated_light_dq_ledger": bool(resident_dq_mask_contract_rows),
         },
         "calibration_artifact_type": calibration_artifact_type,
         "resident_native_calibration_artifact": resident_native_calibration,

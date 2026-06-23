@@ -16,6 +16,34 @@ def _plan_frame(frame_id: str) -> dict[str, object]:
     }
 
 
+def _resident_dq_contract(frame_id: str, *, passed: bool = True) -> dict[str, object]:
+    return {
+        "source_dq_contract": {
+            "source": "resident_source_dq_execution",
+            "available": True,
+            "passed": passed,
+            "status": "passed" if passed else "failed",
+            "execution_route": "resident_in_memory_mask_streaming",
+        },
+        "frame_mask_contract": {
+            "source": "resident_frame_masks",
+            "available": True,
+            "passed": passed,
+            "frame_id": frame_id,
+            "mask_status": "active" if passed else "masked",
+        },
+        "resident_dq_mask_contract": {
+            "schema_version": 1,
+            "contract_type": "resident_calibrated_light_dq_mask_contract",
+            "passed": passed,
+            "status": "passed" if passed else "failed",
+            "frame_id": frame_id,
+            "contract_sources": ["resident_source_dq_execution"],
+            "frame_mask_sources": ["resident_frame_masks"],
+        },
+    }
+
+
 def test_frame_accounting_builds_per_light_ledger(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()
@@ -215,9 +243,23 @@ def test_report_renders_frame_accounting(tmp_path: Path):
                 "input_light_frames": 1,
                 "integrated_frames": 1,
                 "integration_conflict_frames": 1,
+                "resident_calibrated_light_dq_contract_rows": 1,
+                "resident_calibrated_light_dq_contract_passed": 1,
+                "resident_calibrated_light_dq_contract_failed": 0,
+                "resident_dq_mask_contract_sources": ["resident_source_dq_execution"],
+                "resident_dq_frame_mask_sources": ["resident_frame_masks"],
                 "final_status_counts": {"integrated": 1},
             },
-            "frames": [{"frame_id": "light_001", "final_status": "integrated"}],
+            "frames": [
+                {
+                    "frame_id": "light_001",
+                    "final_status": "integrated",
+                    "resident_dq_mask_contract_status": "passed",
+                    "resident_dq_mask_contract_passed": True,
+                    "resident_dq_mask_contract_sources": ["resident_source_dq_execution"],
+                    "resident_source_dq_execution_route": "resident_in_memory_mask_streaming",
+                }
+            ],
             "exception_summary": {"count": 1, "final_status_counts": {"zero_weight": 1}},
             "exception_frames": [
                 {
@@ -240,6 +282,9 @@ def test_report_renders_frame_accounting(tmp_path: Path):
     assert "light_002" in html
     assert "integration_conflict_frames" in html
     assert "integration weight is zero" in html
+    assert "resident_calibrated_light_dq_contract_rows" in html
+    assert "resident_source_dq_execution" in html
+    assert "resident_in_memory_mask_streaming" in html
 
 
 def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
@@ -266,6 +311,7 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
                     "resident_output_index": 0,
                     "resident_stack_index": 0,
                     "resident_master_path": "integration/resident_master_H.fits",
+                    **_resident_dq_contract("ref"),
                 },
                 {
                     "frame_id": "excluded",
@@ -276,6 +322,7 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
                     "resident_output_index": 0,
                     "resident_stack_index": 1,
                     "resident_master_path": "integration/resident_master_H.fits",
+                    **_resident_dq_contract("excluded"),
                 },
             ],
         },
@@ -313,11 +360,25 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
     assert rows["excluded"]["resident_stack_index"] == 1
     assert rows["ref"]["warp_status"] == "resident_in_vram"
     assert rows["ref"]["local_norm_status"] == "resident_applied"
+    assert rows["ref"]["resident_dq_mask_contract_available"] is True
+    assert rows["ref"]["resident_dq_mask_contract_status"] == "passed"
+    assert rows["ref"]["resident_dq_mask_contract_passed"] is True
+    assert rows["ref"]["resident_dq_mask_contract_sources"] == ["resident_source_dq_execution"]
+    assert rows["ref"]["resident_dq_frame_mask_sources"] == ["resident_frame_masks"]
+    assert rows["ref"]["resident_source_dq_execution_route"] == "resident_in_memory_mask_streaming"
     assert rows["excluded"]["final_status"] == "registration_rejected"
     written = read_json(run / "frame_accounting.json")
     assert written["sources"]["integration"] is True
+    assert written["sources"]["resident_calibrated_light_dq_ledger"] is True
     assert written["resident_native_calibration_artifact"] is True
     assert written["summary"]["resident_native_calibration_artifact"] is True
     assert written["summary"]["resident_calibrated_light_ledger_rows"] == 2
+    assert written["summary"]["resident_calibrated_light_dq_contract_rows"] == 2
+    assert written["summary"]["resident_calibrated_light_dq_contract_passed"] == 2
+    assert written["summary"]["resident_calibrated_light_dq_contract_failed"] == 0
+    assert written["summary"]["resident_source_dq_contract_rows"] == 2
+    assert written["summary"]["resident_frame_mask_contract_rows"] == 2
+    assert written["summary"]["resident_dq_mask_contract_sources"] == ["resident_source_dq_execution"]
+    assert written["summary"]["resident_dq_frame_mask_sources"] == ["resident_frame_masks"]
     assert written["summary"]["calibration_master_count"] == 3
     assert written["exception_summary"]["primary_stage_counts"] == {"registration": 1}

@@ -431,6 +431,17 @@ def _frame_accounting_summary_rows(frame_accounting: dict[str, Any] | None) -> l
             "calibration_artifact_type": summary.get("calibration_artifact_type"),
             "calibration_master_count": summary.get("calibration_master_count"),
             "resident_calibrated_light_ledger_rows": summary.get("resident_calibrated_light_ledger_rows"),
+            "resident_calibrated_light_dq_contract_rows": summary.get(
+                "resident_calibrated_light_dq_contract_rows"
+            ),
+            "resident_calibrated_light_dq_contract_passed": summary.get(
+                "resident_calibrated_light_dq_contract_passed"
+            ),
+            "resident_calibrated_light_dq_contract_failed": summary.get(
+                "resident_calibrated_light_dq_contract_failed"
+            ),
+            "resident_dq_mask_contract_sources": summary.get("resident_dq_mask_contract_sources"),
+            "resident_dq_frame_mask_sources": summary.get("resident_dq_frame_mask_sources"),
             "registration_accepted_frames": summary.get("registration_accepted_frames"),
             "warp_accepted_frames": summary.get("warp_accepted_frames"),
             "warp_skipped_frames": summary.get("warp_skipped_frames"),
@@ -454,6 +465,10 @@ def _frame_accounting_rows(frame_accounting: dict[str, Any] | None) -> list[dict
                 "calibration_backend": item.get("calibration_backend"),
                 "calibration_source_stage": item.get("calibration_source_stage"),
                 "resident_stack_index": item.get("resident_stack_index"),
+                "resident_dq_mask_contract": item.get("resident_dq_mask_contract_status"),
+                "resident_dq_mask_contract_passed": item.get("resident_dq_mask_contract_passed"),
+                "resident_dq_mask_contract_sources": item.get("resident_dq_mask_contract_sources"),
+                "resident_source_dq_route": item.get("resident_source_dq_execution_route"),
                 "registration": item.get("registration_status"),
                 "warp": item.get("warp_status"),
                 "local_norm": item.get("local_norm_status"),

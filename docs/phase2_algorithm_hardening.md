@@ -219,6 +219,76 @@ Validation commands:
 - Real 200-light `glass run` with the default `throughput-v3-io` resident
   preset.
 
+### S2-Gate 583: Resident Frame Accounting DQ Ledger
+
+Gate 583 carries the Gate582 calibrated-light DQ/mask ledger into the canonical
+frame-accounting artifact. This is a core contract-surface change, not a
+presentation-only report gate: downstream audit tools can now inspect each
+light row and see whether the resident in-VRAM calibrated-light DQ contract
+exists, passed, and which execution route and mask sources backed it.
+
+Implementation:
+
+- `src/glass/engine/frame_accounting.py` now consumes the embedded
+  `source_dq_contract`, `frame_mask_contract`, and `resident_dq_mask_contract`
+  fields from resident `calibration_artifacts.json` rows.
+- Each frame-accounting row records resident source-DQ availability/status,
+  source-DQ execution route, resident calibrated-light DQ/mask contract status,
+  frame-mask contract availability, and resident DQ/mask source lists.
+- Frame-accounting summaries now count resident calibrated-light DQ contract
+  rows, passing/failing contracts, resident source-DQ rows, resident frame-mask
+  rows, and distinct contract sources.
+- Exception-frame accounting also carries the resident DQ/mask contract fields,
+  so masked or zero-weight frames remain auditable instead of disappearing from
+  the DQ ledger.
+- `src/glass/report/html_report.py` surfaces the new frame-accounting summary
+  and per-frame fields in the HTML report.
+
+Real 200-light evidence:
+
+- Source run:
+  `C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3`
+- Gate583 validation directory:
+  `C:\glass_runs\phase2_s2_gate583_frame_accounting_ledger`
+- Frame-accounting validation:
+  `C:\glass_runs\phase2_s2_gate583_frame_accounting_ledger\frame_accounting_ledger_validation.json`
+- Pixel-verified pipeline contract:
+  `C:\glass_runs\phase2_s2_gate583_frame_accounting_ledger\pipeline_contract_after_frame_accounting.json`
+- HTML report:
+  `C:\glass_runs\phase2_s2_gate583_frame_accounting_ledger\report.html`
+- Frame-accounting rows: `200`.
+- Resident calibrated-light DQ contract rows: `200 / 200`.
+- Passing resident calibrated-light DQ contracts: `200 / 200`.
+- Resident source-DQ contract rows: `200 / 200`.
+- Resident frame-mask contract rows: `200 / 200`.
+- Contract sources: `resident_source_dq_execution`.
+- Frame-mask sources: `resident_frame_masks`.
+- Final frame statuses remained `193` integrated and `7` quality rejected.
+- Pixel-verified pipeline-contract status remained `passed`, including
+  resident source-DQ, resident frame masks, DQ pixel closure, frame accounting,
+  and rejection-map/sample-count checks.
+- The six integration FITS outputs remain SHA256-identical to the Gate579
+  current default output through the Gate582 parity artifact.
+
+Validation commands:
+
+- `python -m pytest -q tests/test_frame_accounting.py`
+- `python -m ruff check src\glass\engine\frame_accounting.py
+  src\glass\report\html_report.py tests\test_frame_accounting.py`
+- `python -m py_compile src\glass\engine\frame_accounting.py
+  src\glass\report\html_report.py tests\test_frame_accounting.py`
+- `glass pipeline-contract --run
+  C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3 --out
+  C:\glass_runs\phase2_s2_gate583_frame_accounting_ledger\pipeline_contract_after_frame_accounting.json
+  --markdown
+  C:\glass_runs\phase2_s2_gate583_frame_accounting_ledger\pipeline_contract_after_frame_accounting.md
+  --pixel-verify`
+- `glass report --run
+  C:\glass_runs\phase2_s2_gate582_resident_calibration_ledger\default_v3 --out
+  C:\glass_runs\phase2_s2_gate583_frame_accounting_ledger\report.html
+  --pipeline-contract
+  C:\glass_runs\phase2_s2_gate583_frame_accounting_ledger\pipeline_contract_after_frame_accounting.json`
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident
