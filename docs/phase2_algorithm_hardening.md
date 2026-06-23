@@ -98,6 +98,71 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 581: Native Completion Runtime Preset
+
+Gate 581 returns the current work to a substantive resident CUDA runtime path
+without promoting a slower experiment. A real 200-light probe showed that the
+native FITS completion-queue calibration route is numerically safe but slightly
+slower than the current `throughput-v3-io` default on this workstation. The gate
+therefore makes the route a first-class explicit A/B preset instead of a hidden
+environment-variable-only experiment.
+
+Implementation:
+
+- `glass run|audit --resident-runtime-preset throughput-v4-native-completion`
+  now applies the Gate579/Gate580 default resident scheduling values plus
+  `--resident-native-completion-calibration on` and
+  `--resident-native-completion-wave-fill-us 25`.
+- The default remains `throughput-v3-io`.
+- `src/glass/engine/resident_cuda.py` records CLI opt-in as `cli_enabled` while
+  preserving the older `GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION` and
+  `GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US` environment-variable path as
+  legacy opt-in evidence.
+- Benchmark-contract routing can recognize
+  `--resident-runtime-preset throughput-v4-native-completion` from
+  `resident_artifacts.json` when a future contract explicitly asks for that
+  experiment. The active M38 default benchmark still requires the v3 default
+  route.
+
+Real 200-light evidence:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate581_native_completion_preset\throughput_v4_native_completion`
+- Hash parity artifact:
+  `C:\glass_runs\phase2_s2_gate581_native_completion_preset\hash_parity_vs_gate579.json`
+- Candidate runtime: `7.867076899972744 s`.
+- Gate579 default runtime: `7.746504300041124 s`.
+- Candidate light read/upload/calibrate: `3.095646100002341 s`, versus Gate579
+  default `2.508018699940294 s`.
+- Candidate resident registration/warp: `0.2611523000523448 s`.
+- Candidate resident LN: `1.0705019999295473 s`.
+- Candidate resident integration: `0.31247899995651096 s`.
+- The route recorded
+  `calibration_batch_mode=fits_u16be_bzero_native_completion_calibration_batch`,
+  `native_completion_calibration_policy=cli_enabled`, and
+  `fits_backend_counts={"native_u16be_raw_completion_calibration":200}`.
+- All six integration FITS outputs were SHA256-identical to the Gate579 default
+  output: master, coverage, DQ, weight, low rejection, and high rejection maps.
+
+Decision:
+
+- `throughput-v4-native-completion` is available for reproducible A/B testing.
+- It is not promoted because the real 200-light run was about `1.6%` slower on
+  this machine while preserving identical output.
+- Next substantive work should stay on default-path completeness and larger
+  engineering contracts: StackEngine default surfaces, DQ/mask pipeline
+  semantics, and resident registration/warp orchestration.
+
+Validation commands:
+
+- `python -m pytest -q tests/test_cli_smoke.py -k "resident_runtime_preset"`
+- `python -m pytest -q tests/test_resident_cuda_run.py -k
+  "native_u16_completion_calibration or native_completion_runtime_preset"`
+- `python -m pytest -q tests/test_acceptance_audit.py -k
+  "runtime_preset_from_artifact"`
+- Real 200-light `glass run` with
+  `--resident-runtime-preset throughput-v4-native-completion`.
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident

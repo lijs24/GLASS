@@ -5601,6 +5601,8 @@ def run_resident_calibration_integration(
     resident_calibration_streams: int = 1,
     resident_calibration_wave_frames: int = 0,
     resident_calibration_release_mode: str = "sync",
+    resident_native_completion_calibration: str = "off",
+    resident_native_completion_wave_fill_us: int = 0,
     resident_master_cache_dir: str | Path | None = None,
     resident_master_cache_policy: str = "auto",
     resident_output_maps: str = "audit",
@@ -5771,6 +5773,10 @@ def run_resident_calibration_integration(
         raise ValueError("resident_calibration_wave_frames must be non-negative")
     if resident_calibration_release_mode not in {"sync", "h2d_event", "auto", "callback_queue"}:
         raise ValueError("resident_calibration_release_mode must be one of: sync, h2d_event, auto, callback_queue")
+    if resident_native_completion_calibration not in {"off", "on"}:
+        raise ValueError("resident_native_completion_calibration must be off or on")
+    if resident_native_completion_wave_fill_us < 0 or resident_native_completion_wave_fill_us > 10000:
+        raise ValueError("resident_native_completion_wave_fill_us must be between 0 and 10000")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -6222,9 +6228,11 @@ def run_resident_calibration_integration(
             native_completion_wave_fill_env = str(
                 os.environ.get("GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US", "")
             ).strip()
-            native_completion_wave_fill_wait_us = 0
-            native_completion_wave_fill_source = "default_disabled"
-            if native_completion_wave_fill_env:
+            native_completion_wave_fill_wait_us = int(resident_native_completion_wave_fill_us)
+            native_completion_wave_fill_source = (
+                "cli" if native_completion_wave_fill_wait_us > 0 else "default_disabled"
+            )
+            if native_completion_wave_fill_env and native_completion_wave_fill_wait_us <= 0:
                 try:
                     native_completion_wave_fill_wait_us = int(native_completion_wave_fill_env)
                 except ValueError as exc:
@@ -6242,11 +6250,12 @@ def run_resident_calibration_integration(
                 if native_path_calibration_env in {"1", "true", "yes", "on"}
                 else "env_disabled_default"
             )
-            native_completion_calibration_policy = (
-                "env_enabled"
-                if native_completion_calibration_env in {"1", "true", "yes", "on"}
-                else "env_disabled_default"
-            )
+            if resident_native_completion_calibration == "on":
+                native_completion_calibration_policy = "cli_enabled"
+            elif native_completion_calibration_env in {"1", "true", "yes", "on"}:
+                native_completion_calibration_policy = "env_enabled"
+            else:
+                native_completion_calibration_policy = "env_disabled_default"
             native_path_calibration_candidate = bool(
                 raw_u16_gpu_decode_enabled
                 and calibration_batch_enabled
@@ -6257,7 +6266,7 @@ def run_resident_calibration_integration(
             native_completion_calibration_candidate = bool(native_path_calibration_candidate)
             native_completion_calibration_requested = bool(
                 native_completion_calibration_candidate
-                and native_completion_calibration_policy == "env_enabled"
+                and native_completion_calibration_policy in {"cli_enabled", "env_enabled"}
             )
             native_completion_calibration_available = bool(
                 native_completion_calibration_candidate and native_completion_calibration_supported
@@ -6281,12 +6290,12 @@ def run_resident_calibration_integration(
                     native_path_calibration_reason = "requires_source_dq_fast_skip"
                 else:
                     native_path_calibration_reason = "requires_fits_header_spec_cache"
+            elif native_completion_calibration_requested:
+                native_path_calibration_reason = "ignored_native_completion_enabled"
             elif not native_path_calibration_requested:
                 native_path_calibration_reason = "env_disabled_default"
             elif not native_path_calibration_available:
                 native_path_calibration_reason = "native_method_unavailable"
-            elif native_completion_calibration_requested:
-                native_path_calibration_reason = "env_ignored_native_completion_enabled"
             else:
                 native_path_calibration_reason = "env_enabled"
             native_path_calibration_enabled = bool(
@@ -6308,7 +6317,7 @@ def run_resident_calibration_integration(
             elif not native_completion_calibration_available:
                 native_completion_calibration_reason = "native_method_unavailable"
             else:
-                native_completion_calibration_reason = "env_enabled"
+                native_completion_calibration_reason = native_completion_calibration_policy
             native_completion_calibration_enabled = bool(
                 native_completion_calibration_requested and native_completion_calibration_available
             )

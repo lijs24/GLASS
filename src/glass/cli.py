@@ -380,6 +380,18 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_wave_frames": 4,
         "resident_calibration_release_mode": "callback_queue",
     },
+    "throughput-v4-native-completion": {
+        "resident_prefetch_frames": 32,
+        "resident_prefetch_workers": 16,
+        "resident_prefetch_refill_mode": "queued",
+        "resident_h2d_mode": "pinned_ring",
+        "resident_calibration_batch_frames": 16,
+        "resident_calibration_streams": 4,
+        "resident_calibration_wave_frames": 4,
+        "resident_calibration_release_mode": "callback_queue",
+        "resident_native_completion_calibration": "on",
+        "resident_native_completion_wave_fill_us": 25,
+    },
 }
 DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v3-io"
 DEFAULT_MEMORY_MODE = "resident"
@@ -414,6 +426,8 @@ RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_calibration_streams": "--resident-calibration-streams",
     "resident_calibration_wave_frames": "--resident-calibration-wave-frames",
     "resident_calibration_release_mode": "--resident-calibration-release-mode",
+    "resident_native_completion_calibration": "--resident-native-completion-calibration",
+    "resident_native_completion_wave_fill_us": "--resident-native-completion-wave-fill-us",
     "resident_integration_dispatch": "--resident-integration-dispatch",
 }
 
@@ -912,6 +926,12 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
         timing["resident_warp_interpolation_resolution"] = warp_interpolation_resolution
     timing["resident_warp_interpolation"] = getattr(args, "resident_warp_interpolation", None)
     timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
+    timing["resident_native_completion_calibration"] = getattr(
+        args, "resident_native_completion_calibration", "off"
+    )
+    timing["resident_native_completion_wave_fill_us"] = getattr(
+        args, "resident_native_completion_wave_fill_us", 0
+    )
     timing["resident_master_cache_policy"] = getattr(args, "resident_master_cache_policy", None)
     timing["resident_master_cache_dir"] = getattr(args, "resident_master_cache_dir", None)
     timing["resident_source_dq_cache"] = getattr(args, "resident_source_dq_cache", "off")
@@ -2285,6 +2305,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_calibration_streams=args.resident_calibration_streams,
                 resident_calibration_wave_frames=args.resident_calibration_wave_frames,
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
+                resident_native_completion_calibration=args.resident_native_completion_calibration,
+                resident_native_completion_wave_fill_us=args.resident_native_completion_wave_fill_us,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_master_cache_policy=args.resident_master_cache_policy,
                 resident_output_maps=args.resident_output_maps,
@@ -2559,6 +2581,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_calibration_streams=args.resident_calibration_streams,
                 resident_calibration_wave_frames=args.resident_calibration_wave_frames,
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
+                resident_native_completion_calibration=args.resident_native_completion_calibration,
+                resident_native_completion_wave_fill_us=args.resident_native_completion_wave_fill_us,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_master_cache_policy=args.resident_master_cache_policy,
                 resident_output_maps=args.resident_output_maps,
@@ -5731,6 +5755,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "resident runtime scheduling preset; throughput-v3-io is the default high-throughput "
             "I/O/upload/calibration schedule unless an individual option is explicitly provided; "
+            "throughput-v4-native-completion is an experimental completion-queue A/B route and is not default; "
             "throughput-v1 remains available as the lower-memory fallback schedule; "
             "throughput-v2-fused adds resident integration auto dispatch as a non-default A/B candidate; "
             "use manual for the legacy conservative schedule"
@@ -5800,6 +5825,24 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "resident batch host-slot release mode; auto enables h2d_event only when the calibration "
             "wave fills all native stream lanes; callback_queue is an explicit native multi-wave experiment"
+        ),
+    )
+    run.add_argument(
+        "--resident-native-completion-calibration",
+        choices=["off", "on"],
+        default="off",
+        help=(
+            "experimental resident native FITS completion-queue calibration route; kept explicit because "
+            "Gate581 real 200-light testing showed numerical parity but no default speed gain"
+        ),
+    )
+    run.add_argument(
+        "--resident-native-completion-wave-fill-us",
+        type=int,
+        default=0,
+        help=(
+            "microseconds to wait for additional completion-queue frames before draining a calibration wave; "
+            "0 disables the wait"
         ),
     )
     run.add_argument(
@@ -6371,7 +6414,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "resident runtime scheduling preset for the audit run; throughput-v3-io is the default "
             "high-throughput I/O/upload/calibration schedule unless an individual option is explicitly "
-            "provided; throughput-v1 remains available as the lower-memory fallback schedule; "
+            "provided; throughput-v4-native-completion is an experimental completion-queue A/B route; "
+            "throughput-v1 remains available as the lower-memory fallback schedule; "
             "throughput-v2-fused adds resident integration auto dispatch as a non-default A/B candidate; "
             "use manual for the legacy conservative schedule"
         ),
@@ -6423,6 +6467,18 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["sync", "h2d_event", "auto", "callback_queue"],
         default="sync",
         help="resident audit batch host-slot release mode",
+    )
+    audit.add_argument(
+        "--resident-native-completion-calibration",
+        choices=["off", "on"],
+        default="off",
+        help="experimental resident native FITS completion-queue calibration route for audit A/B runs",
+    )
+    audit.add_argument(
+        "--resident-native-completion-wave-fill-us",
+        type=int,
+        default=0,
+        help="microseconds to wait for extra completion-queue frames before draining an audit calibration wave",
     )
     audit.add_argument(
         "--resident-master-cache-dir",

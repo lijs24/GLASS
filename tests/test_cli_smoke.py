@@ -388,6 +388,38 @@ def test_resident_runtime_preset_throughput_v3_io_applies_probe_values() -> None
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
 
 
+def test_resident_runtime_preset_throughput_v4_native_completion_is_explicit_ab_route() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "throughput-v4-native-completion",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_prefetch_frames == 32
+    assert args.resident_prefetch_workers == 16
+    assert args.resident_prefetch_refill_mode == "queued"
+    assert args.resident_h2d_mode == "pinned_ring"
+    assert args.resident_calibration_batch_frames == 16
+    assert args.resident_calibration_streams == 4
+    assert args.resident_calibration_wave_frames == 4
+    assert args.resident_calibration_release_mode == "callback_queue"
+    assert args.resident_native_completion_calibration == "on"
+    assert args.resident_native_completion_wave_fill_us == 25
+    assert args._resident_runtime_preset_effective["preset"] == "throughput-v4-native-completion"
+    assert (
+        args._resident_runtime_preset_effective["applied"]["resident_native_completion_calibration"]
+        == "on"
+    )
+
+
 def test_resident_runtime_preset_defaults_to_throughput_v3_io() -> None:
     args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
 
@@ -400,6 +432,8 @@ def test_resident_runtime_preset_defaults_to_throughput_v3_io() -> None:
     assert args.resident_calibration_batch_frames == 16
     assert args.resident_calibration_wave_frames == 4
     assert args.resident_calibration_release_mode == "callback_queue"
+    assert args.resident_native_completion_calibration == "off"
+    assert args.resident_native_completion_wave_fill_us == 0
     assert args.resident_integration_dispatch == "stack"
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
 

@@ -3226,6 +3226,73 @@ def test_acceptance_audit_accepts_fused_runtime_preset_from_artifact(tmp_path: P
     )
 
 
+def test_acceptance_audit_accepts_native_completion_runtime_preset_from_artifact(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=18.8,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+        resident_io_pipeline={
+            "h2d_mode": "pinned_ring",
+            "prefetch_frames": 32,
+            "prefetch_workers": 16,
+            "calibration_batch_requested_frames": 16,
+            "calibration_batch_requested_streams": 4,
+            "calibration_wave_requested_frames": 4,
+            "calibration_release_mode_requested": "callback_queue",
+            "calibration_release_mode_effective": "callback_queue",
+            "native_completion_calibration_policy": "cli_enabled",
+            "native_completion_calibration_requested": True,
+            "native_completion_calibration_enabled": True,
+            "native_completion_calibration_consumer_wave_fill_source": "cli",
+            "native_completion_calibration_consumer_wave_fill_requested_wait_us": 25,
+            "calibration_batch_mode": "fits_u16be_bzero_native_completion_calibration_batch",
+        },
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    contract_payload = read_json(contract)
+    contract_payload["required_command_token_groups"] = [
+        {
+            "name": "resident_native_completion_runtime_preset",
+            "any_of": ["--resident-runtime-preset throughput-v4-native-completion"],
+        }
+    ]
+    write_json(contract, contract_payload)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    check = {
+        item["name"]: item
+        for item in audit["checks"]
+    }["contract_required_command_token_group:resident_native_completion_runtime_preset"]
+    assert audit["passed"] is True
+    assert check["passed"] is True
+    assert check["evidence"]["matched"] == []
+    assert check["evidence"]["resident_io_pipeline_records"] == 1
+    assert any(
+        match.get("preset") == "throughput-v4-native-completion"
+        for match in check["evidence"]["artifact_matches"]
+    )
+
+
 def test_acceptance_audit_applies_resident_drift_contract(tmp_path: Path):
     manifest = tmp_path / "manifest.json"
     gp_run = tmp_path / "gp"

@@ -223,6 +223,23 @@ def _resident_runtime_preset_expectations(preset: str) -> dict[str, Any] | None:
             "calibration_release_mode_requested": "callback_queue",
             "calibration_release_mode_effective": "callback_queue",
         }
+    if preset == "throughput-v4-native-completion":
+        return {
+            "h2d_mode": "pinned_ring",
+            "prefetch_frames": 32,
+            "prefetch_workers": 16,
+            "calibration_batch_requested_frames": 16,
+            "calibration_batch_requested_streams": 4,
+            "calibration_wave_requested_frames": 4,
+            "calibration_release_mode_requested": "callback_queue",
+            "calibration_release_mode_effective": "callback_queue",
+            "native_completion_calibration_policy": "cli_enabled",
+            "native_completion_calibration_requested": True,
+            "native_completion_calibration_enabled": True,
+            "native_completion_calibration_consumer_wave_fill_source": "cli",
+            "native_completion_calibration_consumer_wave_fill_requested_wait_us": 25,
+            "calibration_batch_mode": "fits_u16be_bzero_native_completion_calibration_batch",
+        }
     if preset == "manual":
         return {
             "h2d_mode": "pageable",
