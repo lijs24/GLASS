@@ -15050,6 +15050,55 @@ Completed in Gate446:
   - final real summary:
     `C:\glass_runs\phase2_s2_gate556_ready_intersection_light\runs_20260623_171238\gate556_ready_intersection_light_summary.json`.
 
+### S2-Gate 557: Remaining-Index Set Cursor
+
+- Continued the resident CUDA I/O/calibration mainline by removing another
+  Python hot-loop cost from ready-first calibration scheduling.
+- Completed:
+  - replaced the mutable `remaining_indices` list in the resident calibration
+    loop with `remaining_index_set`;
+  - added a monotonic sequential cursor for non-ready-first fallback ordering;
+  - changed `ready_index(...)` so an internal set can be reused without
+    reconstructing a candidate set on every ready-first selection;
+  - recorded `calibration_remaining_index_model`,
+    `calibration_remaining_index_set_discard_count`,
+    `calibration_remaining_index_cursor_advance_count`, and
+    `prefetch_ready_index_candidate_set_reuse_count` in resident artifacts and
+    the light pipeline profile;
+  - added focused prefetcher and CLI artifact/profile assertions.
+- Tests:
+  - focused prefetcher/CLI tests: `4 passed in 0.91 s`;
+  - resident CUDA/profile tests: `157 passed in 9.62 s`;
+  - full pytest: `1189 passed in 43.94 s`.
+- Real 200-light validation:
+  - Gate556 baseline:
+    `C:\glass_runs\phase2_s2_gate556_ready_intersection_light\runs_20260623_171238\default_ready_intersection_light`;
+  - postpatch default:
+    `C:\glass_runs\phase2_s2_gate557_remaining_set\runs_20260623_171847\default_remaining_set`;
+  - full summary:
+    `C:\glass_runs\phase2_s2_gate557_remaining_set\runs_20260623_171847\gate557_remaining_set_summary.json`.
+- Key timing summary:
+
+  | Run | Shell s | Resident stage s | Light read/upload/calibrate s | Ready wait s | Remaining model | Set reuse | SHA256 vs Gate556 |
+  | --- | ---: | ---: | ---: | ---: | --- | ---: | --- |
+  | Gate556 default baseline | `5.248958` | `4.894711` | `2.414014` | `0.741134` | old list/remove | n/a | baseline |
+  | Gate557 postpatch default | `5.195597` | `4.838175` | `2.405829` | `0.745701` | `set_with_sequential_cursor` | `200` | identical |
+
+- Interpretation:
+  - the new model processed and discarded all `200` light indices through the
+    remaining-index set;
+  - `ready_index` reused the candidate set `200` times on the default
+    homogeneous ready-first path;
+  - output pixels and admitted frame masks are unchanged;
+  - timing is modestly better in this validation, but the larger win is keeping
+    Python scheduler maintenance closer to O(ready-set) as frame counts grow.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_557_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_557_remaining_set_summary.json`;
+  - final real summary:
+    `C:\glass_runs\phase2_s2_gate557_remaining_set\runs_20260623_171847\gate557_remaining_set_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

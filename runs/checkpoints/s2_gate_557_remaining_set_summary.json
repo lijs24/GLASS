@@ -1,0 +1,65 @@
+{
+  "gate": "S2-Gate 557",
+  "date": "2026-06-23",
+  "result": "green",
+  "decision": "keep_set_with_sequential_cursor_default",
+  "implementation": {
+    "calibration_remaining_index_model": "set_with_sequential_cursor",
+    "ready_index_candidate_set_reuse": true,
+    "sequential_fallback": "monotonic_cursor"
+  },
+  "baseline": {
+    "name": "Gate556 default ready intersection",
+    "path": "C:\\glass_runs\\phase2_s2_gate556_ready_intersection_light\\runs_20260623_171238\\default_ready_intersection_light",
+    "shell_seconds": 5.248957900039386,
+    "resident_stage_elapsed_s": 4.894711499975529,
+    "light_read_upload_calibrate_s": 2.414014300040435,
+    "prefetch_ready_queue_wait_s": 0.7411338998936117
+  },
+  "postpatch_default": {
+    "path": "C:\\glass_runs\\phase2_s2_gate557_remaining_set\\runs_20260623_171847\\default_remaining_set",
+    "summary_path": "C:\\glass_runs\\phase2_s2_gate557_remaining_set\\runs_20260623_171847\\gate557_remaining_set_summary.json",
+    "shell_seconds": 5.19559700001264,
+    "resident_stage_elapsed_s": 4.838174999982584,
+    "light_read_upload_calibrate_s": 2.405828899994958,
+    "prefetch_ready_queue_wait_s": 0.7457012998056598,
+    "calibration_remaining_index_model": "set_with_sequential_cursor",
+    "calibration_remaining_index_set_discard_count": 200,
+    "calibration_remaining_index_cursor_advance_count": 0,
+    "prefetch_ready_index_candidate_set_reuse_count": 200,
+    "hash_match_baseline": true,
+    "surface_contract_passed": true,
+    "dq_pixel_closure_passed": true
+  },
+  "postpatch_deltas_vs_gate556": {
+    "shell_s": -0.053360900026746094,
+    "stage_s": -0.0565364999929443,
+    "light_s": -0.008185400045476854,
+    "ready_wait_s": 0.004567399912048131
+  },
+  "output_hashes": {
+    "resident_master_H.fits": "8bc069ce6858ab5e065b5d9af297c35c36d4240c13980546e43cfb480115e110",
+    "resident_weight_map_H.fits": "5862111ee6f527a40671ac13f1faa43f037c90271f872f27af4acf17040fbfe8",
+    "resident_coverage_map_H.fits": "b87517be794a3b4bdcff0d8536ee0188da6afa54ed2be818bd911ba6cf1be1b3",
+    "resident_low_rejection_map_H.fits": "f1181e0ce52a7ff77b988afaf8a8911a1beaf94df54b25b0aa51014cb0d66e23",
+    "resident_high_rejection_map_H.fits": "adb66c931c5a48d6e0d7f5c2fcbcc58481420ad4912304843a3802089050c805",
+    "resident_dq_map_H.fits": "934f661119ce18bbcac1d369488aed4d959669c6ef614d6076d74be06e69ccfb"
+  },
+  "tests": {
+    "syntax_check": "passed",
+    "focused": "4 passed in 0.91 s",
+    "resident_cuda_profile": "157 passed in 9.62 s",
+    "full_pytest": "1189 passed in 43.94 s"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "clean_room": {
+    "compliant": true,
+    "notes": "GLASS-owned scheduler code and artifacts only; no external implementation source inspected; no pixel math or accepted-frame changes."
+  },
+  "next_step": "Continue reducing read/H2D readiness and orchestration cost rather than only Python bookkeeping."
+}

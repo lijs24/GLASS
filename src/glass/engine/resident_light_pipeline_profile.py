@@ -163,6 +163,17 @@ def build_resident_light_pipeline_profile(
                 resident_io_pipeline,
                 "calibration_ready_order_select_wait_s",
             ),
+            "calibration_remaining_index_model": resident_io_pipeline.get(
+                "calibration_remaining_index_model"
+            ),
+            "calibration_remaining_index_set_discard_count": _int_value(
+                resident_io_pipeline,
+                "calibration_remaining_index_set_discard_count",
+            ),
+            "calibration_remaining_index_cursor_advance_count": _int_value(
+                resident_io_pipeline,
+                "calibration_remaining_index_cursor_advance_count",
+            ),
             "calibration_release_mode_effective": resident_io_pipeline.get(
                 "calibration_release_mode_effective"
             ),
@@ -180,6 +191,10 @@ def build_resident_light_pipeline_profile(
             ),
             "prefetch_ready_candidate_probe_mode": resident_io_pipeline.get(
                 "prefetch_ready_candidate_probe_mode"
+            ),
+            "prefetch_ready_index_candidate_set_reuse_count": _int_value(
+                resident_io_pipeline,
+                "prefetch_ready_index_candidate_set_reuse_count",
             ),
             "prefetch_ready_batch_select_policy": resident_io_pipeline.get(
                 "prefetch_ready_batch_select_policy"

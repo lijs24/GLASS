@@ -116,9 +116,10 @@ def test_light_prefetcher_ready_index_selects_completed_candidate(monkeypatch) -
 
     frames = [{"path": f"{index}.fits"} for index in range(2)]
     with _LightPrefetcher(frames, depth=2, workers=2) as prefetcher:
-        assert prefetcher.ready_index([0, 1]) == 1
+        assert prefetcher.ready_index({0, 1}) == 1
         assert prefetcher.ready_queue_callback_count >= 1
         assert prefetcher.ready_candidate_probe_mode == "ready_set_intersection"
+        assert prefetcher.ready_index_candidate_set_reuse_count == 1
         data, _profile, _wait_s = prefetcher.result(1)
         assert data.tolist() == [1.0]
 
@@ -3708,6 +3709,9 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(
     assert io_pipeline["prefetch_ready_batch_select_count"] >= 1
     assert io_pipeline["prefetch_ready_batch_selected_count"] == 2
     assert io_pipeline["prefetch_ready_candidate_probe_mode"] == "ready_set_intersection"
+    assert io_pipeline["prefetch_ready_index_candidate_set_reuse_count"] == 0
+    assert io_pipeline["calibration_remaining_index_model"] == "set_with_sequential_cursor"
+    assert io_pipeline["calibration_remaining_index_set_discard_count"] == 2
     assert io_pipeline["calibration_wave_effective_frames"] == 1
     assert io_pipeline["calibration_wave_release_mode"] == "callback_after_h2d_event"
     assert io_pipeline["calibration_batch_count"] == 1
@@ -3733,6 +3737,11 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(
         "prefetch_ready_batch_selected_count"
     ]
     assert profile_knobs["prefetch_ready_candidate_probe_mode"] == "ready_set_intersection"
+    assert profile_knobs["prefetch_ready_index_candidate_set_reuse_count"] == io_pipeline[
+        "prefetch_ready_index_candidate_set_reuse_count"
+    ]
+    assert profile_knobs["calibration_remaining_index_model"] == "set_with_sequential_cursor"
+    assert profile_knobs["calibration_remaining_index_set_discard_count"] == 2
 
 
 def test_cli_resident_cuda_callback_queue_clamps_fetch_batch_to_prefetch_depth(tmp_path: Path):
@@ -3803,11 +3812,18 @@ def test_cli_resident_cuda_callback_queue_clamps_fetch_batch_to_prefetch_depth(t
     assert io_pipeline["prefetch_ready_batch_select_count"] == 0
     assert io_pipeline["prefetch_ready_batch_selected_count"] == 0
     assert io_pipeline["prefetch_ready_candidate_probe_mode"] == "ready_set_intersection"
+    assert io_pipeline["prefetch_ready_index_candidate_set_reuse_count"] >= 1
+    assert io_pipeline["calibration_remaining_index_model"] == "set_with_sequential_cursor"
+    assert io_pipeline["calibration_remaining_index_set_discard_count"] == 2
     assert io_overlap["calibration_fetch_batch_frames"] == 1
     assert profile_knobs["calibration_fetch_batch_frames"] == 1
     assert profile_knobs["prefetch_ready_batch_select_policy"] == "env_disabled_default"
     assert profile_knobs["prefetch_ready_batch_select_enabled"] is False
     assert profile_knobs["prefetch_ready_candidate_probe_mode"] == "ready_set_intersection"
+    assert profile_knobs["prefetch_ready_index_candidate_set_reuse_count"] == io_pipeline[
+        "prefetch_ready_index_candidate_set_reuse_count"
+    ]
+    assert profile_knobs["calibration_remaining_index_model"] == "set_with_sequential_cursor"
 
 
 def test_cli_resident_cuda_callback_queue_clamps_wave_to_stream_count(tmp_path: Path):

@@ -1062,6 +1062,7 @@ class _LightPrefetcher:
         self.ready_queue_wait_count = 0
         self.ready_queue_wait_s = 0.0
         self.ready_candidate_probe_mode = "ready_set_intersection"
+        self.ready_index_candidate_set_reuse_count = 0
         ready_batch_policy = str(os.environ.get("GLASS_RESIDENT_READY_BATCH_SELECT", "")).strip().lower()
         self.ready_batch_select_policy = (
             "env_enabled"
@@ -1558,7 +1559,11 @@ class _LightPrefetcher:
         return sorted(ready)
 
     def ready_index(self, indices: Iterable[int]) -> int | None:
-        candidates = {int(index) for index in indices}
+        if isinstance(indices, set):
+            candidates = indices
+            self.ready_index_candidate_set_reuse_count += 1
+        else:
+            candidates = {int(index) for index in indices}
         if not candidates:
             return None
         if self.executor is None and not self.native_queue_read_enabled:
@@ -6441,20 +6446,24 @@ def run_resident_calibration_integration(
                 fits_specs_by_path=resident_fits_spec_cache,
             ) as light_prefetch:
                 prefetch_host_pinned_bytes = light_prefetch.host_pinned_bytes
+                calibration_remaining_index_model = "set_with_sequential_cursor"
+                calibration_remaining_index_set_discard_count = 0
+                calibration_remaining_index_cursor_advance_count = 0
                 if calibration_batch_enabled:
-                    remaining_indices = list(range(len(light_frames)))
+                    remaining_index_set = set(range(len(light_frames)))
+                    remaining_index_cursor = 0
                     processed_count = 0
                     ready_batch_queue: list[tuple[int, float]] = []
-                    while remaining_indices:
+                    while remaining_index_set:
                         batch_items: list[tuple[int, dict[str, Any], np.ndarray | None, float]] = []
                         batch_frame_starts: list[float] = []
-                        while remaining_indices and len(batch_items) < calibration_fetch_batch_frames:
+                        while remaining_index_set and len(batch_items) < calibration_fetch_batch_frames:
                             ready_select_wait_s = 0.0
                             if calibration_ready_order_enabled and light_prefetch.ready_batch_select_enabled:
                                 if not ready_batch_queue:
                                     ready_select_start = perf_counter()
                                     selected_indices = light_prefetch.ready_indices_batch(
-                                        remaining_indices,
+                                        remaining_index_set,
                                         calibration_fetch_batch_frames - len(batch_items),
                                     )
                                     ready_select_wait_total_s = perf_counter() - ready_select_start
@@ -6472,14 +6481,22 @@ def run_resident_calibration_integration(
                                 item_index, ready_select_wait_s = ready_batch_queue.pop(0)
                             elif calibration_ready_order_enabled:
                                 ready_select_start = perf_counter()
-                                selected_index = light_prefetch.ready_index(remaining_indices)
+                                selected_index = light_prefetch.ready_index(remaining_index_set)
                                 ready_select_wait_s = perf_counter() - ready_select_start
                                 calibration_ready_order_select_wait_s += ready_select_wait_s
                                 if selected_index is None:
                                     break
                                 item_index = int(selected_index)
                             else:
-                                item_index = int(remaining_indices[0])
+                                while (
+                                    remaining_index_cursor < len(light_frames)
+                                    and remaining_index_cursor not in remaining_index_set
+                                ):
+                                    remaining_index_cursor += 1
+                                    calibration_remaining_index_cursor_advance_count += 1
+                                if remaining_index_cursor >= len(light_frames):
+                                    break
+                                item_index = int(remaining_index_cursor)
                             frame = light_frames[item_index]
                             frame_start = perf_counter()
                             master_key, bias_group, dark_group, flat_group = light_master_selections[item_index]
@@ -6572,7 +6589,8 @@ def run_resident_calibration_integration(
                             calibration_ready_order_expected_next += 1
                             if len(calibration_ready_order_sample) < 64:
                                 calibration_ready_order_sample.append(int(item_index))
-                            remaining_indices.remove(item_index)
+                            remaining_index_set.discard(item_index)
+                            calibration_remaining_index_set_discard_count += 1
                             batch_items.append((item_index, frame, light, float(frame.get("exposure_s") or 0.0)))
                             batch_frame_starts.append(frame_start)
                         if not batch_items:
@@ -11592,10 +11610,20 @@ def run_resident_calibration_integration(
                     calibration_ready_order_out_of_order_count
                 ),
                 "calibration_ready_order_select_wait_s": float(calibration_ready_order_select_wait_s),
+                "calibration_remaining_index_model": str(calibration_remaining_index_model),
+                "calibration_remaining_index_set_discard_count": int(
+                    calibration_remaining_index_set_discard_count
+                ),
+                "calibration_remaining_index_cursor_advance_count": int(
+                    calibration_remaining_index_cursor_advance_count
+                ),
                 "prefetch_ready_queue_callback_count": int(light_prefetch.ready_queue_callback_count),
                 "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
                 "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
                 "prefetch_ready_candidate_probe_mode": str(light_prefetch.ready_candidate_probe_mode),
+                "prefetch_ready_index_candidate_set_reuse_count": int(
+                    light_prefetch.ready_index_candidate_set_reuse_count
+                ),
                 "prefetch_ready_batch_select_policy": str(light_prefetch.ready_batch_select_policy),
                 "prefetch_ready_batch_select_enabled": bool(light_prefetch.ready_batch_select_enabled),
                 "prefetch_ready_batch_select_count": int(light_prefetch.ready_batch_select_count),
@@ -11718,10 +11746,20 @@ def run_resident_calibration_integration(
                 ),
                 "calibration_ready_order_select_wait_s": float(calibration_ready_order_select_wait_s),
                 "calibration_release_mode_effective": calibration_release_mode_effective,
+                "calibration_remaining_index_model": str(calibration_remaining_index_model),
+                "calibration_remaining_index_set_discard_count": int(
+                    calibration_remaining_index_set_discard_count
+                ),
+                "calibration_remaining_index_cursor_advance_count": int(
+                    calibration_remaining_index_cursor_advance_count
+                ),
                 "prefetch_ready_queue_callback_count": int(light_prefetch.ready_queue_callback_count),
                 "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
                 "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
                 "prefetch_ready_candidate_probe_mode": str(light_prefetch.ready_candidate_probe_mode),
+                "prefetch_ready_index_candidate_set_reuse_count": int(
+                    light_prefetch.ready_index_candidate_set_reuse_count
+                ),
                 "prefetch_ready_batch_select_policy": str(light_prefetch.ready_batch_select_policy),
                 "prefetch_ready_batch_select_enabled": bool(light_prefetch.ready_batch_select_enabled),
                 "prefetch_ready_batch_select_count": int(light_prefetch.ready_batch_select_count),
@@ -12215,6 +12253,13 @@ def run_resident_calibration_integration(
                         ),
                         "calibration_ready_order_select_wait_s": float(calibration_ready_order_select_wait_s),
                         "calibration_ready_order_sample": list(calibration_ready_order_sample),
+                        "calibration_remaining_index_model": str(calibration_remaining_index_model),
+                        "calibration_remaining_index_set_discard_count": int(
+                            calibration_remaining_index_set_discard_count
+                        ),
+                        "calibration_remaining_index_cursor_advance_count": int(
+                            calibration_remaining_index_cursor_advance_count
+                        ),
                         "calibration_wave_enabled": bool(calibration_wave_enabled),
                         "calibration_wave_release_mode": (
                             "native_completion_queue_event_gated_slot_reuse"
@@ -12306,6 +12351,9 @@ def run_resident_calibration_integration(
                         "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
                         "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
                         "prefetch_ready_candidate_probe_mode": str(light_prefetch.ready_candidate_probe_mode),
+                        "prefetch_ready_index_candidate_set_reuse_count": int(
+                            light_prefetch.ready_index_candidate_set_reuse_count
+                        ),
                         "prefetch_ready_batch_select_policy": str(light_prefetch.ready_batch_select_policy),
                         "prefetch_ready_batch_select_enabled": bool(light_prefetch.ready_batch_select_enabled),
                         "prefetch_ready_batch_select_count": int(light_prefetch.ready_batch_select_count),
