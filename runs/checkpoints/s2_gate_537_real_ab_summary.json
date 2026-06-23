@@ -1,0 +1,96 @@
+{
+  "gate": "S2-Gate 537",
+  "status": "passed",
+  "scope": "real_200_light_current_head_ab_and_speedup_evidence_contract",
+  "run": "C:\\glass_runs\\phase2_s2_gate537_real_ab\\runs_20260623_133539\\current_head_default",
+  "baseline_run": "C:\\glass_runs\\phase2_s2_gate536_fetch_guard\\runs_20260623_132829\\default_rerun",
+  "wbpp_blackbox_result": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json",
+  "timing": {
+    "glass_shell_elapsed_s": 5.3052115,
+    "glass_internal_elapsed_s": 4.940610599995125,
+    "wbpp_elapsed_s": 1092.541,
+    "speedup_internal_vs_wbpp": 221.13481277012156,
+    "speedup_shell_vs_wbpp": 205.9373127725445
+  },
+  "frames": {
+    "planned_light_frames": 200,
+    "active_weighted_frames": 193,
+    "zero_weight_frames": 7
+  },
+  "resident_cuda": {
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "estimated_peak_gib": 49.608429938554764,
+    "fits_read_mode_effective": "native_u16_gpu",
+    "master_cache_hit_count": 1,
+    "master_cache_miss_count": 0,
+    "prefetch_frames": 32,
+    "prefetch_workers": 16,
+    "calibration_fetch_batch_frames": 16
+  },
+  "stage_timing_s": {
+    "light_read_upload_calibrate": 2.4421659000217915,
+    "light_read_wait_wall": 0.6557814999832772,
+    "light_read_worker_cumulative": 30.96776800043881,
+    "light_read_overlap_saved": 30.311986500455532,
+    "master_build_or_load": 0.2942691000062041,
+    "resident_registration_warp": 0.2569173000520095,
+    "resident_integration": 0.30478270002640784,
+    "output_write": 0.2353500999743119
+  },
+  "bitwise_ab": {
+    "all_bitwise_identical": true,
+    "files": [
+      {
+        "file": "resident_master_H.fits",
+        "sha256": "8bc069ce6858ab5e065b5d9af297c35c36d4240c13980546e43cfb480115e110"
+      },
+      {
+        "file": "resident_weight_map_H.fits",
+        "sha256": "5862111ee6f527a40671ac13f1faa43f037c90271f872f27af4acf17040fbfe8"
+      },
+      {
+        "file": "resident_coverage_map_H.fits",
+        "sha256": "b87517be794a3b4bdcff0d8536ee0188da6afa54ed2be818bd911ba6cf1be1b3"
+      },
+      {
+        "file": "resident_low_rejection_map_H.fits",
+        "sha256": "f1181e0ce52a7ff77b988afaf8a8911a1beaf94df54b25b0aa51014cb0d66e23"
+      },
+      {
+        "file": "resident_high_rejection_map_H.fits",
+        "sha256": "adb66c931c5a48d6e0d7f5c2fcbcc58481420ad4912304843a3802089050c805"
+      },
+      {
+        "file": "resident_dq_map_H.fits",
+        "sha256": "934f661119ce18bbcac1d369488aed4d959669c6ef614d6076d74be06e69ccfb"
+      }
+    ]
+  },
+  "wbpp_compare": {
+    "shape_match": true,
+    "rms_diff": 0.0004279821839256963,
+    "abs_diff_p50": 2.808647695928812e-05,
+    "abs_diff_p90": 7.045280653983355e-05,
+    "abs_diff_p99": 0.0001313822576776147,
+    "abs_diff_p999": 0.0009162264885380911,
+    "relative_rms_diff": 0.0994032568371968,
+    "coverage_fraction": 0.9892770479074376,
+    "compared_pixels": 56997300,
+    "compare_json": "C:\\glass_runs\\phase2_s2_gate537_real_ab\\runs_20260623_133539\\current_head_default\\compare_vs_wbpp_fastintegration_scaled_coverage190.json",
+    "compare_html": "C:\\glass_runs\\phase2_s2_gate537_real_ab\\runs_20260623_133539\\current_head_default\\compare_vs_wbpp_fastintegration_scaled_coverage190.html"
+  },
+  "tests": {
+    "focused": "3 passed in 0.17s",
+    "full_pytest": "1176 passed in 43.10s"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "note": "Used GLASS code, GLASS-generated artifacts, user-owned input images, and user-generated WBPP black-box outputs only."
+  },
+  "known_limits": [
+    "This is a shared-master-cache resident hot-path A/B, not a cold master-frame rebuild timing.",
+    "GLASS and WBPP remain algorithmically different; comparison is a black-box output/timing validation."
+  ]
+}

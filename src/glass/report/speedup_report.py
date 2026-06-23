@@ -17,6 +17,15 @@ def _first_output(integration: dict[str, Any]) -> dict[str, Any]:
     return outputs[0] if outputs and isinstance(outputs[0], dict) else {}
 
 
+def _first_artifact(resident: dict[str, Any]) -> dict[str, Any]:
+    artifacts = resident.get("artifacts") or []
+    return artifacts[0] if artifacts and isinstance(artifacts[0], dict) else {}
+
+
+def _selected_keys(payload: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+    return {key: payload.get(key) for key in keys if key in payload}
+
+
 def _weight_counts(integration: dict[str, Any]) -> dict[str, int]:
     weights = integration.get("frame_weights") or {}
     if not isinstance(weights, dict):
@@ -42,7 +51,27 @@ def _load_glass_run(run: str | Path) -> dict[str, Any]:
     integration = _read_json_lenient(integration_path) if integration_path.exists() else {}
     resident_path = root / "resident_artifacts.json"
     resident = _read_json_lenient(resident_path) if resident_path.exists() else {}
+    resident_master_cache_path = root / "resident_master_cache.json"
+    resident_master_cache = (
+        _read_json_lenient(resident_master_cache_path) if resident_master_cache_path.exists() else {}
+    )
     output = _first_output(integration)
+    artifact = _first_artifact(resident)
+    memory_estimate = artifact.get("memory_estimate") if isinstance(artifact.get("memory_estimate"), dict) else {}
+    artifact_cache = (
+        artifact.get("resident_master_cache") if isinstance(artifact.get("resident_master_cache"), dict) else {}
+    )
+    cache_summary = (
+        resident_master_cache.get("summary")
+        if isinstance(resident_master_cache.get("summary"), dict)
+        else artifact_cache.get("summary")
+        if isinstance(artifact_cache.get("summary"), dict)
+        else {}
+    )
+    timing_s = artifact.get("timing_s") if isinstance(artifact.get("timing_s"), dict) else {}
+    io_pipeline = (
+        artifact.get("resident_io_pipeline") if isinstance(artifact.get("resident_io_pipeline"), dict) else {}
+    )
     weight_counts = _weight_counts(integration)
     elapsed = timing.get("total_elapsed_s")
     if elapsed is None:
@@ -59,10 +88,36 @@ def _load_glass_run(run: str | Path) -> dict[str, Any]:
         "weighting": integration.get("weighting") or output.get("weighting"),
         "rejection": integration.get("rejection") or output.get("rejection"),
         "resident_device": (resident.get("device") or {}).get("name"),
-        "resident_estimated_peak_gib": (
-            ((resident.get("artifacts") or [{}])[0].get("memory_estimate") or {}).get("estimated_peak_gib")
-            if resident.get("artifacts")
-            else None
+        "resident_estimated_peak_gib": output.get("estimated_peak_gib")
+        or memory_estimate.get("estimated_peak_gib"),
+        "resident_master_cache": _selected_keys(
+            cache_summary,
+            ["cache_hit_count", "cache_miss_count", "cache_scope_counts", "set_count", "total_required_bytes"],
+        ),
+        "resident_io": _selected_keys(
+            io_pipeline,
+            [
+                "fits_read_mode_effective",
+                "fits_header_spec_cache_frame_count",
+                "fits_header_spec_cache_hit_count",
+                "prefetch_frames",
+                "prefetch_workers",
+                "calibration_fetch_batch_frames",
+                "calibration_fetch_batch_limit_source",
+            ],
+        ),
+        "resident_timing_s": _selected_keys(
+            timing_s,
+            [
+                "light_read_upload_calibrate",
+                "light_read_wait_wall",
+                "light_read_worker_cumulative",
+                "light_read_overlap_saved",
+                "resident_registration_warp",
+                "resident_integration",
+                "output_write",
+                "master_build_or_load",
+            ],
         ),
     }
 
@@ -97,6 +152,12 @@ def _load_compare(path: str | Path | None) -> dict[str, Any] | None:
         "relative_rms_diff": payload.get("relative_rms_diff"),
         "coverage_fraction": region.get("coverage_fraction"),
         "compared_pixels": region.get("compared_pixels"),
+        "full_frame_rms_diff": (payload.get("full_frame_stats") or {}).get("rms_diff")
+        if isinstance(payload.get("full_frame_stats"), dict)
+        else None,
+        "full_frame_abs_diff_p99": (payload.get("full_frame_stats") or {}).get("abs_diff_p99")
+        if isinstance(payload.get("full_frame_stats"), dict)
+        else None,
         "compare_speedup_vs_reference": timing.get("speedup_vs_reference"),
     }
 
@@ -135,6 +196,9 @@ def write_speedup_markdown(path: str | Path, summary: dict[str, Any]) -> None:
     gp = summary["glass"]
     wbpp = summary["wbpp_blackbox"]
     comparison = summary.get("comparison") or {}
+    cache = gp.get("resident_master_cache") or {}
+    resident_timing = gp.get("resident_timing_s") or {}
+    resident_io = gp.get("resident_io") or {}
     lines = [
         "# GLASS vs WBPP Speedup Summary",
         "",
@@ -148,7 +212,17 @@ def write_speedup_markdown(path: str | Path, summary: dict[str, Any]) -> None:
         f"- Active weighted frames: {gp.get('weighted_frame_count')}",
         f"- Zero-weight frames: {gp.get('zero_weight_frame_count')}",
         f"- Resident device: {gp.get('resident_device')}",
+        f"- Resident peak VRAM estimate: {gp.get('resident_estimated_peak_gib')} GiB",
+        f"- Master cache hits/misses: {cache.get('cache_hit_count')}/{cache.get('cache_miss_count')}",
+        f"- FITS read mode: {resident_io.get('fits_read_mode_effective')}",
         f"- WBPP dataset: {wbpp.get('dataset')}",
+        "",
+        "## Resident Timing",
+        "",
+        f"- Light read/upload/calibrate: {resident_timing.get('light_read_upload_calibrate')} s",
+        f"- Registration/warp: {resident_timing.get('resident_registration_warp')} s",
+        f"- Integration: {resident_timing.get('resident_integration')} s",
+        f"- Output write: {resident_timing.get('output_write')} s",
         "",
         "## Image Comparison",
         "",
@@ -156,6 +230,8 @@ def write_speedup_markdown(path: str | Path, summary: dict[str, Any]) -> None:
         f"- RMS diff: {comparison.get('rms_diff')}",
         f"- abs diff p99: {comparison.get('abs_diff_p99')}",
         f"- coverage fraction: {comparison.get('coverage_fraction')}",
+        f"- compared pixels: {comparison.get('compared_pixels')}",
+        f"- compare timing speedup: {comparison.get('compare_speedup_vs_reference')}",
         "",
         "## Clean-room",
         "",

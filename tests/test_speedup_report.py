@@ -41,7 +41,35 @@ def test_speedup_summary_reads_glass_and_wbpp_blackbox_artifacts(tmp_path: Path)
         gp_run / "resident_artifacts.json",
         {
             "device": {"name": "Test GPU"},
-            "artifacts": [{"memory_estimate": {"estimated_peak_gib": 47.3}}],
+            "artifacts": [
+                {
+                    "memory_estimate": {"estimated_peak_gib": 47.3},
+                    "resident_io_pipeline": {
+                        "fits_read_mode_effective": "native_u16_gpu",
+                        "fits_header_spec_cache_frame_count": 3,
+                        "fits_header_spec_cache_hit_count": 3,
+                        "prefetch_frames": 32,
+                        "prefetch_workers": 16,
+                        "calibration_fetch_batch_frames": 16,
+                        "calibration_fetch_batch_limit_source": "requested",
+                    },
+                    "resident_master_cache": {
+                        "summary": {
+                            "cache_hit_count": 1,
+                            "cache_miss_count": 0,
+                            "cache_scope_counts": {"shared": 1},
+                            "set_count": 1,
+                            "total_required_bytes": 1234,
+                        }
+                    },
+                    "timing_s": {
+                        "light_read_upload_calibrate": 2.5,
+                        "resident_registration_warp": 0.4,
+                        "resident_integration": 0.2,
+                        "output_write": 0.1,
+                    },
+                }
+            ],
         },
     )
     wbpp_result = tmp_path / "wbpp_result.json"
@@ -75,10 +103,15 @@ def test_speedup_summary_reads_glass_and_wbpp_blackbox_artifacts(tmp_path: Path)
     assert summary["meets_min_speedup"] is True
     assert summary["glass"]["backend"] == "cuda_resident_stack"
     assert summary["glass"]["resident_device"] == "Test GPU"
+    assert summary["glass"]["resident_estimated_peak_gib"] == 47.3
+    assert summary["glass"]["resident_master_cache"]["cache_hit_count"] == 1
+    assert summary["glass"]["resident_io"]["fits_read_mode_effective"] == "native_u16_gpu"
+    assert summary["glass"]["resident_timing_s"]["light_read_upload_calibrate"] == 2.5
     assert summary["glass"]["weighted_frame_count"] == 2
     assert summary["glass"]["zero_weight_frame_count"] == 1
     assert summary["wbpp_blackbox"]["dataset"] == "M38_H"
     assert summary["comparison"]["coverage_fraction"] == 0.96
+    assert summary["comparison"]["compare_speedup_vs_reference"] == 10.0
     assert summary["clean_room"]["status"] == "compliant"
 
 
@@ -92,12 +125,28 @@ def test_write_speedup_summary_writes_json_and_markdown(tmp_path: Path):
             "weighted_frame_count": 2,
             "zero_weight_frame_count": 0,
             "resident_device": "Test GPU",
+            "resident_estimated_peak_gib": 47.3,
+            "resident_master_cache": {"cache_hit_count": 1, "cache_miss_count": 0},
+            "resident_io": {"fits_read_mode_effective": "native_u16_gpu"},
+            "resident_timing_s": {
+                "light_read_upload_calibrate": 2.5,
+                "resident_registration_warp": 0.4,
+                "resident_integration": 0.2,
+                "output_write": 0.1,
+            },
         },
         "wbpp_blackbox": {"elapsed_s": 20.0, "dataset": "fixture"},
         "speedup_vs_wbpp": 2.0,
         "min_speedup": 1.25,
         "meets_min_speedup": True,
-        "comparison": {"shape_match": True, "rms_diff": 0.0, "abs_diff_p99": 0.0, "coverage_fraction": 1.0},
+        "comparison": {
+            "shape_match": True,
+            "rms_diff": 0.0,
+            "abs_diff_p99": 0.0,
+            "coverage_fraction": 1.0,
+            "compared_pixels": 42,
+            "compare_speedup_vs_reference": 1.9,
+        },
         "clean_room": {"note": "clean-room note"},
     }
     out_json = tmp_path / "speedup.json"
@@ -109,6 +158,11 @@ def test_write_speedup_summary_writes_json_and_markdown(tmp_path: Path):
     markdown = out_md.read_text(encoding="utf-8")
     assert "Speedup: 2.000x" in markdown
     assert "Active weighted frames: 2" in markdown
+    assert "Resident peak VRAM estimate: 47.3 GiB" in markdown
+    assert "Master cache hits/misses: 1/0" in markdown
+    assert "FITS read mode: native_u16_gpu" in markdown
+    assert "Light read/upload/calibrate: 2.5 s" in markdown
+    assert "compare timing speedup: 1.9" in markdown
     assert "clean-room note" in markdown
 
 

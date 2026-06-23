@@ -33,6 +33,14 @@ measurement, but they show the intended GLASS execution model: keep the stack
 resident in VRAM, reduce disk round trips, and make heavy alignment and stacking
 work GPU-bound instead of storage-bound.
 
+Current Phase 2 development builds have also been validated on the same
+200-light data in a shared-master-cache resident hot path: the latest run
+completed in 5.305 seconds wall time, used 193 active frames with 7 zero-weight
+frames, matched the previous GLASS output bit-for-bit across all six output
+maps, and measured a 205.94x wall-time speedup against the 1092.541-second WBPP
+black-box reference. This hot-path number excludes rebuilding cached master
+calibration frames; it is useful for tracking the resident GPU execution limit.
+
 ## Quick Start
 
 ```powershell

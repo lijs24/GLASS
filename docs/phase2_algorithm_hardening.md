@@ -13772,6 +13772,53 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_536_fetch_batch_guard_summary.json`.
 
+### S2-Gate 537: Real 200-Light Current-Head A/B and Speedup Evidence Contract
+
+- Returned to the Phase 2 mainline real-data target instead of adding more
+  report-only promotion gates.
+- Completed:
+  - reran the current HEAD on the M38 200-light resident CUDA path with the same
+    science settings as Gate536;
+  - compared the six GLASS output maps against Gate536 by SHA-256 and confirmed
+    bitwise identity;
+  - generated a fresh coverage-masked compare against the WBPP FastIntegration
+    black-box master;
+  - strengthened the speedup summary contract so A/B summaries now include
+    resident peak VRAM, shared master-cache hit/miss counts, effective FITS
+    read mode, resident timing components, compared pixels, and compare timing
+    speedup.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate537_real_ab\runs_20260623_133539\current_head_default`;
+  - internal/shell elapsed: `4.940610599995125 s` / `5.3052115 s`;
+  - WBPP black-box elapsed: `1092.541 s`;
+  - speedup: `221.13481277012156x` by internal timing and
+    `205.9373127725445x` by shell timing;
+  - active/zero-weight frames: `193` / `7`;
+  - shared master cache hits/misses: `1` / `0`;
+  - estimated peak VRAM: `49.608429938554764 GiB`;
+  - FITS mode: `native_u16_gpu`.
+- Stage timing evidence:
+  - light read/upload/calibrate: `2.4421659000217915 s`;
+  - resident registration/warp: `0.2569173000520095 s`;
+  - resident integration: `0.30478270002640784 s`;
+  - output write: `0.2353500999743119 s`.
+- WBPP compare evidence:
+  - shape match: true;
+  - coverage-masked RMS: `0.0004279821839256963`;
+  - coverage-masked p99 abs diff: `0.0001313822576776147`;
+  - coverage fraction: `0.9892770479074376`;
+  - compared pixels: `56997300`.
+- Tests:
+  - `tests/test_speedup_report.py`: `3 passed`;
+  - full suite: `1176 passed`.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_537_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_537_real_ab_summary.json`;
+  - speedup summary:
+    `runs\benchmarks\m38_wbpp_speedup_summary_gate537_current.json`.
+
 ## Gate Rules
 
 Each gate requires:

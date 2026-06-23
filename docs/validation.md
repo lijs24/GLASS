@@ -22,8 +22,9 @@ Validation is gate-driven:
 
 ## M38 193-frame PixInsight/WBPP Black-box Compare
 
-The current strongest real-data validation uses the M38 H-alpha run in
-`C:\glass_runs\final_m38_h_200`.
+The current strongest real-data validation uses the M38 H-alpha input and
+black-box reference root in `C:\gpwbpp_runs\final_m38_h_200`. New GLASS
+resident validation runs are written under `C:\glass_runs`.
 
 Input scale:
 
@@ -36,7 +37,7 @@ Input scale:
 PixInsight/WBPP black-box reference:
 
 - Reference master:
-  `C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf`
+  `C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf`
 - External elapsed time: `1092.541 s`.
 - WBPP reported time: `18:03.17`.
 - Observed settings include FastIntegration, Lanczos3 interpolation,
@@ -102,6 +103,24 @@ Machine-readable speedup summary:
 - This summary explicitly records `200` planned frames, `193` active weighted
   frames, and `7` zero-weight frames, matching the WBPP FastIntegration accepted
   frame set used for the parity comparison.
+
+Latest Phase 2 hot-path validation:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate537_real_ab\runs_20260623_133539\current_head_default`.
+- Shared master cache: `1` hit, `0` misses.
+- Internal/shell elapsed time: `4.940610599995125 s` / `5.3052115 s`.
+- WBPP black-box elapsed time: `1092.541 s`.
+- Speedup: `221.13481277012156x` by internal `run_timing.json`, or
+  `205.9373127725445x` by shell timing embedded in the compare report.
+- Output parity: master, weight, coverage, low rejection, high rejection, and
+  DQ maps are bit-identical to the S2-Gate 536 default rerun.
+- Coverage-masked compare to WBPP FastIntegration: shape match true,
+  RMS `0.0004279821839256963`, p99 absolute difference
+  `0.0001313822576776147`, coverage fraction `0.9892770479074376`, compared
+  pixels `56997300`.
+- Machine-readable summary:
+  `runs\benchmarks\m38_wbpp_speedup_summary_gate537_current.json`.
 
 Residual diagnostics:
 
