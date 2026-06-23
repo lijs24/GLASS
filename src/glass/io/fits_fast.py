@@ -169,14 +169,27 @@ def native_u16_gpu_fits_eligibility(
     expected_shape: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """Return header-only eligibility for the compact u16 GPU decode path."""
+    probe, _spec = native_u16_gpu_fits_eligibility_with_spec(path, expected_shape=expected_shape)
+    return probe
+
+
+def native_u16_gpu_fits_eligibility_with_spec(
+    path: str | Path,
+    *,
+    expected_shape: tuple[int, int] | None = None,
+) -> tuple[dict[str, Any], SimpleFitsImageSpec | None]:
+    """Return header-only eligibility and the parsed spec when the header was readable."""
     try:
         spec = simple_fits_image_spec(path)
     except FastFitsUnsupported as exc:
-        return {
-            "path": str(path),
-            "eligible": False,
-            "reason": f"unsupported_fits:{exc}",
-        }
+        return (
+            {
+                "path": str(path),
+                "eligible": False,
+                "reason": f"unsupported_fits:{exc}",
+            },
+            None,
+        )
 
     reason = ""
     if expected_shape is not None and spec.shape != tuple(expected_shape):
@@ -190,17 +203,20 @@ def native_u16_gpu_fits_eligibility(
     elif spec.blank is not None:
         reason = "blank_present"
 
-    return {
-        "path": str(spec.path),
-        "eligible": not bool(reason),
-        "reason": reason,
-        "bitpix": int(spec.bitpix),
-        "bscale": float(spec.bscale),
-        "bzero": float(spec.bzero),
-        "blank_present": spec.blank is not None,
-        "shape": {"height": int(spec.height), "width": int(spec.width)},
-        "data_offset": int(spec.data_offset),
-    }
+    return (
+        {
+            "path": str(spec.path),
+            "eligible": not bool(reason),
+            "reason": reason,
+            "bitpix": int(spec.bitpix),
+            "bscale": float(spec.bscale),
+            "bzero": float(spec.bzero),
+            "blank_present": spec.blank is not None,
+            "shape": {"height": int(spec.height), "width": int(spec.width)},
+            "data_offset": int(spec.data_offset),
+        },
+        spec,
+    )
 
 
 def _materialize_spec(spec: SimpleFitsImageSpec, dtype: Any, output: np.ndarray | None) -> np.ndarray:
@@ -318,11 +334,16 @@ def read_simple_fits_image_native_direct_timed(
 def read_simple_fits_u16be_raw_timed(
     path: str | Path,
     output: np.ndarray | None = None,
+    spec: SimpleFitsImageSpec | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     total_start = perf_counter()
-    open_start = perf_counter()
-    spec = simple_fits_image_spec(path)
-    header_elapsed = perf_counter() - open_start
+    header_cache_hit = spec is not None
+    if spec is None:
+        open_start = perf_counter()
+        spec = simple_fits_image_spec(path)
+        header_elapsed = perf_counter() - open_start
+    else:
+        header_elapsed = 0.0
     if spec.bitpix != 16:
         raise FastFitsUnsupported("native_u16_gpu requires BITPIX=16 simple primary FITS")
     if spec.bscale != 1.0 or spec.bzero != 32768.0 or spec.blank is not None:
@@ -367,4 +388,5 @@ def read_simple_fits_u16be_raw_timed(
         "fits_native_backend": str(native.get("backend", "native_u16be_raw")),
         "fits_raw_byte_count": byte_count,
         "fits_gpu_decode_staging": "u16be_bzero32768",
+        "fits_header_cache_hit": header_cache_hit,
     }

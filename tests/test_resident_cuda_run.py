@@ -50,7 +50,12 @@ def test_light_prefetcher_counts_pinned_ring_inflight_slots(monkeypatch) -> None
         def host_pinned_empty_u8(byte_count: int) -> np.ndarray:
             return np.empty(byte_count, dtype=np.uint8)
 
-    def fake_read_light_timed(path: str, slot: np.ndarray | None = None, fits_read_mode: str = "astropy"):
+    def fake_read_light_timed(
+        path: str,
+        slot: np.ndarray | None = None,
+        fits_read_mode: str = "astropy",
+        fits_spec: object | None = None,
+    ):
         assert slot is not None
         slot[:] = int(Path(path).stem)
         return slot, {
@@ -5887,8 +5892,13 @@ def test_cli_resident_cuda_auto_selects_native_u16_gpu_for_compatible_group(tmp_
     assert selection["raw_u16_gpu"]["eligible"] is True
     assert selection["raw_u16_gpu"]["selected"] is True
     assert selection["raw_u16_gpu"]["eligible_frame_count"] == 2
+    assert selection["raw_u16_gpu"]["spec_cache_frame_count"] == 2
     assert selection["raw_u16_gpu"]["fallback_reason_counts"] == {}
+    assert io_pipeline["fits_header_spec_cache_enabled"] is True
+    assert io_pipeline["fits_header_spec_cache_frame_count"] == 2
+    assert io_pipeline["fits_header_spec_cache_hit_count"] == 2
     assert artifact["resident_io_overlap"]["fits_read_mode_effective"] == "native_u16_gpu"
+    assert artifact["resident_io_overlap"]["fits_header_spec_cache_hit_count"] == 2
 
 
 def test_cli_resident_cuda_default_fits_read_mode_is_guarded_auto(tmp_path: Path):
@@ -5939,6 +5949,9 @@ def test_cli_resident_cuda_default_fits_read_mode_is_guarded_auto(tmp_path: Path
     assert io_pipeline["fits_read_mode_requested"] == "auto"
     assert io_pipeline["fits_read_mode_effective"] == "native_u16_gpu"
     assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
+    assert io_pipeline["fits_header_spec_cache_enabled"] is True
+    assert io_pipeline["fits_header_spec_cache_frame_count"] == 2
+    assert io_pipeline["fits_header_spec_cache_hit_count"] == 2
     assert io_pipeline["prefetch_host_allocation_mode"] == "single_slab"
     assert io_pipeline["prefetch_host_allocation_count"] == 1
     assert io_pipeline["prefetch_host_allocation_fallback_reason"] == ""

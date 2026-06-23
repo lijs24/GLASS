@@ -1,0 +1,52 @@
+{
+  "gate": "S2-Gate 535",
+  "title": "Resident FITS Header Spec Cache Reuse",
+  "baseline_gate": "S2-Gate 534",
+  "baseline_run": "C:\\glass_runs\\phase2_s2_gate534_parallel_dq_final\\runs_20260623_142500\\parallel_dq_final_default",
+  "gate_run": "C:\\glass_runs\\phase2_s2_gate535_header_spec_cache\\runs_20260623_131656\\gate535_spec_cache_timed",
+  "shell_s": 5.264231,
+  "internal_total_s": 4.92039439996006,
+  "external_reference_s": 1092.541,
+  "speedup_vs_external_reference_shell": 207.539,
+  "speedup_vs_external_reference_internal": 222.044,
+  "timing_s": {
+    "gate534_internal_total": 4.924247499962803,
+    "gate535_internal_total": 4.92039439996006,
+    "gate534_light_read_upload_calibrate": 2.431698600004893,
+    "gate535_light_read_upload_calibrate": 2.429854299989529,
+    "gate534_worker_fits_open_cumulative": 0.19557570023507698,
+    "gate535_worker_fits_open_cumulative": 0.0202783,
+    "gate534_worker_read_cumulative": 30.830992500064895,
+    "gate535_worker_read_cumulative": 30.654472299909685,
+    "gate534_consumer_read_wait_wall": 0.6459383995970711,
+    "gate535_consumer_read_wait_wall": 0.6400352999917232,
+    "gate535_resident_registration_warp": 0.25830109958769754,
+    "gate535_resident_integration": 0.3064838999998756,
+    "gate535_output_write": 0.22161220002453774
+  },
+  "cache": {
+    "fits_header_spec_cache_enabled": true,
+    "fits_header_spec_cache_frame_count": 200,
+    "fits_header_spec_cache_hit_count": 200,
+    "worker_fits_open_reduction_s": 0.17529740023507697
+  },
+  "map_comparison_vs_gate534": {
+    "resident_master_H.fits": "bitwise_equal",
+    "resident_weight_map_H.fits": "bitwise_equal",
+    "resident_coverage_map_H.fits": "bitwise_equal",
+    "resident_low_rejection_map_H.fits": "bitwise_equal",
+    "resident_high_rejection_map_H.fits": "bitwise_equal",
+    "resident_dq_map_H.fits": "bitwise_equal"
+  },
+  "tests": {
+    "focused": "4 passed in 0.56s",
+    "full": "1175 passed in 42.58s"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "clean_room": true
+}

@@ -130,15 +130,27 @@ def test_native_u16_raw_fits_reader_reads_into_pinned_output(tmp_path):
     output = module.host_pinned_empty_u8(physical.size * 2)
 
     raw, profile = read_simple_fits_u16be_raw_timed(path, output=output)
+    cached_output = module.host_pinned_empty_u8(physical.size * 2)
+    cached_raw, cached_profile = read_simple_fits_u16be_raw_timed(
+        path,
+        output=cached_output,
+        spec=simple_fits_image_spec(path),
+    )
     decoded = raw.reshape(physical.shape + (2,))
     bits = (decoded[..., 0].astype(np.uint16) << np.uint16(8)) | decoded[..., 1].astype(np.uint16)
     physical_from_raw = bits ^ np.uint16(0x8000)
 
     assert raw is output
+    assert cached_raw is cached_output
     assert profile["fits_reader_backend"] == "native_u16be_raw"
+    assert profile["fits_header_cache_hit"] is False
+    assert cached_profile["fits_header_cache_hit"] is True
+    assert cached_profile["fits_open"] >= 0.0
     assert profile["fits_gpu_decode_staging"] == "u16be_bzero32768"
     assert profile["fits_native_bytes_read"] == physical.size * 2
+    assert cached_profile["fits_native_bytes_read"] == physical.size * 2
     assert np.array_equal(physical_from_raw, physical)
+    assert np.array_equal(cached_raw, raw)
     assert np.allclose(read_fits_data(path), physical.astype(np.float32))
 
 

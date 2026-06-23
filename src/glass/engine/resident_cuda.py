@@ -69,7 +69,8 @@ from glass.engine.resident_registration_quality import (
 from glass.engine.resident_stack_surface import build_resident_integration_stack_surface_contract
 from glass.io.fits_fast import (
     FastFitsUnsupported,
-    native_u16_gpu_fits_eligibility,
+    SimpleFitsImageSpec,
+    native_u16_gpu_fits_eligibility_with_spec,
     read_simple_fits_image_native_direct_timed,
     read_simple_fits_image_timed,
     read_simple_fits_u16be_raw_timed,
@@ -722,7 +723,8 @@ def _resident_fits_read_mode_selection(
     width: int,
     requested_mode: str,
     raw_u16_runtime_reason: str,
-) -> tuple[str, dict[str, Any]]:
+) -> tuple[str, dict[str, Any], dict[str, SimpleFitsImageSpec]]:
+    spec_cache: dict[str, SimpleFitsImageSpec] = {}
     raw_selection: dict[str, Any] = {
         "checked": False,
         "runtime_eligible": raw_u16_runtime_reason == "",
@@ -731,6 +733,7 @@ def _resident_fits_read_mode_selection(
         "eligible": False,
         "checked_frame_count": 0,
         "eligible_frame_count": 0,
+        "spec_cache_frame_count": 0,
         "fallback_reason_counts": {},
         "ineligible_samples": [],
     }
@@ -745,24 +748,26 @@ def _resident_fits_read_mode_selection(
     }
     if requested_mode != "auto":
         raw_selection["selected"] = requested_mode == "native_u16_gpu"
-        return requested_mode, selection
+        return requested_mode, selection, {}
 
     if raw_u16_runtime_reason:
         selection["effective_mode"] = "auto"
         selection["fallback_mode"] = "auto"
         selection["fallback_reason"] = raw_u16_runtime_reason
-        return "auto", selection
+        return "auto", selection, {}
 
     reason_counts: dict[str, int] = {}
     ineligible_samples: list[dict[str, Any]] = []
     eligible_count = 0
     for frame in light_frames:
-        probe = native_u16_gpu_fits_eligibility(
+        probe, spec = native_u16_gpu_fits_eligibility_with_spec(
             frame["path"],
             expected_shape=(int(height), int(width)),
         )
         if probe["eligible"]:
             eligible_count += 1
+            if spec is not None:
+                spec_cache[str(frame["path"])] = spec
         else:
             reason = str(probe.get("reason") or "unknown")
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
@@ -786,25 +791,27 @@ def _resident_fits_read_mode_selection(
     )
     if eligible_count == len(light_frames):
         raw_selection["selected"] = True
+        raw_selection["spec_cache_frame_count"] = len(spec_cache)
         selection["effective_mode"] = "native_u16_gpu"
-        return "native_u16_gpu", selection
+        return "native_u16_gpu", selection, spec_cache
     selection["effective_mode"] = "auto"
     selection["fallback_mode"] = "auto"
     selection["fallback_reason"] = "raw_u16_gpu_group_ineligible"
-    return "auto", selection
+    return "auto", selection, {}
 
 
 def _read_light_timed(
     path: str | Path,
     output: np.ndarray | None = None,
     fits_read_mode: str = "astropy",
+    fits_spec: SimpleFitsImageSpec | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     if fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
         raise ValueError("fits_read_mode must be auto, fast, astropy, native_direct, or native_u16_gpu")
     total_start = perf_counter()
     fallback_reason = ""
     if fits_read_mode == "native_u16_gpu":
-        data, profile = read_simple_fits_u16be_raw_timed(path, output=output)
+        data, profile = read_simple_fits_u16be_raw_timed(path, output=output, spec=fits_spec)
         profile["fits_read_mode_requested"] = fits_read_mode
         profile["fits_fast_fallback_reason"] = ""
         return data, profile
@@ -855,6 +862,7 @@ class _LightPrefetcher:
         width: int | None = None,
         release_refill_mode: str = "immediate",
         fits_read_mode: str = "astropy",
+        fits_specs_by_path: dict[str, SimpleFitsImageSpec] | None = None,
     ):
         self.light_frames = light_frames
         self.depth = max(0, int(depth))
@@ -866,6 +874,7 @@ class _LightPrefetcher:
             raise ValueError("fits_read_mode must be auto, fast, astropy, native_direct, or native_u16_gpu")
         self.release_refill_mode = release_refill_mode
         self.fits_read_mode = fits_read_mode
+        self.fits_specs_by_path = dict(fits_specs_by_path or {})
         self.height = height
         self.width = width
         self.executor: ThreadPoolExecutor | None = None
@@ -980,11 +989,13 @@ class _LightPrefetcher:
                     slot_id = self.free_slots.pop()
                     slot = self.pinned_slots[slot_id]
                 frame = self.light_frames[self.next_submit]
+                fits_spec = self.fits_specs_by_path.get(str(frame["path"]))
                 self.pending[self.next_submit] = self.executor.submit(
                     _read_light_timed,
                     frame["path"],
                     slot,
                     self.fits_read_mode,
+                    fits_spec,
                 )
                 if slot_id is not None:
                     self.inflight_slots[self.next_submit] = slot_id
@@ -1023,9 +1034,11 @@ class _LightPrefetcher:
 
     def result(self, index: int) -> tuple[np.ndarray, dict[str, Any], float]:
         if self.executor is None:
+            frame_path = self.light_frames[index]["path"]
             data, read_profile = _read_light_timed(
-                self.light_frames[index]["path"],
+                frame_path,
                 fits_read_mode=self.fits_read_mode,
+                fits_spec=self.fits_specs_by_path.get(str(frame_path)),
             )
             return data, read_profile, read_profile["total"]
         with self.lock:
@@ -4385,9 +4398,9 @@ def _stack_resident_master_array_with_resident_cuda_mean(
 
     if raw_u16_enabled:
         raw_buffers: list[np.ndarray | None] = []
-        for path in paths:
+        for path, spec in zip(paths, specs, strict=True):
             read_start = perf_counter()
-            raw, profile = read_simple_fits_u16be_raw_timed(path)
+            raw, profile = read_simple_fits_u16be_raw_timed(path, spec=spec)
             per_frame_read_s.append(perf_counter() - read_start)
             raw_buffers.append(raw)
             fits_backends.append(str(profile.get("fits_reader_backend") or "native_u16be_raw"))
@@ -5399,6 +5412,7 @@ def run_resident_calibration_integration(
             per_frame_fits_native_decode_s: list[float] = []
             per_frame_fits_native_total_s: list[float] = []
             per_frame_fits_native_bytes_read: list[int] = []
+            per_frame_fits_header_cache_hits = 0
             per_frame_calibrate_s: list[float] = []
             per_frame_host_copy_s: list[float] = []
             per_frame_h2d_s: list[float] = []
@@ -5576,7 +5590,11 @@ def run_resident_calibration_integration(
                 raw_u16_runtime_reason = "raw_u16_gpu_requires_batch_calibration"
             elif not calibration_callback_release_enabled:
                 raw_u16_runtime_reason = "raw_u16_gpu_requires_callback_release"
-            resident_fits_read_mode_effective, resident_fits_auto_selection = _resident_fits_read_mode_selection(
+            (
+                resident_fits_read_mode_effective,
+                resident_fits_auto_selection,
+                resident_fits_spec_cache,
+            ) = _resident_fits_read_mode_selection(
                 light_frames,
                 height=height,
                 width=width,
@@ -5640,6 +5658,7 @@ def run_resident_calibration_integration(
                 width=width,
                 release_refill_mode=resident_prefetch_refill_mode,
                 fits_read_mode=resident_fits_read_mode_effective,
+                fits_specs_by_path=resident_fits_spec_cache,
             ) as light_prefetch:
                 prefetch_host_pinned_bytes = light_prefetch.host_pinned_bytes
                 if calibration_batch_enabled:
@@ -5716,6 +5735,8 @@ def run_resident_calibration_integration(
                                 per_frame_fits_native_bytes_read.append(
                                     int(read_profile.get("fits_native_bytes_read", 0) or 0)
                                 )
+                            if bool(read_profile.get("fits_header_cache_hit", False)):
+                                per_frame_fits_header_cache_hits += 1
                             per_frame_read_s.append(read_wait_elapsed)
                             batch_items.append((index, frame, light, float(frame.get("exposure_s") or 0.0)))
                             batch_frame_starts.append(frame_start)
@@ -6043,6 +6064,8 @@ def run_resident_calibration_integration(
                             per_frame_fits_native_bytes_read.append(
                                 int(read_profile.get("fits_native_bytes_read", 0) or 0)
                             )
+                        if bool(read_profile.get("fits_header_cache_hit", False)):
+                            per_frame_fits_header_cache_hits += 1
                         per_frame_read_s.append(read_wait_elapsed)
                         invalid_mask = None
                         mask_info: dict[str, Any] = {}
@@ -10399,6 +10422,9 @@ def run_resident_calibration_integration(
                 "fits_read_mode_effective": resident_fits_read_mode_effective,
                 "fits_read_mode_resolution": resident_fits_read_mode_resolution_payload,
                 "resident_fits_auto_selection": resident_fits_auto_selection,
+                "fits_header_spec_cache_enabled": bool(resident_fits_spec_cache),
+                "fits_header_spec_cache_frame_count": int(len(resident_fits_spec_cache)),
+                "fits_header_spec_cache_hit_count": int(per_frame_fits_header_cache_hits),
                 "fits_backend_counts": fits_backend_counts,
                 "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
                 "fits_native_file_read_cumulative_s": fits_native_file_read_timing["total"],
@@ -10456,6 +10482,9 @@ def run_resident_calibration_integration(
                 "fits_read_mode_effective": resident_fits_read_mode_effective,
                 "fits_read_mode_resolution": resident_fits_read_mode_resolution_payload,
                 "resident_fits_auto_selection": resident_fits_auto_selection,
+                "fits_header_spec_cache_enabled": bool(resident_fits_spec_cache),
+                "fits_header_spec_cache_frame_count": int(len(resident_fits_spec_cache)),
+                "fits_header_spec_cache_hit_count": int(per_frame_fits_header_cache_hits),
                 "fits_backend_counts": fits_backend_counts,
                 "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
                 "fits_native_file_read_cumulative_s": fits_native_file_read_timing["total"],
@@ -10793,6 +10822,9 @@ def run_resident_calibration_integration(
                         "fits_read_mode_effective": resident_fits_read_mode_effective,
                         "fits_read_mode_resolution": resident_fits_read_mode_resolution_payload,
                         "resident_fits_auto_selection": resident_fits_auto_selection,
+                        "fits_header_spec_cache_enabled": bool(resident_fits_spec_cache),
+                        "fits_header_spec_cache_frame_count": int(len(resident_fits_spec_cache)),
+                        "fits_header_spec_cache_hit_count": int(per_frame_fits_header_cache_hits),
                         "resident_inline_source_dq": resident_inline_source_dq,
                         "resident_inline_source_dq_detector": (
                             "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"

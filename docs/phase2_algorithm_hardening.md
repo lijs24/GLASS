@@ -13684,6 +13684,47 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_534_parallel_dq_summary.json`.
 
+### S2-Gate 535: Resident FITS Header Spec Cache Reuse
+
+- Continued the Phase 2 mainline I/O + upload + calibration work by removing
+  repeated FITS primary-header parsing from the resident `native_u16_gpu` path.
+- Completed:
+  - added `native_u16_gpu_fits_eligibility_with_spec()` to return the parsed
+    `SimpleFitsImageSpec` alongside guarded-auto eligibility;
+  - passed the spec cache into `_LightPrefetcher` and `_read_light_timed()`;
+  - reused pre-parsed specs in the resident master raw-u16 cache builder;
+  - added resident artifact fields for spec cache enabled/frame count/hit count.
+- Real 200-light validation:
+  - baseline Gate534:
+    `C:\glass_runs\phase2_s2_gate534_parallel_dq_final\runs_20260623_142500\parallel_dq_final_default`;
+  - Gate535 final:
+    `C:\glass_runs\phase2_s2_gate535_header_spec_cache\runs_20260623_131656\gate535_spec_cache_timed`;
+  - same M38 H-alpha 200-light plan, shared master cache, resident CUDA,
+    `similarity_cuda_triangle`, Lanczos3 warp, winsorized sigma rejection, and
+    audit maps.
+- Runtime evidence:
+  - Gate535 shell/internal: `5.264231 s` / `4.92039439996006 s`;
+  - retained external reference runtime: `1092.541 s`, about `207.5x` shell
+    speedup and `222.0x` internal speedup;
+  - header spec cache hit count: `200/200` light frames;
+  - worker FITS open cumulative time improved from
+    `0.19557570023507698 s` to `0.0202783 s`;
+  - consumer read wait wall time moved from `0.6459383995970711 s` to
+    `0.6400352999917232 s`.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to Gate534.
+- Interpretation:
+  - this removes avoidable I/O metadata work but does not change pixel math;
+  - because most header work was already overlapped by prefetch, the total
+    runtime improvement is small;
+  - the next substantive target should remain resident registration/warp
+    batching and reduced Python orchestration in the light loop.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_535_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_535_header_spec_cache_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

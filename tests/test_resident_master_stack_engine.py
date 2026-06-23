@@ -325,7 +325,7 @@ def test_resident_matching_master_cache_prefers_raw_u16_gpu_decode(
             blank=None,
         )
 
-    def fake_raw_read(path, output=None):
+    def fake_raw_read(path, output=None, spec=None):
         value = int(raw_values[str(Path(path))])
         bits = np.full(16, value ^ 0x8000, dtype=">u2")
         raw = bits.view(np.uint8).copy()
