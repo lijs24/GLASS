@@ -13725,6 +13725,53 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_535_header_spec_cache_summary.json`.
 
+### S2-Gate 536: Resident Callback Fetch Batch Prefetch-Depth Guard
+
+- Continued the Phase 2 resident CUDA scheduling hardening path. This gate
+  explicitly avoided promoting larger warp or calibration batches until the
+  real 200-light dataset proved they were useful.
+- Completed:
+  - probed a large explicit warp chunk (`134` frames), which was numerically
+    identical but slower, so it was not promoted;
+  - found a resident callback-release scheduling bug where calibration fetch
+    batch size could exceed the pinned prefetch ring depth and crash while
+    fetching the next light;
+  - clamped callback-release + pinned-ring effective
+    `calibration_fetch_batch_frames` to `resident_prefetch_frames`;
+  - recorded requested/effective fetch batch, limit source, and clamp status in
+    resident I/O artifacts and the light pipeline profile knobs;
+  - added a minimal regression test for prefetch depth `1` and requested
+    callback fetch batch `2`.
+- Real 200-light validation:
+  - baseline Gate535:
+    `C:\glass_runs\phase2_s2_gate535_header_spec_cache\runs_20260623_131656\gate535_spec_cache_timed`;
+  - oversized batch validation:
+    `C:\glass_runs\phase2_s2_gate536_fetch_guard\runs_20260623_132748\batch64_clamped`;
+  - default rerun:
+    `C:\glass_runs\phase2_s2_gate536_fetch_guard\runs_20260623_132829\default_rerun`.
+- Runtime evidence:
+  - the previously crashing `--resident-calibration-batch-frames 64` route now
+    runs and records `calibration_fetch_batch_requested_frames=64`,
+    `calibration_fetch_batch_frames=32`, and
+    `calibration_fetch_batch_limit_source=pinned_ring_prefetch_depth`;
+  - batch64 shell/internal: `5.8136118 s` / `5.456099700066261 s`;
+  - default rerun shell/internal: `5.4279064 s` / `5.083654500020202 s`;
+  - batch64 was slower than the default on this data, so no default preset
+    change was made.
+- Numerical validation:
+  - batch64 clamp and default rerun outputs are bitwise identical to Gate535
+    for master, weight map, coverage map, low/high rejection maps, and DQ map.
+- Interpretation:
+  - this is a scheduling safety gate, not a speedup gate;
+  - the result prevents future high-throughput tuning from failing due to an
+    impossible fetch batch/ring-depth combination;
+  - the next mainline work should continue profiling actual default wall time
+    rather than assuming larger chunks or batches are faster.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_536_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_536_fetch_batch_guard_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

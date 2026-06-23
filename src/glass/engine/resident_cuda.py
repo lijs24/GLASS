@@ -5629,6 +5629,18 @@ def run_resident_calibration_integration(
                 if calibration_callback_release_enabled
                 else int(calibration_wave_effective_frames)
             )
+            calibration_fetch_batch_requested_frames = int(calibration_fetch_batch_frames)
+            calibration_fetch_batch_limit_source = "requested"
+            calibration_fetch_batch_clamped_to_prefetch_depth = False
+            if (
+                calibration_callback_release_enabled
+                and resident_h2d_mode == "pinned_ring"
+                and resident_prefetch_frames > 0
+                and calibration_fetch_batch_frames > int(resident_prefetch_frames)
+            ):
+                calibration_fetch_batch_frames = int(resident_prefetch_frames)
+                calibration_fetch_batch_limit_source = "pinned_ring_prefetch_depth"
+                calibration_fetch_batch_clamped_to_prefetch_depth = True
             calibration_batch_count = 0
             calibration_batch_frame_count = 0
             calibration_batch_native_total_s = 0.0
@@ -10438,6 +10450,12 @@ def run_resident_calibration_integration(
                 "source_dq_fast_skipped_frame_count": int(source_dq_fast_skipped_frame_count),
                 "source_dq_fast_skip_reason": source_dq_fast_skip_reason,
                 "source_dq_sidecar_frame_count": int(source_dq_sidecar_frame_count),
+                "calibration_fetch_batch_requested_frames": int(calibration_fetch_batch_requested_frames),
+                "calibration_fetch_batch_frames": int(calibration_fetch_batch_frames),
+                "calibration_fetch_batch_limit_source": calibration_fetch_batch_limit_source,
+                "calibration_fetch_batch_clamped_to_prefetch_depth": bool(
+                    calibration_fetch_batch_clamped_to_prefetch_depth
+                ),
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -10506,6 +10524,12 @@ def run_resident_calibration_integration(
                 "calibration_wave_effective_source": calibration_wave_effective_source,
                 "calibration_wave_lane_guard_applied": bool(calibration_wave_lane_guard_applied),
                 "calibration_wave_stream_count_limit": int(resident_calibration_streams),
+                "calibration_fetch_batch_requested_frames": int(calibration_fetch_batch_requested_frames),
+                "calibration_fetch_batch_frames": int(calibration_fetch_batch_frames),
+                "calibration_fetch_batch_limit_source": calibration_fetch_batch_limit_source,
+                "calibration_fetch_batch_clamped_to_prefetch_depth": bool(
+                    calibration_fetch_batch_clamped_to_prefetch_depth
+                ),
                 "calibration_release_mode_effective": calibration_release_mode_effective,
                 "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
                 "host_pinned_bytes": int(
@@ -10942,7 +10966,12 @@ def run_resident_calibration_integration(
                         "calibration_wave_effective_source": calibration_wave_effective_source,
                         "calibration_wave_lane_guard_applied": bool(calibration_wave_lane_guard_applied),
                         "calibration_wave_stream_count_limit": int(resident_calibration_streams),
+                        "calibration_fetch_batch_requested_frames": int(calibration_fetch_batch_requested_frames),
                         "calibration_fetch_batch_frames": int(calibration_fetch_batch_frames),
+                        "calibration_fetch_batch_limit_source": calibration_fetch_batch_limit_source,
+                        "calibration_fetch_batch_clamped_to_prefetch_depth": bool(
+                            calibration_fetch_batch_clamped_to_prefetch_depth
+                        ),
                         "calibration_wave_enabled": bool(calibration_wave_enabled),
                         "calibration_wave_release_mode": (
                             "callback_after_h2d_event"

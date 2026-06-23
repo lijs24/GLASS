@@ -1,0 +1,80 @@
+{
+  "gate": "S2-Gate 536",
+  "title": "Resident Callback Fetch Batch Prefetch-Depth Guard",
+  "baseline_gate": "S2-Gate 535",
+  "baseline_run": "C:\\glass_runs\\phase2_s2_gate535_header_spec_cache\\runs_20260623_131656\\gate535_spec_cache_timed",
+  "bug": {
+    "trigger": "callback_queue calibration fetch batch larger than pinned prefetch ring depth",
+    "observed_failure": "KeyError at light_prefetch.result(index=32) with calibration batch 64 and prefetch depth 32",
+    "fix": "clamp effective calibration_fetch_batch_frames to resident_prefetch_frames for callback_queue+pinned_ring"
+  },
+  "real_200_light_runs": {
+    "batch64_clamped": {
+      "run": "C:\\glass_runs\\phase2_s2_gate536_fetch_guard\\runs_20260623_132748\\batch64_clamped",
+      "shell_s": 5.8136118,
+      "internal_s": 5.456099700066261,
+      "calibration_batch_requested_frames": 64,
+      "calibration_fetch_batch_requested_frames": 64,
+      "calibration_fetch_batch_frames": 32,
+      "calibration_fetch_batch_limit_source": "pinned_ring_prefetch_depth",
+      "calibration_fetch_batch_clamped_to_prefetch_depth": true,
+      "calibration_batch_count": 7,
+      "prefetch_frames": 32,
+      "prefetch_fill_blocked_no_slot_count": 0
+    },
+    "default_after_guard": {
+      "run": "C:\\glass_runs\\phase2_s2_gate536_fetch_guard\\runs_20260623_132748\\default_after_guard",
+      "shell_s": 5.5123951,
+      "internal_s": 5.158665099996142,
+      "calibration_fetch_batch_requested_frames": 16,
+      "calibration_fetch_batch_frames": 16,
+      "calibration_fetch_batch_limit_source": "requested",
+      "calibration_fetch_batch_clamped_to_prefetch_depth": false
+    },
+    "default_rerun": {
+      "run": "C:\\glass_runs\\phase2_s2_gate536_fetch_guard\\runs_20260623_132829\\default_rerun",
+      "shell_s": 5.4279064,
+      "internal_s": 5.083654500020202,
+      "calibration_fetch_batch_requested_frames": 16,
+      "calibration_fetch_batch_frames": 16,
+      "calibration_fetch_batch_limit_source": "requested",
+      "calibration_fetch_batch_clamped_to_prefetch_depth": false
+    }
+  },
+  "map_comparison_vs_gate535": {
+    "batch64_clamped": {
+      "resident_master_H.fits": "bitwise_equal",
+      "resident_weight_map_H.fits": "bitwise_equal",
+      "resident_coverage_map_H.fits": "bitwise_equal",
+      "resident_low_rejection_map_H.fits": "bitwise_equal",
+      "resident_high_rejection_map_H.fits": "bitwise_equal",
+      "resident_dq_map_H.fits": "bitwise_equal"
+    },
+    "default_rerun": {
+      "resident_master_H.fits": "bitwise_equal",
+      "resident_weight_map_H.fits": "bitwise_equal",
+      "resident_coverage_map_H.fits": "bitwise_equal",
+      "resident_low_rejection_map_H.fits": "bitwise_equal",
+      "resident_high_rejection_map_H.fits": "bitwise_equal",
+      "resident_dq_map_H.fits": "bitwise_equal"
+    }
+  },
+  "tests": {
+    "focused": "6 passed in 1.04s",
+    "full": "1176 passed in 42.87s"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "cleanup": {
+    "removed_probe_dirs": [
+      "C:\\glass_runs\\phase2_s2_gate536_warp_capacity_probe",
+      "C:\\glass_runs\\phase2_s2_gate536_batch_probe\\runs_20260623_132503\\batch32_probe"
+    ],
+    "c_free_gb_after_cleanup": 333.5
+  },
+  "clean_room": true
+}

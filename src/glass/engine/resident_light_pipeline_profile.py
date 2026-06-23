@@ -130,6 +130,20 @@ def build_resident_light_pipeline_profile(
             "calibration_wave_lane_guard_applied": bool(
                 resident_io_pipeline.get("calibration_wave_lane_guard_applied", False)
             ),
+            "calibration_fetch_batch_requested_frames": _int_value(
+                resident_io_pipeline,
+                "calibration_fetch_batch_requested_frames",
+            ),
+            "calibration_fetch_batch_frames": _int_value(
+                resident_io_pipeline,
+                "calibration_fetch_batch_frames",
+            ),
+            "calibration_fetch_batch_limit_source": resident_io_pipeline.get(
+                "calibration_fetch_batch_limit_source"
+            ),
+            "calibration_fetch_batch_clamped_to_prefetch_depth": bool(
+                resident_io_pipeline.get("calibration_fetch_batch_clamped_to_prefetch_depth", False)
+            ),
             "calibration_release_mode_effective": resident_io_pipeline.get(
                 "calibration_release_mode_effective"
             ),
