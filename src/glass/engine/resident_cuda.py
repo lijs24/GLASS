@@ -874,6 +874,10 @@ class _LightPrefetcher:
         self.lock = RLock()
         self.pending: dict[int, Future[tuple[np.ndarray, dict[str, float]]]] = {}
         self.pinned_slots: list[np.ndarray] = []
+        self.pinned_slab: np.ndarray | None = None
+        self.pinned_host_allocation_mode = "off"
+        self.pinned_host_allocation_count = 0
+        self.pinned_host_allocation_fallback_reason = ""
         self.free_slots: list[int] = []
         self.inflight_slots: dict[int, int] = {}
         self.next_submit = 0
@@ -896,18 +900,47 @@ class _LightPrefetcher:
                 if self.height is None or self.width is None:
                     raise ValueError("pinned resident prefetch requires image height and width")
                 glass_cuda = _cuda_module_required()
-                if self.fits_read_mode == "native_u16_gpu":
-                    byte_count = int(self.height) * int(self.width) * 2
-                    self.pinned_slots = [
-                        glass_cuda.host_pinned_empty_u8(byte_count)
-                        for _ in range(self.depth)
-                    ]
-                else:
-                    self.pinned_slots = [
-                        glass_cuda.host_pinned_empty_f32(int(self.height), int(self.width))
-                        for _ in range(self.depth)
-                    ]
+                try:
+                    if self.fits_read_mode == "native_u16_gpu":
+                        byte_count = int(self.height) * int(self.width) * 2
+                        self.pinned_slab = glass_cuda.host_pinned_empty_u8(byte_count * self.depth)
+                        self.pinned_slots = [
+                            self.pinned_slab[index * byte_count : (index + 1) * byte_count]
+                            for index in range(self.depth)
+                        ]
+                    else:
+                        self.pinned_slab = glass_cuda.host_pinned_empty_f32(
+                            int(self.height) * self.depth,
+                            int(self.width),
+                        )
+                        self.pinned_slots = [
+                            self.pinned_slab[
+                                index * int(self.height) : (index + 1) * int(self.height),
+                                :,
+                            ]
+                            for index in range(self.depth)
+                        ]
+                    self.pinned_host_allocation_mode = "single_slab"
+                    self.pinned_host_allocation_count = 1
+                except Exception as exc:
+                    self.pinned_slab = None
+                    self.pinned_host_allocation_mode = "per_slot_fallback"
+                    self.pinned_host_allocation_fallback_reason = type(exc).__name__
+                    if self.fits_read_mode == "native_u16_gpu":
+                        byte_count = int(self.height) * int(self.width) * 2
+                        self.pinned_slots = [
+                            glass_cuda.host_pinned_empty_u8(byte_count)
+                            for _ in range(self.depth)
+                        ]
+                    else:
+                        self.pinned_slots = [
+                            glass_cuda.host_pinned_empty_f32(int(self.height), int(self.width))
+                            for _ in range(self.depth)
+                        ]
+                    self.pinned_host_allocation_count = len(self.pinned_slots)
                 self.free_slots = list(range(len(self.pinned_slots)))
+            else:
+                self.pinned_host_allocation_mode = "disabled"
             self.executor = ThreadPoolExecutor(
                 max_workers=self.workers,
                 thread_name_prefix="glass-light-prefetch",
@@ -10310,6 +10343,11 @@ def run_resident_calibration_integration(
                 "prefetch_enabled": bool(resident_prefetch_frames > 0),
                 "prefetch_frames": int(resident_prefetch_frames),
                 "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
+                "prefetch_host_allocation_mode": str(light_prefetch.pinned_host_allocation_mode),
+                "prefetch_host_allocation_count": int(light_prefetch.pinned_host_allocation_count),
+                "prefetch_host_allocation_fallback_reason": str(
+                    light_prefetch.pinned_host_allocation_fallback_reason
+                ),
                 "fits_read_mode": resident_fits_read_mode,
                 "fits_read_mode_requested": resident_fits_read_mode,
                 "fits_read_mode_effective": resident_fits_read_mode_effective,
@@ -10362,6 +10400,11 @@ def run_resident_calibration_integration(
                 "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
                 "prefetch_refill_mode": resident_prefetch_refill_mode,
                 "h2d_mode": resident_h2d_mode,
+                "prefetch_host_allocation_mode": str(light_prefetch.pinned_host_allocation_mode),
+                "prefetch_host_allocation_count": int(light_prefetch.pinned_host_allocation_count),
+                "prefetch_host_allocation_fallback_reason": str(
+                    light_prefetch.pinned_host_allocation_fallback_reason
+                ),
                 "fits_read_mode": resident_fits_read_mode,
                 "fits_read_mode_requested": resident_fits_read_mode,
                 "fits_read_mode_effective": resident_fits_read_mode_effective,
@@ -10879,6 +10922,11 @@ def run_resident_calibration_integration(
                         ),
                         "prefetch_release_refill_wait_s": float(light_prefetch.release_refill_wait_s),
                         "prefetch_max_inflight_slots": int(prefetch_max_inflight_slots),
+                        "prefetch_host_allocation_mode": str(light_prefetch.pinned_host_allocation_mode),
+                        "prefetch_host_allocation_count": int(light_prefetch.pinned_host_allocation_count),
+                        "prefetch_host_allocation_fallback_reason": str(
+                            light_prefetch.pinned_host_allocation_fallback_reason
+                        ),
                         "master_cache_dir": str(shared_master_cache_dir) if shared_master_cache_dir is not None else None,
                         "master_cache_scope": "shared" if shared_master_cache_dir is not None else "run",
                         "master_cache_policy_requested": master_cache_policy_record["requested"],

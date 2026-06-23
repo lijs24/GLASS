@@ -13237,6 +13237,58 @@ Completed in Gate446:
   - profile after:
     `C:\glass_runs\phase2_s2_gate526_dq_fastpath_profile\runs_20260623_120000\profile_after.prof`.
 
+### S2-Gate 527: Resident Pinned Prefetch Slab
+
+- Returned to the I/O + upload + calibration memory model and changed the
+  resident pinned-ring allocator from many per-slot `cudaHostAlloc` calls to a
+  single contiguous pinned host slab sliced into prefetch slots. This is a
+  memory-orchestration foundation gate, not a new pixel algorithm and not a
+  speedup claim.
+- Completed:
+  - native-u16 GPU FITS reads now allocate one `uint8` pinned slab for all
+    prefetch slots and slice it into raw-byte slot views;
+  - float32 host decode paths now allocate one `float32` pinned slab and slice
+    it into `(height, width)` slot views;
+  - if the slab allocation fails, GLASS automatically falls back to the
+    previous per-slot allocation behavior;
+  - resident artifacts record `prefetch_host_allocation_mode`,
+    `prefetch_host_allocation_count`, and
+    `prefetch_host_allocation_fallback_reason`.
+- Real 200-light validation:
+  - baseline:
+    `C:\glass_runs\phase2_s2_gate526_dq_fastpath_real\runs_20260623_120000\default`;
+  - Gate527 run:
+    `C:\glass_runs\phase2_s2_gate527_pinned_slab_real\runs_20260623_120000\default`;
+  - same command family as Gate526: resident CUDA, `similarity_cuda_triangle`,
+    Lanczos3 warp, winsorized sigma rejection, audit output maps, shared master
+    cache;
+  - Gate527 records `prefetch_host_allocation_mode=single_slab` and
+    `prefetch_host_allocation_count=1`;
+  - host pinned bytes remain `3945676800`;
+  - baseline shell `6.290154 s`, internal `5.946307100006379 s`;
+  - Gate527 shell `6.676883 s`, internal `6.31407629995374 s`;
+  - cProfile host-pinned allocation calls moved from `32` calls to `1` call;
+  - cProfile host-pinned allocation cumulative time moved from
+    `0.36556370000000005 s` to `0.3479651 s`.
+- Numerical validation:
+  - Gate527 master, weight map, coverage map, low/high rejection maps, and DQ
+    map match Gate526 bitwise;
+  - RMS and max absolute difference are `0.0` for those outputs.
+- Interpretation:
+  - this gate reduces pinned allocator fragmentation and makes the resident
+    memory model more explicit and auditable;
+  - it does not provide a reliable end-to-end speedup on the current 200-light
+    route, so it must not be advertised as one;
+  - the next gate should target larger runtime components: native
+    H2D/calibration scheduling, FITS read overlap, or resident registration/warp
+    kernel batching.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_527_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_527_pinned_prefetch_slab_summary.json`;
+  - profile after:
+    `C:\glass_runs\phase2_s2_gate527_pinned_slab_profile\runs_20260623_120000\profile_after.prof`.
+
 ## Gate Rules
 
 Each gate requires:

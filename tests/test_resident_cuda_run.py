@@ -2155,6 +2155,9 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert io_pipeline["calibration_event_reuse"] is True
     assert io_pipeline["host_pinned_bytes"] > 0
     assert io_pipeline["prefetch_host_pinned_bytes"] > 0
+    assert io_pipeline["prefetch_host_allocation_mode"] == "single_slab"
+    assert io_pipeline["prefetch_host_allocation_count"] == 1
+    assert io_pipeline["prefetch_host_allocation_fallback_reason"] == ""
     assert io_pipeline["stack_host_pinned_bytes"] == 0
     assert resident["artifacts"][0]["resident_warp_scratch_bytes"] >= 0
     assert io_pipeline["warp_scratch_bytes"] == resident["artifacts"][0]["resident_warp_scratch_bytes"]
@@ -5690,6 +5693,9 @@ def test_cli_resident_cuda_default_fits_read_mode_is_guarded_auto(tmp_path: Path
     assert io_pipeline["fits_read_mode_requested"] == "auto"
     assert io_pipeline["fits_read_mode_effective"] == "native_u16_gpu"
     assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
+    assert io_pipeline["prefetch_host_allocation_mode"] == "single_slab"
+    assert io_pipeline["prefetch_host_allocation_count"] == 1
+    assert io_pipeline["prefetch_host_allocation_fallback_reason"] == ""
     assert mode_resolution["source"] == "resident_cuda_guarded_auto_default"
     assert mode_resolution["explicit"] is False
     assert mode_resolution["requested"] is None

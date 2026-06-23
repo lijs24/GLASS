@@ -1,0 +1,84 @@
+{
+  "gate": "S2-Gate 527",
+  "title": "Resident pinned prefetch slab",
+  "created_at": "2026-06-23",
+  "change_summary": [
+    "pinned-ring prefetch now allocates one pinned host slab and slices it into slots",
+    "native_u16_gpu uses a uint8 slab; float32 host decode uses a float32 slab",
+    "slab allocation failure falls back to the previous per-slot allocation mode",
+    "resident artifacts record prefetch_host_allocation_mode/count/fallback_reason"
+  ],
+  "runs": {
+    "baseline_gate526": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate526_dq_fastpath_real\\runs_20260623_120000\\default",
+      "shell_elapsed_s": 6.290154,
+      "internal_total_s": 5.946307100006379,
+      "prefetch_host_allocation_mode": null,
+      "prefetch_host_allocation_count": null
+    },
+    "gate527_default": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate527_pinned_slab_real\\runs_20260623_120000\\default",
+      "shell_elapsed_s": 6.676883,
+      "internal_total_s": 6.31407629995374,
+      "prefetch_host_allocation_mode": "single_slab",
+      "prefetch_host_allocation_count": 1,
+      "prefetch_host_allocation_fallback_reason": "",
+      "prefetch_host_pinned_bytes": 3945676800,
+      "fits_read_mode_effective": "native_u16_gpu"
+    }
+  },
+  "profiles": {
+    "before_profile": "C:\\glass_runs\\phase2_s2_gate526_dq_fastpath_profile\\runs_20260623_120000\\profile_after.prof",
+    "after_profile": "C:\\glass_runs\\phase2_s2_gate527_pinned_slab_profile\\runs_20260623_120000\\profile_after.prof",
+    "before_host_pinned_empty_u8_calls": 32,
+    "after_host_pinned_empty_u8_calls": 1,
+    "before_host_pinned_empty_u8_cumtime_s": 0.36556370000000005,
+    "after_host_pinned_empty_u8_cumtime_s": 0.3479651
+  },
+  "comparisons": {
+    "gate527_vs_gate526_maps": {
+      "resident_master_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_weight_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_coverage_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_low_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_high_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_dq_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      }
+    }
+  },
+  "interpretation": [
+    "This changes pinned host allocation topology and reduces allocation count, but it is not a reliable end-to-end speedup on the current benchmark.",
+    "The gate is kept as a memory-orchestration foundation for the resident I/O pipeline.",
+    "The next gate should target a larger runtime component, such as native H2D/calibration scheduling or resident registration/warp batching."
+  ],
+  "clean_room": "Only GLASS code, GLASS-generated artifacts, and user-owned 200-light data were used; no official PixInsight/WBPP/PJSR source was accessed."
+}
