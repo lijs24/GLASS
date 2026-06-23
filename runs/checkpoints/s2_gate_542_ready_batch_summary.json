@@ -1,0 +1,69 @@
+{
+  "gate": "S2-Gate 542",
+  "title": "Ready-First Resident Calibration Batches",
+  "date": "2026-06-23",
+  "code_changes": [
+    "Added _LightPrefetcher.ready_index()",
+    "Enabled ready-first resident calibration batches for homogeneous single-master groups",
+    "Recorded ready-order artifacts and profile knobs",
+    "Included ready-selection wait in light_read_wait_wall accounting",
+    "Added focused prefetcher ready-index test"
+  ],
+  "tests": {
+    "focused": "passed",
+    "full_pytest": "1179 passed in 42.99s",
+    "diff_check": "passed with LF-to-CRLF warnings only"
+  },
+  "cuda": {
+    "available": true,
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "driver_version": "596.21"
+  },
+  "real_200_light": {
+    "run_path": "C:\\glass_runs\\phase2_s2_gate542_ready_batch\\runs_20260623_142334\\ready_batch_default_timed",
+    "plan_path": "C:\\glass_runs\\phase2_s2_gate540_plan_spec_cache\\runs_20260623_140314\\processing_plan.json",
+    "shell_elapsed_s": 5.22964,
+    "internal_elapsed_s": 4.869791700039059,
+    "fits_read_mode_effective": "native_u16_gpu",
+    "fits_spec_cache_hits": 200,
+    "calibration_order_mode": "ready_first_single_master_group",
+    "ready_order_enabled": true,
+    "ready_order_master_group_count": 1,
+    "ready_order_out_of_order_count": 62,
+    "ready_order_select_wait_s": 1.1719279001117684,
+    "timing_s": {
+      "light_read_upload_calibrate": 2.5747510999790393,
+      "light_read_wait_wall": 1.1721220000763424,
+      "light_worker_native_fits_read_cumulative": 25.2634427,
+      "resident_registration_warp": 0.25434350047726184,
+      "resident_integration": 0.30348869995214045,
+      "output_write": 0.23077540000667796
+    }
+  },
+  "bitwise_compare": {
+    "baseline_gate": "S2-Gate 541",
+    "all_six_outputs_match": true,
+    "hash_compare_path": "C:\\glass_runs\\phase2_s2_gate542_ready_batch\\runs_20260623_142334\\ready_batch_default_timed\\hash_compare_gate541.json"
+  },
+  "wbpp_compare": {
+    "reference_time_s": 1092.541,
+    "speedup_vs_reference": 208.91323303324893,
+    "shape_match": true,
+    "compared_pixels": 56997300,
+    "coverage_fraction": 0.9892770479074376,
+    "rms_diff": 0.0004279821839256963,
+    "p99_abs_diff": 0.0001313822576776147,
+    "robust_fit_rms_diff": 0.000042529498303511286,
+    "compare_json": "C:\\glass_runs\\phase2_s2_gate542_ready_batch\\runs_20260623_142334\\ready_batch_default_timed\\compare_vs_wbpp_fastintegration_scaled_coverage190.json",
+    "compare_html": "C:\\glass_runs\\phase2_s2_gate542_ready_batch\\runs_20260623_142334\\ready_batch_default_timed\\compare_vs_wbpp_fastintegration_scaled_coverage190.html"
+  },
+  "known_limitations": [
+    "Ready-first scheduling is disabled for multi-master calibration groups",
+    "The measured win is modest and still leaves Python/Future orchestration as a main bottleneck",
+    "Warm-cache real-data timings should be repeated before release-level claims"
+  ],
+  "next_step": "Move resident FITS read queueing and batch fill orchestration deeper into native code.",
+  "clean_room": true
+}

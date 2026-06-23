@@ -14028,6 +14028,68 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_541_explicit_native_spec_cache_summary.json`.
 
+### S2-Gate 542: Ready-First Resident Calibration Batches
+
+- Returned to the Phase 2 mainline CUDA resident performance target by reducing
+  avoidable main-thread ordering stalls in the light read/upload/calibration
+  loop.
+- Completed:
+  - added a `_LightPrefetcher.ready_index()` primitive that selects a completed
+    candidate read future instead of always blocking on the lowest pending
+    frame index;
+  - enabled ready-first consumption only when a resident calibration batch uses
+    one homogeneous master calibration set, so the batch can be filled out of
+    order while every calibrated frame is still stored at its original resident
+    frame index;
+  - left multi-master groups on the previous sequential-index path;
+  - recorded `calibration_order_mode`, ready-order eligibility, master-group
+    count, out-of-order count, sample order, and ready-selection wait time in
+    resident artifacts and the resident light pipeline profile;
+  - fixed timing accounting so waiting inside ready-first selection remains part
+    of `light_read_wait_wall` instead of disappearing into unaccounted time;
+  - added a unit test proving a completed later candidate can be selected before
+    a blocked lower index.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate542_ready_batch\runs_20260623_142334\ready_batch_default_timed`;
+  - plan:
+    `C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json`;
+  - shell/internal elapsed: `5.22964 s` / `4.869791700039059 s`;
+  - resident default preset: `throughput-v3-io`;
+  - effective FITS mode: `native_u16_gpu`;
+  - FITS spec cache hits during light read: `200`;
+  - calibration order mode: `ready_first_single_master_group`;
+  - ready-order master-group count: `1`;
+  - out-of-order consumed frames: `62`;
+  - ready-selection wait recorded in read wait: `1.1719279001117684 s`.
+- Stage timing evidence:
+  - light read/upload/calibrate: `2.5747510999790393 s`;
+  - light read wait wall: `1.1721220000763424 s`;
+  - worker native FITS read cumulative: `25.2634427 s`;
+  - resident registration/warp: `0.25434350047726184 s`;
+  - resident integration: `0.30348869995214045 s`;
+  - output write: `0.23077540000667796 s`.
+- Numerical and WBPP validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to Gate541;
+  - coverage-masked compare against the WBPP FastIntegration black-box master:
+    RMS `0.0004279821839256963`, p99 abs diff
+    `0.0001313822576776147`, coverage fraction `0.9892770479074376`,
+    compared pixels `56997300`;
+  - shell-time speedup versus WBPP: `208.91323303324893x`.
+- Interpretation:
+  - this gate improves scheduling safety and exposes true ready-selection wait
+    instead of hiding it;
+  - the wall-time gain over Gate541 is modest but measurable on this warm-cache
+    benchmark, while pixel outputs remain unchanged;
+  - the next material optimization should move the remaining Future/read
+    orchestration and raw FITS batching deeper into native code, or use a native
+    multi-file read queue that can feed calibration streams directly.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_542_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_542_ready_batch_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

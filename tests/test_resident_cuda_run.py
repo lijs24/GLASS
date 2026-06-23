@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event
 
 import numpy as np
 import pytest
@@ -90,6 +91,38 @@ def test_light_prefetcher_counts_pinned_ring_inflight_slots(monkeypatch) -> None
         prefetcher.release_many([0])
 
         assert prefetcher.fill_submit_count == 3
+
+
+def test_light_prefetcher_ready_index_selects_completed_candidate(monkeypatch) -> None:
+    release_slow = Event()
+
+    def fake_read_light_timed(
+        path: str,
+        slot: np.ndarray | None = None,
+        fits_read_mode: str = "astropy",
+        fits_spec: object | None = None,
+    ):
+        index = int(Path(path).stem)
+        if index == 0:
+            assert release_slow.wait(timeout=5.0)
+        return np.asarray([index], dtype=np.float32), {
+            "total": 0.0,
+            "fits_open": 0.0,
+            "fits_materialize_decode": 0.0,
+            "fits_reader_backend": "fake",
+        }
+
+    monkeypatch.setattr("glass.engine.resident_cuda._read_light_timed", fake_read_light_timed)
+
+    frames = [{"path": f"{index}.fits"} for index in range(2)]
+    with _LightPrefetcher(frames, depth=2, workers=2) as prefetcher:
+        assert prefetcher.ready_index([0, 1]) == 1
+        data, _profile, _wait_s = prefetcher.result(1)
+        assert data.tolist() == [1.0]
+
+        release_slow.set()
+        data, _profile, _wait_s = prefetcher.result(0)
+        assert data.tolist() == [0.0]
 
 
 def test_resident_memory_estimate_includes_chunked_warp_workspace() -> None:

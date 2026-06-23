@@ -144,6 +144,25 @@ def build_resident_light_pipeline_profile(
             "calibration_fetch_batch_clamped_to_prefetch_depth": bool(
                 resident_io_pipeline.get("calibration_fetch_batch_clamped_to_prefetch_depth", False)
             ),
+            "calibration_order_mode": resident_io_pipeline.get("calibration_order_mode"),
+            "calibration_ready_order_enabled": bool(
+                resident_io_pipeline.get("calibration_ready_order_enabled", False)
+            ),
+            "calibration_ready_order_reason": resident_io_pipeline.get(
+                "calibration_ready_order_reason"
+            ),
+            "calibration_ready_order_master_group_count": _int_value(
+                resident_io_pipeline,
+                "calibration_ready_order_master_group_count",
+            ),
+            "calibration_ready_order_out_of_order_count": _int_value(
+                resident_io_pipeline,
+                "calibration_ready_order_out_of_order_count",
+            ),
+            "calibration_ready_order_select_wait_s": _float_value(
+                resident_io_pipeline,
+                "calibration_ready_order_select_wait_s",
+            ),
             "calibration_release_mode_effective": resident_io_pipeline.get(
                 "calibration_release_mode_effective"
             ),

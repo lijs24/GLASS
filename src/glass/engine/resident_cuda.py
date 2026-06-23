@@ -5,7 +5,7 @@ import gc
 import hashlib
 import json
 from contextlib import ExitStack
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict
 from pathlib import Path
 from threading import RLock
@@ -1141,6 +1141,32 @@ class _LightPrefetcher:
         if not self.pinned_ring:
             self._fill()
         return data, read_profile, wait_elapsed
+
+    def ready_index(self, indices: Iterable[int]) -> int | None:
+        candidates = {int(index) for index in indices}
+        if not candidates:
+            return None
+        if self.executor is None:
+            return min(candidates)
+        while True:
+            with self.lock:
+                pending = {
+                    index: future
+                    for index, future in self.pending.items()
+                    if index in candidates
+                }
+            ready = [index for index, future in pending.items() if future.done()]
+            if ready:
+                return min(ready)
+            if pending:
+                wait(list(pending.values()), return_when=FIRST_COMPLETED)
+                continue
+            self.flush_refill()
+            self._fill()
+            with self.lock:
+                has_pending = any(index in candidates for index in self.pending)
+            if not has_pending:
+                return None
 
     def release(self, index: int) -> None:
         self.release_many([index])
@@ -5745,6 +5771,48 @@ def run_resident_calibration_integration(
             prefetch_fill_blocked_no_slot_count = 0
             prefetch_release_count = 0
             prefetch_max_inflight_slots = 0
+            light_master_selections: list[tuple[str, str | None, str | None, str | None]] = []
+            for frame in light_frames:
+                calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
+                bias_group = calibration_groups.get("bias_group")
+                dark_group = calibration_groups.get("dark_group")
+                flat_group = calibration_groups.get("flat_group")
+                light_master_selections.append(
+                    (
+                        _master_set_cache_key(
+                            filter_name,
+                            height,
+                            width,
+                            bias_group,
+                            dark_group,
+                            flat_group,
+                        ),
+                        bias_group,
+                        dark_group,
+                        flat_group,
+                    )
+                )
+            calibration_master_group_count = len({item[0] for item in light_master_selections})
+            if not calibration_batch_enabled:
+                calibration_ready_order_reason = "batch_calibration_disabled"
+            elif int(resident_prefetch_frames) <= 0:
+                calibration_ready_order_reason = "prefetch_disabled"
+            elif calibration_master_group_count != 1:
+                calibration_ready_order_reason = "multiple_master_sets"
+            elif len(light_frames) <= 1:
+                calibration_ready_order_reason = "single_frame_group"
+            else:
+                calibration_ready_order_reason = "single_master_set_prefetch_ready"
+            calibration_ready_order_enabled = calibration_ready_order_reason == "single_master_set_prefetch_ready"
+            calibration_order_mode = (
+                "ready_first_single_master_group"
+                if calibration_ready_order_enabled
+                else "sequential_index"
+            )
+            calibration_ready_order_select_wait_s = 0.0
+            calibration_ready_order_out_of_order_count = 0
+            calibration_ready_order_sample: list[int] = []
+            calibration_ready_order_expected_next = 0
             with _LightPrefetcher(
                 light_frames,
                 resident_prefetch_frames,
@@ -5758,25 +5826,26 @@ def run_resident_calibration_integration(
             ) as light_prefetch:
                 prefetch_host_pinned_bytes = light_prefetch.host_pinned_bytes
                 if calibration_batch_enabled:
-                    index = 0
-                    while index < len(light_frames):
+                    remaining_indices = list(range(len(light_frames)))
+                    processed_count = 0
+                    while remaining_indices:
                         batch_items: list[tuple[int, dict[str, Any], np.ndarray, float]] = []
                         batch_frame_starts: list[float] = []
-                        while index < len(light_frames) and len(batch_items) < calibration_fetch_batch_frames:
-                            frame = light_frames[index]
+                        while remaining_indices and len(batch_items) < calibration_fetch_batch_frames:
+                            ready_select_wait_s = 0.0
+                            if calibration_ready_order_enabled:
+                                ready_select_start = perf_counter()
+                                selected_index = light_prefetch.ready_index(remaining_indices)
+                                ready_select_wait_s = perf_counter() - ready_select_start
+                                calibration_ready_order_select_wait_s += ready_select_wait_s
+                                if selected_index is None:
+                                    break
+                                item_index = int(selected_index)
+                            else:
+                                item_index = int(remaining_indices[0])
+                            frame = light_frames[item_index]
                             frame_start = perf_counter()
-                            calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
-                            bias_group = calibration_groups.get("bias_group")
-                            dark_group = calibration_groups.get("dark_group")
-                            flat_group = calibration_groups.get("flat_group")
-                            master_key = _master_set_cache_key(
-                                filter_name,
-                                height,
-                                width,
-                                bias_group,
-                                dark_group,
-                                flat_group,
-                            )
+                            master_key, bias_group, dark_group, flat_group = light_master_selections[item_index]
                             if batch_items and master_key != current_master_key:
                                 break
                             if master_key != current_master_key:
@@ -5805,7 +5874,7 @@ def run_resident_calibration_integration(
                                 gc_start = perf_counter()
                                 gc.collect()
                                 gc_elapsed += perf_counter() - gc_start
-                            light, read_profile, read_wait_elapsed = light_prefetch.result(index)
+                            light, read_profile, read_wait_elapsed = light_prefetch.result(item_index)
                             per_frame_read_worker_s.append(float(read_profile.get("total", 0.0)))
                             per_frame_fits_open_s.append(float(read_profile.get("fits_open", 0.0)))
                             per_frame_fits_materialize_decode_s.append(
@@ -5833,12 +5902,17 @@ def run_resident_calibration_integration(
                                 )
                             if bool(read_profile.get("fits_header_cache_hit", False)):
                                 per_frame_fits_header_cache_hits += 1
-                            per_frame_read_s.append(read_wait_elapsed)
-                            batch_items.append((index, frame, light, float(frame.get("exposure_s") or 0.0)))
+                            per_frame_read_s.append(read_wait_elapsed + ready_select_wait_s)
+                            if item_index != calibration_ready_order_expected_next:
+                                calibration_ready_order_out_of_order_count += 1
+                            calibration_ready_order_expected_next += 1
+                            if len(calibration_ready_order_sample) < 64:
+                                calibration_ready_order_sample.append(int(item_index))
+                            remaining_indices.remove(item_index)
+                            batch_items.append((item_index, frame, light, float(frame.get("exposure_s") or 0.0)))
                             batch_frame_starts.append(frame_start)
-                            index += 1
                         if not batch_items:
-                            continue
+                            break
 
                         batch_calibrate_start = perf_counter()
                         batch_indices = [item[0] for item in batch_items]
@@ -6088,8 +6162,9 @@ def run_resident_calibration_integration(
                             source_dq_rows.extend(rows)
                         for position, _item in enumerate(batch_items):
                             per_frame_s.append(perf_counter() - batch_frame_starts[position])
+                        processed_count += len(batch_items)
                         del batch_items
-                        if index % 10 == 9:
+                        if processed_count % 10 == 0:
                             gc_start = perf_counter()
                             gc.collect()
                             gc_elapsed += perf_counter() - gc_start
@@ -10540,6 +10615,14 @@ def run_resident_calibration_integration(
                 "calibration_fetch_batch_clamped_to_prefetch_depth": bool(
                     calibration_fetch_batch_clamped_to_prefetch_depth
                 ),
+                "calibration_order_mode": calibration_order_mode,
+                "calibration_ready_order_enabled": bool(calibration_ready_order_enabled),
+                "calibration_ready_order_reason": calibration_ready_order_reason,
+                "calibration_ready_order_master_group_count": int(calibration_master_group_count),
+                "calibration_ready_order_out_of_order_count": int(
+                    calibration_ready_order_out_of_order_count
+                ),
+                "calibration_ready_order_select_wait_s": float(calibration_ready_order_select_wait_s),
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -10614,6 +10697,14 @@ def run_resident_calibration_integration(
                 "calibration_fetch_batch_clamped_to_prefetch_depth": bool(
                     calibration_fetch_batch_clamped_to_prefetch_depth
                 ),
+                "calibration_order_mode": calibration_order_mode,
+                "calibration_ready_order_enabled": bool(calibration_ready_order_enabled),
+                "calibration_ready_order_reason": calibration_ready_order_reason,
+                "calibration_ready_order_master_group_count": int(calibration_master_group_count),
+                "calibration_ready_order_out_of_order_count": int(
+                    calibration_ready_order_out_of_order_count
+                ),
+                "calibration_ready_order_select_wait_s": float(calibration_ready_order_select_wait_s),
                 "calibration_release_mode_effective": calibration_release_mode_effective,
                 "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
                 "host_pinned_bytes": int(
@@ -11056,6 +11147,15 @@ def run_resident_calibration_integration(
                         "calibration_fetch_batch_clamped_to_prefetch_depth": bool(
                             calibration_fetch_batch_clamped_to_prefetch_depth
                         ),
+                        "calibration_order_mode": calibration_order_mode,
+                        "calibration_ready_order_enabled": bool(calibration_ready_order_enabled),
+                        "calibration_ready_order_reason": calibration_ready_order_reason,
+                        "calibration_ready_order_master_group_count": int(calibration_master_group_count),
+                        "calibration_ready_order_out_of_order_count": int(
+                            calibration_ready_order_out_of_order_count
+                        ),
+                        "calibration_ready_order_select_wait_s": float(calibration_ready_order_select_wait_s),
+                        "calibration_ready_order_sample": list(calibration_ready_order_sample),
                         "calibration_wave_enabled": bool(calibration_wave_enabled),
                         "calibration_wave_release_mode": (
                             "callback_after_h2d_event"
