@@ -1,0 +1,100 @@
+{
+  "gate": "S2-Gate 526",
+  "title": "Resident DQ valid-map fast path",
+  "created_at": "2026-06-23",
+  "change_summary": [
+    "guarded DQ fast path skips master/weight no-data scan when output diagnostics prove finite master and positive weight pixels",
+    "guarded nonnegative count-map stats avoid negative scans and max(value,0) temporaries for GLASS-generated resident count maps",
+    "strict helper behavior remains available for arbitrary arrays"
+  ],
+  "runs": {
+    "baseline_gate525": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate525_translation_refine_default\\runs_20260623_111012\\default",
+      "shell_elapsed_s": 6.75901,
+      "internal_total_s": 6.399099300033413,
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      }
+    },
+    "gate526_default": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate526_dq_fastpath_real\\runs_20260623_120000\\default",
+      "shell_elapsed_s": 6.290154,
+      "internal_total_s": 5.946307100006379,
+      "dq_summary": {
+        "high_rejected": 32082764,
+        "low_rejected": 12560911,
+        "valid": 22720993,
+        "warp_edge": 1690704
+      },
+      "dq_coverage_provenance": {
+        "precomputed_dq_stats_used": true,
+        "post_rejection_zero_pixels": 0,
+        "geometric_zero_pixels": 0,
+        "geometric_partial_pixels": 1690704,
+        "rejection_reduced_pixels": 38645798
+      }
+    }
+  },
+  "profiles": {
+    "before_profile": "C:\\glass_runs\\phase2_s2_gate526_profile_current\\runs_20260623_120000\\profile_current.prof",
+    "after_profile": "C:\\glass_runs\\phase2_s2_gate526_dq_fastpath_profile\\runs_20260623_120000\\profile_after.prof",
+    "before_resident_dq_map_python_cumtime_s": 1.3944242,
+    "after_resident_dq_map_python_cumtime_s": 0.9936101,
+    "delta_s": -0.4008141
+  },
+  "comparisons": {
+    "gate526_vs_gate525_maps": {
+      "resident_master_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_weight_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_coverage_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_low_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_high_rejection_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      },
+      "resident_dq_map_H.fits": {
+        "equal": true,
+        "rms": 0.0,
+        "p99_abs": 0.0,
+        "max_abs": 0.0
+      }
+    },
+    "gate524_wbpp_reference_carried_forward": {
+      "robust_fit_rms": 0.0015009512947433384,
+      "robust_fit_p99_abs": 0.00034034321741462114,
+      "fit_fraction": 0.982980688129347,
+      "note": "Gate526 output is bitwise identical to Gate525/Gate524, so prior WBPP comparison remains applicable."
+    }
+  },
+  "interpretation": [
+    "This closes a measured DQ/mask pipeline hotspot while keeping science and diagnostic maps bitwise identical.",
+    "This is not a new report-only gate; the optimized code is on the resident integration artifact path.",
+    "Further work should move back to larger resident GPU registration/warp and I/O overlap goals instead of narrow cleanup probes."
+  ],
+  "clean_room": "Only GLASS code, GLASS-generated artifacts, user-owned 200-light data, and prior user-generated WBPP black-box comparison metrics were used; no official PixInsight/WBPP/PJSR source was accessed."
+}

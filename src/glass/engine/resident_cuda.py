@@ -2159,6 +2159,7 @@ def _resident_finite_count_map_array_stats_from_values(
     *,
     positive_count: int | None = None,
     negative_count: int | None = None,
+    assume_nonnegative: bool = False,
 ) -> dict[str, Any]:
     values = np.asarray(values, dtype=np.float32)
     total_pixels = int(values.size)
@@ -2171,13 +2172,25 @@ def _resident_finite_count_map_array_stats_from_values(
     else:
         minimum = float(np.min(values))
         maximum = float(np.max(values))
-        rounded_sum = int(round(float(np.sum(np.maximum(values, 0.0), dtype=np.float64))))
+        rounded_sum = int(
+            round(
+                float(
+                    np.sum(
+                        values if assume_nonnegative else np.maximum(values, 0.0),
+                        dtype=np.float64,
+                    )
+                )
+            )
+        )
         positive_pixels = (
             int(positive_count)
             if positive_count is not None
             else int(np.count_nonzero(values > 0.0))
         )
         negative_pixels = (
+            0
+            if assume_nonnegative
+            else
             int(negative_count)
             if negative_count is not None
             else int(np.count_nonzero(values < 0.0))
@@ -2221,6 +2234,8 @@ def _resident_dq_map_python(
     *,
     return_stats: bool = False,
     assume_finite_count_maps: bool = False,
+    assume_nonnegative_count_maps: bool = False,
+    assume_valid_master_weight: bool = False,
     dq_dtype: Any = np.uint32,
 ) -> tuple[np.ndarray, dict[str, int]] | tuple[np.ndarray, dict[str, int], dict[str, Any]]:
     dq_dtype = _resident_dq_flag_dtype(dq_dtype)
@@ -2231,10 +2246,19 @@ def _resident_dq_map_python(
     dq = np.zeros(np.asarray(master).shape, dtype=dq_dtype)
     master_values = np.asarray(master, dtype=np.float32)
     weights = np.asarray(weight_map, dtype=np.float32)
-    invalid = (~np.isfinite(master_values)) | (~np.isfinite(weights)) | (weights <= 0.0)
+    invalid = (
+        None
+        if assume_valid_master_weight
+        else (~np.isfinite(master_values)) | (~np.isfinite(weights)) | (weights <= 0.0)
+    )
     stats: dict[str, Any] = {
         "schema_version": 1,
         "stats_source": "resident_dq_map_single_pass",
+        "stats_profile": (
+            "resident_valid_master_nonnegative_count_map_fast_path"
+            if assume_valid_master_weight and assume_nonnegative_count_maps
+            else "resident_general_dq_map_path"
+        ),
         "post_rejection_coverage": None,
         "post_rejection_zero_pixels": None,
         "geometric_warp_coverage": None,
@@ -2249,14 +2273,7 @@ def _resident_dq_map_python(
     if coverage_map is not None:
         coverage = np.asarray(coverage_map, dtype=np.float32)
         coverage_finite = None if assume_finite_count_maps else np.isfinite(coverage)
-        coverage_invalid = (
-            coverage <= 0.5
-            if assume_finite_count_maps
-            else (~coverage_finite) | (coverage <= 0.5)
-        )
-        invalid |= coverage_invalid
-        dq[coverage_invalid] |= warp_edge_bit
-        stats["post_rejection_coverage"] = (
+        coverage_stats = (
             _resident_finite_count_coverage_stats(coverage)
             if assume_finite_count_maps
             else _resident_coverage_array_stats_from_values(
@@ -2264,22 +2281,27 @@ def _resident_dq_map_python(
                 coverage_finite,
             )
         )
-        stats["post_rejection_zero_pixels"] = (
-            int(np.count_nonzero(coverage_invalid))
-            if assume_finite_count_maps
-            else int(np.count_nonzero(coverage_finite & (coverage <= 0.5)))
-        )
+        stats["post_rejection_coverage"] = coverage_stats
+        coverage_min = coverage_stats.get("min")
+        if assume_finite_count_maps and coverage_min is not None and float(coverage_min) > 0.5:
+            stats["post_rejection_zero_pixels"] = 0
+        else:
+            coverage_invalid = (
+                coverage <= 0.5
+                if assume_finite_count_maps
+                else (~coverage_finite) | (coverage <= 0.5)
+            )
+            invalid = coverage_invalid.copy() if invalid is None else (invalid | coverage_invalid)
+            dq[coverage_invalid] |= warp_edge_bit
+            stats["post_rejection_zero_pixels"] = (
+                int(np.count_nonzero(coverage_invalid))
+                if assume_finite_count_maps
+                else int(np.count_nonzero(coverage_finite & (coverage <= 0.5)))
+            )
     if geometric_warp_coverage_map is not None:
         geometric = np.asarray(geometric_warp_coverage_map, dtype=np.float32)
         geometric_finite = None if assume_finite_count_maps else np.isfinite(geometric)
-        geometric_invalid = (
-            geometric <= 0.5
-            if assume_finite_count_maps
-            else (~geometric_finite) | (geometric <= 0.5)
-        )
-        invalid |= geometric_invalid
-        dq[geometric_invalid] |= warp_edge_bit
-        stats["geometric_warp_coverage"] = (
+        geometric_stats = (
             _resident_finite_count_coverage_stats(geometric)
             if assume_finite_count_maps
             else _resident_coverage_array_stats_from_values(
@@ -2287,27 +2309,48 @@ def _resident_dq_map_python(
                 geometric_finite,
             )
         )
-        stats["geometric_zero_pixels"] = (
-            int(np.count_nonzero(geometric_invalid))
-            if assume_finite_count_maps
-            else int(np.count_nonzero(geometric_finite & (geometric <= 0.5)))
-        )
+        stats["geometric_warp_coverage"] = geometric_stats
+        geometric_min = geometric_stats.get("min")
+        geometric_has_no_zero = assume_finite_count_maps and geometric_min is not None and float(geometric_min) > 0.5
+        if geometric_has_no_zero:
+            stats["geometric_zero_pixels"] = 0
+        else:
+            geometric_invalid = (
+                geometric <= 0.5
+                if assume_finite_count_maps
+                else (~geometric_finite) | (geometric <= 0.5)
+            )
+            invalid = geometric_invalid.copy() if invalid is None else (invalid | geometric_invalid)
+            dq[geometric_invalid] |= warp_edge_bit
+            stats["geometric_zero_pixels"] = (
+                int(np.count_nonzero(geometric_invalid))
+                if assume_finite_count_maps
+                else int(np.count_nonzero(geometric_finite & (geometric <= 0.5)))
+            )
         expected_count = int(active_frame_count)
         if expected_count > 0:
-            geometric_partial = (geometric > 0.5) & (geometric < float(expected_count) - 0.5)
-            if not assume_finite_count_maps:
+            full_threshold = float(expected_count) - 0.5
+            geometric_partial = geometric < full_threshold if geometric_has_no_zero else (
+                (geometric > 0.5) & (geometric < full_threshold)
+            )
+            if not assume_finite_count_maps and not geometric_has_no_zero:
                 geometric_partial &= geometric_finite
             dq[geometric_partial] |= warp_edge_bit
-            stats["geometric_partial_pixels"] = int(np.count_nonzero(geometric_partial))
-            stats["geometric_full_pixels"] = int(
-                np.count_nonzero(geometric >= float(expected_count) - 0.5)
-                if assume_finite_count_maps
-                else np.count_nonzero(geometric_finite & (geometric >= float(expected_count) - 0.5))
-            )
+            partial_count = int(np.count_nonzero(geometric_partial))
+            stats["geometric_partial_pixels"] = partial_count
+            if geometric_has_no_zero:
+                stats["geometric_full_pixels"] = int(geometric.size - partial_count)
+            else:
+                stats["geometric_full_pixels"] = int(
+                    np.count_nonzero(geometric >= full_threshold)
+                    if assume_finite_count_maps
+                    else np.count_nonzero(geometric_finite & (geometric >= full_threshold))
+                )
         else:
             stats["geometric_partial_pixels"] = 0
             stats["geometric_full_pixels"] = 0
-    dq[invalid] |= no_data_bit
+    if invalid is not None:
+        dq[invalid] |= no_data_bit
     low_rejected_count = 0
     low_rejected = None
     if low_rejection_map is not None:
@@ -2320,6 +2363,8 @@ def _resident_dq_map_python(
             _resident_finite_count_map_array_stats_from_values(
                 low,
                 positive_count=low_rejected_count,
+                negative_count=0 if assume_nonnegative_count_maps else None,
+                assume_nonnegative=assume_nonnegative_count_maps,
             )
             if assume_finite_count_maps
             else _resident_count_map_array_stats_from_values(low, low_finite)
@@ -2336,6 +2381,8 @@ def _resident_dq_map_python(
             _resident_finite_count_map_array_stats_from_values(
                 high,
                 positive_count=high_rejected_count,
+                negative_count=0 if assume_nonnegative_count_maps else None,
+                assume_nonnegative=assume_nonnegative_count_maps,
             )
             if assume_finite_count_maps
             else _resident_count_map_array_stats_from_values(high, high_finite)
@@ -2350,7 +2397,7 @@ def _resident_dq_map_python(
         stats["rejection_reduced_pixels"] = high_rejected_count
         stats["rejection_reduced_pixels_source"] = "high_rejection_mask"
     summary = {"valid": int(np.count_nonzero(dq == 0))}
-    no_data_count = int(np.count_nonzero(invalid))
+    no_data_count = 0 if invalid is None else int(np.count_nonzero(invalid))
     if no_data_count:
         summary["no_data"] = no_data_count
     warp_edge_count = int(np.count_nonzero((dq & warp_edge_bit) != 0))
@@ -2376,6 +2423,8 @@ def _resident_dq_map(
     *,
     return_stats: bool = False,
     assume_finite_count_maps: bool = False,
+    assume_nonnegative_count_maps: bool = False,
+    assume_valid_master_weight: bool = False,
     dq_dtype: Any = np.uint32,
 ) -> tuple[np.ndarray, dict[str, int]] | tuple[np.ndarray, dict[str, int], dict[str, Any]]:
     if return_stats:
@@ -2401,6 +2450,8 @@ def _resident_dq_map(
         active_frame_count,
         return_stats=return_stats,
         assume_finite_count_maps=assume_finite_count_maps,
+        assume_nonnegative_count_maps=assume_nonnegative_count_maps,
+        assume_valid_master_weight=assume_valid_master_weight,
         dq_dtype=dq_dtype,
     )
 
@@ -9992,6 +10043,19 @@ def run_resident_calibration_integration(
             dq_map_stats: dict[str, Any] | None = None
             dq_path = output_dir / f"resident_dq_map_{filt}.fits" if output_map_selection["dq"] else None
             if output_map_selection["dq"]:
+                clipping_probe = (
+                    output_diagnostics.get("clipping_probe")
+                    if isinstance(output_diagnostics.get("clipping_probe"), dict)
+                    else {}
+                )
+                total_output_pixels = int(output_diagnostics.get("total_pixels", np.asarray(master).size) or 0)
+                assume_valid_master_weight = bool(
+                    total_output_pixels > 0
+                    and int(output_diagnostics.get("nonfinite_pixels", -1) or 0) == 0
+                    and int(clipping_probe.get("nonfinite_count", -1) or 0) == 0
+                    and int(clipping_probe.get("zero_weight_pixels", -1) or 0) == 0
+                    and int(clipping_probe.get("positive_weight_pixels", -1) or 0) == total_output_pixels
+                )
                 dq_map, dq_summary, dq_map_stats = _resident_dq_map(
                     master,
                     weight_map,
@@ -10002,6 +10066,8 @@ def run_resident_calibration_integration(
                     active_frame_count=active_frame_count,
                     return_stats=True,
                     assume_finite_count_maps=True,
+                    assume_nonnegative_count_maps=True,
+                    assume_valid_master_weight=assume_valid_master_weight,
                     dq_dtype=np.int16,
                 )
             dq_map_stats_payload = dq_map_stats if isinstance(dq_map_stats, dict) else {}

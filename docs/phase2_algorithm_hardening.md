@@ -13184,6 +13184,59 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_525_translation_refine_bypass_summary.json`.
 
+### S2-Gate 526: Resident DQ Valid-Map Fast Path
+
+- Returned to the real 200-light profile and removed a measured DQ/mask
+  pipeline hotspot. This gate is limited to GLASS-generated resident output
+  maps where `_output_diagnostics` proves the master is finite and every weight
+  pixel is positive, and where coverage/rejection maps are finite
+  nonnegative count maps. Strict direct helper calls keep the general path.
+- Completed:
+  - added a guarded `assume_valid_master_weight` path for resident DQ map
+    generation;
+  - added a guarded `assume_nonnegative_count_maps` path for low/high rejection
+    count-map stats;
+  - avoided allocating/scanning no-data masks when post-rejection and geometric
+    coverage maps have no zero pixels;
+  - kept DQ flag values, coverage/rejection semantics, output FITS dtypes, and
+    strict fallback behavior unchanged;
+  - added a focused synthetic test that proves the valid-master/nonnegative
+    fast path matches the strict Python DQ path bitwise.
+- Real 200-light validation:
+  - baseline:
+    `C:\glass_runs\phase2_s2_gate525_translation_refine_default\runs_20260623_111012\default`;
+  - Gate526 run:
+    `C:\glass_runs\phase2_s2_gate526_dq_fastpath_real\runs_20260623_120000\default`;
+  - same command family as Gate525: resident CUDA, `similarity_cuda_triangle`,
+    Lanczos3 warp, winsorized sigma rejection, audit output maps, shared master
+    cache;
+  - baseline shell `6.75901 s`, internal `6.399099300033413 s`;
+  - Gate526 shell `6.290154 s`, internal `5.946307100006379 s`;
+  - DQ summary remained `valid=22720993`, `warp_edge=1690704`,
+    `low_rejected=12560911`, `high_rejected=32082764`;
+  - profile `_resident_dq_map_python` cumulative time moved from
+    `1.3944242 s` to `0.9936101 s`.
+- Numerical validation:
+  - Gate526 master, weight map, coverage map, low/high rejection maps, and DQ
+    map match Gate525 bitwise;
+  - RMS, p99 absolute difference, and max absolute difference are all `0.0`
+    for those six outputs.
+- Interpretation:
+  - this is a DQ/mask-contract runtime optimization, not a report-only change;
+  - it closes the largest remaining Python-side non-I/O hotspot in the current
+    profiled path;
+  - the next work should avoid more narrow cleanup and return to larger
+    resident GPU-path goals: registration/warp batching, host/device
+    orchestration, and light-pipeline overlap.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_526_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_526_dq_valid_map_fastpath_summary.json`;
+  - profile before:
+    `C:\glass_runs\phase2_s2_gate526_profile_current\runs_20260623_120000\profile_current.prof`;
+  - profile after:
+    `C:\glass_runs\phase2_s2_gate526_dq_fastpath_profile\runs_20260623_120000\profile_after.prof`.
+
 ## Gate Rules
 
 Each gate requires:
