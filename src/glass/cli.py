@@ -1685,6 +1685,88 @@ def _write_default_stack_engine_contract_artifact(
     return stack_contract_path
 
 
+def _resident_warp_quality_has_map_surface(run: Path) -> bool:
+    resident_payload = _read_report_json_if_exists(run / "resident_artifacts.json")
+    if not isinstance(resident_payload, dict):
+        return False
+    artifacts = resident_payload.get("artifacts") if isinstance(resident_payload.get("artifacts"), list) else []
+    first_artifact = next((item for item in artifacts if isinstance(item, dict)), None)
+    if first_artifact is None:
+        return False
+    return bool(first_artifact.get("coverage_map_path") and first_artifact.get("dq_map_path"))
+
+
+def _resident_warp_quality_has_geometric_surface(run: Path) -> bool:
+    resident_payload = _read_report_json_if_exists(run / "resident_artifacts.json")
+    if not isinstance(resident_payload, dict):
+        return False
+    artifacts = resident_payload.get("artifacts") if isinstance(resident_payload.get("artifacts"), list) else []
+    first_artifact = next((item for item in artifacts if isinstance(item, dict)), None)
+    if first_artifact is None:
+        return False
+    provenance = (
+        first_artifact.get("dq_coverage_provenance")
+        if isinstance(first_artifact.get("dq_coverage_provenance"), dict)
+        else {}
+    )
+    geometric = (
+        provenance.get("geometric_warp_coverage")
+        if isinstance(provenance.get("geometric_warp_coverage"), dict)
+        else {}
+    )
+    total_pixels = _optional_int(geometric.get("total_pixels"))
+    if total_pixels is None or total_pixels <= 0:
+        return False
+    return any(
+        value is not None
+        for value in (
+            _optional_int(provenance.get("geometric_zero_pixels")),
+            _optional_int(geometric.get("finite_pixels")),
+            _optional_int(provenance.get("geometric_full_pixels")),
+        )
+    )
+
+
+def _write_default_warp_quality_contract_artifact(run: Path, state) -> Path | None:
+    if not (run / "resident_artifacts.json").exists() or not (run / "registration_results.json").exists():
+        return None
+    warp_quality_path = run / "warp_quality_contract.json"
+    warp_quality_markdown = run / "warp_quality_contract.md"
+    has_map_surface = _resident_warp_quality_has_map_surface(run)
+    has_geometric_surface = _resident_warp_quality_has_geometric_surface(run)
+    audit = build_warp_quality_contract(
+        run,
+        min_valid_fraction=0.75 if has_geometric_surface else None,
+        max_skipped_frames=10,
+        require_artifacts=has_map_surface,
+        require_all_registered=True,
+        pixel_verify=False,
+    )
+    write_warp_quality_contract(
+        warp_quality_path,
+        audit,
+        markdown=warp_quality_markdown,
+    )
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="warp_quality_contract",
+            path=str(warp_quality_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    if not audit.get("passed") and _warp_quality_contract_failure_blocks_default_run(audit):
+        state.current_stage = "warp_quality_contract"
+        state.failed_stage = "warp_quality_contract"
+        state.errors.append("default resident warp-quality contract failed")
+    elif not audit.get("passed"):
+        state.warnings.append(
+            "default resident warp-quality contract failed in a non-blocking diagnostic small-frame run"
+        )
+    return warp_quality_path
+
+
 def _write_default_local_norm_contract_artifact(run: Path, state) -> Path | None:
     if not (run / "local_norm_results.json").exists():
         return None
@@ -1780,6 +1862,18 @@ def _stack_engine_contract_failure_blocks_default_run(audit: dict[str, Any]) -> 
     ledger = ledger if isinstance(ledger, dict) else {}
     expected_rows = _optional_int(ledger.get("expected_rows"))
     if expected_rows is not None and expected_rows < 3:
+        return False
+    return True
+
+
+def _warp_quality_contract_failure_blocks_default_run(audit: dict[str, Any]) -> bool:
+    if audit.get("passed"):
+        return False
+    summary = audit.get("summary") if isinstance(audit.get("summary"), dict) else {}
+    output_count = _optional_int(summary.get("output_count"))
+    if output_count is None:
+        output_count = _optional_int(summary.get("resident_active_frame_count"))
+    if output_count is not None and output_count < 3:
         return False
     return True
 
@@ -2768,6 +2862,14 @@ def cmd_run(args: argparse.Namespace) -> int:
                     expected_integration_engine="cuda_resident_stack",
                 ),
             )
+        warp_quality_contract_path = None
+        if stack_engine_contract_path is not None and state.failed_stage is None:
+            warp_quality_contract_path = _timed_stage(
+                out,
+                timing,
+                "warp_quality_contract",
+                lambda: _write_default_warp_quality_contract_artifact(out, state),
+            )
         write_run_state(args.out, state)
         if state.failed_stage == "pipeline_contract":
             console.print(
@@ -2787,6 +2889,18 @@ def cmd_run(args: argparse.Namespace) -> int:
                     "run": str(out),
                     "stack_engine_contract": str(stack_engine_contract_path)
                     if stack_engine_contract_path
+                    else None,
+                }
+            )
+            return 2
+        if state.failed_stage == "warp_quality_contract":
+            console.print(
+                {
+                    "status": "failed",
+                    "stage": "warp_quality_contract",
+                    "run": str(out),
+                    "warp_quality_contract": str(warp_quality_contract_path)
+                    if warp_quality_contract_path
                     else None,
                 }
             )

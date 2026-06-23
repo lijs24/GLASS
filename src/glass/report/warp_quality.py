@@ -524,10 +524,24 @@ def _resident_warp_quality_contract(
     )
     total_pixels = _positive_int(geometric.get("total_pixels"))
     geometric_full = _nonnegative_int(provenance.get("geometric_full_pixels"))
+    geometric_zero = _nonnegative_int(provenance.get("geometric_zero_pixels"))
+    geometric_finite = _nonnegative_int(geometric.get("finite_pixels"))
     resident_valid_fraction = (
         None
-        if total_pixels is None or total_pixels <= 0 or geometric_full is None
-        else float(geometric_full) / float(total_pixels)
+        if total_pixels is None or total_pixels <= 0
+        else (
+            float(max(0, int(total_pixels) - int(geometric_zero))) / float(total_pixels)
+            if geometric_zero is not None
+            else (
+                float(min(int(geometric_finite), int(total_pixels))) / float(total_pixels)
+                if geometric_finite is not None
+                else (
+                    float(geometric_full) / float(total_pixels)
+                    if geometric_full is not None
+                    else None
+                )
+            )
+        )
     )
     geometric_frame_count = _nonnegative_int(provenance.get("geometric_warp_coverage_frame_count"))
     active_frame_count = _nonnegative_int(provenance.get("active_frame_count"))
@@ -629,7 +643,6 @@ def _resident_warp_quality_contract(
         or geometric_frame_count != len(active_ids)
         or active_frame_count != len(active_ids)
     )
-    pixel_failed = bool(pixel_verify)
 
     checks = [
         _check(

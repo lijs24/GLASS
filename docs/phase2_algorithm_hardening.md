@@ -541,6 +541,117 @@ Validation commands:
 - `glass acceptance-audit` with the Gate586 run's automatic
   `pipeline_contract.json` and `stack_engine_contract.json`.
 
+### S2-Gate 587: Default Run Auto Resident Warp-Quality Contract
+
+Gate 587 completes the resident default run evidence chain for registration and
+warp. Gate586 made the run-local pipeline and StackEngine contracts automatic;
+this gate makes the resident in-VRAM `warp_quality_contract.json` automatic as
+well, so a fresh `glass run --memory-mode resident` can be accepted using only
+artifacts from that run directory.
+
+Implementation:
+
+- `glass run --memory-mode resident` now writes `warp_quality_contract.json`
+  and `warp_quality_contract.md` after the automatic StackEngine contract when
+  resident artifacts and registration results exist.
+- The automatic contract uses `contract_surface=resident_in_vram`,
+  `require_all_registered=true`, `pixel_verify=false`, and
+  `max_skipped_frames=10`.
+- When resident geometric coverage statistics are present, the default contract
+  enforces `min_valid_fraction=0.75`. It now derives the valid fraction from
+  resident geometric coverage provenance (`geometric_zero_pixels`,
+  `finite_pixels`, or the older `geometric_full_pixels` field), so resident
+  runs without a materialized per-frame registered cache are still auditable.
+- When coverage and DQ map paths are present, the automatic contract also
+  enforces output-map artifact readiness. Runs that do not request coverage-map
+  output still get frame-mask, registration, and geometric-coverage closure
+  checks without pretending that missing maps exist.
+- Normal resident runs fail if the automatic warp-quality contract fails; tiny
+  diagnostic runs with fewer than three active outputs keep the existing
+  non-blocking small-frame allowance.
+- `run_state.json` records `warp_quality_contract` as a first-class run
+  artifact, and `run_timing.json` records the new
+  `warp_quality_contract` stage.
+
+Real 200-light evidence:
+
+- Fresh Gate587 run:
+  `C:\glass_runs\phase2_s2_gate587_auto_warp_quality\default_auto_contract`
+- Hash parity versus Gate586:
+  `C:\glass_runs\phase2_s2_gate587_auto_warp_quality\hash_parity_vs_gate586.json`
+- Compare:
+  `C:\glass_runs\phase2_s2_gate587_auto_warp_quality\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate587_auto_warp_quality\acceptance_audit.json`
+- `run_state.json` artifact tail:
+  `resident_registration_health`, `local_norm_contract`, `pipeline_contract`,
+  `stack_engine_contract`, `warp_quality_contract`.
+- Run failed stage: none.
+- Stage timing sum: `7.614031400065869 s`.
+- Automatic `warp_quality_contract` stage timing:
+  `0.022742300061509013 s`.
+- Pipeline contract: `passed`, `24` checks.
+- StackEngine contract: `passed`, default-promotion ready.
+- Warp-quality contract:
+  - status: `passed`;
+  - contract surface: `resident_in_vram`;
+  - checks: `9`;
+  - active/masked frames: `193 / 7`;
+  - artifact-ready active frames: `193`;
+  - geometric warp coverage frames: `193`;
+  - min valid fraction: `1.0`;
+  - max skipped frames threshold: `10`;
+  - failed checks: `0`.
+- Six integration FITS outputs were SHA256-identical to Gate586.
+- Compare versus WBPP black-box fastIntegration:
+  - GLASS time: `7.614031400065869 s`;
+  - WBPP black-box reference time: `1092.541 s`;
+  - speedup: `143.4904773298608x`;
+  - coverage190 fraction: `0.905523489118409`;
+  - RMS difference: `0.005340835487175878`;
+  - p99 absolute difference: `0.002133606873685496`.
+- Acceptance audit: `passed`, using the Gate587 run-local
+  `pipeline_contract.json`, `stack_engine_contract.json`, and
+  `warp_quality_contract.json`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\cli.py src\glass\report\warp_quality.py
+  tests\test_resident_cuda_run.py tests\test_warp_quality_contract.py`
+- `python -m pytest -q tests\test_warp_quality_contract.py
+  tests\test_resident_cuda_run.py -k
+  "test_cli_resident_cuda_run_smoke or
+  test_cli_resident_cuda_run_generates_source_dq_cache_route or
+  warp_quality"`
+- Fresh 200-light resident run:
+  `glass run --plan
+  C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json
+  --out
+  C:\glass_runs\phase2_s2_gate587_auto_warp_quality\default_auto_contract
+  --backend cuda --memory-mode resident --resident-runtime-preset
+  throughput-v3-io --integration-weighting none --flat-floor 0.05
+  --resident-star-threshold 350 --resident-star-max-candidates 48
+  --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4
+  --resident-output-maps audit --resident-master-cache-dir
+  C:\glass_runs\phase2_s2_gate518_dq_stats_reuse\runs_20260623_094619\resident_master_cache`
+- `glass compare` against the WBPP black-box fastIntegration master with the
+  Gate587 output master and coverage map.
+- `glass acceptance-audit` with the Gate587 run-local automatic
+  `pipeline_contract.json`, `stack_engine_contract.json`, and
+  `warp_quality_contract.json`.
+
+Interpretation:
+
+- the default resident route now carries calibration, StackEngine, DQ/mask,
+  registration, and warp evidence in one self-contained run directory;
+- this is not a report-only or micro-optimization gate: future real default
+  acceptance fails if resident registration/warp masks, coverage, skipped-frame
+  limits, or output maps stop closing;
+- the next substantive gate should use this default evidence chain while
+  returning to StackEngine default-path execution, DQ/mask pipeline contract
+  coverage, real 200-light regression, or resident CUDA performance/numerical
+  consistency work.
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident

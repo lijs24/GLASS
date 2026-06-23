@@ -2326,6 +2326,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     local_norm_contract = read_json(run / "local_norm_contract.json")
     pipeline_contract = read_json(run / "pipeline_contract.json")
     auto_stack_contract = read_json(run / "stack_engine_contract.json")
+    auto_warp_quality_contract = read_json(run / "warp_quality_contract.json")
     assert integration["source_stage"] == "resident_calibrated_stack"
     assert integration["outputs"][0]["backend"] == "cuda_resident_stack"
     assert integration["outputs"][0]["resident_registration"] == "translation_preview"
@@ -2408,6 +2409,17 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert auto_stack_contract["pipeline_contract_dq_ledger"]["ready"] is True
     assert auto_stack_contract["default_promotion"]["ready"] is True
     assert any(item["stage"] == "stack_engine_contract" for item in state["artifacts"])
+    assert auto_warp_quality_contract["artifact_type"] == "warp_quality_contract"
+    assert auto_warp_quality_contract["contract_surface"] == "resident_in_vram"
+    assert auto_warp_quality_contract["passed"] is True
+    assert auto_warp_quality_contract["thresholds"]["min_valid_fraction"] == 0.75
+    assert auto_warp_quality_contract["thresholds"]["max_skipped_frames"] == 10
+    assert auto_warp_quality_contract["thresholds"]["require_artifacts"] is False
+    assert auto_warp_quality_contract["thresholds"]["require_all_registered"] is True
+    assert auto_warp_quality_contract["thresholds"]["pixel_verify"] is False
+    assert auto_warp_quality_contract["summary"]["resident_active_frame_count"] >= 1
+    assert any(item["stage"] == "warp_quality_contract" for item in state["artifacts"])
+    assert (run / "warp_quality_contract.md").exists()
     stack_contract_out = tmp_path / "stack_engine_contract.json"
     assert (
         main(
@@ -3368,7 +3380,7 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
             "--integration-weighting",
             "none",
             "--resident-registration",
-            "off",
+            "translation_preview",
             "--resident-prefetch-frames",
             "2",
             "--resident-prefetch-workers",
@@ -3391,6 +3403,7 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     timing = read_json(run / "run_timing.json")
     state = read_json(run / "run_state.json")
     integration = read_json(run / "integration_results.json")
+    warp_quality = read_json(run / "warp_quality_contract.json")
     output = integration["outputs"][0]
     master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
     weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
@@ -3423,12 +3436,21 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
         "local_norm_contract",
         "pipeline_contract",
         "stack_engine_contract",
+        "warp_quality_contract",
     ]
     assert "resident_source_dq_cache_calibration" in state["completed_stages"]
     assert any(item["stage"] == "resident_source_dq_strategy" for item in state["artifacts"])
     assert any(item["stage"] == "resident_source_dq_cache" for item in state["artifacts"])
     assert any(item["stage"] == "stack_engine_contract" for item in state["artifacts"])
+    assert any(item["stage"] == "warp_quality_contract" for item in state["artifacts"])
     assert (run / "stack_engine_contract.json").exists()
+    assert (run / "warp_quality_contract.json").exists()
+    assert warp_quality["passed"] is True
+    assert warp_quality["contract_surface"] == "resident_in_vram"
+    assert warp_quality["thresholds"]["require_artifacts"] is False
+    assert warp_quality["thresholds"]["min_valid_fraction"] == 0.75
+    assert warp_quality["thresholds"]["max_skipped_frames"] == 10
+    assert warp_quality["summary"]["artifact_ready_count"] == 0
     assert master[4, 5] == pytest.approx(100.0)
     assert weight[4, 5] == pytest.approx(1.0)
     assert master[0, 0] == pytest.approx(100.0)
