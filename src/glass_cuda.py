@@ -4054,6 +4054,7 @@ class ResidentCalibratedStack:
                         result.get("catalog_timing_model", "unavailable")
                     ),
                     "catalog_batch_size": int(result.get("catalog_batch_size", 1) or 1),
+                    "catalog_stream_limit": int(result.get("catalog_stream_limit", 0) or 0),
                     "catalog_stream_count": int(result.get("catalog_stream_count", 1) or 1),
                     "catalog_batch_sync_count": int(
                         result.get("catalog_batch_sync_count", 1) or 1
@@ -4180,6 +4181,7 @@ class ResidentCalibratedStack:
             "catalog_topk_mode": str(result.get("catalog_topk_mode", "unavailable")),
             "catalog_timing_model": str(result.get("catalog_timing_model", "unavailable")),
             "catalog_batch_size": int(result.get("catalog_batch_size", 1) or 1),
+            "catalog_stream_limit": int(result.get("catalog_stream_limit", 0) or 0),
             "catalog_stream_count": int(result.get("catalog_stream_count", 1) or 1),
             "catalog_batch_sync_count": int(result.get("catalog_batch_sync_count", 1) or 1),
             "catalog_sync_phase_count": int(result.get("catalog_sync_phase_count", 1) or 1),

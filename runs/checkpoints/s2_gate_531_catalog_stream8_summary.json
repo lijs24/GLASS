@@ -1,0 +1,69 @@
+{
+  "gate": "S2-Gate 531",
+  "title": "Resident triangle catalog 8-stream fanout",
+  "created_at": "2026-06-23T04:30:22.787723+00:00",
+  "implementation": {
+    "native_stream_limit": 8,
+    "files": [
+      "cpp/src/native_bindings.cpp",
+      "src/glass_cuda.py",
+      "src/glass/engine/resident_cuda.py",
+      "tests/test_cuda_resident_stack.py",
+      "docs/algorithm_sources.md",
+      "docs/phase2_algorithm_hardening.md"
+    ],
+    "semantics": "Raises resident batched grid/NMS catalog stream fanout only; math and output pixels unchanged."
+  },
+  "real_200_light": {
+    "dataset": "M38_H_200light_20bias_20dark_20flat",
+    "baseline_run": "C:\\glass_runs\\phase2_mainline_real_200_ab_current\\runs_20260623_122002\\glass_current_default",
+    "candidate_run": "C:\\glass_runs\\phase2_s2_gate531_catalog_stream8_real\\runs_20260623_122624\\catalog_stream8_repeat",
+    "baseline_internal_s": 5.721311400004197,
+    "baseline_shell_s": 6.088693,
+    "candidate_internal_s": 5.650653899996541,
+    "candidate_shell_s": 6.001961,
+    "baseline_registration_component_s": 1.8479182995140835,
+    "candidate_registration_component_s": 1.530751099891913,
+    "baseline_catalog_native_sync_s": 0.23199929999999996,
+    "candidate_catalog_native_sync_s": 0.1254431,
+    "candidate_catalog_stream_limit": 8,
+    "candidate_catalog_stream_count": 8,
+    "wbpp_elapsed_s": 1092.541,
+    "internal_speedup_vs_wbpp": 193.3477114924113
+  },
+  "numerical_validation": {
+    "bitwise_compare_json": "C:\\glass_runs\\phase2_s2_gate531_catalog_stream8_real\\runs_20260623_122624\\catalog_stream8_repeat\\gate531_bitwise_vs_previous_default.json",
+    "all_six_audit_maps_bitwise_equal": true,
+    "scaled_compare_json": "C:\\glass_runs\\phase2_s2_gate531_catalog_stream8_real\\runs_20260623_122624\\catalog_stream8_repeat\\compare_vs_wbpp_fastintegration_scaled_coverage190.json",
+    "scaled_acceptance_json": "C:\\glass_runs\\phase2_s2_gate531_catalog_stream8_real\\runs_20260623_122624\\catalog_stream8_repeat\\acceptance_audit_scaled.json",
+    "scaled_acceptance_status": "passed",
+    "coverage_fraction": 0.9892770479074376,
+    "rms_diff": 0.0004279821839256963,
+    "abs_diff_p99": 0.0001313822576776147
+  },
+  "commands": [
+    "cmake Release native build via Visual Studio BuildTools and CUDA 13.2",
+    "python -m pytest -q tests/test_cuda_resident_stack.py::test_resident_stack_grid_star_catalog_batch_reports_native_timing tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair",
+    "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --backend cuda --memory-mode resident ... --resident-output-maps audit",
+    "glass compare --glass resident_master_H.fits --reference WBPP fastIntegration master --glass-scale 1.545301547671945e-05 --glass-offset=-9.765786009702931e-05 --min-coverage 190",
+    "glass speedup-summary --min-speedup 2.0",
+    "glass acceptance-audit --min-active-frames 190 --min-speedup 2.0 --max-rms-diff 0.01 --max-abs-diff-p99 0.01",
+    "python -m pytest -q",
+    "glass doctor"
+  ],
+  "test_results": {
+    "focused": "2 passed in 0.46s",
+    "full_pytest": "1174 passed in 43.24s",
+    "doctor": "CUDA available; RTX PRO 6000 Blackwell; cc 12.0; VRAM 97886 MiB; driver 596.21"
+  },
+  "clean_room": {
+    "status": "compliant",
+    "note": "Uses GLASS code, GLASS-generated artifacts, and user-generated WBPP black-box timing/reference outputs only. No official WBPP/PJSR source was read or copied."
+  },
+  "known_limitations": [
+    "The remaining registration/warp bottleneck is batched Lanczos3 warp sync around 0.47 s.",
+    "The stream fanout is a scheduling optimization validated on the local RTX PRO 6000 Blackwell; lower-end GPUs may show different timing but should preserve output identity.",
+    "Scaled WBPP compare is used because GLASS and WBPP masters differ by output normalization scale."
+  ],
+  "next_step": "Target resident Lanczos3 warp sync and deeper catalog/descriptor/warp residency overlap."
+}

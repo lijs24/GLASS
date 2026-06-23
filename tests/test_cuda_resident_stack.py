@@ -1216,6 +1216,7 @@ def test_resident_stack_grid_star_catalog_batch_reports_native_timing():
     for batch_item, repeat_item, single_item in zip(batch, repeat_batch, singles, strict=True):
         assert batch_item["catalog_timing_model"] == "batch_multistream_bulk_download"
         assert batch_item["catalog_batch_size"] == 3
+        assert batch_item["catalog_stream_limit"] == 8
         assert batch_item["catalog_stream_count"] == 3
         assert batch_item["catalog_batch_sync_count"] == 3
         assert batch_item["catalog_sync_phase_count"] == 1
@@ -1278,6 +1279,7 @@ def test_resident_stack_grid_star_catalog_batch_reports_native_timing():
     ):
         assert batch_item["catalog_timing_model"] == "batch_multistream_bulk_download"
         assert batch_item["catalog_batch_size"] == 3
+        assert batch_item["catalog_stream_limit"] == 8
         assert batch_item["catalog_stream_count"] == 3
         assert batch_item["catalog_batch_sync_count"] == 3
         assert batch_item["catalog_sync_phase_count"] == 1

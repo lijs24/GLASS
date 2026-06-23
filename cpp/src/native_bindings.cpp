@@ -7980,7 +7980,8 @@ class ResidentCalibratedStack {
                 batch_count * static_cast<std::size_t>(centroid_mean_blocks) * sizeof(unsigned int)),
             "cudaMalloc(resident batch grid top nms centroid fused mean counts)");
       }
-      catalog_stream_count = std::min<std::size_t>(4, batch_count);
+      constexpr std::size_t catalog_stream_limit = 8;
+      catalog_stream_count = std::min<std::size_t>(catalog_stream_limit, batch_count);
       catalog_streams.resize(catalog_stream_count, nullptr);
       for (std::size_t stream_index = 0; stream_index < catalog_stream_count; ++stream_index) {
         check_cuda(
@@ -8243,6 +8244,7 @@ class ResidentCalibratedStack {
                    : "batch_multistream_bulk_download_centroid_multistream")
             : "batch_multistream_bulk_download";
         result["catalog_batch_size"] = static_cast<int>(batch_count);
+        result["catalog_stream_limit"] = static_cast<int>(catalog_stream_limit);
         result["catalog_stream_count"] = static_cast<int>(catalog_stream_count);
         result["catalog_batch_sync_count"] = static_cast<int>(catalog_stream_count);
         result["catalog_sync_phase_count"] = catalog_sync_phase_count;

@@ -13466,6 +13466,60 @@ Completed in Gate446:
   - WBPP compare report:
     `C:\glass_runs\phase2_s2_gate530_native_count_dq\runs_20260623_120726\native_count_r2\compare_vs_wbpp_fastintegration.html`.
 
+### S2-Gate 531: Resident Triangle Catalog 8-Stream Fanout
+
+- Returned to the Phase 2 mainline registration bottleneck after confirming
+  that larger warp chunks and higher light-prefetch worker counts should not be
+  promoted. The resident triangle catalog batch was still capped at four native
+  CUDA streams while the 200-light route had 199 moving frames ready for a
+  single batched catalog pass.
+- Completed:
+  - raised the native `star_grid_top_nms_candidates_batch` stream fanout cap
+    from `4` to `8`;
+  - records `catalog_stream_limit` in native catalog results and
+    `triangle_catalog_stream_limit` in `resident_artifacts.json`;
+  - preserved deterministic catalog ordering and all downstream descriptor,
+    registration, warp, DQ, rejection, and integration math.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate531_catalog_stream8_real`;
+  - baseline current default:
+    `C:\glass_runs\phase2_mainline_real_200_ab_current\runs_20260623_122002\glass_current_default`;
+  - promoted validation run:
+    `C:\glass_runs\phase2_s2_gate531_catalog_stream8_real\runs_20260623_122624\catalog_stream8_repeat`;
+  - same M38 H-alpha 200-light plan, shared master cache, resident CUDA,
+    `similarity_cuda_triangle`, Lanczos3 warp, winsorized sigma rejection, and
+    audit maps;
+  - baseline internal runtime `5.721311400004197 s`, shell `6.088693 s`;
+  - stream8 validation internal runtime `5.650653899996541 s`, shell
+    `6.001961 s`;
+  - catalog stream evidence records `triangle_catalog_stream_limit=8` and
+    `triangle_catalog_stream_count=8`;
+  - catalog native sync dropped from about `0.2319993 s` to `0.1254431 s`;
+  - resident registration component dropped from about `1.8479183 s` to
+    `1.5307511 s`.
+- Numerical and black-box validation:
+  - stream8 master, weight map, coverage map, low/high rejection maps, and DQ
+    map match the previous default run bitwise;
+  - GLASS-vs-WBPP scaled compare is shape-matched with coverage fraction
+    `0.9892770479074376`, RMS `0.0004279821839256963`, and p99 absolute
+    difference `0.0001313822576776147`;
+  - scaled acceptance audit passed with GLASS internal speedup
+    `193.3477114924113x` versus the WBPP black-box `1092.541 s` timing.
+- Interpretation:
+  - this is a resident registration scheduling improvement, not a report-only
+    evidence gate;
+  - output identity proves the stream fanout only changes GPU scheduling;
+  - the largest remaining registration/warp target is the batched Lanczos3 warp
+    sync (`~0.47 s`) and deeper residency/overlap around catalog, descriptor,
+    and warp dispatch.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_531_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_531_catalog_stream8_summary.json`;
+  - WBPP compare report:
+    `C:\glass_runs\phase2_s2_gate531_catalog_stream8_real\runs_20260623_122624\catalog_stream8_repeat\compare_vs_wbpp_fastintegration_scaled_coverage190.html`.
+
 ## Gate Rules
 
 Each gate requires:

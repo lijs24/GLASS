@@ -7413,6 +7413,7 @@ def run_resident_calibration_integration(
                 triangle_catalog_native_centroid_refine_s = 0.0
                 triangle_catalog_native_total_s = 0.0
                 triangle_catalog_batch_size = 0
+                triangle_catalog_stream_limit = 0
                 triangle_catalog_stream_count = 0
                 triangle_catalog_batch_sync_count = 0
                 triangle_catalog_sync_phase_count = 0
@@ -7677,6 +7678,7 @@ def run_resident_calibration_integration(
                     nonlocal triangle_catalog_native_sync_s
                     nonlocal triangle_catalog_native_total_s
                     nonlocal triangle_catalog_batch_size
+                    nonlocal triangle_catalog_stream_limit
                     nonlocal triangle_catalog_stream_count
                     nonlocal triangle_catalog_batch_sync_count
                     nonlocal triangle_catalog_sync_phase_count
@@ -7749,6 +7751,10 @@ def run_resident_calibration_integration(
                                 )
                                 triangle_catalog_batch_size = max(
                                     int(item.get("catalog_batch_size", 0) or 0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_stream_limit = max(
+                                    int(item.get("catalog_stream_limit", 0) or 0)
                                     for item in batch_results
                                 )
                                 triangle_catalog_stream_count = max(
@@ -11241,6 +11247,9 @@ def run_resident_calibration_integration(
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_catalog_batch_size": int(triangle_catalog_batch_size)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_catalog_stream_limit": int(triangle_catalog_stream_limit)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
                         "triangle_catalog_stream_count": int(triangle_catalog_stream_count)
