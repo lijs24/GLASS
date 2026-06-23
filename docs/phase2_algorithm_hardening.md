@@ -13632,6 +13632,58 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_533_prefetch_inflight_summary.json`.
 
+### S2-Gate 534: Parallel Native Count-Map DQ
+
+- Continued the Phase 2 mainline by targeting the DQ/mask pipeline hot path
+  surfaced by a real 200-light cProfile run. The profile showed the native
+  count-map DQ builder as a large host-side component in the audit-map route.
+- Completed:
+  - parallelized `_glass_cuda_native.resident_dq_map_count_maps_i16` with
+    chunked `std::thread` workers;
+  - each worker writes a disjoint DQ output slice and accumulates local
+    coverage/rejection/DQ stats;
+  - the main thread merges local stats with the same min/max/sum/count
+    semantics as the previous single-thread scan;
+  - small arrays remain single-threaded, while the real `9600x6422` benchmark
+    uses 16 worker threads;
+  - resident artifacts now record `dq_map_stats_native_thread_count`.
+- Build validation:
+  - the first rebuild used the old Debug `build` directory and correctly fell
+    back to the Python DQ fast path; this result was not promoted;
+  - rebuilt a true Release native extension in `build-release-native`, after
+    which `resident_dq_map_host_f32_optimized()` and
+    `resident_dq_map_count_maps_i16_preferred()` both returned `True`.
+- Real 200-light validation:
+  - profile run:
+    `C:\glass_runs\phase2_s2_gate534_profile\runs_20260623_135500`;
+  - final validation run:
+    `C:\glass_runs\phase2_s2_gate534_parallel_dq_final\runs_20260623_142500\parallel_dq_final_default`;
+  - same M38 H-alpha 200-light plan, shared master cache, resident CUDA,
+    `similarity_cuda_triangle`, Lanczos3 warp, winsorized sigma rejection, and
+    audit maps.
+- Runtime evidence:
+  - Gate533 baseline shell `5.795757 s`, internal `5.4339563000248745 s`;
+  - Gate534 final shell `5.278554 s`, internal `4.924247499962803 s`;
+  - artifact records `dq_map_stats_backend=native_host_fast_count_maps`,
+    `dq_map_stats_native_method=resident_dq_map_count_maps_i16`, and
+    `dq_map_stats_native_thread_count=16`.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to Gate533;
+  - by bitwise identity, the established Gate532 scaled WBPP comparison remains
+    applicable: coverage fraction `0.9892770479074376`, RMS
+    `0.0004279821839256963`, and p99 absolute difference
+    `0.0001313822576776147`.
+- Interpretation:
+  - this is a DQ/mask runtime gate on the production audit-map path;
+  - the next substantive targets remain resident registration/warp batching,
+    native FITS read overlap, and artifact JSON size/write cost if it blocks
+    benchmark turnaround.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_534_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_534_parallel_dq_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

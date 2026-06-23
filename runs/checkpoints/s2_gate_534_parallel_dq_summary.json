@@ -1,0 +1,70 @@
+{
+  "gate": "S2-Gate 534",
+  "title": "Parallel Native Count-Map DQ",
+  "code_changes": [
+    {
+      "file": "cpp/src/native_bindings.cpp",
+      "summary": "Parallelized resident_dq_map_count_maps_i16 with disjoint DQ output slices, per-thread stats, and final host reduction."
+    },
+    {
+      "file": "src/glass/engine/resident_cuda.py",
+      "summary": "Recorded dq_map_stats_native_thread_count in resident artifacts."
+    },
+    {
+      "file": "tests/test_resident_cuda_run.py",
+      "summary": "Asserted native count-map DQ reports native_thread_count."
+    }
+  ],
+  "build": {
+    "debug_build_result": "Debug build fell back to Python DQ fast path and was not promoted.",
+    "release_build_dir": "build-release-native",
+    "release_build_result": "successful",
+    "optimized_probe": true,
+    "count_map_preferred_probe": true
+  },
+  "pytest": {
+    "focused_native_dq_cuda": "5 passed in 0.26s",
+    "focused_native_dq_prefetch": "3 passed in 0.25s",
+    "full": "1175 passed in 43.68s"
+  },
+  "real_200_light_validation": {
+    "plan": "C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json",
+    "baseline_run": "C:\\glass_runs\\phase2_s2_gate533_prefetch_inflight_fix\\runs_20260623_134500\\default_after",
+    "final_run": "C:\\glass_runs\\phase2_s2_gate534_parallel_dq_final\\runs_20260623_142500\\parallel_dq_final_default",
+    "baseline_shell_s": 5.795757,
+    "baseline_total_elapsed_s": 5.4339563000248745,
+    "final_shell_s": 5.278554,
+    "final_total_elapsed_s": 4.924247499962803,
+    "dq_map_stats_backend": "native_host_fast_count_maps",
+    "dq_map_stats_native_method": "resident_dq_map_count_maps_i16",
+    "dq_map_stats_native_thread_count": 16,
+    "bitwise_maps_vs_gate533": {
+      "resident_master_H.fits": true,
+      "resident_weight_map_H.fits": true,
+      "resident_coverage_map_H.fits": true,
+      "resident_low_rejection_map_H.fits": true,
+      "resident_high_rejection_map_H.fits": true,
+      "resident_dq_map_H.fits": true
+    }
+  },
+  "wbpp_reference_status": {
+    "rerun_compare": false,
+    "reason": "Gate534 output maps are bitwise identical to Gate533/Gate532 lineage that already passed scaled WBPP comparison.",
+    "inherited_gate532_scaled_compare": {
+      "coverage_fraction": 0.9892770479074376,
+      "rms": 0.0004279821839256963,
+      "p99_abs": 0.0001313822576776147
+    }
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "clean_room": true,
+  "known_limitations": [
+    "The optimization applies to the validated finite/nonnegative count-map DQ fast path.",
+    "Debug native builds intentionally fall back to Python DQ unless forced."
+  ]
+}

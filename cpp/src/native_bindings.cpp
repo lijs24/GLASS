@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <fstream>
 #include <memory>
+#include <thread>
 
 namespace py = pybind11;
 
@@ -14760,6 +14761,59 @@ void update_finite_nonnegative_count_stats(HostCountMapStats& stats, float value
   stats.rounded_sum += static_cast<long long>(std::nearbyint(as_double));
 }
 
+void merge_coverage_stats(HostCoverageStats& target, const HostCoverageStats& source) {
+  target.total_pixels += source.total_pixels;
+  if (source.finite_pixels == 0) {
+    return;
+  }
+  if (target.finite_pixels == 0) {
+    target.min = source.min;
+    target.max = source.max;
+  } else {
+    target.min = std::min(target.min, source.min);
+    target.max = std::max(target.max, source.max);
+  }
+  target.finite_pixels += source.finite_pixels;
+  target.mean += source.mean;
+  target.rounded_sum += source.rounded_sum;
+}
+
+void merge_count_map_stats(HostCountMapStats& target, const HostCountMapStats& source) {
+  target.present = target.present || source.present;
+  target.total_pixels += source.total_pixels;
+  if (source.finite_pixels > 0) {
+    if (target.finite_pixels == 0) {
+      target.min = source.min;
+      target.max = source.max;
+    } else {
+      target.min = std::min(target.min, source.min);
+      target.max = std::max(target.max, source.max);
+    }
+  }
+  target.finite_pixels += source.finite_pixels;
+  target.rounded_sum += source.rounded_sum;
+  target.positive_pixels += source.positive_pixels;
+  target.negative_pixels += source.negative_pixels;
+  target.fractional_pixels += source.fractional_pixels;
+}
+
+void merge_dq_map_stats(HostDqMapStats& target, const HostDqMapStats& source) {
+  merge_coverage_stats(target.post_rejection_coverage, source.post_rejection_coverage);
+  merge_coverage_stats(target.geometric_warp_coverage, source.geometric_warp_coverage);
+  merge_count_map_stats(target.low_rejection, source.low_rejection);
+  merge_count_map_stats(target.high_rejection, source.high_rejection);
+  target.post_rejection_zero_pixels += source.post_rejection_zero_pixels;
+  target.geometric_zero_pixels += source.geometric_zero_pixels;
+  target.geometric_partial_pixels += source.geometric_partial_pixels;
+  target.geometric_full_pixels += source.geometric_full_pixels;
+  target.no_data_pixels += source.no_data_pixels;
+  target.warp_edge_pixels += source.warp_edge_pixels;
+  target.low_rejected_pixels += source.low_rejected_pixels;
+  target.high_rejected_pixels += source.high_rejected_pixels;
+  target.rejection_reduced_pixels += source.rejection_reduced_pixels;
+  target.valid_pixels += source.valid_pixels;
+}
+
 py::dict finite_nonnegative_count_map_stats_to_dict(
     const HostCountMapStats& stats,
     py::ssize_t height,
@@ -14821,77 +14875,107 @@ py::tuple resident_dq_map_count_maps_i16(
   HostDqMapStats loop_stats;
   const int expected_count = active_frame_count > 0 ? active_frame_count : 0;
   const float full_threshold = expected_count > 0 ? static_cast<float>(expected_count) - 0.5f : 0.0f;
+  const unsigned int hardware_threads = std::max(1u, std::thread::hardware_concurrency());
+  std::size_t thread_count = 1;
+  if (total_pixels >= 1024u * 1024u) {
+    const std::size_t chunk_limited_threads = (total_pixels + (1024u * 1024u) - 1u) / (1024u * 1024u);
+    thread_count = std::min<std::size_t>(16u, std::min<std::size_t>(hardware_threads, chunk_limited_threads));
+    thread_count = std::max<std::size_t>(1u, thread_count);
+  }
 
   {
     py::gil_scoped_release release;
-    for (std::size_t index = 0; index < total_pixels; ++index) {
-      std::int16_t flags = 0;
-      bool invalid = false;
+    auto scan_range = [&](std::size_t begin, std::size_t end, HostDqMapStats& stats) {
+      for (std::size_t index = begin; index < end; ++index) {
+        std::int16_t flags = 0;
+        bool invalid = false;
 
-      if (coverage_map.present) {
-        const float coverage = coverage_map.data[index];
-        update_finite_coverage_stats(loop_stats.post_rejection_coverage, coverage);
-        if (coverage <= 0.5f) {
-          invalid = true;
-          flags = static_cast<std::int16_t>(flags | dq_warp_edge);
-          ++loop_stats.post_rejection_zero_pixels;
-        }
-      }
-
-      if (geometric_warp_coverage_map.present) {
-        const float geometric = geometric_warp_coverage_map.data[index];
-        update_finite_coverage_stats(loop_stats.geometric_warp_coverage, geometric);
-        if (geometric <= 0.5f) {
-          invalid = true;
-          flags = static_cast<std::int16_t>(flags | dq_warp_edge);
-          ++loop_stats.geometric_zero_pixels;
-        } else if (expected_count > 0) {
-          if (geometric < full_threshold) {
+        if (coverage_map.present) {
+          const float coverage = coverage_map.data[index];
+          update_finite_coverage_stats(stats.post_rejection_coverage, coverage);
+          if (coverage <= 0.5f) {
+            invalid = true;
             flags = static_cast<std::int16_t>(flags | dq_warp_edge);
-            ++loop_stats.geometric_partial_pixels;
-          } else {
-            ++loop_stats.geometric_full_pixels;
+            ++stats.post_rejection_zero_pixels;
           }
         }
-      }
 
-      if (invalid) {
-        flags = static_cast<std::int16_t>(flags | dq_no_data);
-        ++loop_stats.no_data_pixels;
-      }
-
-      bool low_rejected = false;
-      if (low_rejection_map.present) {
-        const float low = low_rejection_map.data[index];
-        update_finite_nonnegative_count_stats(loop_stats.low_rejection, low);
-        low_rejected = low > 0.0f;
-        if (low_rejected) {
-          flags = static_cast<std::int16_t>(flags | dq_low_rejected);
-          ++loop_stats.low_rejected_pixels;
+        if (geometric_warp_coverage_map.present) {
+          const float geometric = geometric_warp_coverage_map.data[index];
+          update_finite_coverage_stats(stats.geometric_warp_coverage, geometric);
+          if (geometric <= 0.5f) {
+            invalid = true;
+            flags = static_cast<std::int16_t>(flags | dq_warp_edge);
+            ++stats.geometric_zero_pixels;
+          } else if (expected_count > 0) {
+            if (geometric < full_threshold) {
+              flags = static_cast<std::int16_t>(flags | dq_warp_edge);
+              ++stats.geometric_partial_pixels;
+            } else {
+              ++stats.geometric_full_pixels;
+            }
+          }
         }
-      }
 
-      bool high_rejected = false;
-      if (high_rejection_map.present) {
-        const float high = high_rejection_map.data[index];
-        update_finite_nonnegative_count_stats(loop_stats.high_rejection, high);
-        high_rejected = high > 0.0f;
-        if (high_rejected) {
-          flags = static_cast<std::int16_t>(flags | dq_high_rejected);
-          ++loop_stats.high_rejected_pixels;
+        if (invalid) {
+          flags = static_cast<std::int16_t>(flags | dq_no_data);
+          ++stats.no_data_pixels;
         }
-      }
 
-      if (low_rejected || high_rejected) {
-        ++loop_stats.rejection_reduced_pixels;
+        bool low_rejected = false;
+        if (low_rejection_map.present) {
+          const float low = low_rejection_map.data[index];
+          update_finite_nonnegative_count_stats(stats.low_rejection, low);
+          low_rejected = low > 0.0f;
+          if (low_rejected) {
+            flags = static_cast<std::int16_t>(flags | dq_low_rejected);
+            ++stats.low_rejected_pixels;
+          }
+        }
+
+        bool high_rejected = false;
+        if (high_rejection_map.present) {
+          const float high = high_rejection_map.data[index];
+          update_finite_nonnegative_count_stats(stats.high_rejection, high);
+          high_rejected = high > 0.0f;
+          if (high_rejected) {
+            flags = static_cast<std::int16_t>(flags | dq_high_rejected);
+            ++stats.high_rejected_pixels;
+          }
+        }
+
+        if (low_rejected || high_rejected) {
+          ++stats.rejection_reduced_pixels;
+        }
+        if ((flags & dq_warp_edge) != 0) {
+          ++stats.warp_edge_pixels;
+        }
+        if (flags == 0) {
+          ++stats.valid_pixels;
+        }
+        dq_data[index] = flags;
       }
-      if ((flags & dq_warp_edge) != 0) {
-        ++loop_stats.warp_edge_pixels;
+    };
+
+    if (thread_count == 1) {
+      scan_range(0, total_pixels, loop_stats);
+    } else {
+      std::vector<HostDqMapStats> local_stats(thread_count);
+      std::vector<std::thread> workers;
+      workers.reserve(thread_count);
+      for (std::size_t thread_index = 0; thread_index < thread_count; ++thread_index) {
+        const std::size_t begin = (total_pixels * thread_index) / thread_count;
+        const std::size_t end = (total_pixels * (thread_index + 1u)) / thread_count;
+        workers.emplace_back([&, begin, end, thread_index]() {
+          scan_range(begin, end, local_stats[thread_index]);
+        });
       }
-      if (flags == 0) {
-        ++loop_stats.valid_pixels;
+      for (auto& worker : workers) {
+        worker.join();
       }
-      dq_data[index] = flags;
+      for (const auto& stats : local_stats) {
+        merge_dq_map_stats(loop_stats, stats);
+      }
     }
   }
 
@@ -14916,6 +15000,7 @@ py::tuple resident_dq_map_count_maps_i16(
   stats["stats_backend"] = "native_host_fast_count_maps";
   stats["stats_profile"] = "resident_valid_master_nonnegative_count_map_native_i16";
   stats["native_method"] = "resident_dq_map_count_maps_i16";
+  stats["native_thread_count"] = static_cast<int>(thread_count);
   stats["post_rejection_coverage"] =
       coverage_map.present ? py::object(coverage_stats_to_dict(loop_stats.post_rejection_coverage)) : py::none();
   stats["post_rejection_zero_pixels"] =

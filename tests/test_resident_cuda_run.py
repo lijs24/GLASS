@@ -843,6 +843,7 @@ def test_resident_dq_map_count_maps_native_matches_fast_python_when_available():
     assert stats["stats_source"] == expected_stats["stats_source"]
     assert stats["stats_backend"] == "native_host_fast_count_maps"
     assert stats["native_method"] == "resident_dq_map_count_maps_i16"
+    assert stats["native_thread_count"] >= 1
     for key in (
         "post_rejection_coverage",
         "geometric_warp_coverage",
