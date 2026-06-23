@@ -18,6 +18,7 @@ from glass.cli import build_parser
 from glass.cli import main
 from glass.engine.contracts import DQFlag
 from glass.engine.pipeline import initialize_run
+from glass.engine.resident_reference_health import build_resident_reference_health
 from glass.engine.resident_registration_health import build_resident_registration_health
 from glass.engine.resident_reference_scout import write_resident_reference_scout
 from glass.io.fits_io import write_fits_data
@@ -113,6 +114,53 @@ def _write_resident_registration_quality(
             "decisions": decisions,
         },
     )
+
+
+def _light_frame_id_by_stem(plan_path: Path, stem: str) -> str:
+    plan = read_json(plan_path)
+    for frame in plan.get("frames", []):
+        if frame.get("frame_type") == "light" and Path(str(frame.get("path"))).stem == stem:
+            return str(frame["id"])
+    raise AssertionError(f"missing light frame stem: {stem}")
+
+
+def _write_minimal_cuda_reference_scout(run: Path, *, reference_frame_id: str) -> Path:
+    run.mkdir(parents=True, exist_ok=True)
+    scout = {
+        "schema_version": 1,
+        "artifact_type": "resident_reference_scout",
+        "metric_source": "unit_test_cuda_reference_scout",
+        "sample_stride": 1,
+        "sample_side": 768,
+        "max_frames": 0,
+        "threshold_sigma": 5.0,
+        "max_stars": 300,
+        "catalog_backend_requested": "cuda",
+        "catalog_backend": "cuda",
+        "catalog_backend_resolution": {"requested": "cuda", "effective": "cuda", "cuda_status": "available"},
+        "frame_count": 2,
+        "scouted_frame_count": 2,
+        "measured_frame_count": 2,
+        "error_count": 0,
+        "frame_quality": [
+            {
+                "frame_id": reference_frame_id,
+                "reference_candidate": True,
+                "catalog_backend": "cuda",
+                "star_count": 16,
+                "quality_score": 100.0,
+            }
+        ],
+        "errors": [],
+        "reference_frame_id": reference_frame_id,
+    }
+    scout_path = run / "resident_reference_scout.json"
+    write_json(scout_path, scout)
+    quality = dict(scout)
+    quality["artifact_type"] = "frame_quality"
+    quality["source_artifact"] = str(scout_path)
+    write_json(run / "frame_quality.json", quality)
+    return scout_path
 
 
 def _write_uniform_no_star_dataset(root: Path) -> None:
@@ -983,6 +1031,98 @@ def test_resident_reference_scout_cuda_catalog_backend_records_diagnostics(
     assert reference_row["star_detector"] == "cuda_grid_top_nms_candidates_f32_sampled_raw"
     assert reference_row["catalog_diagnostics"]["catalog_model"] == "cuda_grid_top_nms_candidates_f32"
     assert reference_row["catalog_diagnostics"]["catalog_sort_mode"] == "fake_cuda_test"
+
+
+def test_resident_reference_health_passes_cuda_reference_with_cpu_crosscheck(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "reference_health_pass"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    strong_id = _light_frame_id_by_stem(plan, "light_002")
+    _write_minimal_cuda_reference_scout(run, reference_frame_id=strong_id)
+
+    health = build_resident_reference_health(plan, run)
+
+    assert health["effective_action"] == "fail"
+    assert health["passed"] is True
+    assert health["blocking"] is False
+    assert health["summary"]["reference_frame_id"] == strong_id
+    assert health["summary"]["cpu_reference_frame_id"] == strong_id
+    assert health["summary"]["selected_cpu_rank"] == 1
+
+
+def test_resident_reference_health_blocks_cuda_reference_cpu_crosscheck_miss(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "reference_health_fail"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    weak_id = _light_frame_id_by_stem(plan, "light_001")
+    strong_id = _light_frame_id_by_stem(plan, "light_002")
+    _write_minimal_cuda_reference_scout(run, reference_frame_id=weak_id)
+
+    health = build_resident_reference_health(plan, run)
+
+    assert health["effective_action"] == "fail"
+    assert health["passed"] is False
+    assert health["blocking"] is True
+    assert health["summary"]["reference_frame_id"] == weak_id
+    assert health["summary"]["cpu_reference_frame_id"] == strong_id
+    assert "selected_reference_cpu_star_ratio" in health["failed_checks"]
+
+
+def test_cli_resident_run_blocks_bad_cuda_reference_before_compute(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "reference_health_cli_fail"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    weak_id = _light_frame_id_by_stem(plan, "light_001")
+
+    monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
+
+    def write_bad_scout(run_dir, _args, *, plan_path=None):
+        return _write_minimal_cuda_reference_scout(Path(run_dir), reference_frame_id=weak_id)
+
+    def fail_if_memory_admission_starts(*_args, **_kwargs):
+        raise AssertionError("resident memory admission should not start after reference health failure")
+
+    def fail_if_resident_compute_starts(*_args, **_kwargs):
+        raise AssertionError("resident CUDA compute should not start after reference health failure")
+
+    monkeypatch.setattr("glass.cli._write_resident_reference_scout_if_needed", write_bad_scout)
+    monkeypatch.setattr("glass.cli._write_resident_memory_admission", fail_if_memory_admission_starts)
+    monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fail_if_resident_compute_starts)
+
+    assert main(["run", "--plan", str(plan), "--out", str(run), "--resident-reference-scout-backend", "cuda"]) == 2
+
+    health = read_json(run / "resident_reference_health.json")
+    state = read_json(run / "run_state.json")
+    timing = read_json(run / "run_timing.json")
+
+    assert health["blocking"] is True
+    assert health["summary"]["reference_frame_id"] == weak_id
+    assert state["failed_stage"] == "resident_reference_health"
+    assert [item["stage"] for item in timing["stages"]] == [
+        "resident_reference_scout",
+        "resident_reference_health",
+    ]
+    assert timing["stages"][-1]["status"] == "failed"
+    assert not (run / "resident_memory_admission.json").exists()
 
 
 def test_resident_reference_scout_auto_keeps_cpu_until_cuda_reference_health_gate(

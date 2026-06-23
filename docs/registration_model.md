@@ -677,3 +677,37 @@ This gate catches the real S2-Gate 571 negative CUDA scout probe, where only
 path with `193/200` accepted frames and the same output master hash. The check
 does not alter registration, warp, LN, rejection, or integration math; it only
 changes whether a run is allowed to report success.
+
+## S2-Gate 573 Resident Reference Health Gate
+
+S2-Gate 573 moves the CUDA-scout failure mode earlier. When
+`resident_reference_scout.json` exists and was produced by an explicit CUDA
+scout, the CLI now runs `resident_reference_health` before reference admission,
+memory admission, calibration, registration, warp, LN, or integration. The gate
+performs a bounded CPU raw-light scout over the same sampled frames and checks
+whether the CUDA-selected reference is also plausible under the CPU detector.
+
+The default policy is:
+
+- `--resident-reference-health-gate auto` resolves to `fail` for
+  `catalog_backend = cuda` and to `off` for the CPU/default scout;
+- `--resident-reference-health-min-cpu-star-ratio 0.85` requires the
+  CUDA-selected reference to have at least 85% of the CPU-selected reference's
+  star count;
+- `--resident-reference-health-max-cpu-rank-fraction 0.25` requires the
+  CUDA-selected reference to be in the top quarter of the CPU cross-check rank;
+- `warn` and `off` remain explicit diagnostic escape hatches.
+
+On the real 200-light M38 H-alpha benchmark, this rejects the explicit CUDA
+scout reference `F000215` before resident compute starts:
+
+- CPU cross-check reference: `F000225`;
+- selected CPU star ratio: `40/51 = 0.784`;
+- selected CPU rank fraction: `33/63 = 0.5238`;
+- failed stage: `resident_reference_health`;
+- elapsed stages: `resident_reference_scout` and `resident_reference_health`
+  only.
+
+The safe default path remains CPU-scout based and is not slowed by this gate.
+It continues to pass resident registration health with `193/200` accepted light
+frames and the same master hash as the previous safe default runs.

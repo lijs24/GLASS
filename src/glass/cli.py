@@ -29,6 +29,13 @@ from glass.engine.resident_reference_scout import (
     DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA,
     write_resident_reference_scout,
 )
+from glass.engine.resident_reference_health import (
+    DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE,
+    DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
+    DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
+    build_resident_reference_health,
+    resolve_resident_reference_health_action,
+)
 from glass.engine.resident_registration_health import (
     DEFAULT_RESIDENT_REGISTRATION_HEALTH_GATE,
     DEFAULT_RESIDENT_REGISTRATION_HEALTH_MIN_ACCEPTED_FRACTION,
@@ -314,6 +321,15 @@ class ResidentReferenceAdmissionBlocked(RuntimeError):
     def __init__(self, message: str, *, admission: dict[str, Any], path: Path):
         super().__init__(message)
         self.admission = admission
+        self.path = path
+
+
+class ResidentReferenceHealthBlocked(RuntimeError):
+    """Raised when resident reference-scout cross-check blocks an unsafe reference."""
+
+    def __init__(self, message: str, *, health: dict[str, Any], path: Path):
+        super().__init__(message)
+        self.health = health
         self.path = path
 
 
@@ -1070,6 +1086,92 @@ def _write_resident_reference_scout_if_needed(
     )
     args._resident_reference_scout = str(scout_path)
     return scout_path
+
+
+def _resident_reference_health_message(health: dict[str, Any]) -> str:
+    summary = health.get("summary") if isinstance(health.get("summary"), dict) else {}
+    thresholds = health.get("thresholds") if isinstance(health.get("thresholds"), dict) else {}
+    return (
+        "resident reference health gate failed"
+        f": reference={summary.get('reference_frame_id')}, "
+        f"cpu_reference={summary.get('cpu_reference_frame_id')}, "
+        f"star_ratio={float(summary.get('selected_cpu_star_ratio') or 0.0):.3f}, "
+        f"required_star_ratio={thresholds.get('min_cpu_star_ratio')}, "
+        f"cpu_rank={summary.get('selected_cpu_rank')}/{summary.get('cpu_measured_frame_count')}, "
+        f"required_rank_fraction<={thresholds.get('max_cpu_rank_fraction')}"
+    )
+
+
+def _resident_reference_health_is_needed(run: Path, args: argparse.Namespace) -> bool:
+    scout_path = _resident_reference_scout_path(run)
+    if not scout_path.exists():
+        return False
+    try:
+        scout = read_json(scout_path)
+    except Exception:
+        return True
+    scout_backend = str(scout.get("catalog_backend") or "") if isinstance(scout, dict) else ""
+    action = resolve_resident_reference_health_action(
+        getattr(args, "resident_reference_health_gate", DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE),
+        scout_backend=scout_backend,
+    )
+    return action != "off"
+
+
+def _write_resident_reference_health(
+    run: Path,
+    args: argparse.Namespace,
+    *,
+    plan_path: str | Path,
+) -> Path:
+    health = build_resident_reference_health(
+        plan_path,
+        run,
+        requested_action=getattr(args, "resident_reference_health_gate", DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE),
+        min_cpu_star_ratio=getattr(
+            args,
+            "resident_reference_health_min_cpu_star_ratio",
+            DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
+        ),
+        max_cpu_rank_fraction=getattr(
+            args,
+            "resident_reference_health_max_cpu_rank_fraction",
+            DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
+        ),
+    )
+    health_path = run / "resident_reference_health.json"
+    write_json(health_path, health, compact=True)
+    args._resident_reference_health = health
+    if health.get("blocking"):
+        raise ResidentReferenceHealthBlocked(
+            _resident_reference_health_message(health),
+            health=health,
+            path=health_path,
+        )
+    return health_path
+
+
+def _write_resident_reference_health_failed_state(
+    run: Path,
+    exc: ResidentReferenceHealthBlocked,
+    *,
+    completed_stages: list[str] | None = None,
+) -> None:
+    state = initialize_run(run)
+    state.current_stage = "resident_reference_health"
+    state.failed_stage = "resident_reference_health"
+    state.completed_stages = list(completed_stages or [])
+    state.errors.append(str(exc))
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_reference_health",
+            path=str(exc.path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    write_run_state(run, state)
 
 
 def _resident_reference_admission_message(admission: dict[str, Any]) -> str:
@@ -2030,6 +2132,22 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 "resident_reference_scout",
                 lambda: _write_resident_reference_scout_if_needed(out, args, plan_path=plan_path),
             )
+        resident_reference_health_path = None
+        if _resident_reference_health_is_needed(out, args):
+            try:
+                resident_reference_health_path = _timed_stage(
+                    out,
+                    timing,
+                    "resident_reference_health",
+                    lambda: _write_resident_reference_health(out, args, plan_path=plan_path),
+                )
+            except ResidentReferenceHealthBlocked as exc:
+                completed = ["scan", "plan"]
+                if resident_reference_scout_path is not None:
+                    completed.append("resident_reference_scout")
+                _write_resident_reference_health_failed_state(out, exc, completed_stages=completed)
+                console.print({"status": "failed", "stage": "resident_reference_health", "error": str(exc)})
+                return 2
         try:
             resident_reference_admission_path = _timed_stage(
                 out,
@@ -2149,6 +2267,18 @@ def cmd_audit(args: argparse.Namespace) -> int:
             )
             if "resident_reference_scout" not in state.completed_stages:
                 state.completed_stages.insert(0, "resident_reference_scout")
+        if resident_reference_health_path is not None:
+            state.artifacts.append(
+                PipelineArtifact(
+                    stage="resident_reference_health",
+                    path=str(resident_reference_health_path),
+                    format="json",
+                    created_at=now_iso(),
+                    source_frames=[],
+                )
+            )
+            if "resident_reference_health" not in state.completed_stages:
+                state.completed_stages.insert(0, "resident_reference_health")
         state.artifacts.append(
             PipelineArtifact(
                 stage="resident_reference_admission",
@@ -2249,6 +2379,20 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "resident_reference_scout",
                 lambda: _write_resident_reference_scout_if_needed(out, args, plan_path=args.plan),
             )
+        resident_reference_health_path = None
+        if _resident_reference_health_is_needed(out, args):
+            try:
+                resident_reference_health_path = _timed_stage(
+                    out,
+                    timing,
+                    "resident_reference_health",
+                    lambda: _write_resident_reference_health(out, args, plan_path=args.plan),
+                )
+            except ResidentReferenceHealthBlocked as exc:
+                completed = ["resident_reference_scout"] if resident_reference_scout_path is not None else []
+                _write_resident_reference_health_failed_state(out, exc, completed_stages=completed)
+                console.print({"status": "failed", "stage": "resident_reference_health", "error": str(exc)})
+                return 2
         try:
             resident_reference_admission_path = _timed_stage(
                 out,
@@ -2397,6 +2541,18 @@ def cmd_run(args: argparse.Namespace) -> int:
             )
             if "resident_reference_scout" not in state.completed_stages:
                 state.completed_stages.insert(0, "resident_reference_scout")
+        if resident_reference_health_path is not None:
+            state.artifacts.append(
+                PipelineArtifact(
+                    stage="resident_reference_health",
+                    path=str(resident_reference_health_path),
+                    format="json",
+                    created_at=now_iso(),
+                    source_frames=[],
+                )
+            )
+            if "resident_reference_health" not in state.completed_stages:
+                state.completed_stages.insert(0, "resident_reference_health")
         if source_dq_cache_route_path is not None:
             if "resident_source_dq_cache_calibration" not in state.completed_stages:
                 state.completed_stages.insert(0, "resident_source_dq_cache_calibration")
@@ -6066,6 +6222,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="maximum sampled stars retained per frame by the resident raw-light reference scout",
     )
     run.add_argument(
+        "--resident-reference-health-gate",
+        choices=["auto", "off", "warn", "fail"],
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE,
+        help=(
+            "early resident reference-scout health action; auto fails explicit CUDA scout references "
+            "that do not pass a CPU raw-light cross-check"
+        ),
+    )
+    run.add_argument(
+        "--resident-reference-health-min-cpu-star-ratio",
+        type=float,
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
+        help="minimum CPU-scout star-count ratio versus the CPU-selected reference for CUDA scout references",
+    )
+    run.add_argument(
+        "--resident-reference-health-max-cpu-rank-fraction",
+        type=float,
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
+        help="maximum CPU-scout rank fraction allowed for CUDA scout references",
+    )
+    run.add_argument(
         "--exclude-frame-id",
         action="append",
         default=[],
@@ -6543,6 +6720,24 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_REFERENCE_SCOUT_MAX_STARS,
         help="maximum sampled stars retained per frame by the resident raw-light reference scout in audit runs",
+    )
+    audit.add_argument(
+        "--resident-reference-health-gate",
+        choices=["auto", "off", "warn", "fail"],
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE,
+        help="early resident reference-scout health action for audit runs",
+    )
+    audit.add_argument(
+        "--resident-reference-health-min-cpu-star-ratio",
+        type=float,
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
+        help="minimum CPU-scout star-count ratio versus the CPU-selected reference for audit CUDA scout references",
+    )
+    audit.add_argument(
+        "--resident-reference-health-max-cpu-rank-fraction",
+        type=float,
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
+        help="maximum CPU-scout rank fraction allowed for audit CUDA scout references",
     )
     audit.add_argument("--exclude-frame-id", action="append", default=[])
     audit.set_defaults(func=cmd_audit)
