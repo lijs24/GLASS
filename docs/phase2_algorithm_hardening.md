@@ -14673,6 +14673,77 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_550_event_gated_completion_summary.json`.
 
+### S2-Gate 551: Native Completion Lane-Wave Drain
+
+- Continued the resident CUDA I/O/calibration mainline by changing the opt-in
+  native completion consumer from one-completion-at-a-time handling to a
+  lane-wave drain: after the first completed read wakes the consumer, all
+  currently ready completions are drained up to the active calibration lane
+  count and submitted as one scheduling wave.
+- Completed:
+  - kept the existing `GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION=1` opt-in
+    gate and left the default resident raw-u16 path unchanged;
+  - added native consumer counters:
+    `native_completion_consumer_schedule_mode`,
+    `native_completion_consumer_wave_count`,
+    `native_completion_consumer_max_wave_frames`, and
+    `native_completion_consumer_multi_frame_wave_count`;
+  - surfaced the same counters in resident artifacts;
+  - updated focused native and CLI tests to assert the lane-wave scheduling
+    contract;
+  - rejected a same-gate FIFO-front-only slot query variant after it reduced
+    event queries but worsened light-stage time; that variant was not kept in
+    code.
+- Tests:
+  - focused completion/path/default tests: `5 passed in 1.21 s`;
+  - full pytest: `1188 passed in 43.83 s`.
+- Real 200-light same-session A/B:
+  - completion lane-wave opt-in run:
+    `C:\glass_runs\phase2_s2_gate551_completion_lane_wave\runs_20260623_161354\completion_lane_wave_release`;
+  - fresh default run:
+    `C:\glass_runs\phase2_s2_gate551_completion_lane_wave\runs_20260623_161410\default_release`;
+  - completion shell elapsed: `5.5835369 s`;
+  - fresh default shell elapsed: `5.6008087 s`;
+  - completion light read/upload/calibrate: `2.882655 s`;
+  - fresh default light read/upload/calibrate: `2.588665 s`;
+  - completion light-stage ratio versus default: `1.113568x`;
+  - completion light-stage improvement versus Gate550 completion
+    (`2.911669 s`): `1.010x`;
+  - completion registration/warp: `0.254906 s`;
+  - default registration/warp: `0.254457 s`;
+  - completion integration: `0.306447 s`;
+  - default integration: `0.320908 s`;
+  - completion output write: `0.226364 s`;
+  - default output write: `0.344932 s`;
+  - completion recorded `native_u16be_raw_completion_calibration: 200`,
+    `16` workers, `24` pinned queue buffers, `200` submits/completions, and
+    `118` out-of-order completions;
+  - lane-wave diagnostics: `184` consumer waves, max wave size `4`, and `10`
+    multi-frame waves;
+  - slot reuse diagnostics: `176` reuses, `2232` event queries, `176`
+    query-ready reuses, `0` wait reuses, and `24` final H2D collects.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    SHA256-identical between the completion run and the fresh default run;
+  - master SHA256:
+    `8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110`.
+- Interpretation:
+  - lane-wave drain is safe and gives a small improvement versus Gate550's
+    completion path, but it still does not beat the current default light
+    stage;
+  - only `10` of `184` consumer waves carried more than one frame, so the
+    completion queue still mostly arrives one frame at a time;
+  - shell time can slightly beat same-session default because later integration
+    and output-write timing vary, but the light-stage bottleneck remains;
+  - therefore this remains opt-in and must not be promoted;
+  - the next substantial target is to feed native completions into the existing
+    callback-release scheduler or add a deeper native ready buffer that can fill
+    true four-lane calibration waves before H2D submission.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_551_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_551_completion_lane_wave_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

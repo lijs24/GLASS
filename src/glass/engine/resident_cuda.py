@@ -6288,6 +6288,10 @@ def run_resident_calibration_integration(
             native_completion_calibration_slot_reuse_wait_count = 0
             native_completion_calibration_slot_reuse_wait_s = 0.0
             native_completion_calibration_final_h2d_collect_count = 0
+            native_completion_calibration_consumer_schedule_mode: str | None = None
+            native_completion_calibration_consumer_wave_count = 0
+            native_completion_calibration_consumer_max_wave_frames = 0
+            native_completion_calibration_consumer_multi_frame_wave_count = 0
             prefetch_fill_blocked_no_slot_count = 0
             prefetch_release_count = 0
             prefetch_max_inflight_slots = 0
@@ -6571,6 +6575,26 @@ def run_resident_calibration_integration(
                                 )
                                 native_completion_calibration_final_h2d_collect_count += int(
                                     calibration_timing.get("native_completion_final_h2d_collect_count", 0) or 0
+                                )
+                                timing_consumer_schedule_mode = str(
+                                    calibration_timing.get("native_completion_consumer_schedule_mode", "") or ""
+                                )
+                                if timing_consumer_schedule_mode:
+                                    native_completion_calibration_consumer_schedule_mode = (
+                                        timing_consumer_schedule_mode
+                                    )
+                                native_completion_calibration_consumer_wave_count += int(
+                                    calibration_timing.get("native_completion_consumer_wave_count", 0) or 0
+                                )
+                                native_completion_calibration_consumer_max_wave_frames = max(
+                                    native_completion_calibration_consumer_max_wave_frames,
+                                    int(calibration_timing.get("native_completion_consumer_max_wave_frames", 0) or 0),
+                                )
+                                native_completion_calibration_consumer_multi_frame_wave_count += int(
+                                    calibration_timing.get(
+                                        "native_completion_consumer_multi_frame_wave_count", 0
+                                    )
+                                    or 0
                                 )
                                 for sample_index in list(
                                     calibration_timing.get("native_completion_order_sample", []) or []
@@ -11308,6 +11332,18 @@ def run_resident_calibration_integration(
                 ),
                 "native_completion_calibration_final_h2d_collect_count": int(
                     native_completion_calibration_final_h2d_collect_count
+                ),
+                "native_completion_calibration_consumer_schedule_mode": (
+                    native_completion_calibration_consumer_schedule_mode
+                ),
+                "native_completion_calibration_consumer_wave_count": int(
+                    native_completion_calibration_consumer_wave_count
+                ),
+                "native_completion_calibration_consumer_max_wave_frames": int(
+                    native_completion_calibration_consumer_max_wave_frames
+                ),
+                "native_completion_calibration_consumer_multi_frame_wave_count": int(
+                    native_completion_calibration_consumer_multi_frame_wave_count
                 ),
             }
             registration_total = registration_timing["total"]

@@ -6148,6 +6148,10 @@ class ResidentCalibratedStack {
       out["native_completion_slot_reuse_wait_count"] = 0;
       out["native_completion_slot_reuse_wait_s"] = 0.0;
       out["native_completion_final_h2d_collect_count"] = 0;
+      out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
+      out["native_completion_consumer_wave_count"] = 0;
+      out["native_completion_consumer_max_wave_frames"] = 0;
+      out["native_completion_consumer_multi_frame_wave_count"] = 0;
       out["h2d_event_sync_s"] = 0.0;
       out["h2d_event_elapsed_s"] = 0.0;
       out["stream_h2d_calibrate_store_s"] = 0.0;
@@ -6259,6 +6263,9 @@ class ResidentCalibratedStack {
     unsigned long long slot_reuse_ready_count = 0;
     unsigned long long slot_reuse_wait_count = 0;
     unsigned long long final_h2d_collect_count = 0;
+    unsigned long long consumer_wave_count = 0;
+    unsigned long long consumer_max_wave_frames = 0;
+    unsigned long long consumer_multi_frame_wave_count = 0;
     double slot_reuse_wait_s = 0.0;
 
     std::mutex queue_mutex;
@@ -6397,89 +6404,6 @@ class ResidentCalibratedStack {
       std::size_t next_expected_completion = 0;
       std::size_t launched_count = 0;
       while (launched_count < frame_count) {
-        if (next_submit < frame_count && static_cast<unsigned long long>(next_submit) == completion_count) {
-          const std::size_t buffer_index = wait_for_reusable_buffer();
-          submit_job(next_submit, buffer_index);
-          ++next_submit;
-          continue;
-        }
-        CompletionResult completion;
-        {
-          std::unique_lock<std::mutex> lock(queue_mutex);
-          completion_condition.wait(lock, [&]() { return !completions.empty(); });
-          completion = std::move(completions.front());
-          completions.pop_front();
-        }
-        if (!completion.error.empty()) {
-          std::ostringstream message;
-          message << "native completion calibration read failed for frame "
-                  << completion.frame_offset << " (" << paths[completion.frame_offset]
-                  << "): " << completion.error;
-          throw std::runtime_error(message.str());
-        }
-        native_open_s += completion.timing.file_open_s;
-        native_read_s += completion.timing.file_read_s;
-        native_total_read_s += completion.timing.total_s;
-        native_bytes_read += completion.timing.bytes_read;
-        ++completion_count;
-        if (completion.frame_offset != next_expected_completion) {
-          ++out_of_order_count;
-        }
-        ++next_expected_completion;
-        if (completion_order_sample.size() < 64u) {
-          completion_order_sample.push_back(completion.frame_offset);
-        }
-
-        const std::size_t lane = launched_count % lane_count;
-        if (!lane_started[lane]) {
-          check_cuda(
-              cudaEventRecord(calibration_lane_start_events_[lane], calibration_lane_streams_[lane]),
-              "cudaEventRecord(resident native completion lane start)");
-          lane_started[lane] = 1;
-        }
-        auto* lane_raw = reinterpret_cast<unsigned char*>(d_calibration_lane_lights_[lane]);
-        check_cuda(
-            cudaEventRecord(
-                buffer_h2d_start_events[completion.buffer_index]->get(),
-                calibration_lane_streams_[lane]),
-            "cudaEventRecord(resident native completion buffer h2d start)");
-        check_cuda(
-            cudaMemcpyAsync(
-                lane_raw,
-                host_buffers[completion.buffer_index].get(),
-                raw_frame_bytes,
-                cudaMemcpyHostToDevice,
-                calibration_lane_streams_[lane]),
-            "cudaMemcpyAsync(resident native completion FITS u16 light)");
-        check_cuda(
-            cudaEventRecord(
-                buffer_h2d_done_events[completion.buffer_index]->get(),
-                calibration_lane_streams_[lane]),
-            "cudaEventRecord(resident native completion buffer h2d done)");
-        buffer_h2d_recorded[completion.buffer_index] = 1;
-        glass_calibrate_fits_u16be_bzero_f32_launch_stream(
-            lane_raw,
-            d_bias_,
-            d_dark_,
-            d_flat_,
-            d_stack_ + indices[completion.frame_offset] * pixels_per_frame_,
-            pixels_per_frame_,
-            has_bias_,
-            has_dark_,
-            has_flat_,
-            params[completion.frame_offset].master_dark_includes_bias,
-            params[completion.frame_offset].dark_scale,
-            params[completion.frame_offset].flat_floor,
-            params[completion.frame_offset].pedestal,
-            calibration_lane_streams_[lane]);
-        check_cuda(
-            cudaGetLastError(),
-            "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_completion_queue kernel launch");
-        check_cuda(
-            cudaEventRecord(calibration_lane_stop_events_[lane], calibration_lane_streams_[lane]),
-            "cudaEventRecord(resident native completion lane calibration stop)");
-
-        pending_reuse_buffers.push_back(completion.buffer_index);
         while (next_submit < frame_count) {
           std::size_t reusable_buffer_index = 0;
           if (!try_acquire_reusable_buffer(reusable_buffer_index)) {
@@ -6488,7 +6412,113 @@ class ResidentCalibratedStack {
           submit_job(next_submit, reusable_buffer_index);
           ++next_submit;
         }
-        ++launched_count;
+        if (next_submit < frame_count && static_cast<unsigned long long>(next_submit) == completion_count) {
+          const std::size_t buffer_index = wait_for_reusable_buffer();
+          submit_job(next_submit, buffer_index);
+          ++next_submit;
+          continue;
+        }
+        std::vector<CompletionResult> completion_wave;
+        completion_wave.reserve(lane_count);
+        {
+          std::unique_lock<std::mutex> lock(queue_mutex);
+          completion_condition.wait(lock, [&]() { return !completions.empty(); });
+          while (!completions.empty() && completion_wave.size() < lane_count) {
+            completion_wave.push_back(std::move(completions.front()));
+            completions.pop_front();
+          }
+        }
+        if (completion_wave.empty()) {
+          continue;
+        }
+        ++consumer_wave_count;
+        consumer_max_wave_frames = std::max<unsigned long long>(
+            consumer_max_wave_frames,
+            static_cast<unsigned long long>(completion_wave.size()));
+        if (completion_wave.size() > 1u) {
+          ++consumer_multi_frame_wave_count;
+        }
+        for (CompletionResult& completion : completion_wave) {
+          if (!completion.error.empty()) {
+            std::ostringstream message;
+            message << "native completion calibration read failed for frame "
+                    << completion.frame_offset << " (" << paths[completion.frame_offset]
+                    << "): " << completion.error;
+            throw std::runtime_error(message.str());
+          }
+          native_open_s += completion.timing.file_open_s;
+          native_read_s += completion.timing.file_read_s;
+          native_total_read_s += completion.timing.total_s;
+          native_bytes_read += completion.timing.bytes_read;
+          ++completion_count;
+          if (completion.frame_offset != next_expected_completion) {
+            ++out_of_order_count;
+          }
+          ++next_expected_completion;
+          if (completion_order_sample.size() < 64u) {
+            completion_order_sample.push_back(completion.frame_offset);
+          }
+
+          const std::size_t lane = launched_count % lane_count;
+          if (!lane_started[lane]) {
+            check_cuda(
+                cudaEventRecord(calibration_lane_start_events_[lane], calibration_lane_streams_[lane]),
+                "cudaEventRecord(resident native completion lane start)");
+            lane_started[lane] = 1;
+          }
+          auto* lane_raw = reinterpret_cast<unsigned char*>(d_calibration_lane_lights_[lane]);
+          check_cuda(
+              cudaEventRecord(
+                  buffer_h2d_start_events[completion.buffer_index]->get(),
+                  calibration_lane_streams_[lane]),
+              "cudaEventRecord(resident native completion buffer h2d start)");
+          check_cuda(
+              cudaMemcpyAsync(
+                  lane_raw,
+                  host_buffers[completion.buffer_index].get(),
+                  raw_frame_bytes,
+                  cudaMemcpyHostToDevice,
+                  calibration_lane_streams_[lane]),
+              "cudaMemcpyAsync(resident native completion FITS u16 light)");
+          check_cuda(
+              cudaEventRecord(
+                  buffer_h2d_done_events[completion.buffer_index]->get(),
+                  calibration_lane_streams_[lane]),
+              "cudaEventRecord(resident native completion buffer h2d done)");
+          buffer_h2d_recorded[completion.buffer_index] = 1;
+          glass_calibrate_fits_u16be_bzero_f32_launch_stream(
+              lane_raw,
+              d_bias_,
+              d_dark_,
+              d_flat_,
+              d_stack_ + indices[completion.frame_offset] * pixels_per_frame_,
+              pixels_per_frame_,
+              has_bias_,
+              has_dark_,
+              has_flat_,
+              params[completion.frame_offset].master_dark_includes_bias,
+              params[completion.frame_offset].dark_scale,
+              params[completion.frame_offset].flat_floor,
+              params[completion.frame_offset].pedestal,
+              calibration_lane_streams_[lane]);
+          check_cuda(
+              cudaGetLastError(),
+              "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_completion_queue kernel launch");
+          check_cuda(
+              cudaEventRecord(calibration_lane_stop_events_[lane], calibration_lane_streams_[lane]),
+              "cudaEventRecord(resident native completion lane calibration stop)");
+
+          pending_reuse_buffers.push_back(completion.buffer_index);
+          ++launched_count;
+        }
+        while (next_submit < frame_count) {
+          std::size_t reusable_buffer_index = 0;
+          if (!try_acquire_reusable_buffer(reusable_buffer_index)) {
+            break;
+          }
+          submit_job(next_submit, reusable_buffer_index);
+          ++next_submit;
+        }
       }
       close_workers();
     } catch (...) {
@@ -6582,6 +6612,10 @@ class ResidentCalibratedStack {
     out["native_completion_slot_reuse_wait_count"] = slot_reuse_wait_count;
     out["native_completion_slot_reuse_wait_s"] = slot_reuse_wait_s;
     out["native_completion_final_h2d_collect_count"] = final_h2d_collect_count;
+    out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
+    out["native_completion_consumer_wave_count"] = consumer_wave_count;
+    out["native_completion_consumer_max_wave_frames"] = consumer_max_wave_frames;
+    out["native_completion_consumer_multi_frame_wave_count"] = consumer_multi_frame_wave_count;
     out["h2d_release_s"] = h2d_event_sync_s;
     out["h2d_event_sync_s"] = h2d_event_sync_s;
     out["h2d_event_elapsed_s"] = h2d_event_elapsed_s;

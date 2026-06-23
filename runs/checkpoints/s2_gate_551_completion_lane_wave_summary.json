@@ -1,0 +1,123 @@
+{
+  "gate": "S2-Gate 551",
+  "title": "Native completion lane-wave drain",
+  "date": "2026-06-23",
+  "result": "green_checkpoint_not_promoted",
+  "checkpoint_status": "runs/checkpoints/s2_gate_551_status.md",
+  "implementation": {
+    "native_method": "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed",
+    "env_flag": "GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION",
+    "default_enabled": false,
+    "event_mode": "native_completion_queue_buffer_reuse_events",
+    "slot_release_mode": "event_query_deferred_reuse",
+    "consumer_schedule_mode": "completion_lane_wave_drain",
+    "resident_release_mode": "native_completion_queue_event_gated_slot_reuse",
+    "buffer_model": "cuda_host_alloc_portable_pinned_completion_ring",
+    "batch_mode": "fits_u16be_bzero_native_completion_calibration_batch",
+    "timing_model": "native_completion_queue_read_then_h2d_gpu_decode_calibration"
+  },
+  "tests": {
+    "native_build": {
+      "command": "cmd.exe /c '\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\" -arch=x64 -host_arch=x64 && .venv\\Scripts\\cmake.exe --build build --target _glass_cuda_native --config Release'",
+      "result": "success"
+    },
+    "focused": {
+      "command": ".venv\\Scripts\\python.exe -m pytest -q tests/test_cuda_resident_stack.py::test_resident_stack_calibrates_u16be_paths_completion_queue_on_gpu_like_cpu tests/test_cuda_resident_stack.py::test_resident_stack_calibrates_u16be_paths_on_gpu_like_cpu tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_path_calibration_is_opt_in tests/test_resident_cuda_run.py::test_cli_resident_cuda_records_native_u16_gpu_decode_backend",
+      "result": "5 passed in 1.21 s"
+    },
+    "full_pytest": {
+      "command": ".venv\\Scripts\\python.exe -m pytest -q",
+      "result": "1188 passed in 43.83 s"
+    }
+  },
+  "real_200_light_ab": {
+    "plan": "C:\\glass_runs\\phase2_s2_gate540_plan_spec_cache\\runs_20260623_140314\\processing_plan.json",
+    "master_cache": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\resident_master_cache",
+    "completion_run": "C:\\glass_runs\\phase2_s2_gate551_completion_lane_wave\\runs_20260623_161354\\completion_lane_wave_release",
+    "default_run": "C:\\glass_runs\\phase2_s2_gate551_completion_lane_wave\\runs_20260623_161410\\default_release",
+    "frame_count": 200,
+    "shell_elapsed_s": {
+      "completion": 5.5835369,
+      "default": 5.6008087,
+      "completion_over_default_ratio": 0.9969161951
+    },
+    "stage_elapsed_s": {
+      "completion_light_read_upload_calibrate": 2.8826551000238396,
+      "default_light_read_upload_calibrate": 2.5886651999899186,
+      "completion_light_stage_over_default_ratio": 1.1135681431631506,
+      "gate550_completion_light_read_upload_calibrate": 2.9116690999944694,
+      "completion_light_stage_vs_gate550_speedup": 1.0100646735,
+      "completion_registration_warp": 0.2549064005143009,
+      "default_registration_warp": 0.25445659953402355,
+      "completion_integration": 0.30644729995401576,
+      "default_integration": 0.3209082999965176,
+      "completion_output_write": 0.22636400000192225,
+      "default_output_write": 0.3449321999796666
+    },
+    "completion_metrics": {
+      "backend_counts": {
+        "native_u16be_raw_completion_calibration": 200
+      },
+      "workers": 16,
+      "queue_buffers": 24,
+      "submits": 200,
+      "completions": 200,
+      "out_of_order_completions": 118,
+      "consumer_schedule_mode": "completion_lane_wave_drain",
+      "consumer_wave_count": 184,
+      "consumer_max_wave_frames": 4,
+      "consumer_multi_frame_wave_count": 10,
+      "slot_release_mode": "event_query_deferred_reuse",
+      "slot_reuse_count": 176,
+      "slot_reuse_query_count": 2232,
+      "slot_reuse_ready_count": 176,
+      "slot_reuse_wait_count": 0,
+      "final_h2d_collect_count": 24,
+      "native_read_total_s": 26.890241200000006,
+      "native_file_read_cumulative_s": 26.84513009999999,
+      "raw_h2d_bytes": 24660480000,
+      "avoided_float32_host_bytes": 49320960000
+    },
+    "default_metrics": {
+      "backend_counts": {
+        "native_u16be_raw": 200
+      },
+      "read_wait_wall_s": 1.1669475997332484,
+      "calibration_batch_count": 13,
+      "raw_h2d_bytes": 24660480000,
+      "avoided_float32_host_bytes": 49320960000
+    },
+    "rejected_fifo_probe": {
+      "completion_run": "C:\\glass_runs\\phase2_s2_gate551_completion_lane_wave\\runs_20260623_161552\\completion_lane_wave_fifo_release",
+      "default_run": "C:\\glass_runs\\phase2_s2_gate551_completion_lane_wave\\runs_20260623_161606\\default_release_fifo_session",
+      "slot_reuse_query_count": 496,
+      "completion_light_read_upload_calibrate_s": 2.9263696999987587,
+      "default_light_read_upload_calibrate_s": 2.5679286000085995,
+      "kept_in_code": false,
+      "reason": "FIFO front-only slot queries reduced event query count but worsened the light stage, so the variant was removed before commit."
+    }
+  },
+  "output_sha256": {
+    "resident_master_H.fits": "8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110",
+    "resident_weight_map_H.fits": "5862111EE6F527A40671AC13F1FAA43F037C90271F872F27AF4ACF17040FBFE8",
+    "resident_coverage_map_H.fits": "B87517BE794A3B4BDCFF0D8536EE0188DA6AFA54ED2BE818BD911BA6CF1BE1B3",
+    "resident_low_rejection_map_H.fits": "F1181E0CE52A7FF77B988AFAF8A8911A1BEAF94DF54B25B0AA51014CB0D66E23",
+    "resident_high_rejection_map_H.fits": "ADB66C931C5A48D6E0D7F5C2FCBCC58481420AD4912304843A3802089050C805",
+    "resident_dq_map_H.fits": "934F661119CE18BBCAC1D369488AED4D959669C6EF614D6076D74BE06E69CCFB"
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "decision": {
+    "promote_to_default": false,
+    "reason": "Lane-wave draining slightly improved the opt-in completion path and preserved bitwise outputs, but it still ran 1.11x slower than the current default light stage and only 10 of 184 consumer waves carried multiple frames.",
+    "next_step": "Feed native completions into callback-release lane waves or add a deeper native ready buffer that can fill true four-lane waves before H2D submission."
+  },
+  "clean_room": {
+    "compliant": true,
+    "notes": "GLASS-owned implementation, user image data, public FITS byte layout, and GLASS-generated artifacts only."
+  }
+}
