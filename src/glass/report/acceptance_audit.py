@@ -319,6 +319,7 @@ def _contract_attachment_audit(
     exists = bool(path and path.exists())
     payload = _read_json_lenient(path) if path is not None and exists else {}
     contract_checks = [item for item in payload.get("checks") or [] if isinstance(item, dict)]
+    check_names = [str(item.get("name")) for item in contract_checks if item.get("name") is not None]
     failed_checks = [item.get("name") for item in contract_checks if not item.get("passed")]
     output_count = payload.get("output_count")
     if output_count is None and isinstance(payload.get("outputs"), list):
@@ -332,7 +333,10 @@ def _contract_attachment_audit(
         "passed": payload.get("passed"),
         "output_count": output_count,
         "check_count": len(contract_checks),
+        "check_names": check_names,
         "failed_checks": failed_checks,
+        "contract_surface": payload.get("contract_surface"),
+        "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
     }
     checks = [
         _check(
@@ -1115,8 +1119,17 @@ def build_acceptance_audit(
     )
     checks.extend(resident_calibration_checks)
     checks.extend(resident_result_checks)
+    warp_quality_requirements = (
+        (contract_payload or {}).get("warp_quality_contract")
+        if isinstance(contract_payload, dict)
+        else {}
+    )
+    contract_requires_warp_quality = (
+        isinstance(warp_quality_requirements, dict)
+        and bool(warp_quality_requirements.get("required"))
+    )
     warp_quality_contract_bundle = contract_bundle
-    if warp_quality_contract_json is not None or require_warp_quality_contract:
+    if warp_quality_contract_json is not None or require_warp_quality_contract or contract_requires_warp_quality:
         warp_quality_contract_bundle = dict(contract_bundle or {})
         warp_quality_contract_bundle["warp_quality_contract_json"] = (
             None
@@ -1409,6 +1422,7 @@ def build_acceptance_audit(
                 output_numerical_drifts=output_numerical_drifts,
                 pipeline_contract=pipeline_contract,
                 stack_engine_contract=stack_engine_contract,
+                warp_quality_contract=warp_quality_contract,
             )
         )
         performance_regression = build_benchmark_performance_diagnostics(

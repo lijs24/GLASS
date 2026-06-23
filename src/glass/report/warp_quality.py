@@ -386,15 +386,391 @@ def _row_accepted_registration(item: dict[str, Any]) -> bool:
     return str(item.get("status") or "").lower() in {"reference", "registered", "aligned", "ok"}
 
 
+def _registration_result_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = payload.get("registration_results")
+    if not isinstance(rows, list):
+        rows = payload.get("results")
+    return [item for item in rows or [] if isinstance(item, dict)]
+
+
 def _accepted_registration_frame_ids(run_root: Path) -> set[str] | None:
     payload = _read_json_object(run_root / "registration_results.json")
     if payload is None:
         return None
     frame_ids: set[str] = set()
-    for item in payload.get("registration_results") or []:
+    for item in _registration_result_rows(payload):
         if isinstance(item, dict) and _row_accepted_registration(item) and item.get("frame_id") is not None:
             frame_ids.add(str(item["frame_id"]))
     return frame_ids
+
+
+def _resident_artifact_payload(run_root: Path) -> dict[str, Any] | None:
+    payload = _read_json_object(run_root / "resident_artifacts.json")
+    if payload is None:
+        return None
+    artifacts = payload.get("artifacts") if isinstance(payload.get("artifacts"), list) else []
+    artifact_rows = [item for item in artifacts if isinstance(item, dict)]
+    if not artifact_rows:
+        return None
+    if payload.get("backend") == "cuda_resident_stack":
+        return payload
+    for artifact in artifact_rows:
+        if artifact.get("backend") == "cuda_resident_stack":
+            return payload
+        if isinstance(artifact.get("dq_coverage_provenance"), dict):
+            return payload
+        if isinstance(artifact.get("resident_registration"), dict):
+            return payload
+    return None
+
+
+def _resident_frame_mask_rows(run_root: Path) -> list[dict[str, Any]]:
+    payload = _read_json_object(run_root / "resident_frame_masks.json") or {}
+    rows: list[dict[str, Any]] = []
+    for group in payload.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        for row in group.get("rows") or []:
+            if isinstance(row, dict):
+                rows.append(row)
+    return rows
+
+
+def _resident_registration_quality_decisions(run_root: Path) -> list[dict[str, Any]]:
+    payload = _read_json_object(run_root / "resident_registration_quality.json") or {}
+    return [item for item in payload.get("decisions") or [] if isinstance(item, dict)]
+
+
+def _resident_frame_accounting_rows(run_root: Path) -> list[dict[str, Any]]:
+    payload = _read_json_object(run_root / "frame_accounting.json") or {}
+    return [item for item in payload.get("frames") or [] if isinstance(item, dict)]
+
+
+def _resident_warp_quality_contract(
+    run_root: Path,
+    *,
+    min_valid_fraction: float | None,
+    max_skipped_frames: int | None,
+    require_artifacts: bool,
+    require_all_registered: bool,
+    pixel_verify: bool,
+    thresholds: dict[str, Any],
+    created_at: str,
+) -> dict[str, Any] | None:
+    resident_payload = _resident_artifact_payload(run_root)
+    registration_payload = _read_json_object(run_root / "registration_results.json")
+    if resident_payload is None or registration_payload is None:
+        return None
+
+    registration_rows = _registration_result_rows(registration_payload)
+    registration_by_id = {str(row.get("frame_id")): row for row in registration_rows if row.get("frame_id") is not None}
+    quality_rows = _resident_registration_quality_decisions(run_root)
+    quality_by_id = {str(row.get("frame_id")): row for row in quality_rows if row.get("frame_id") is not None}
+    mask_rows = _resident_frame_mask_rows(run_root)
+    mask_by_id = {str(row.get("frame_id")): row for row in mask_rows if row.get("frame_id") is not None}
+    accounting_rows = _resident_frame_accounting_rows(run_root)
+    accounting_by_id = {str(row.get("frame_id")): row for row in accounting_rows if row.get("frame_id") is not None}
+
+    active_ids = sorted(
+        frame_id
+        for frame_id, row in mask_by_id.items()
+        if str(row.get("mask_status") or "").lower() == "active"
+    )
+    if not active_ids:
+        active_ids = sorted(
+            frame_id
+            for frame_id, row in accounting_by_id.items()
+            if str(row.get("integration_status") or "").lower() == "used"
+            and str(row.get("warp_status") or "").lower() == "resident_in_vram"
+        )
+    masked_ids = sorted(
+        frame_id
+        for frame_id, row in mask_by_id.items()
+        if str(row.get("mask_status") or "").lower() == "masked"
+    )
+    if not masked_ids:
+        masked_ids = sorted(
+            frame_id
+            for frame_id, row in accounting_by_id.items()
+            if str(row.get("integration_status") or "").lower() == "zero_weight"
+        )
+
+    accepted_quality_ids = sorted(
+        frame_id
+        for frame_id, row in quality_by_id.items()
+        if bool(row.get("accepted"))
+        and str(row.get("final_status") or "").lower() in {"ok", "reference"}
+    )
+    accepted_registration_ids = sorted(
+        frame_id
+        for frame_id, row in registration_by_id.items()
+        if _row_accepted_registration(row)
+    )
+    expected_active_ids = accepted_quality_ids or accepted_registration_ids
+    missing_active_ids = sorted(set(expected_active_ids) - set(active_ids)) if expected_active_ids else []
+    extra_active_ids = sorted(set(active_ids) - set(expected_active_ids)) if expected_active_ids else []
+
+    artifact_rows = [item for item in resident_payload.get("artifacts") or [] if isinstance(item, dict)]
+    first_artifact = artifact_rows[0] if artifact_rows else {}
+    provenance = (
+        first_artifact.get("dq_coverage_provenance")
+        if isinstance(first_artifact.get("dq_coverage_provenance"), dict)
+        else {}
+    )
+    geometric = (
+        provenance.get("geometric_warp_coverage")
+        if isinstance(provenance.get("geometric_warp_coverage"), dict)
+        else {}
+    )
+    total_pixels = _positive_int(geometric.get("total_pixels"))
+    geometric_full = _nonnegative_int(provenance.get("geometric_full_pixels"))
+    resident_valid_fraction = (
+        None
+        if total_pixels is None or total_pixels <= 0 or geometric_full is None
+        else float(geometric_full) / float(total_pixels)
+    )
+    geometric_frame_count = _nonnegative_int(provenance.get("geometric_warp_coverage_frame_count"))
+    active_frame_count = _nonnegative_int(provenance.get("active_frame_count"))
+    map_paths = {
+        "master": first_artifact.get("master_path"),
+        "weight": first_artifact.get("weight_map_path"),
+        "coverage": first_artifact.get("coverage_map_path"),
+        "dq": first_artifact.get("dq_map_path"),
+        "low_rejection": first_artifact.get("low_rejection_map_path"),
+        "high_rejection": first_artifact.get("high_rejection_map_path"),
+    }
+    map_exists = {name: _path_exists(path, run_root) for name, path in map_paths.items()}
+
+    rows: list[dict[str, Any]] = []
+    for frame_id in active_ids:
+        registration = registration_by_id.get(frame_id, {})
+        quality = quality_by_id.get(frame_id, {})
+        mask = mask_by_id.get(frame_id, {})
+        accounting = accounting_by_id.get(frame_id, {})
+        failed_checks: list[str] = []
+        if not registration:
+            failed_checks.append("registration_row_present")
+        if str(accounting.get("warp_status") or mask.get("warp_status") or "resident_in_vram") != "resident_in_vram":
+            failed_checks.append("warp_status_resident_in_vram")
+        if str(mask.get("mask_status") or "active") != "active":
+            failed_checks.append("frame_mask_active")
+        if quality and not bool(quality.get("accepted")):
+            failed_checks.append("registration_quality_accepted")
+        rows.append(
+            {
+                "frame_id": frame_id,
+                "resident": True,
+                "resident_surface": "resident_in_vram",
+                "registration_status": registration.get("status") or accounting.get("registration_status"),
+                "registration_quality_status": quality.get("decision_status"),
+                "frame_mask_status": mask.get("mask_status"),
+                "warp_model": registration.get("transform_model"),
+                "interpolation": first_artifact.get("warp_interpolation") or first_artifact.get("interpolation"),
+                "tile_size": first_artifact.get("tile_size"),
+                "tile_count": None,
+                "valid_pixels": None,
+                "pixel_count": total_pixels,
+                "valid_fraction": resident_valid_fraction,
+                "registered_path": None,
+                "coverage_path": map_paths.get("coverage"),
+                "dq_mask_path": map_paths.get("dq"),
+                "registered_path_exists": False,
+                "coverage_path_exists": map_exists.get("coverage"),
+                "dq_mask_path_exists": map_exists.get("dq"),
+                "dq_summary_present": isinstance(first_artifact.get("dq_summary"), dict),
+                "dq_summary_has_valid": "valid" in (first_artifact.get("dq_summary") or {}),
+                "artifact_ready": bool(map_exists.get("coverage")) and bool(map_exists.get("dq")),
+                "pixel_verification": {
+                    "verified": False,
+                    "status": "resident_surface_not_per_frame",
+                    "passed": not pixel_verify,
+                    "reason": "resident warp is accumulated in VRAM and audited through integration DQ/pixel-closure contracts",
+                }
+                if pixel_verify
+                else None,
+                "passed": not failed_checks,
+                "failed_checks": failed_checks,
+            }
+        )
+
+    skipped_rows: list[dict[str, Any]] = []
+    for frame_id in masked_ids:
+        accounting = accounting_by_id.get(frame_id, {})
+        quality = quality_by_id.get(frame_id, {})
+        reasons = accounting.get("resident_frame_mask_reasons") or accounting.get("reasons") or quality.get("reasons") or []
+        reason = "; ".join(str(item) for item in reasons) if reasons else "resident frame mask excluded frame"
+        failed_checks: list[str] = []
+        if not frame_id:
+            failed_checks.append("frame_id_present")
+        if not reason:
+            failed_checks.append("reason_present")
+        skipped_rows.append(
+            {
+                "frame_id": frame_id,
+                "status": accounting.get("registration_status") or quality.get("final_status") or "masked",
+                "reason": reason,
+                "warnings": accounting.get("warnings") or [],
+                "passed": not failed_checks,
+                "failed_checks": failed_checks,
+            }
+        )
+
+    artifact_failures: list[str] = []
+    if require_artifacts:
+        artifact_failures = [name for name, exists in map_exists.items() if not exists and name in {"coverage", "dq"}]
+    valid_fraction_failed = min_valid_fraction is not None and (
+        resident_valid_fraction is None or resident_valid_fraction < float(min_valid_fraction)
+    )
+    skipped_failed = max_skipped_frames is not None and len(skipped_rows) > int(max_skipped_frames)
+    all_registered_failed = bool(require_all_registered) and bool(missing_active_ids or extra_active_ids)
+    provenance_failed = (
+        geometric_frame_count is None
+        or active_frame_count is None
+        or geometric_frame_count != len(active_ids)
+        or active_frame_count != len(active_ids)
+    )
+    pixel_failed = bool(pixel_verify)
+
+    checks = [
+        _check(
+            "resident_warp_surface_present",
+            True,
+            {
+                "resident_artifacts": str(run_root / "resident_artifacts.json"),
+                "registration_results": str(run_root / "registration_results.json"),
+            },
+        ),
+        _check(
+            "resident_warp_outputs_present",
+            bool(active_ids),
+            {"output_count": len(active_ids)},
+        ),
+        _check(
+            "resident_warp_skipped_rows_have_reasons",
+            all(row["passed"] for row in skipped_rows),
+            {"failed": [row["frame_id"] for row in skipped_rows if not row["passed"]]},
+        ),
+        _check(
+            "resident_warp_frame_masks_close",
+            len(active_ids) + len(masked_ids) == len(mask_rows) and bool(mask_rows),
+            {
+                "active_count": len(active_ids),
+                "masked_count": len(masked_ids),
+                "frame_mask_rows": len(mask_rows),
+            },
+        ),
+        _check(
+            "resident_warp_geometric_coverage_closes",
+            not provenance_failed,
+            {
+                "active_frame_count": len(active_ids),
+                "provenance_active_frame_count": active_frame_count,
+                "geometric_warp_coverage_frame_count": geometric_frame_count,
+            },
+        ),
+    ]
+    if require_artifacts:
+        checks.append(
+            _check(
+                "resident_warp_output_maps_ready",
+                not artifact_failures,
+                {"map_exists": map_exists, "failed": artifact_failures},
+            )
+        )
+    if min_valid_fraction is not None:
+        checks.append(
+            _check(
+                "resident_warp_valid_fraction_meets_threshold",
+                not valid_fraction_failed,
+                {
+                    "observed_valid_fraction": resident_valid_fraction,
+                    "min_valid_fraction": min_valid_fraction,
+                    "geometric_full_pixels": geometric_full,
+                    "total_pixels": total_pixels,
+                },
+            )
+        )
+    if max_skipped_frames is not None:
+        checks.append(
+            _check(
+                "resident_warp_skipped_frames_within_threshold",
+                not skipped_failed,
+                {"skipped_count": len(skipped_rows), "max_skipped_frames": max_skipped_frames},
+            )
+        )
+    if require_all_registered:
+        checks.append(
+            _check(
+                "resident_all_accepted_registration_frames_warped",
+                not all_registered_failed,
+                {
+                    "accepted_registration_count": len(expected_active_ids),
+                    "active_warp_count": len(active_ids),
+                    "missing": missing_active_ids,
+                    "extra": extra_active_ids,
+                },
+            )
+        )
+    if pixel_verify:
+        checks.append(
+            _check(
+                "resident_warp_pixel_verification_not_supported",
+                False,
+                {
+                    "reason": "resident warp has no per-frame registered/coverage/DQ cache; use pipeline-contract pixel verification",
+                },
+            )
+        )
+
+    failed_outputs = [row for row in rows if row["failed_checks"]]
+    passed = all(item["passed"] for item in checks)
+    return {
+        "schema_version": 1,
+        "artifact_type": "warp_quality_contract",
+        "contract_surface": "resident_in_vram",
+        "created_at": created_at,
+        "run_dir": str(run_root),
+        "warp_path": str(run_root / "warp_results.json"),
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "required": True,
+        "thresholds": thresholds,
+        "summary": {
+            "output_count": len(rows),
+            "skipped_count": len(skipped_rows),
+            "artifact_ready_count": sum(1 for row in rows if row["artifact_ready"]),
+            "failed_output_count": len(failed_outputs),
+            "min_valid_fraction": resident_valid_fraction,
+            "max_valid_fraction": resident_valid_fraction,
+            "total_valid_pixels": geometric_full,
+            "accepted_registration_count": len(expected_active_ids),
+            "missing_warp_for_accepted_registration_count": len(missing_active_ids),
+            "resident_active_frame_count": len(active_ids),
+            "resident_masked_frame_count": len(masked_ids),
+            "geometric_warp_coverage_frame_count": geometric_frame_count,
+            "pixel_verify": bool(pixel_verify),
+            "pixel_verified_output_count": 0,
+            "pixel_failed_output_count": len(rows) if pixel_verify else 0,
+            "pixel_max_delta": None,
+            "science_residual_verify": False,
+            "science_residual_reference_frame_id": None,
+            "science_residual_verified_output_count": 0,
+            "science_residual_failed_output_count": 0,
+            "science_residual_max_rms": None,
+            "science_residual_max_abs": None,
+            "registration_mode": (quality_rows[0].get("registration_mode") if quality_rows else None),
+            "reference_frame_id": registration_payload.get("reference_frame_id"),
+            "reference_selection_source": registration_payload.get("reference_selection_source"),
+            "map_paths": map_paths,
+            "map_exists": map_exists,
+        },
+        "checks": checks,
+        "outputs": rows,
+        "skipped_frames": skipped_rows,
+        "failed_checks": [item["name"] for item in checks if not item["passed"]],
+        "failed_outputs": failed_outputs,
+        "missing_warp_for_accepted_registration": missing_active_ids,
+    }
 
 
 def _warp_output_rows(
@@ -565,6 +941,18 @@ def build_warp_quality_contract(
         "science_residual_tile_size": max(1, int(science_residual_tile_size)),
     }
     if payload is None:
+        resident_contract = _resident_warp_quality_contract(
+            run_root,
+            min_valid_fraction=min_valid_fraction,
+            max_skipped_frames=max_skipped_frames,
+            require_artifacts=require_artifacts,
+            require_all_registered=require_all_registered,
+            pixel_verify=pixel_verify,
+            thresholds=thresholds,
+            created_at=created_at,
+        )
+        if resident_contract is not None:
+            return resident_contract
         checks = [
             _check(
                 "warp_results_present",
@@ -575,6 +963,7 @@ def build_warp_quality_contract(
         return {
             "schema_version": 1,
             "artifact_type": "warp_quality_contract",
+            "contract_surface": "warp_results_json",
             "created_at": created_at,
             "run_dir": str(run_root),
             "warp_path": str(warp_path),
@@ -747,6 +1136,7 @@ def build_warp_quality_contract(
     return {
         "schema_version": 1,
         "artifact_type": "warp_quality_contract",
+        "contract_surface": "warp_results_json",
         "created_at": created_at,
         "run_dir": str(run_root),
         "warp_path": str(warp_path),
@@ -807,9 +1197,13 @@ def write_warp_quality_contract(
         f"- Status: {payload.get('status')}",
         f"- Passed: {payload.get('passed')}",
         f"- Required: {payload.get('required')}",
+        f"- Contract surface: {payload.get('contract_surface')}",
         f"- Output count: {summary.get('output_count')}",
         f"- Skipped count: {summary.get('skipped_count')}",
         f"- Artifact-ready count: {summary.get('artifact_ready_count')}",
+        f"- Resident active frames: {summary.get('resident_active_frame_count')}",
+        f"- Resident masked frames: {summary.get('resident_masked_frame_count')}",
+        f"- Geometric warp coverage frames: {summary.get('geometric_warp_coverage_frame_count')}",
         f"- Min valid fraction: {summary.get('min_valid_fraction')}",
         f"- Threshold min valid fraction: {thresholds.get('min_valid_fraction')}",
         f"- Max skipped frames: {thresholds.get('max_skipped_frames')}",

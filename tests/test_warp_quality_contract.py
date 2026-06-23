@@ -102,6 +102,123 @@ def _write_warp_run(
     return run
 
 
+def _write_resident_warp_run(tmp_path: Path) -> Path:
+    run = tmp_path / "resident_run"
+    run.mkdir()
+    coverage = run / "coverage_map.fits"
+    dq = run / "dq_map.fits"
+    write_fits_data(coverage, np.ones((3, 3), dtype=np.float32))
+    write_fits_data(dq, np.zeros((3, 3), dtype=np.float32))
+    write_json(
+        run / "resident_artifacts.json",
+        {
+            "schema_version": 1,
+            "artifacts": [
+                {
+                    "backend": "cuda_resident_stack",
+                    "coverage_map_path": str(coverage),
+                    "dq_map_path": str(dq),
+                    "warp_interpolation": "lanczos3",
+                    "dq_summary": {"valid": 8, "warp_edge": 1},
+                    "dq_coverage_provenance": {
+                        "active_frame_count": 2,
+                        "geometric_warp_coverage_frame_count": 2,
+                        "geometric_full_pixels": 8,
+                        "geometric_warp_coverage": {"total_pixels": 9},
+                    },
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "registration_results.json",
+        {
+            "schema_version": 1,
+            "reference_frame_id": "F1",
+            "reference_selection_source": "frame_quality",
+            "results": [
+                {"frame_id": "F1", "status": "reference", "transform_model": "similarity"},
+                {"frame_id": "F2", "status": "ok", "transform_model": "similarity"},
+                {"frame_id": "F3", "status": "failed", "transform_model": "similarity"},
+            ],
+        },
+    )
+    write_json(
+        run / "resident_registration_quality.json",
+        {
+            "schema_version": 1,
+            "decisions": [
+                {
+                    "frame_id": "F1",
+                    "accepted": True,
+                    "final_status": "reference",
+                    "decision_status": "reference",
+                    "registration_mode": "similarity_cuda_triangle",
+                },
+                {
+                    "frame_id": "F2",
+                    "accepted": True,
+                    "final_status": "ok",
+                    "decision_status": "accepted",
+                    "registration_mode": "similarity_cuda_triangle",
+                },
+                {
+                    "frame_id": "F3",
+                    "accepted": False,
+                    "final_status": "failed",
+                    "decision_status": "rejected",
+                    "reasons": ["too few stars"],
+                    "registration_mode": "similarity_cuda_triangle",
+                },
+            ],
+        },
+    )
+    write_json(
+        run / "resident_frame_masks.json",
+        {
+            "schema_version": 1,
+            "groups": [
+                {
+                    "filter": "H",
+                    "rows": [
+                        {"frame_id": "F1", "mask_status": "active"},
+                        {"frame_id": "F2", "mask_status": "active"},
+                        {"frame_id": "F3", "mask_status": "masked", "reasons": ["too few stars"]},
+                    ],
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "frame_accounting.json",
+        {
+            "schema_version": 1,
+            "frames": [
+                {
+                    "frame_id": "F1",
+                    "registration_status": "reference",
+                    "warp_status": "resident_in_vram",
+                    "integration_status": "used",
+                },
+                {
+                    "frame_id": "F2",
+                    "registration_status": "ok",
+                    "warp_status": "resident_in_vram",
+                    "integration_status": "used",
+                },
+                {
+                    "frame_id": "F3",
+                    "registration_status": "failed",
+                    "warp_status": "masked",
+                    "integration_status": "zero_weight",
+                    "resident_frame_mask_reasons": ["too few stars"],
+                },
+            ],
+        },
+    )
+    return run
+
+
 def test_warp_quality_contract_passes_artifact_and_registration_checks(tmp_path: Path):
     run = _write_warp_run(tmp_path)
 
@@ -126,6 +243,48 @@ def test_warp_quality_contract_passes_artifact_and_registration_checks(tmp_path:
     assert contract["outputs"][0]["pixel_verification"]["status"] == "passed"
     assert contract["summary"]["missing_warp_for_accepted_registration_count"] == 0
     assert contract["failed_checks"] == []
+
+
+def test_warp_quality_contract_accepts_resident_in_vram_surface(tmp_path: Path):
+    run = _write_resident_warp_run(tmp_path)
+
+    contract = build_warp_quality_contract(
+        run,
+        min_valid_fraction=0.75,
+        max_skipped_frames=1,
+        require_artifacts=True,
+        require_all_registered=True,
+    )
+
+    assert contract["passed"] is True
+    assert contract["contract_surface"] == "resident_in_vram"
+    assert contract["summary"]["output_count"] == 2
+    assert contract["summary"]["skipped_count"] == 1
+    assert contract["summary"]["resident_active_frame_count"] == 2
+    assert contract["summary"]["resident_masked_frame_count"] == 1
+    assert contract["summary"]["geometric_warp_coverage_frame_count"] == 2
+    check_names = {item["name"] for item in contract["checks"]}
+    assert "resident_warp_geometric_coverage_closes" in check_names
+    assert "resident_all_accepted_registration_frames_warped" in check_names
+    assert contract["failed_checks"] == []
+
+
+def test_warp_quality_contract_resident_surface_rejects_pixel_verify(tmp_path: Path):
+    run = _write_resident_warp_run(tmp_path)
+
+    contract = build_warp_quality_contract(
+        run,
+        min_valid_fraction=0.75,
+        max_skipped_frames=1,
+        require_artifacts=True,
+        require_all_registered=True,
+        pixel_verify=True,
+    )
+
+    assert contract["passed"] is False
+    assert contract["contract_surface"] == "resident_in_vram"
+    assert "resident_warp_pixel_verification_not_supported" in contract["failed_checks"]
+    assert contract["summary"]["pixel_failed_output_count"] == 2
 
 
 def test_warp_quality_contract_fails_missing_artifact_and_fraction(tmp_path: Path):

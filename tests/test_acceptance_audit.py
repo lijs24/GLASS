@@ -467,6 +467,29 @@ def _add_stack_engine_default_promotion_requirement(path: Path) -> None:
     write_json(path, payload)
 
 
+def _add_warp_quality_contract_requirement(path: Path) -> None:
+    payload = read_json(path)
+    payload["warp_quality_contract"] = {
+        "required": True,
+        "required_artifact_type": "warp_quality_contract",
+        "required_contract_surface": "resident_in_vram",
+        "require_passed": True,
+        "min_check_count": 7,
+        "min_output_count": 2,
+        "required_check_names": [
+            "resident_warp_surface_present",
+            "resident_warp_outputs_present",
+            "resident_warp_frame_masks_close",
+            "resident_warp_geometric_coverage_closes",
+            "resident_warp_valid_fraction_meets_threshold",
+            "resident_warp_skipped_frames_within_threshold",
+            "resident_all_accepted_registration_frames_warped",
+        ],
+        "allow_failed_checks": False,
+    }
+    write_json(path, payload)
+
+
 def _write_resident_determinism(
     path: Path,
     *,
@@ -1194,11 +1217,23 @@ def _write_resident_contract(path: Path, *, artifact_type: str, passed: bool = T
 
 
 def _write_warp_quality_contract(path: Path, *, passed: bool = True) -> None:
+    check_names = [
+        "resident_warp_surface_present",
+        "resident_warp_outputs_present",
+        "resident_warp_skipped_rows_have_reasons",
+        "resident_warp_frame_masks_close",
+        "resident_warp_geometric_coverage_closes",
+        "resident_warp_output_maps_ready",
+        "resident_warp_valid_fraction_meets_threshold",
+        "resident_warp_skipped_frames_within_threshold",
+        "resident_all_accepted_registration_frames_warped",
+    ]
     write_json(
         path,
         {
             "schema_version": 1,
             "artifact_type": "warp_quality_contract",
+            "contract_surface": "resident_in_vram",
             "status": "passed" if passed else "failed",
             "passed": passed,
             "output_count": 2,
@@ -1210,17 +1245,12 @@ def _write_warp_quality_contract(path: Path, *, passed: bool = True) -> None:
             },
             "checks": [
                 {
-                    "name": "warp_outputs_present",
-                    "passed": True,
-                    "evidence": {"output_count": 2},
-                    "note": "",
-                },
-                {
-                    "name": "warp_output_artifacts_ready",
+                    "name": name,
                     "passed": passed,
-                    "evidence": {"failed": [] if passed else ["light_001"]},
+                    "evidence": {"fixture": True, "output_count": 2},
                     "note": "",
-                },
+                }
+                for name in check_names
             ],
         },
     )
@@ -2600,6 +2630,85 @@ def test_acceptance_audit_cli_accepts_contract_bundle(tmp_path: Path):
     assert "Warp quality contract: passed" in markdown
     assert "PASS: contract_pipeline_contract_passed" in markdown
     assert "PASS: contract_stack_engine_default_promotion_ready" in markdown
+
+
+def test_acceptance_audit_applies_benchmark_warp_quality_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    warp_quality = tmp_path / "warp_quality_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=30.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_warp_quality_contract_requirement(contract)
+    _write_warp_quality_contract(warp_quality, passed=True)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+        warp_quality_contract_json=warp_quality,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert checks["warp_quality_contract_passed"]["passed"] is True
+    assert checks["contract_warp_quality_contract_present"]["passed"] is True
+    assert checks["contract_warp_quality_contract_surface"]["passed"] is True
+    assert checks["contract_warp_quality_contract_min_output_count"]["passed"] is True
+    assert checks["contract_warp_quality_contract_no_failed_checks"]["passed"] is True
+
+
+def test_acceptance_audit_blocks_missing_benchmark_warp_quality_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=30.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_warp_quality_contract_requirement(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert checks["warp_quality_contract_present"]["passed"] is False
+    assert checks["contract_warp_quality_contract_present"]["passed"] is False
+    assert checks["contract_warp_quality_contract_passed"]["passed"] is False
 
 
 def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):

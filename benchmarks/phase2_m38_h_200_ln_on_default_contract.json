@@ -126,6 +126,24 @@
     "max_blocker_count": 0,
     "allow_failed_checks": false
   },
+  "warp_quality_contract": {
+    "required": true,
+    "required_artifact_type": "warp_quality_contract",
+    "required_contract_surface": "resident_in_vram",
+    "require_passed": true,
+    "min_check_count": 7,
+    "min_output_count": 190,
+    "required_check_names": [
+      "resident_warp_surface_present",
+      "resident_warp_outputs_present",
+      "resident_warp_frame_masks_close",
+      "resident_warp_geometric_coverage_closes",
+      "resident_warp_valid_fraction_meets_threshold",
+      "resident_warp_skipped_frames_within_threshold",
+      "resident_all_accepted_registration_frames_warped"
+    ],
+    "allow_failed_checks": false
+  },
   "required_command_tokens": [
     "--backend cuda",
     "--memory-mode resident",

@@ -1784,6 +1784,119 @@ def _build_stack_engine_default_promotion_contract_checks(
     return checks
 
 
+def _build_warp_quality_contract_checks(
+    requirements: dict[str, Any],
+    *,
+    warp_quality_contract: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    contract = warp_quality_contract or {}
+    present = bool(contract) and contract.get("exists", True) is True
+    failed_checks = contract.get("failed_checks") if isinstance(contract.get("failed_checks"), list) else []
+    check_names = contract.get("check_names") if isinstance(contract.get("check_names"), list) else []
+    summary = contract.get("summary") if isinstance(contract.get("summary"), dict) else {}
+
+    if requirements.get("required"):
+        checks.append(
+            _check(
+                "contract_warp_quality_contract_present",
+                present,
+                {
+                    "required": True,
+                    "present": present,
+                    "path": contract.get("path"),
+                },
+            )
+        )
+
+    required_artifact_type = requirements.get("required_artifact_type")
+    if required_artifact_type is not None:
+        checks.append(
+            _check(
+                "contract_warp_quality_contract_type",
+                present and contract.get("artifact_type") == str(required_artifact_type),
+                {
+                    "actual": contract.get("artifact_type"),
+                    "required": str(required_artifact_type),
+                },
+            )
+        )
+
+    required_surface = requirements.get("required_contract_surface")
+    if required_surface is not None:
+        checks.append(
+            _check(
+                "contract_warp_quality_contract_surface",
+                present and contract.get("contract_surface") == str(required_surface),
+                {
+                    "actual": contract.get("contract_surface"),
+                    "required": str(required_surface),
+                },
+            )
+        )
+
+    if requirements.get("require_passed"):
+        checks.append(
+            _check(
+                "contract_warp_quality_contract_passed",
+                contract.get("passed") is True,
+                {
+                    "actual": contract.get("passed"),
+                    "status": contract.get("status"),
+                    "failed_checks": failed_checks,
+                },
+            )
+        )
+
+    min_check_count = requirements.get("min_check_count")
+    if min_check_count is not None:
+        actual = int(contract.get("check_count") or 0)
+        required = int(min_check_count)
+        checks.append(
+            _check(
+                "contract_warp_quality_contract_min_check_count",
+                actual >= required,
+                {"actual": actual, "required_min": required},
+            )
+        )
+
+    min_output_count = requirements.get("min_output_count")
+    if min_output_count is not None:
+        actual_output_count = contract.get("output_count")
+        if actual_output_count is None:
+            actual_output_count = summary.get("output_count")
+        actual = int(actual_output_count or 0)
+        required = int(min_output_count)
+        checks.append(
+            _check(
+                "contract_warp_quality_contract_min_output_count",
+                actual >= required,
+                {"actual": actual, "required_min": required},
+            )
+        )
+
+    for required_name in requirements.get("required_check_names") or []:
+        name = str(required_name)
+        checks.append(
+            _check(
+                f"contract_warp_quality_contract_check:{name}",
+                name in {str(item) for item in check_names},
+                {"required": name, "available": [str(item) for item in check_names]},
+            )
+        )
+
+    if requirements.get("allow_failed_checks") is False:
+        checks.append(
+            _check(
+                "contract_warp_quality_contract_no_failed_checks",
+                present and not failed_checks,
+                {"failed_checks": failed_checks},
+            )
+        )
+
+    return checks
+
+
 def build_benchmark_contract_checks(
     contract: dict[str, Any],
     *,
@@ -1798,6 +1911,7 @@ def build_benchmark_contract_checks(
     output_numerical_drifts: list[dict[str, Any]] | None = None,
     pipeline_contract: dict[str, Any] | None = None,
     stack_engine_contract: dict[str, Any] | None = None,
+    warp_quality_contract: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     dataset = contract.get("dataset_requirements") or {}
@@ -2103,6 +2217,14 @@ def build_benchmark_contract_checks(
             _build_stack_engine_default_promotion_contract_checks(
                 stack_default_requirements,
                 stack_engine_contract=stack_engine_contract,
+            )
+        )
+    warp_quality_requirements = contract.get("warp_quality_contract") or {}
+    if isinstance(warp_quality_requirements, dict) and warp_quality_requirements:
+        checks.extend(
+            _build_warp_quality_contract_checks(
+                warp_quality_requirements,
+                warp_quality_contract=warp_quality_contract,
             )
         )
     return checks

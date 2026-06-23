@@ -15946,6 +15946,73 @@ Completed in Gate446:
   - this is a benchmark-contract and real-regression gate on the main resident
     StackEngine/DQ path, not a report-only gate and not an image-math change.
 
+### S2-Gate 580: Resident in-VRAM Warp-Quality Benchmark Gate
+
+- Returns to the resident registration/warp mainline by making the real
+  in-VRAM warp surface auditable without requiring a per-frame registered FITS
+  cache.
+- Problem found:
+  - the resident CUDA default path intentionally accumulates warped frames in
+    VRAM and writes final integration maps, so it does not emit
+    `warp_results.json`;
+  - the existing `warp-quality-contract` therefore failed the true default
+    resident run at `warp_results_present`, even though registration quality,
+    frame masks, frame accounting, geometric coverage, coverage maps, and DQ
+    maps were all present.
+- Completed:
+  - `warp-quality-contract` now recognizes `contract_surface=resident_in_vram`
+    when `resident_artifacts.json`, `registration_results.json`,
+    `resident_frame_masks.json`, and `frame_accounting.json` provide the
+    resident warp evidence;
+  - resident checks now close active/masked frame counts, skipped-frame
+    reasons, geometric warp coverage frame count, output coverage/DQ maps,
+    valid-fraction threshold, skipped-frame threshold, and accepted
+    registration frames against active warped frames;
+  - resident pixel verification is explicitly not faked. If requested on the
+    resident in-VRAM surface, the contract fails with
+    `resident_warp_pixel_verification_not_supported` and points callers to the
+    pipeline pixel-verification contract;
+  - `acceptance-audit` now passes warp-quality evidence into benchmark-contract
+    checks and treats a benchmark-required warp-quality contract as required
+    even if no explicit CLI `--require-warp-quality-contract` flag is supplied;
+  - `benchmarks/phase2_m38_h_200_ln_on_default_contract.json` now requires a
+    passing resident in-VRAM warp-quality contract with at least `190` active
+    outputs and the core resident warp checks.
+- Real 200-light validation:
+  - source run:
+    `C:\glass_runs\phase2_s2_gate579_current_default_contract\current_head_default`;
+  - warp-quality contract:
+    `C:\glass_runs\phase2_s2_gate580_resident_warp_quality\warp_quality_contract.json`;
+  - acceptance audit:
+    `C:\glass_runs\phase2_s2_gate580_resident_warp_quality\acceptance_audit_gate580.json`;
+  - markdown:
+    `C:\glass_runs\phase2_s2_gate580_resident_warp_quality\acceptance_audit_gate580.md`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Warp contract status | `passed` |
+  | Contract surface | `resident_in_vram` |
+  | Resident active/masked frames | `193 / 7` |
+  | Artifact-ready active frames | `193` |
+  | Geometric warp coverage frames | `193` |
+  | Geometric valid fraction | `0.9721536969272293` |
+  | Accepted registration closure | `193 / 193`, `0 missing` |
+  | Warp-quality failed checks | `0` |
+  | Acceptance audit | `passed` |
+  | Acceptance speedup vs WBPP | `141.03664797477745x` |
+  | Benchmark warp checks | `contract_warp_quality_contract_*` all passed |
+
+- Interpretation:
+  - the default resident route now has a formal registration/warp acceptance
+    surface based on the artifacts it actually produces;
+  - this is not a runtime micro-optimization and not a report-only handoff: a
+    future default 200-light acceptance run fails if resident registration/warp
+    accounting or maps stop closing;
+  - the next substantive gate should use this contract as a guardrail while
+    improving resident registration/warp throughput or strengthening result
+    consistency tests.
+
 ## Gate Rules
 
 Each gate requires:
