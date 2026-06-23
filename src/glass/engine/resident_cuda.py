@@ -6281,6 +6281,13 @@ def run_resident_calibration_integration(
             native_completion_calibration_worker_count = 0
             native_completion_calibration_queue_buffer_count = 0
             native_completion_calibration_order_sample: list[int] = []
+            native_completion_calibration_slot_release_mode: str | None = None
+            native_completion_calibration_slot_reuse_count = 0
+            native_completion_calibration_slot_reuse_query_count = 0
+            native_completion_calibration_slot_reuse_ready_count = 0
+            native_completion_calibration_slot_reuse_wait_count = 0
+            native_completion_calibration_slot_reuse_wait_s = 0.0
+            native_completion_calibration_final_h2d_collect_count = 0
             prefetch_fill_blocked_no_slot_count = 0
             prefetch_release_count = 0
             prefetch_max_inflight_slots = 0
@@ -6541,6 +6548,29 @@ def run_resident_calibration_integration(
                                 native_completion_calibration_queue_buffer_count = max(
                                     native_completion_calibration_queue_buffer_count,
                                     int(calibration_timing.get("queue_buffer_count", 0) or 0),
+                                )
+                                timing_slot_release_mode = str(
+                                    calibration_timing.get("native_completion_slot_release_mode", "") or ""
+                                )
+                                if timing_slot_release_mode:
+                                    native_completion_calibration_slot_release_mode = timing_slot_release_mode
+                                native_completion_calibration_slot_reuse_count += int(
+                                    calibration_timing.get("native_completion_slot_reuse_count", 0) or 0
+                                )
+                                native_completion_calibration_slot_reuse_query_count += int(
+                                    calibration_timing.get("native_completion_slot_reuse_query_count", 0) or 0
+                                )
+                                native_completion_calibration_slot_reuse_ready_count += int(
+                                    calibration_timing.get("native_completion_slot_reuse_ready_count", 0) or 0
+                                )
+                                native_completion_calibration_slot_reuse_wait_count += int(
+                                    calibration_timing.get("native_completion_slot_reuse_wait_count", 0) or 0
+                                )
+                                native_completion_calibration_slot_reuse_wait_s += float(
+                                    calibration_timing.get("native_completion_slot_reuse_wait_s", 0.0) or 0.0
+                                )
+                                native_completion_calibration_final_h2d_collect_count += int(
+                                    calibration_timing.get("native_completion_final_h2d_collect_count", 0) or 0
                                 )
                                 for sample_index in list(
                                     calibration_timing.get("native_completion_order_sample", []) or []
@@ -11260,6 +11290,25 @@ def run_resident_calibration_integration(
                 "native_completion_calibration_order_sample": list(
                     native_completion_calibration_order_sample
                 ),
+                "native_completion_calibration_slot_release_mode": native_completion_calibration_slot_release_mode,
+                "native_completion_calibration_slot_reuse_count": int(
+                    native_completion_calibration_slot_reuse_count
+                ),
+                "native_completion_calibration_slot_reuse_query_count": int(
+                    native_completion_calibration_slot_reuse_query_count
+                ),
+                "native_completion_calibration_slot_reuse_ready_count": int(
+                    native_completion_calibration_slot_reuse_ready_count
+                ),
+                "native_completion_calibration_slot_reuse_wait_count": int(
+                    native_completion_calibration_slot_reuse_wait_count
+                ),
+                "native_completion_calibration_slot_reuse_wait_s": float(
+                    native_completion_calibration_slot_reuse_wait_s
+                ),
+                "native_completion_calibration_final_h2d_collect_count": int(
+                    native_completion_calibration_final_h2d_collect_count
+                ),
             }
             registration_total = registration_timing["total"]
             registration_component_total = float(
@@ -11952,7 +12001,7 @@ def run_resident_calibration_integration(
                         "calibration_ready_order_sample": list(calibration_ready_order_sample),
                         "calibration_wave_enabled": bool(calibration_wave_enabled),
                         "calibration_wave_release_mode": (
-                            "native_completion_queue_h2d_event"
+                            "native_completion_queue_event_gated_slot_reuse"
                             if native_completion_calibration_enabled
                             else "native_path_read_wave_sync"
                             if native_path_calibration_enabled

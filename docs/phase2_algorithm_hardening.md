@@ -14608,6 +14608,71 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_549_completion_calibration_summary.json`.
 
+### S2-Gate 550: Native Completion Event-Gated Slot Reuse
+
+- Continued the resident CUDA I/O/calibration mainline by removing Gate549's
+  immediate per-frame H2D synchronization before reusing a pinned completion
+  buffer. Each completion-ring slot now owns H2D start/done events; the native
+  consumer reuses a slot when `cudaEventQuery` reports the copy is complete and
+  blocks only if all reusable slots are still in flight.
+- Completed:
+  - changed
+    `ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed`
+    to use per-buffer H2D events instead of reused lane H2D events for host
+    buffer lifetime;
+  - kept the existing `GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION=1` opt-in
+    gate and did not alter the default path;
+  - surfaced `native_completion_calibration_slot_release_mode`,
+    slot reuse/query/ready/wait counters, wait seconds, and final H2D collect
+    count in resident artifacts;
+  - updated the completion event mode to
+    `native_completion_queue_buffer_reuse_events` and the resident release mode
+    to `native_completion_queue_event_gated_slot_reuse`.
+- Tests:
+  - focused completion/path/default tests: `5 passed in 0.69 s`;
+  - full pytest: `1188 passed in 43.87 s`.
+- Real 200-light same-session A/B:
+  - completion event-gated opt-in run:
+    `C:\glass_runs\phase2_s2_gate550_event_gated_completion\runs_20260623_160644\completion_event_gated_release`;
+  - fresh default run:
+    `C:\glass_runs\phase2_s2_gate550_event_gated_completion\runs_20260623_160701\default_release`;
+  - completion shell elapsed: `5.6586045 s`;
+  - fresh default shell elapsed: `5.5989522 s`;
+  - completion light read/upload/calibrate: `2.911669 s`;
+  - fresh default light read/upload/calibrate: `2.581875 s`;
+  - completion light-stage ratio versus default: `1.127734x`;
+  - completion registration/warp: `0.254520 s`;
+  - default registration/warp: `0.256226 s`;
+  - completion integration: `0.306109 s`;
+  - default integration: `0.318505 s`;
+  - completion output write: `0.249455 s`;
+  - default output write: `0.339304 s`;
+  - completion recorded `native_u16be_raw_completion_calibration: 200`,
+    `16` workers, `24` pinned queue buffers, `200` submits/completions, and
+    `118` out-of-order completions;
+  - slot reuse diagnostics: `176` reuses, `1291` event queries, `176`
+    query-ready reuses, `0` wait reuses, `0.0 s` slot wait, and `24` final H2D
+    collects.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    SHA256-identical between the completion run and the fresh default run;
+  - master SHA256:
+    `8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110`.
+- Interpretation:
+  - event-gated slot reuse worked as designed and proved that the pinned slot
+    lifetime can be made safe without per-frame synchronization;
+  - the real run did not improve the light stage versus Gate549 and remained
+    slower than the current default path, so per-frame H2D slot waiting was not
+    the dominant bottleneck;
+  - the next substantial target is to connect native read completions to the
+    existing callback-release lane machinery or a native lane-wave scheduler,
+    reducing single-consumer orchestration and query churn while preserving the
+    default path's ready-first overlap.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_550_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_550_event_gated_completion_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

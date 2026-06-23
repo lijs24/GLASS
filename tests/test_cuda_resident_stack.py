@@ -334,11 +334,14 @@ def test_resident_stack_calibrates_u16be_paths_completion_queue_on_gpu_like_cpu(
     master, weight_map = stack.integrate_mean()
 
     assert timing["h2d_mode"] == "fits_u16be_bzero_native_completion_calibration_batch"
-    assert timing["event_mode"] == "native_completion_queue_reused_stack_lane_events"
+    assert timing["event_mode"] == "native_completion_queue_buffer_reuse_events"
     assert timing["native_completion_submit_count"] == 2
     assert timing["native_completion_count"] == 2
     assert timing["queue_buffer_count"] == 2
     assert timing["worker_count"] == 2
+    assert timing["native_completion_slot_release_mode"] == "event_query_deferred_reuse"
+    assert timing["native_completion_slot_reuse_count"] == 0
+    assert timing["native_completion_final_h2d_collect_count"] == 2
     assert timing["native_path_host_buffer_model"] == "cuda_host_alloc_portable_pinned_completion_ring"
     assert timing["native_path_host_buffer_pinned"] is True
     assert timing["raw_h2d_bytes"] == 2 * 4 * 5 * 2

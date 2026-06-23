@@ -6113,6 +6113,10 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     assert io_pipeline["calibration_batch_timing_model"] == (
         "native_completion_queue_read_then_h2d_gpu_decode_calibration"
     )
+    assert io_pipeline["calibration_wave_release_mode"] == "native_completion_queue_event_gated_slot_reuse"
+    assert io_pipeline["native_completion_calibration_slot_release_mode"] == "event_query_deferred_reuse"
+    assert io_pipeline["native_completion_calibration_slot_reuse_count"] == 0
+    assert io_pipeline["native_completion_calibration_final_h2d_collect_count"] == 2
     assert io_pipeline["raw_gpu_h2d_bytes"] == 2 * 24 * 24 * 2
     assert io_pipeline["raw_gpu_float32_host_bytes_avoided"] == 2 * 24 * 24 * 4
 
