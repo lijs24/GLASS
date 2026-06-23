@@ -1,0 +1,105 @@
+{
+  "gate": "S2-Gate 543",
+  "title": "Resident Prefetch Completion Queue",
+  "date": "2026-06-23",
+  "code_changes": [
+    "Added a callback-backed ready queue to _LightPrefetcher",
+    "Replaced ready-first future scanning with condition-variable completion notification",
+    "Recorded ready queue callback/wait counters in resident artifacts",
+    "Exposed ready queue counters in resident_light_pipeline_profile knobs",
+    "Kept default prefetch depth at 24 after a real 200-light probe"
+  ],
+  "tests": {
+    "focused": "passed",
+    "full_pytest": "1179 passed in 42.69s",
+    "diff_check": "passed with LF-to-CRLF warnings only"
+  },
+  "cuda": {
+    "available": true,
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "driver_version": "596.21"
+  },
+  "prefetch_probe": {
+    "root": "C:\\glass_runs\\phase2_s2_gate543_ready_prefetch_probe\\runs_20260623_142849",
+    "results": [
+      {
+        "prefetch": 16,
+        "shell_s": 5.446844,
+        "internal_s": 5.06957490002969,
+        "light_s": 2.81011220003711,
+        "read_wait_s": 1.51051870099036
+      },
+      {
+        "prefetch": 24,
+        "shell_s": 5.337614,
+        "internal_s": 4.98283779999474,
+        "light_s": 2.57856090000132,
+        "read_wait_s": 1.17228100064676
+      },
+      {
+        "prefetch": 32,
+        "shell_s": 5.363577,
+        "internal_s": 4.9905124999932,
+        "light_s": 2.41222210001433,
+        "read_wait_s": 0.748279599589296
+      },
+      {
+        "prefetch": 48,
+        "shell_s": 5.714103,
+        "internal_s": 5.33984980004607,
+        "light_s": 2.61253780004336,
+        "read_wait_s": 0.686400900536682
+      }
+    ],
+    "decision": "keep_default_prefetch_24"
+  },
+  "real_200_light": {
+    "run_path": "C:\\glass_runs\\phase2_s2_gate543_completion_queue\\runs_20260623_143136\\completion_queue_default",
+    "plan_path": "C:\\glass_runs\\phase2_s2_gate540_plan_spec_cache\\runs_20260623_140314\\processing_plan.json",
+    "shell_elapsed_s": 5.257148,
+    "internal_elapsed_s": 4.8933528999914415,
+    "fits_read_mode_effective": "native_u16_gpu",
+    "fits_spec_cache_hits": 200,
+    "calibration_order_mode": "ready_first_single_master_group",
+    "ready_order_enabled": true,
+    "ready_order_out_of_order_count": 71,
+    "ready_order_select_wait_s": 1.1693598999991082,
+    "prefetch_ready_queue_callback_count": 200,
+    "prefetch_ready_queue_wait_count": 90,
+    "prefetch_ready_queue_wait_s": 1.1662104998831637,
+    "timing_s": {
+      "light_read_upload_calibrate": 2.5817079999833368,
+      "light_read_wait_wall": 1.1696307998499833,
+      "light_worker_native_fits_read_cumulative": 25.162711299999998,
+      "resident_registration_warp": 0.25297270010923967,
+      "resident_integration": 0.30424030002905056,
+      "output_write": 0.22156090004136786
+    }
+  },
+  "bitwise_compare": {
+    "baseline_gate": "S2-Gate 542",
+    "all_six_outputs_match": true,
+    "hash_compare_path": "C:\\glass_runs\\phase2_s2_gate543_completion_queue\\runs_20260623_143136\\completion_queue_default\\hash_compare_gate542.json"
+  },
+  "wbpp_compare": {
+    "reference_time_s": 1092.541,
+    "speedup_vs_reference": 207.82009561077604,
+    "shape_match": true,
+    "compared_pixels": 56997300,
+    "coverage_fraction": 0.9892770479074376,
+    "rms_diff": 0.0004279821839256963,
+    "p99_abs_diff": 0.0001313822576776147,
+    "robust_fit_rms_diff": 0.000042529498303511286,
+    "compare_json": "C:\\glass_runs\\phase2_s2_gate543_completion_queue\\runs_20260623_143136\\completion_queue_default\\compare_vs_wbpp_fastintegration_scaled_coverage190.json",
+    "compare_html": "C:\\glass_runs\\phase2_s2_gate543_completion_queue\\runs_20260623_143136\\completion_queue_default\\compare_vs_wbpp_fastintegration_scaled_coverage190.html"
+  },
+  "known_limitations": [
+    "Scheduler hardening only; not a speed win on the warm-cache 200-light run",
+    "Python still owns one Future per frame",
+    "The next meaningful target is native multi-file raw FITS queueing or direct native read-to-calibration stream feeding"
+  ],
+  "next_step": "Implement native multi-file raw FITS queueing for resident native_u16_gpu ingestion.",
+  "clean_room": true
+}

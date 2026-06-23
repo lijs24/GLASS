@@ -166,6 +166,18 @@ def build_resident_light_pipeline_profile(
             "calibration_release_mode_effective": resident_io_pipeline.get(
                 "calibration_release_mode_effective"
             ),
+            "prefetch_ready_queue_callback_count": _int_value(
+                resident_io_pipeline,
+                "prefetch_ready_queue_callback_count",
+            ),
+            "prefetch_ready_queue_wait_count": _int_value(
+                resident_io_pipeline,
+                "prefetch_ready_queue_wait_count",
+            ),
+            "prefetch_ready_queue_wait_s": _float_value(
+                resident_io_pipeline,
+                "prefetch_ready_queue_wait_s",
+            ),
             "prefetch_fill_blocked_no_slot_count": _int_value(
                 resident_io_pipeline,
                 "prefetch_fill_blocked_no_slot_count",

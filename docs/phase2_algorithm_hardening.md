@@ -14090,6 +14090,77 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_542_ready_batch_summary.json`.
 
+### S2-Gate 543: Resident Prefetch Completion Queue
+
+- Continued the resident CUDA I/O/calibration mainline by replacing
+  ready-first future scanning with an explicit completion queue.
+- Completed:
+  - added a callback-backed ready queue to `_LightPrefetcher`;
+  - `ready_index()` now waits on a `Condition` notified by completed read
+    futures instead of rebuilding a candidate future list and calling
+    `concurrent.futures.wait()` on every selection;
+  - `result()` removes consumed indices from the ready queue while preserving
+    existing pinned-ring release semantics;
+  - recorded `prefetch_ready_queue_callback_count`,
+    `prefetch_ready_queue_wait_count`, and `prefetch_ready_queue_wait_s` in
+    resident I/O artifacts and resident light pipeline profile knobs;
+  - kept non-prefetch and sequential-index paths compatible;
+  - added focused testing for the completed-candidate path.
+- Real pre-check probe:
+  - probe root:
+    `C:\glass_runs\phase2_s2_gate543_ready_prefetch_probe\runs_20260623_142849`;
+  - with Gate542 ready-first, prefetch depth `24` remained the best
+    end-to-end default among tested `16/24/32/48`;
+  - measured shell/internal seconds:
+    `16 -> 5.446844 / 5.06957490002969`,
+    `24 -> 5.337614 / 4.98283779999474`,
+    `32 -> 5.363577 / 4.9905124999932`,
+    `48 -> 5.714103 / 5.33984980004607`;
+  - therefore this gate did not retune the default prefetch depth.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate543_completion_queue\runs_20260623_143136\completion_queue_default`;
+  - plan:
+    `C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json`;
+  - shell/internal elapsed: `5.257148 s` / `4.8933528999914415 s`;
+  - resident default preset: `throughput-v3-io`;
+  - effective FITS mode: `native_u16_gpu`;
+  - FITS spec cache hits during light read: `200`;
+  - calibration order mode: `ready_first_single_master_group`;
+  - out-of-order consumed frames: `71`;
+  - ready-selection wait recorded in read wait: `1.1693598999991082 s`;
+  - ready queue callbacks: `200`;
+  - ready queue waits: `90`;
+  - ready queue wait time: `1.1662104998831637 s`.
+- Stage timing evidence:
+  - light read/upload/calibrate: `2.5817079999833368 s`;
+  - light read wait wall: `1.1696307998499833 s`;
+  - worker native FITS read cumulative: `25.162711299999998 s`;
+  - resident registration/warp: `0.25297270010923967 s`;
+  - resident integration: `0.30424030002905056 s`;
+  - output write: `0.22156090004136786 s`.
+- Numerical and WBPP validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    bitwise identical to Gate542;
+  - coverage-masked compare against the WBPP FastIntegration black-box master:
+    RMS `0.0004279821839256963`, p99 abs diff
+    `0.0001313822576776147`, coverage fraction `0.9892770479074376`,
+    compared pixels `56997300`;
+  - shell-time speedup versus WBPP: `207.82009561077604x`.
+- Interpretation:
+  - the completion queue makes the ready-first scheduler explicit and
+    auditable, but it did not beat Gate542's best warm-cache wall time;
+  - because the full-output run remains bitwise identical and only slightly
+    slower, the change is acceptable as scheduler hardening and instrumentation,
+    not as a claimed speed win;
+  - the next material optimization should move multi-file raw FITS reading and
+    queue completion into native code so Python is no longer managing one future
+    per frame.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_543_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_543_completion_queue_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

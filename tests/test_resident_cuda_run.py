@@ -117,6 +117,7 @@ def test_light_prefetcher_ready_index_selects_completed_candidate(monkeypatch) -
     frames = [{"path": f"{index}.fits"} for index in range(2)]
     with _LightPrefetcher(frames, depth=2, workers=2) as prefetcher:
         assert prefetcher.ready_index([0, 1]) == 1
+        assert prefetcher.ready_queue_callback_count >= 1
         data, _profile, _wait_s = prefetcher.result(1)
         assert data.tolist() == [1.0]
 

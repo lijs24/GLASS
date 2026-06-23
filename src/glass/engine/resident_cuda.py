@@ -5,10 +5,10 @@ import gc
 import hashlib
 import json
 from contextlib import ExitStack
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
-from threading import RLock
+from threading import Condition, RLock
 from time import perf_counter
 from typing import Any, Iterable
 
@@ -986,6 +986,11 @@ class _LightPrefetcher:
         self.release_refill_deferred_count = 0
         self.release_refill_wait_s = 0.0
         self.max_inflight_slots = 0
+        self.ready_indices: set[int] = set()
+        self.ready_condition = Condition(self.lock)
+        self.ready_queue_callback_count = 0
+        self.ready_queue_wait_count = 0
+        self.ready_queue_wait_s = 0.0
 
     def __enter__(self) -> "_LightPrefetcher":
         if self.depth > 0:
@@ -1074,18 +1079,31 @@ class _LightPrefetcher:
                     slot = self.pinned_slots[slot_id]
                 frame = self.light_frames[self.next_submit]
                 fits_spec = self.fits_specs_by_path.get(str(frame["path"]))
-                self.pending[self.next_submit] = self.executor.submit(
+                submit_index = int(self.next_submit)
+                future = self.executor.submit(
                     _read_light_timed,
                     frame["path"],
                     slot,
                     self.fits_read_mode,
                     fits_spec,
                 )
+                self.pending[submit_index] = future
+                future.add_done_callback(
+                    lambda _future, index=submit_index: self._mark_ready(index)
+                )
                 if slot_id is not None:
-                    self.inflight_slots[self.next_submit] = slot_id
+                    self.inflight_slots[submit_index] = slot_id
                     self.max_inflight_slots = max(self.max_inflight_slots, len(self.inflight_slots))
                 self.fill_submit_count += 1
                 self.next_submit += 1
+
+    def _mark_ready(self, index: int) -> None:
+        with self.ready_condition:
+            if index not in self.pending:
+                return
+            self.ready_indices.add(index)
+            self.ready_queue_callback_count += 1
+            self.ready_condition.notify_all()
 
     def _queued_fill(self) -> None:
         self.release_refill_queued_execute_count += 1
@@ -1127,14 +1145,17 @@ class _LightPrefetcher:
             return data, read_profile, read_profile["total"]
         with self.lock:
             future = self.pending.pop(index, None)
+            self.ready_indices.discard(index)
         if future is None:
             self.flush_refill()
             with self.lock:
                 future = self.pending.pop(index, None)
+                self.ready_indices.discard(index)
         if future is None:
             self._fill()
             with self.lock:
                 future = self.pending.pop(index)
+                self.ready_indices.discard(index)
         wait_start = perf_counter()
         data, read_profile = future.result()
         wait_elapsed = perf_counter() - wait_start
@@ -1149,18 +1170,21 @@ class _LightPrefetcher:
         if self.executor is None:
             return min(candidates)
         while True:
-            with self.lock:
-                pending = {
-                    index: future
-                    for index, future in self.pending.items()
-                    if index in candidates
-                }
-            ready = [index for index, future in pending.items() if future.done()]
-            if ready:
-                return min(ready)
-            if pending:
-                wait(list(pending.values()), return_when=FIRST_COMPLETED)
-                continue
+            with self.ready_condition:
+                ready = [
+                    index
+                    for index in candidates
+                    if index in self.ready_indices and index in self.pending
+                ]
+                if ready:
+                    return min(ready)
+                has_pending_candidate = any(index in self.pending for index in candidates)
+                if has_pending_candidate:
+                    wait_start = perf_counter()
+                    self.ready_queue_wait_count += 1
+                    self.ready_condition.wait(timeout=0.1)
+                    self.ready_queue_wait_s += perf_counter() - wait_start
+                    continue
             self.flush_refill()
             self._fill()
             with self.lock:
@@ -10623,6 +10647,9 @@ def run_resident_calibration_integration(
                     calibration_ready_order_out_of_order_count
                 ),
                 "calibration_ready_order_select_wait_s": float(calibration_ready_order_select_wait_s),
+                "prefetch_ready_queue_callback_count": int(light_prefetch.ready_queue_callback_count),
+                "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
+                "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -10706,6 +10733,9 @@ def run_resident_calibration_integration(
                 ),
                 "calibration_ready_order_select_wait_s": float(calibration_ready_order_select_wait_s),
                 "calibration_release_mode_effective": calibration_release_mode_effective,
+                "prefetch_ready_queue_callback_count": int(light_prefetch.ready_queue_callback_count),
+                "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
+                "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
                 "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
                 "host_pinned_bytes": int(
                     max(prefetch_host_pinned_bytes, int(getattr(stack, "host_pinned_bytes", 0)))
@@ -11225,6 +11255,11 @@ def run_resident_calibration_integration(
                             light_prefetch.release_refill_queued_coalesced_count
                         ),
                         "prefetch_release_refill_wait_s": float(light_prefetch.release_refill_wait_s),
+                        "prefetch_ready_queue_callback_count": int(
+                            light_prefetch.ready_queue_callback_count
+                        ),
+                        "prefetch_ready_queue_wait_count": int(light_prefetch.ready_queue_wait_count),
+                        "prefetch_ready_queue_wait_s": float(light_prefetch.ready_queue_wait_s),
                         "prefetch_max_inflight_slots": int(prefetch_max_inflight_slots),
                         "prefetch_host_allocation_mode": str(light_prefetch.pinned_host_allocation_mode),
                         "prefetch_host_allocation_count": int(light_prefetch.pinned_host_allocation_count),
