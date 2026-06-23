@@ -236,7 +236,82 @@ def _calibration_master_rows(calibration: dict[str, Any], run_root: Path) -> lis
     return rows
 
 
-def _calibrated_light_rows(calibration: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
+def _resident_source_dq_light_contract(
+    payload: dict[str, Any],
+    resident_source_dq_execution: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(resident_source_dq_execution, dict) or not resident_source_dq_execution.get("exists"):
+        return {
+            "source": None,
+            "available": False,
+            "passed": False,
+            "reason": "resident_source_dq_execution_not_present",
+        }
+
+    groups = [
+        group
+        for group in resident_source_dq_execution.get("groups") or []
+        if isinstance(group, dict)
+    ]
+    filter_name = payload.get("filter")
+    matching_groups = [
+        group
+        for group in groups
+        if filter_name in (None, "", group.get("filter"))
+    ]
+    if not matching_groups and filter_name in (None, ""):
+        matching_groups = groups
+
+    source_counts: dict[str, int] = {}
+    status_counts: dict[str, int] = {}
+    for group in matching_groups:
+        for key, value in (group.get("source_counts") or {}).items():
+            source_counts[str(key)] = source_counts.get(str(key), 0) + int(value or 0)
+        for key, value in (group.get("status_counts") or {}).items():
+            status_counts[str(key)] = status_counts.get(str(key), 0) + int(value or 0)
+
+    passed = (
+        resident_source_dq_execution.get("passed") is True
+        and bool(matching_groups)
+        and all(group.get("passed") is True for group in matching_groups)
+        and all(group.get("materializes_calibrated_dq_cache") is not True for group in matching_groups)
+    )
+    return {
+        "source": "resident_source_dq_execution",
+        "available": True,
+        "passed": bool(passed),
+        "status": resident_source_dq_execution.get("status"),
+        "path": resident_source_dq_execution.get("path"),
+        "filter": filter_name,
+        "matching_group_count": len(matching_groups),
+        "execution_routes": sorted(
+            {
+                str(group.get("execution_route"))
+                for group in matching_groups
+                if group.get("execution_route")
+            }
+        ),
+        "source_counts": source_counts,
+        "status_counts": status_counts,
+        "materializes_calibrated_dq_cache": any(
+            group.get("materializes_calibrated_dq_cache") is True for group in matching_groups
+        ),
+        "summary_input_invalid_samples": (
+            resident_source_dq_execution.get("summary") or {}
+        ).get("input_invalid_samples_before_rejection"),
+        "summary_applied_invalid_samples": (
+            resident_source_dq_execution.get("summary") or {}
+        ).get("applied_invalid_samples"),
+        "reason": None if passed else "resident_source_dq_execution_not_passing_or_not_matched",
+    }
+
+
+def _calibrated_light_rows(
+    calibration: dict[str, Any],
+    run_root: Path,
+    *,
+    resident_source_dq_execution: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     lights = calibration.get("calibrated_lights") if isinstance(calibration.get("calibrated_lights"), list) else []
     for index, payload in enumerate(lights):
@@ -258,7 +333,7 @@ def _calibrated_light_rows(calibration: dict[str, Any], run_root: Path) -> list[
             and payload.get("source_stage") == "resident_calibrated_stack"
             and _nonnegative_int(payload.get("resident_stack_index"))
         )
-        dq_contract_ok = (
+        disk_dq_contract_ok = (
             path_exists
             and dq_path_exists
             and isinstance(payload.get("dq_summary"), dict)
@@ -266,6 +341,21 @@ def _calibrated_light_rows(calibration: dict[str, Any], run_root: Path) -> list[
             and _positive_int(payload.get("tile_count"))
             and _positive_int(payload.get("tile_size"))
         )
+        resident_source_dq_contract = (
+            _resident_source_dq_light_contract(payload, resident_source_dq_execution)
+            if is_resident
+            else {}
+        )
+        resident_source_dq_contract_ok = (
+            bool(resident_contract_ok)
+            and bool(resident_source_dq_contract.get("passed"))
+        )
+        dq_contract_ok = bool(disk_dq_contract_ok) or bool(resident_source_dq_contract_ok)
+        dq_contract_source = None
+        if disk_dq_contract_ok:
+            dq_contract_source = "calibrated_disk_cache"
+        elif resident_source_dq_contract_ok:
+            dq_contract_source = "resident_source_dq_execution"
         rows.append(
             {
                 "index": index,
@@ -285,6 +375,10 @@ def _calibrated_light_rows(calibration: dict[str, Any], run_root: Path) -> list[
                 "tile_count": payload.get("tile_count"),
                 "tile_size": payload.get("tile_size"),
                 "resident_contract_ok": bool(resident_contract_ok),
+                "disk_dq_contract_ok": bool(disk_dq_contract_ok),
+                "resident_source_dq_contract_ok": bool(resident_source_dq_contract_ok),
+                "resident_source_dq_contract": resident_source_dq_contract,
+                "dq_contract_source": dq_contract_source,
                 "dq_contract_ok": bool(dq_contract_ok),
                 "contract_ok": bool(resident_contract_ok) or bool(dq_contract_ok),
             }
@@ -2024,10 +2118,15 @@ def build_pipeline_contract_audit(
     integration = _load_json_object(integration_path)
     frame_accounting = _load_json_object(frame_accounting_path)
 
+    resident_source_dq_execution = _resident_source_dq_execution_state(run_root)
     local_calibration_master_rows = _calibration_master_rows(calibration, run_root)
     resident_calibration_rows = _resident_calibration_rows(resident_calibration_contract)
     calibration_master_rows = [*local_calibration_master_rows, *resident_calibration_rows]
-    calibrated_light_rows = _calibrated_light_rows(calibration, run_root)
+    calibrated_light_rows = _calibrated_light_rows(
+        calibration,
+        run_root,
+        resident_source_dq_execution=resident_source_dq_execution,
+    )
     local_calibrated_light_rows = [row for row in calibrated_light_rows if not row.get("resident")]
     resident_calibrated_light_rows = [row for row in calibrated_light_rows if row.get("resident")]
     resident_native_calibration = (
@@ -2046,7 +2145,6 @@ def build_pipeline_contract_audit(
     integration_map_rows = _integration_map_rows(integration, run_root)
     integration_engine_policy = _integration_engine_policy_state(integration, integration_rows)
     frame_accounting_admission = _frame_accounting_admission_state(frame_accounting)
-    resident_source_dq_execution = _resident_source_dq_execution_state(run_root)
     resident_integration_required = any(_is_resident_integration_row(row) for row in integration_rows)
     resident_frame_mask = _resident_frame_mask_state(
         run_root,
@@ -2408,6 +2506,32 @@ def build_pipeline_contract_audit(
                 ),
             ]
         )
+        if resident_source_dq_execution["exists"]:
+            checks.append(
+                _check(
+                    "resident_calibrated_light_dq_contract",
+                    bool(resident_calibrated_light_rows)
+                    and all(bool(row["dq_contract_ok"]) for row in resident_calibrated_light_rows),
+                    {
+                        "light_count": len(resident_calibrated_light_rows),
+                        "source_dq_status": resident_source_dq_execution["status"],
+                        "source_dq_passed": resident_source_dq_execution["passed"],
+                        "failed": [
+                            row["frame_id"] or row["index"]
+                            for row in resident_calibrated_light_rows
+                            if not row["dq_contract_ok"]
+                        ],
+                        "contract_sources": sorted(
+                            {
+                                str(row.get("dq_contract_source"))
+                                for row in resident_calibrated_light_rows
+                                if row.get("dq_contract_source")
+                            }
+                        ),
+                    },
+                    "Resident calibrated light DQ semantics must be backed by the resident source-DQ execution contract when that evidence is present.",
+                )
+            )
     if pixel_verify:
         dq_rows = [row.get("dq") or {} for row in pixel_verification_rows]
         coverage_rows = [(row.get("count_maps") or {}).get("coverage") or {} for row in pixel_verification_rows]

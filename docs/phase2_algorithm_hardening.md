@@ -15839,6 +15839,52 @@ Completed in Gate446:
   - future changes to DQ/mask, rejection, or LN coverage must satisfy this
     semantic contract or update it deliberately with new evidence.
 
+### S2-Gate 578: Resident Calibrated-Light DQ Contract Closure
+
+- Returned to the Phase 2 DQ/mask mainline by closing a real contract gap in
+  the resident CUDA calibrated-light surface.
+- Problem found:
+  - the real 200-light default run passed its top-level pipeline contract and
+    carried passing `resident_source_dq_execution.json`,
+    `resident_frame_masks.json`, and `resident_dq_pixel_closure.json`;
+  - however, each resident `calibrated_lights[]` row still reported
+    `dq_contract_ok=false` because resident mode intentionally does not
+    materialize calibrated light FITS and per-frame DQ-mask disk caches.
+- Completed:
+  - `pipeline-contract` now maps passing `resident_source_dq_execution`
+    evidence onto resident calibrated-light rows;
+  - each resident calibrated-light row records `dq_contract_source`,
+    `disk_dq_contract_ok`, `resident_source_dq_contract_ok`, and the matched
+    resident source-DQ execution route/count evidence;
+  - added `resident_calibrated_light_dq_contract`, enabled when resident
+    source-DQ execution evidence is present, so a failed or unmatched source-DQ
+    contract cannot silently satisfy calibrated-light DQ semantics;
+  - added positive and negative unit tests for the resident calibrated-light
+    DQ handoff.
+- Real 200-light validation:
+  - source run:
+    `C:\glass_runs\phase2_s2_gate575_cuda_calibrated_reference_health\default_safe_auto_should_pass`;
+  - regenerated pipeline contract:
+    `C:\glass_runs\phase2_s2_gate578_resident_calibrated_dq_contract\pipeline_contract.json`;
+  - pixel-verified contract:
+    `C:\glass_runs\phase2_s2_gate578_resident_calibrated_dq_contract\pipeline_contract_pixel_verify.json`;
+  - result: `passed`;
+  - pixel verification: `25` checks, `0` failed;
+  - resident calibrated-light rows: `200`;
+  - `dq_contract_ok`: `200 / 200`;
+  - `resident_source_dq_contract_ok`: `200 / 200`;
+  - `disk_dq_contract_ok`: `0 / 200`;
+  - `dq_contract_source`: `resident_source_dq_execution`;
+  - new check `resident_calibrated_light_dq_contract`: `passed`.
+- Interpretation:
+  - the resident path now explicitly states that calibrated-light DQ semantics
+    are backed by in-memory source-DQ execution, not by missing disk DQ caches;
+  - this is a DQ/mask contract-completeness gate, not a report-only gate and
+    not an image-math change;
+  - the next substantive gate should continue with StackEngine default-path
+    runtime completeness, real 200-light regression, or resident registration/
+    warp throughput and numerical consistency.
+
 ## Gate Rules
 
 Each gate requires:
