@@ -15099,6 +15099,59 @@ Completed in Gate446:
   - final real summary:
     `C:\glass_runs\phase2_s2_gate557_remaining_set\runs_20260623_171847\gate557_remaining_set_summary.json`.
 
+### S2-Gate 558: Current Full 200-Light A/B Acceptance Refresh
+
+- Redirected Phase 2 work away from sub-second scheduler experiments and back
+  to the main acceptance path: a self-contained current resident CUDA run on
+  the real 200-light M38 H-alpha benchmark.
+- Completed:
+  - ran the current default resident CUDA path without the shared
+    `--resident-master-cache-dir`, so resident master calibration frames were
+    built for this run (`cache_hit_count=0`, `cache_miss_count=1`);
+  - compared the final resident master against the stored WBPP black-box
+    FastIntegration master with coverage >= 190 and a 128 px border ignore;
+  - ran `glass acceptance-audit` with the `resident_cuda_dq_v1` benchmark
+    profile;
+  - wrote a speedup summary and checkpoint summary for this current full run;
+  - explicitly left ready-min selection, refill-mode changes, and
+    single-notify behavior unpromoted because real 200-light evidence did not
+    support them.
+- Real 200-light validation:
+  - GLASS run:
+    `C:\glass_runs\phase2_s2_gate558_real_200_full_ab\runs_20260623_173204\current_full_default`;
+  - WBPP black-box result:
+    `C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json`;
+  - compare artifact:
+    `C:\glass_runs\phase2_s2_gate558_real_200_full_ab\runs_20260623_173204\current_full_default\compare_vs_wbpp_fastintegration_scaled_coverage190.json`;
+  - acceptance artifact:
+    `C:\glass_runs\phase2_s2_gate558_real_200_full_ab\runs_20260623_173204\current_full_default\acceptance_audit.json`.
+- Key timing and result summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | GLASS run timing total | `13.36161980003817 s` |
+  | GLASS shell timing | `13.716492 s` |
+  | WBPP black-box elapsed | `1092.541 s` |
+  | Speedup by run timing | `81.76710730811836x` |
+  | Speedup by shell timing | `79.65163396005333x` |
+  | Active/zero-weight frames | `193 / 7` |
+  | Coverage fraction | `0.9892770479074376` |
+  | RMS diff | `0.0004279821839256963` |
+  | abs diff p99 | `0.0001313822576776147` |
+
+- Resident timing buckets:
+  - master build/load: `8.650153900031 s`;
+  - light read/upload/calibrate: `10.856784100004006 s`;
+  - registration/warp: `0.25406019965885207 s`;
+  - integration: `0.32319869997445494 s`;
+  - output write: `0.3425363000133075 s`.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_558_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_558_current_full_ab_summary.json`;
+  - speedup summary:
+    `runs\benchmarks\m38_wbpp_speedup_summary_gate558_current_full.json`.
+
 ## Gate Rules
 
 Each gate requires:
