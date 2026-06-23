@@ -14744,6 +14744,79 @@ Completed in Gate446:
   - checkpoint summary:
     `runs/checkpoints/s2_gate_551_completion_lane_wave_summary.json`.
 
+### S2-Gate 552: Native Completion Ready-Buffer Wave-Fill
+
+- Continued the resident CUDA I/O/calibration mainline by adding a bounded
+  ready-buffer fill wait to the opt-in native completion consumer. After the
+  first completed read wakes the consumer and immediately ready completions are
+  drained, the consumer now waits up to `100 us` at a time for additional
+  completions until the active calibration lane count is filled or no more
+  submitted reads are outstanding.
+- Completed:
+  - kept `GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION=1` as the explicit
+    profiling gate and left the default resident raw-u16 path unchanged;
+  - added native counters for wave-fill policy, wait budget, wait count,
+    timeout count, and accumulated wait seconds;
+  - propagated the counters into `resident_io_pipeline` and
+    `resident_io_overlap` in `resident_artifacts.json`;
+  - updated focused tests to assert the wave-fill policy contract.
+- Tests:
+  - Release native extension build: success;
+  - focused completion/path/default tests: `5 passed in 0.71 s`;
+  - full pytest: `1188 passed in 43.80 s`.
+- Real 200-light same-session A/B:
+  - completion wave-fill opt-in run:
+    `C:\glass_runs\phase2_s2_gate552_completion_wave_fill\runs_20260623_162509\completion_wave_fill_release`;
+  - fresh default run:
+    `C:\glass_runs\phase2_s2_gate552_completion_wave_fill\runs_20260623_162509\default_release`;
+  - completion shell elapsed: `5.4283625 s`;
+  - fresh default shell elapsed: `5.7409071 s`;
+  - run-timing total delta, completion minus default: `-0.316418 s`;
+  - resident stage delta, completion minus default: `-0.316737 s`;
+  - completion light read/upload/calibrate: `2.856499 s`;
+  - fresh default light read/upload/calibrate: `2.566939 s`;
+  - completion native H2D/decode/calibrate/store: `1.857241 s`;
+  - fresh default native H2D/decode/calibrate/store: `0.783179 s`;
+  - completion registration/warp: `0.254409 s`;
+  - fresh default registration/warp: `0.257511 s`;
+  - completion integration: `0.303845 s`;
+  - fresh default integration: `0.348234 s`;
+  - completion output write: `0.221734 s`;
+  - fresh default output write: `0.393786 s`;
+  - completion recorded `200` submits/completions, `16` workers, `24` pinned
+    queue buffers, `176` event-query slot reuses, `841` slot-reuse event
+    queries, and `0` slot waits;
+  - wave-fill diagnostics: `67` consumer waves, max wave size `4`, `53`
+    multi-frame waves, `151` fill waits, `33` fill timeouts, and
+    `0.466731 s` accumulated fill-wait time.
+- Numerical validation:
+  - master, weight map, coverage map, low/high rejection maps, and DQ map are
+    SHA256-identical between the completion wave-fill run and the fresh default
+    run;
+  - master SHA256:
+    `8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110`;
+  - resident StackEngine surface contract and DQ pixel closure both passed.
+- Interpretation:
+  - ready-buffer wave-fill successfully changed the consumer shape: compared
+    with Gate551 it reduced consumer waves from `184` to `67` and increased
+    multi-frame waves from `10` to `53`;
+  - the fixed `100 us` wait is still too blunt for default promotion because it
+    added `0.466731 s` of explicit fill wait and the light stage remained
+    slower than the default path;
+  - same-session shell time improved because output-write and later stage
+    timings favored the completion run, but the main light-stage target remains
+    unsolved;
+  - therefore this remains opt-in and must not be promoted;
+  - the next substantial target is an adaptive fill policy or direct reuse of
+    the existing callback-release scheduler so native completions can form
+    full lane waves without fixed waiting.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_552_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_552_completion_wave_fill_summary.json`;
+  - full run summary:
+    `C:\glass_runs\phase2_s2_gate552_completion_wave_fill\runs_20260623_162509\gate552_metrics_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

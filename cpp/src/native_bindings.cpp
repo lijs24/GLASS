@@ -6149,6 +6149,11 @@ class ResidentCalibratedStack {
       out["native_completion_slot_reuse_wait_s"] = 0.0;
       out["native_completion_final_h2d_collect_count"] = 0;
       out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
+      out["native_completion_consumer_wave_fill_policy"] = "timed_wait_100us";
+      out["native_completion_consumer_wave_fill_wait_us"] = 100;
+      out["native_completion_consumer_wave_fill_wait_count"] = 0;
+      out["native_completion_consumer_wave_fill_timeout_count"] = 0;
+      out["native_completion_consumer_wave_fill_wait_s"] = 0.0;
       out["native_completion_consumer_wave_count"] = 0;
       out["native_completion_consumer_max_wave_frames"] = 0;
       out["native_completion_consumer_multi_frame_wave_count"] = 0;
@@ -6266,6 +6271,9 @@ class ResidentCalibratedStack {
     unsigned long long consumer_wave_count = 0;
     unsigned long long consumer_max_wave_frames = 0;
     unsigned long long consumer_multi_frame_wave_count = 0;
+    unsigned long long consumer_wave_fill_wait_count = 0;
+    unsigned long long consumer_wave_fill_timeout_count = 0;
+    double consumer_wave_fill_wait_s = 0.0;
     double slot_reuse_wait_s = 0.0;
 
     std::mutex queue_mutex;
@@ -6426,6 +6434,24 @@ class ResidentCalibratedStack {
           while (!completions.empty() && completion_wave.size() < lane_count) {
             completion_wave.push_back(std::move(completions.front()));
             completions.pop_front();
+          }
+          while (completion_wave.size() < lane_count &&
+                 submit_count > completion_count + static_cast<unsigned long long>(completion_wave.size())) {
+            const auto fill_wait_start = Clock::now();
+            const bool filled = completion_condition.wait_for(
+                lock,
+                std::chrono::microseconds(100),
+                [&]() { return closing || !completions.empty(); });
+            consumer_wave_fill_wait_s += seconds_since(fill_wait_start);
+            ++consumer_wave_fill_wait_count;
+            if (!filled && completions.empty()) {
+              ++consumer_wave_fill_timeout_count;
+              break;
+            }
+            while (!completions.empty() && completion_wave.size() < lane_count) {
+              completion_wave.push_back(std::move(completions.front()));
+              completions.pop_front();
+            }
           }
         }
         if (completion_wave.empty()) {
@@ -6613,6 +6639,11 @@ class ResidentCalibratedStack {
     out["native_completion_slot_reuse_wait_s"] = slot_reuse_wait_s;
     out["native_completion_final_h2d_collect_count"] = final_h2d_collect_count;
     out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
+    out["native_completion_consumer_wave_fill_policy"] = "timed_wait_100us";
+    out["native_completion_consumer_wave_fill_wait_us"] = 100;
+    out["native_completion_consumer_wave_fill_wait_count"] = consumer_wave_fill_wait_count;
+    out["native_completion_consumer_wave_fill_timeout_count"] = consumer_wave_fill_timeout_count;
+    out["native_completion_consumer_wave_fill_wait_s"] = consumer_wave_fill_wait_s;
     out["native_completion_consumer_wave_count"] = consumer_wave_count;
     out["native_completion_consumer_max_wave_frames"] = consumer_max_wave_frames;
     out["native_completion_consumer_multi_frame_wave_count"] = consumer_multi_frame_wave_count;

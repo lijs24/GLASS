@@ -1,0 +1,139 @@
+{
+  "gate": "S2-Gate 552",
+  "title": "Native completion ready-buffer wave-fill",
+  "date": "2026-06-23",
+  "result": "green_checkpoint_not_promoted",
+  "checkpoint_status": "runs/checkpoints/s2_gate_552_status.md",
+  "implementation": {
+    "native_method": "ResidentCalibratedStack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed",
+    "env_flag": "GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION",
+    "default_enabled": false,
+    "slot_release_mode": "event_query_deferred_reuse",
+    "consumer_schedule_mode": "completion_lane_wave_drain",
+    "consumer_wave_fill_policy": "timed_wait_100us",
+    "consumer_wave_fill_wait_us": 100,
+    "buffer_model": "cuda_host_alloc_portable_pinned_completion_ring",
+    "batch_mode": "fits_u16be_bzero_native_completion_calibration_batch"
+  },
+  "tests": {
+    "native_build": {
+      "command": "cmd.exe /c '\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\" -arch=x64 -host_arch=x64 && .venv\\Scripts\\cmake.exe --build build --target _glass_cuda_native --config Release'",
+      "result": "success"
+    },
+    "focused": {
+      "command": ".venv\\Scripts\\python.exe -m pytest -q tests/test_cuda_resident_stack.py::test_resident_stack_calibrates_u16be_paths_completion_queue_on_gpu_like_cpu tests/test_cuda_resident_stack.py::test_resident_stack_calibrates_u16be_paths_on_gpu_like_cpu tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_path_calibration_is_opt_in tests/test_resident_cuda_run.py::test_cli_resident_cuda_records_native_u16_gpu_decode_backend",
+      "result": "5 passed in 0.71 s"
+    },
+    "full_pytest": {
+      "command": ".venv\\Scripts\\python.exe -m pytest -q",
+      "result": "1188 passed in 43.80 s"
+    }
+  },
+  "real_200_light_ab": {
+    "plan": "C:\\glass_runs\\phase2_s2_gate540_plan_spec_cache\\runs_20260623_140314\\processing_plan.json",
+    "master_cache": "C:\\glass_runs\\phase2_s2_gate518_dq_stats_reuse\\runs_20260623_094619\\resident_master_cache",
+    "completion_run": "C:\\glass_runs\\phase2_s2_gate552_completion_wave_fill\\runs_20260623_162509\\completion_wave_fill_release",
+    "default_run": "C:\\glass_runs\\phase2_s2_gate552_completion_wave_fill\\runs_20260623_162509\\default_release",
+    "full_metrics_summary": "C:\\glass_runs\\phase2_s2_gate552_completion_wave_fill\\runs_20260623_162509\\gate552_metrics_summary.json",
+    "frame_count": 200,
+    "active_frame_count": 193,
+    "masked_frame_ids": [
+      "F000160",
+      "F000213",
+      "F000214",
+      "F000215",
+      "F000216",
+      "F000217",
+      "F000218"
+    ],
+    "shell_elapsed_s": {
+      "completion": 5.4283625,
+      "default": 5.7409071,
+      "default_over_completion_speedup": 1.0575762212
+    },
+    "run_timing_elapsed_s": {
+      "completion_total": 5.0590255,
+      "default_total": 5.3754435,
+      "completion_minus_default_delta": -0.316418
+    },
+    "resident_stage_elapsed_s": {
+      "completion": 5.0555342,
+      "default": 5.3722712,
+      "completion_minus_default_delta": -0.316737
+    },
+    "stage_elapsed_s": {
+      "completion_light_read_upload_calibrate": 2.8564991,
+      "default_light_read_upload_calibrate": 2.5669388,
+      "completion_light_stage_over_default_ratio": 1.112807,
+      "completion_native_h2d_decode_calibrate_store": 1.8572412,
+      "default_native_h2d_decode_calibrate_store": 0.7831786,
+      "completion_registration_warp": 0.254409,
+      "default_registration_warp": 0.2575115,
+      "completion_integration": 0.3038455,
+      "default_integration": 0.3482343,
+      "completion_output_write": 0.221734,
+      "default_output_write": 0.3937858
+    },
+    "completion_metrics": {
+      "backend_counts": {
+        "native_u16be_raw_completion_calibration": 200
+      },
+      "workers": 16,
+      "queue_buffers": 24,
+      "submits": 200,
+      "completions": 200,
+      "out_of_order_completions": 104,
+      "consumer_schedule_mode": "completion_lane_wave_drain",
+      "consumer_wave_count": 67,
+      "consumer_max_wave_frames": 4,
+      "consumer_multi_frame_wave_count": 53,
+      "consumer_wave_fill_policy": "timed_wait_100us",
+      "consumer_wave_fill_wait_us": 100,
+      "consumer_wave_fill_wait_count": 151,
+      "consumer_wave_fill_timeout_count": 33,
+      "consumer_wave_fill_wait_s": 0.4667308,
+      "slot_release_mode": "event_query_deferred_reuse",
+      "slot_reuse_count": 176,
+      "slot_reuse_query_count": 841,
+      "slot_reuse_ready_count": 176,
+      "slot_reuse_wait_count": 0,
+      "slot_reuse_wait_s": 0.0,
+      "final_h2d_collect_count": 24,
+      "native_read_total_s": 27.6633864,
+      "native_file_read_cumulative_s": 27.6170953
+    },
+    "default_metrics": {
+      "backend_counts": {
+        "native_u16be_raw": 200
+      }
+    }
+  },
+  "output_sha256": {
+    "resident_master_H.fits": "8BC069CE6858AB5E065B5D9AF297C35C36D4240C13980546E43CFB480115E110",
+    "resident_weight_map_H.fits": "5862111EE6F527A40671AC13F1FAA43F037C90271F872F27AF4ACF17040FBFE8",
+    "resident_coverage_map_H.fits": "B87517BE794A3B4BDCFF0D8536EE0188DA6AFA54ED2BE818BD911BA6CF1BE1B3",
+    "resident_low_rejection_map_H.fits": "F1181E0CE52A7FF77B988AFAF8A8911A1BEAF94DF54B25B0AA51014CB0D66E23",
+    "resident_high_rejection_map_H.fits": "ADB66C931C5A48D6E0D7F5C2FCBCC58481420AD4912304843A3802089050C805",
+    "resident_dq_map_H.fits": "934F661119CE18BBCAC1D369488AED4D959669C6EF614D6076D74BE06E69CCFB"
+  },
+  "contracts": {
+    "surface_contract_passed": true,
+    "dq_pixel_closure_passed": true,
+    "hash_match": true
+  },
+  "cuda": {
+    "available": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886
+  },
+  "decision": {
+    "promote_to_default": false,
+    "reason": "Ready-buffer wave-fill reduced consumer waves from Gate551's 184 to 67 and raised multi-frame waves from 10 to 53 while preserving bitwise outputs, but the fixed 100 us wait accumulated 0.466731 s and the light stage remained slower than the current default.",
+    "next_step": "Try adaptive fill timing or direct callback-release scheduler reuse before considering default promotion."
+  },
+  "clean_room": {
+    "compliant": true,
+    "notes": "GLASS-owned scheduling over public FITS byte ranges and resident CUDA calibration kernels only; no external implementation source inspected or copied."
+  }
+}
