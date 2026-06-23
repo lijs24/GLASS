@@ -12745,6 +12745,63 @@ Completed in Gate446:
   - real A/B root:
     `C:\glass_runs\phase2_s2_gate504_chunked_fits_writer_ab_real\runs_20260623_053419`.
 
+### S2-Gate 519: Native Host DQ Map Contract Fast Path
+
+- Returned to the Phase 2 substantive path after the Gate517/Gate518 DQ
+  provenance fast paths: no new release/default-promotion/report-only gates
+  were added.
+- Completed:
+  - added native `_glass_cuda_native.resident_dq_map_host_f32`;
+  - added `glass_cuda.resident_dq_map_host_f32_available()` and wrapper API;
+  - routes resident `_resident_dq_map(..., return_stats=True)` through the
+    native host single-pass scanner when available, with exact Python fallback
+    retained for CPU-only or older native builds;
+  - keeps `stats_source="resident_dq_map_single_pass"` for downstream
+    provenance reuse and adds `stats_backend="native_host"`;
+  - added parity coverage proving native DQ flags, summaries, coverage stats,
+    and rejection-map stats match the Python fallback.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate519_native_dq_ab\runs_20260623_100321`;
+  - input: M38 H-alpha plan with 200 light frames and the existing calibration
+    groups; active integration frame count stayed `193`, matching the WBPP
+    black-box fast-integration frame count;
+  - warm-repeat with shared master cache: internal `10.82136449997779 s`,
+    shell `11.1992665 s`;
+  - full run with per-run master cache policy: internal
+    `15.253281100012828 s`, shell `15.6334588 s`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - measured speedup: `100.96148226060053x` by warm internal timing,
+    `97.55469253276542x` by warm shell timing, `71.62662202554446x` by full
+    internal timing, and `69.88479094594217x` by full shell timing.
+- Latest component timings from warm-repeat:
+  - light read/upload/calibration: `2.5335453000152484 s`;
+  - master build/load: `0.4051558000501245 s`;
+  - resident registration component: `1.962568399430535 s`;
+  - resident registration warp: `0.47296360082691535 s`;
+  - resident integration: `0.3025613999925554 s`;
+  - output write: `0.3603093000128865 s`;
+  - estimated peak VRAM: `49.608429938554764 GiB`.
+- Numerical validation:
+  - current warm-repeat master matches Gate518 warm-repeat bitwise;
+  - full per-run-cache master matches warm-repeat bitwise;
+  - current GLASS vs WBPP black-box compare is shape-matched; robust linear
+    fit over fit pixels has RMS `0.0015009512947433384` and p99 absolute
+    difference `0.00034034321741462114`.
+- Interpretation:
+  - this is a DQ/mask contract/output-path performance hardening gate, not a
+    science-pixel change;
+  - the native path removes a Python multi-stat scan from the DQ provenance
+    path, but the real 200-light end-to-end timing is now dominated by the
+    resident light I/O/orchestration and registration/warp path;
+  - the next substantive targets should be reducing the light pipeline
+    Python orchestration/unaccounted time and making resident registration/warp
+    more fully resident/batched, rather than adding more report-only gates.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_519_status.md`;
+  - summary:
+    `C:\glass_runs\phase2_s2_gate519_native_dq_ab\runs_20260623_100321\gate519_native_dq_real_ab_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:

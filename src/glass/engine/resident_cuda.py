@@ -2091,7 +2091,7 @@ def _resident_count_map_array_stats_from_values(
     }
 
 
-def _resident_dq_map(
+def _resident_dq_map_python(
     master: np.ndarray,
     weight_map: np.ndarray,
     coverage_map: np.ndarray | None,
@@ -2203,6 +2203,42 @@ def _resident_dq_map(
     if return_stats:
         return dq, summary, stats
     return dq, summary
+
+
+def _resident_dq_map(
+    master: np.ndarray,
+    weight_map: np.ndarray,
+    coverage_map: np.ndarray | None,
+    low_rejection_map: np.ndarray | None,
+    high_rejection_map: np.ndarray | None,
+    geometric_warp_coverage_map: np.ndarray | None = None,
+    active_frame_count: int = 0,
+    *,
+    return_stats: bool = False,
+) -> tuple[np.ndarray, dict[str, int]] | tuple[np.ndarray, dict[str, int], dict[str, Any]]:
+    if return_stats:
+        import glass_cuda
+
+        if glass_cuda.resident_dq_map_host_f32_available():
+            return glass_cuda.resident_dq_map_host_f32(
+                master,
+                weight_map,
+                coverage_map,
+                low_rejection_map,
+                high_rejection_map,
+                geometric_warp_coverage_map,
+                active_frame_count,
+            )
+    return _resident_dq_map_python(
+        master,
+        weight_map,
+        coverage_map,
+        low_rejection_map,
+        high_rejection_map,
+        geometric_warp_coverage_map,
+        active_frame_count,
+        return_stats=return_stats,
+    )
 
 
 def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:

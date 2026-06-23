@@ -14541,6 +14541,356 @@ py::dict star_grid_candidates_f32(
   return result;
 }
 
+struct HostFloat2D {
+  py::array_t<float, py::array::c_style | py::array::forcecast> array;
+  const float* data = nullptr;
+  py::ssize_t height = 0;
+  py::ssize_t width = 0;
+  bool present = false;
+};
+
+struct HostCoverageStats {
+  std::size_t total_pixels = 0;
+  std::size_t finite_pixels = 0;
+  long long rounded_sum = 0;
+  double min = 0.0;
+  double max = 0.0;
+  double mean = 0.0;
+};
+
+struct HostCountMapStats {
+  bool present = false;
+  std::size_t total_pixels = 0;
+  std::size_t finite_pixels = 0;
+  long long rounded_sum = 0;
+  std::size_t positive_pixels = 0;
+  std::size_t negative_pixels = 0;
+  std::size_t fractional_pixels = 0;
+  double min = 0.0;
+  double max = 0.0;
+};
+
+struct HostDqMapStats {
+  HostCoverageStats post_rejection_coverage;
+  HostCoverageStats geometric_warp_coverage;
+  HostCountMapStats low_rejection;
+  HostCountMapStats high_rejection;
+  std::size_t post_rejection_zero_pixels = 0;
+  std::size_t geometric_zero_pixels = 0;
+  std::size_t geometric_partial_pixels = 0;
+  std::size_t geometric_full_pixels = 0;
+  std::size_t no_data_pixels = 0;
+  std::size_t warp_edge_pixels = 0;
+  std::size_t low_rejected_pixels = 0;
+  std::size_t high_rejected_pixels = 0;
+  std::size_t rejection_reduced_pixels = 0;
+  std::size_t valid_pixels = 0;
+};
+
+HostFloat2D require_host_float2d(py::object object, const std::string& name) {
+  auto array = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(object);
+  if (!array) {
+    throw std::invalid_argument(name + " must be convertible to a float32 C-contiguous array");
+  }
+  const py::buffer_info info = array.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument(name + " must have shape (height, width)");
+  }
+  HostFloat2D result;
+  result.array = array;
+  result.data = static_cast<const float*>(info.ptr);
+  result.height = info.shape[0];
+  result.width = info.shape[1];
+  result.present = true;
+  return result;
+}
+
+HostFloat2D optional_host_float2d(py::object object, const std::string& name) {
+  if (object.is_none()) {
+    return HostFloat2D();
+  }
+  return require_host_float2d(object, name);
+}
+
+void require_same_shape(const HostFloat2D& candidate, const HostFloat2D& reference, const std::string& name) {
+  if (candidate.present && (candidate.height != reference.height || candidate.width != reference.width)) {
+    std::ostringstream stream;
+    stream << name << " shape " << candidate.height << "x" << candidate.width << " does not match master shape "
+           << reference.height << "x" << reference.width;
+    throw std::invalid_argument(stream.str());
+  }
+}
+
+void update_coverage_stats(HostCoverageStats& stats, float value) {
+  ++stats.total_pixels;
+  if (!std::isfinite(value)) {
+    return;
+  }
+  const double as_double = static_cast<double>(value);
+  if (stats.finite_pixels == 0) {
+    stats.min = as_double;
+    stats.max = as_double;
+  } else {
+    stats.min = std::min(stats.min, as_double);
+    stats.max = std::max(stats.max, as_double);
+  }
+  ++stats.finite_pixels;
+  stats.mean += as_double;
+  stats.rounded_sum += static_cast<long long>(std::nearbyint(as_double));
+}
+
+void update_count_map_stats(HostCountMapStats& stats, float value) {
+  ++stats.total_pixels;
+  if (!std::isfinite(value)) {
+    return;
+  }
+  const double as_double = static_cast<double>(value);
+  const double rounded = std::nearbyint(as_double);
+  if (stats.finite_pixels == 0) {
+    stats.min = as_double;
+    stats.max = as_double;
+  } else {
+    stats.min = std::min(stats.min, as_double);
+    stats.max = std::max(stats.max, as_double);
+  }
+  ++stats.finite_pixels;
+  if (value > 0.0f) {
+    ++stats.positive_pixels;
+  }
+  if (value < 0.0f) {
+    ++stats.negative_pixels;
+  }
+  if (std::abs(as_double - rounded) > 1.0e-3) {
+    ++stats.fractional_pixels;
+  }
+  stats.rounded_sum += static_cast<long long>(std::max(rounded, 0.0));
+}
+
+py::dict coverage_stats_to_dict(const HostCoverageStats& stats) {
+  py::dict result;
+  result["total_pixels"] = stats.total_pixels;
+  result["finite_pixels"] = stats.finite_pixels;
+  result["rounded_sum"] = stats.rounded_sum;
+  if (stats.finite_pixels == 0) {
+    result["min"] = 0.0;
+    result["max"] = 0.0;
+    result["mean"] = 0.0;
+  } else {
+    result["min"] = stats.min;
+    result["max"] = stats.max;
+    result["mean"] = static_cast<float>(stats.mean / static_cast<double>(stats.finite_pixels));
+  }
+  return result;
+}
+
+py::dict count_map_stats_to_dict(const HostCountMapStats& stats, py::ssize_t height, py::ssize_t width) {
+  py::dict result;
+  result["present"] = true;
+  py::list shape;
+  shape.append(height);
+  shape.append(width);
+  result["shape"] = shape;
+  result["dtype"] = "float32";
+  result["finite_pixels"] = stats.finite_pixels;
+  result["nonfinite_pixels"] = stats.total_pixels - stats.finite_pixels;
+  if (stats.finite_pixels == 0) {
+    result["min"] = py::none();
+    result["max"] = py::none();
+  } else {
+    result["min"] = stats.min;
+    result["max"] = stats.max;
+  }
+  result["rounded_sum"] = stats.rounded_sum;
+  result["positive_pixels"] = stats.positive_pixels;
+  result["zero_or_less_pixels"] = stats.total_pixels - stats.positive_pixels;
+  result["negative_pixels"] = stats.negative_pixels;
+  result["fractional_pixels"] = stats.fractional_pixels;
+  result["stats_source"] = "resident_precomputed_count_map";
+  result["stats_profile"] = "count_map_contract_fields";
+  result["stats_backend"] = "native_host";
+  return result;
+}
+
+py::dict absent_count_map_stats() {
+  py::dict result;
+  result["present"] = false;
+  return result;
+}
+
+py::tuple resident_dq_map_host_f32(
+    py::object master_obj,
+    py::object weight_map_obj,
+    py::object coverage_map_obj,
+    py::object low_rejection_map_obj,
+    py::object high_rejection_map_obj,
+    py::object geometric_warp_coverage_map_obj,
+    int active_frame_count) {
+  const HostFloat2D master = require_host_float2d(master_obj, "master");
+  const HostFloat2D weight_map = require_host_float2d(weight_map_obj, "weight_map");
+  const HostFloat2D coverage_map = optional_host_float2d(coverage_map_obj, "coverage_map");
+  const HostFloat2D low_rejection_map = optional_host_float2d(low_rejection_map_obj, "low_rejection_map");
+  const HostFloat2D high_rejection_map = optional_host_float2d(high_rejection_map_obj, "high_rejection_map");
+  const HostFloat2D geometric_warp_coverage_map =
+      optional_host_float2d(geometric_warp_coverage_map_obj, "geometric_warp_coverage_map");
+  require_same_shape(weight_map, master, "weight_map");
+  require_same_shape(coverage_map, master, "coverage_map");
+  require_same_shape(low_rejection_map, master, "low_rejection_map");
+  require_same_shape(high_rejection_map, master, "high_rejection_map");
+  require_same_shape(geometric_warp_coverage_map, master, "geometric_warp_coverage_map");
+
+  constexpr std::uint32_t dq_no_data = 1u << 0;
+  constexpr std::uint32_t dq_warp_edge = 1u << 6;
+  constexpr std::uint32_t dq_low_rejected = 1u << 8;
+  constexpr std::uint32_t dq_high_rejected = 1u << 9;
+  const std::size_t total_pixels =
+      static_cast<std::size_t>(master.height) * static_cast<std::size_t>(master.width);
+  py::array_t<std::uint32_t> dq({master.height, master.width});
+  const py::buffer_info dq_info = dq.request();
+  auto* dq_data = static_cast<std::uint32_t*>(dq_info.ptr);
+  HostDqMapStats loop_stats;
+  const int expected_count = active_frame_count > 0 ? active_frame_count : 0;
+
+  {
+    py::gil_scoped_release release;
+    for (std::size_t index = 0; index < total_pixels; ++index) {
+      std::uint32_t flags = 0;
+      const float master_value = master.data[index];
+      const float weight_value = weight_map.data[index];
+      bool invalid = !std::isfinite(master_value) || !std::isfinite(weight_value) || weight_value <= 0.0f;
+
+      if (coverage_map.present) {
+        const float coverage = coverage_map.data[index];
+        update_coverage_stats(loop_stats.post_rejection_coverage, coverage);
+        const bool coverage_finite = std::isfinite(coverage);
+        if (!coverage_finite || coverage <= 0.5f) {
+          invalid = true;
+          flags |= dq_warp_edge;
+          if (coverage_finite) {
+            ++loop_stats.post_rejection_zero_pixels;
+          }
+        }
+      }
+
+      if (geometric_warp_coverage_map.present) {
+        const float geometric = geometric_warp_coverage_map.data[index];
+        update_coverage_stats(loop_stats.geometric_warp_coverage, geometric);
+        const bool geometric_finite = std::isfinite(geometric);
+        if (!geometric_finite || geometric <= 0.5f) {
+          invalid = true;
+          flags |= dq_warp_edge;
+          if (geometric_finite) {
+            ++loop_stats.geometric_zero_pixels;
+          }
+        }
+        if (expected_count > 0 && geometric_finite && geometric > 0.5f) {
+          if (geometric < static_cast<float>(expected_count) - 0.5f) {
+            flags |= dq_warp_edge;
+            ++loop_stats.geometric_partial_pixels;
+          } else {
+            ++loop_stats.geometric_full_pixels;
+          }
+        }
+      }
+
+      if (invalid) {
+        flags |= dq_no_data;
+        ++loop_stats.no_data_pixels;
+      }
+
+      bool low_rejected = false;
+      if (low_rejection_map.present) {
+        const float low = low_rejection_map.data[index];
+        update_count_map_stats(loop_stats.low_rejection, low);
+        low_rejected = std::isfinite(low) && low > 0.0f;
+        if (low_rejected) {
+          flags |= dq_low_rejected;
+          ++loop_stats.low_rejected_pixels;
+        }
+      }
+
+      bool high_rejected = false;
+      if (high_rejection_map.present) {
+        const float high = high_rejection_map.data[index];
+        update_count_map_stats(loop_stats.high_rejection, high);
+        high_rejected = std::isfinite(high) && high > 0.0f;
+        if (high_rejected) {
+          flags |= dq_high_rejected;
+          ++loop_stats.high_rejected_pixels;
+        }
+      }
+
+      if (low_rejected || high_rejected) {
+        ++loop_stats.rejection_reduced_pixels;
+      }
+      if ((flags & dq_warp_edge) != 0) {
+        ++loop_stats.warp_edge_pixels;
+      }
+      if (flags == 0) {
+        ++loop_stats.valid_pixels;
+      }
+      dq_data[index] = flags;
+    }
+  }
+
+  py::dict summary;
+  summary["valid"] = loop_stats.valid_pixels;
+  if (loop_stats.no_data_pixels != 0) {
+    summary["no_data"] = loop_stats.no_data_pixels;
+  }
+  if (loop_stats.warp_edge_pixels != 0) {
+    summary["warp_edge"] = loop_stats.warp_edge_pixels;
+  }
+  if (loop_stats.low_rejected_pixels != 0) {
+    summary["low_rejected"] = loop_stats.low_rejected_pixels;
+  }
+  if (loop_stats.high_rejected_pixels != 0) {
+    summary["high_rejected"] = loop_stats.high_rejected_pixels;
+  }
+
+  py::dict stats;
+  stats["schema_version"] = 1;
+  stats["stats_source"] = "resident_dq_map_single_pass";
+  stats["stats_backend"] = "native_host";
+  stats["stats_profile"] = "resident_dq_map_host_single_pass";
+  stats["native_method"] = "resident_dq_map_host_f32";
+  stats["post_rejection_coverage"] =
+      coverage_map.present ? py::object(coverage_stats_to_dict(loop_stats.post_rejection_coverage)) : py::none();
+  stats["post_rejection_zero_pixels"] =
+      coverage_map.present ? py::object(py::int_(loop_stats.post_rejection_zero_pixels)) : py::none();
+  stats["geometric_warp_coverage"] =
+      geometric_warp_coverage_map.present
+          ? py::object(coverage_stats_to_dict(loop_stats.geometric_warp_coverage))
+          : py::none();
+  stats["geometric_zero_pixels"] =
+      geometric_warp_coverage_map.present ? py::object(py::int_(loop_stats.geometric_zero_pixels)) : py::none();
+  stats["geometric_partial_pixels"] =
+      geometric_warp_coverage_map.present ? py::object(py::int_(loop_stats.geometric_partial_pixels)) : py::none();
+  stats["geometric_full_pixels"] =
+      geometric_warp_coverage_map.present ? py::object(py::int_(loop_stats.geometric_full_pixels)) : py::none();
+  stats["low_rejection"] =
+      low_rejection_map.present
+          ? py::object(count_map_stats_to_dict(loop_stats.low_rejection, master.height, master.width))
+          : py::object(absent_count_map_stats());
+  stats["high_rejection"] =
+      high_rejection_map.present
+          ? py::object(count_map_stats_to_dict(loop_stats.high_rejection, master.height, master.width))
+          : py::object(absent_count_map_stats());
+  if (low_rejection_map.present && high_rejection_map.present) {
+    stats["rejection_reduced_pixels"] = loop_stats.rejection_reduced_pixels;
+    stats["rejection_reduced_pixels_source"] = "low_high_rejection_masks";
+  } else if (low_rejection_map.present) {
+    stats["rejection_reduced_pixels"] = loop_stats.low_rejected_pixels;
+    stats["rejection_reduced_pixels_source"] = "low_rejection_mask";
+  } else if (high_rejection_map.present) {
+    stats["rejection_reduced_pixels"] = loop_stats.high_rejected_pixels;
+    stats["rejection_reduced_pixels_source"] = "high_rejection_mask";
+  } else {
+    stats["rejection_reduced_pixels"] = py::none();
+    stats["rejection_reduced_pixels_source"] = "unavailable";
+  }
+  return py::make_tuple(dq, summary, stats);
+}
+
 PYBIND11_MODULE(_glass_cuda_native, m) {
   m.doc() = "Native CUDA backend for GLASS";
   m.def("cuda_available", &cuda_available);
@@ -14741,6 +15091,16 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       py::arg("max_output_candidates"),
       py::arg("min_separation_px"));
   m.def("star_grid_candidates_f32", &star_grid_candidates_f32);
+  m.def(
+      "resident_dq_map_host_f32",
+      &resident_dq_map_host_f32,
+      py::arg("master"),
+      py::arg("weight_map"),
+      py::arg("coverage_map"),
+      py::arg("low_rejection_map"),
+      py::arg("high_rejection_map"),
+      py::arg("geometric_warp_coverage_map") = py::none(),
+      py::arg("active_frame_count") = 0);
   py::class_<ResidentCalibratedStack>(m, "ResidentCalibratedStack")
       .def(py::init<std::size_t, std::size_t, std::size_t>())
       .def_property_readonly("frame_count", &ResidentCalibratedStack::frame_count)

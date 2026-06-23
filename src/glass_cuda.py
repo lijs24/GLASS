@@ -225,6 +225,37 @@ def host_pinned_empty_u8(byte_count: int) -> np.ndarray:
     return np.asarray(native.host_pinned_empty_u8(int(byte_count)), dtype=np.uint8)
 
 
+def resident_dq_map_host_f32_available() -> bool:
+    native = _native()
+    return native is not None and hasattr(native, "resident_dq_map_host_f32")
+
+
+def resident_dq_map_host_f32(
+    master: Any,
+    weight_map: Any,
+    coverage_map: Any | None,
+    low_rejection_map: Any | None,
+    high_rejection_map: Any | None,
+    geometric_warp_coverage_map: Any | None = None,
+    active_frame_count: int = 0,
+) -> tuple[np.ndarray, dict[str, int], dict[str, Any]]:
+    native = _native()
+    if native is None or not hasattr(native, "resident_dq_map_host_f32"):
+        raise RuntimeError("native CUDA backend with resident_dq_map_host_f32 is not available")
+    dq, summary, stats = native.resident_dq_map_host_f32(
+        np.asarray(master, dtype=np.float32),
+        np.asarray(weight_map, dtype=np.float32),
+        None if coverage_map is None else np.asarray(coverage_map, dtype=np.float32),
+        None if low_rejection_map is None else np.asarray(low_rejection_map, dtype=np.float32),
+        None if high_rejection_map is None else np.asarray(high_rejection_map, dtype=np.float32),
+        None
+        if geometric_warp_coverage_map is None
+        else np.asarray(geometric_warp_coverage_map, dtype=np.float32),
+        int(active_frame_count),
+    )
+    return np.asarray(dq, dtype=np.uint32), dict(summary), dict(stats)
+
+
 def read_simple_fits_into_f32(
     path: Any,
     data_offset: int,

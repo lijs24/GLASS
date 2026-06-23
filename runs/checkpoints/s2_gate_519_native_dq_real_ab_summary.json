@@ -1,0 +1,72 @@
+{
+  "gate": "S2-Gate 519",
+  "title": "Native host DQ map contract fast path",
+  "created_at": "2026-06-23T10:10:00+08:00",
+  "real_run_root": "C:\\glass_runs\\phase2_s2_gate519_native_dq_ab\\runs_20260623_100321",
+  "input_plan": "C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json",
+  "input_light_frames": 200,
+  "active_integrated_frames": 193,
+  "wbpp_active_integrated_frames": 193,
+  "wbpp_elapsed_s": 1092.541,
+  "warm_repeat": {
+    "shell_elapsed_s": 11.1992665,
+    "internal_total_elapsed_s": 10.82136449997779,
+    "speedup_internal_x": 100.96148226060053,
+    "speedup_shell_x": 97.55469253276542,
+    "light_read_upload_calibrate_s": 2.5335453000152484,
+    "master_build_or_load_s": 0.4051558000501245,
+    "resident_registration_component_s": 1.962568399430535,
+    "resident_registration_warp_s": 0.47296360082691535,
+    "resident_integration_s": 0.3025613999925554,
+    "output_write_s": 0.3603093000128865
+  },
+  "full_run_cache_policy_run": {
+    "shell_elapsed_s": 15.6334588,
+    "internal_total_elapsed_s": 15.253281100012828,
+    "speedup_internal_x": 71.62662202554446,
+    "speedup_shell_x": 69.88479094594217,
+    "light_read_upload_calibrate_s": 6.990396499983035,
+    "master_build_or_load_s": 4.865560800011735,
+    "resident_registration_component_s": 1.951897299406118,
+    "resident_registration_warp_s": 0.47139239992247894,
+    "resident_integration_s": 0.301384299993515,
+    "output_write_s": 0.406052699952852
+  },
+  "estimated_peak_vram_gib": 49.608429938554764,
+  "dq_fast_path": {
+    "available": true,
+    "stats_backend": "native_host",
+    "precomputed_dq_stats_used": true,
+    "native_method": "resident_dq_map_host_f32"
+  },
+  "numerical_validation": {
+    "gate519_vs_gate518": {
+      "rms_diff": 0.0,
+      "max_abs_diff": 0.0
+    },
+    "full_run_vs_warm_repeat": {
+      "rms_diff": 0.0,
+      "max_abs_diff": 0.0
+    },
+    "glass_vs_wbpp_robust_fit_pixels": {
+      "shape_match": true,
+      "rms_diff": 0.0015009512947433384,
+      "abs_diff_p99": 0.00034034321741462114,
+      "max_abs_diff": 0.0669627725356087
+    }
+  },
+  "cuda": {
+    "available": true,
+    "native_extension_loaded": true,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "driver": "596.21"
+  },
+  "tests": {
+    "ruff": "passed",
+    "focused_dq": "7 passed",
+    "pytest": "1162 passed in 43.32s",
+    "glass_doctor": "passed"
+  }
+}

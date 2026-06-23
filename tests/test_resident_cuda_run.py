@@ -20,6 +20,7 @@ from glass.engine.resident_cuda import (
     _memory_estimate,
     _resident_dq_coverage_provenance,
     _resident_dq_map,
+    _resident_dq_map_python,
     _resident_catalog_signature,
     _resident_descriptor_signature,
     _resident_fit_signature,
@@ -673,6 +674,76 @@ def test_resident_dq_map_precomputed_stats_feed_geometric_provenance():
     assert provenance["geometric_full_pixels"] == 2
     assert provenance["rejection_reduced_pixels"] == 2
     assert provenance["rejected_sample_count"] == 2.0
+
+
+def test_resident_dq_map_native_host_matches_python_when_available():
+    import glass_cuda
+
+    if not glass_cuda.resident_dq_map_host_f32_available():
+        pytest.skip("native resident_dq_map_host_f32 is not available")
+    master = np.array(
+        [[1.0, np.nan, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]],
+        dtype=np.float32,
+    )
+    weight = np.array(
+        [[2.0, 2.0, 0.0], [2.0, 2.0, 2.0], [np.nan, 2.0, 2.0]],
+        dtype=np.float32,
+    )
+    coverage = np.array(
+        [[3.0, 2.0, 1.0], [0.0, 3.0, 3.0], [3.0, 2.0, np.nan]],
+        dtype=np.float32,
+    )
+    low = np.array(
+        [[0.0, 1.0, 0.0], [2.0, 0.25, 0.0], [0.0, np.nan, 0.0]],
+        dtype=np.float32,
+    )
+    high = np.array(
+        [[0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [3.0, 0.0, -1.0]],
+        dtype=np.float32,
+    )
+    geometric = np.array(
+        [[3.0, 2.0, 1.0], [0.0, 3.0, 3.0], [3.0, 2.0, 3.0]],
+        dtype=np.float32,
+    )
+
+    expected_dq, expected_summary, expected_stats = _resident_dq_map_python(
+        master,
+        weight,
+        coverage,
+        low,
+        high,
+        geometric_warp_coverage_map=geometric,
+        active_frame_count=3,
+        return_stats=True,
+    )
+    dq, summary, stats = glass_cuda.resident_dq_map_host_f32(
+        master,
+        weight,
+        coverage,
+        low,
+        high,
+        geometric,
+        3,
+    )
+
+    assert np.array_equal(dq, expected_dq)
+    assert summary == expected_summary
+    assert stats["stats_source"] == expected_stats["stats_source"]
+    assert stats["stats_backend"] == "native_host"
+    for key in (
+        "post_rejection_coverage",
+        "geometric_warp_coverage",
+        "low_rejection",
+        "high_rejection",
+    ):
+        for stat_key, expected_value in expected_stats[key].items():
+            assert stats[key][stat_key] == expected_value
+    assert stats["post_rejection_zero_pixels"] == expected_stats["post_rejection_zero_pixels"]
+    assert stats["geometric_zero_pixels"] == expected_stats["geometric_zero_pixels"]
+    assert stats["geometric_partial_pixels"] == expected_stats["geometric_partial_pixels"]
+    assert stats["geometric_full_pixels"] == expected_stats["geometric_full_pixels"]
+    assert stats["rejection_reduced_pixels"] == expected_stats["rejection_reduced_pixels"]
+    assert stats["rejection_reduced_pixels_source"] == expected_stats["rejection_reduced_pixels_source"]
 
 
 def test_resident_dq_coverage_provenance_includes_geometric_warp_coverage():
