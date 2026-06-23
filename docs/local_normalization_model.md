@@ -258,3 +258,30 @@ The thresholds are deliberately explicit because acceptable residual scale
 depends on calibrated image units, normalization policy, and validation data.
 This gate adds auditable diagnostics and optional acceptance limits; it does not
 change local-normalization math or read FITS pixels.
+
+## S2-Gate 560 Resident In-VRAM Contract
+
+S2-Gate 560 extends `local_norm_contract.json` to resident CUDA local
+normalization. Resident runs write LN evidence as in-VRAM
+`local_norm_results.json` groups rather than per-frame normalized FITS and
+coefficient-grid JSON files, so the contract now supports a
+`contract_surface = resident_in_vram` mode.
+
+For resident `grid_mean_std`, the contract validates:
+
+- top-level resident source stage, enabled state, mode, crop box, and groups
+- per-frame `reference`, `ok`, `partial`, `empty`, and `skipped_zero_weight`
+  states
+- finite scale and offset values
+- in-VRAM grid coefficient shape, tile size, valid-pixel totals, empty-tile
+  counts, and status grids for normalized non-reference frames
+- output status counts and failed-output summaries
+
+Default resident `glass run` now writes `local_norm_contract.json` and
+`local_norm_contract.md` whenever `local_norm_results.json` exists, then passes
+that artifact into the default `pipeline_contract.json`. This makes LN-on
+resident CUDA runs self-auditing without requiring a later guardrails command.
+
+The gate does not change local-normalization formulas or CUDA kernels. It
+promotes resident LN metadata into the same contract path used by CPU
+continuous-field LN and by run-level pipeline acceptance.

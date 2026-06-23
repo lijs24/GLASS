@@ -2323,6 +2323,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     calibration = read_json(run / "calibration_artifacts.json")
     resident_result_contract = read_json(run / "resident_result_contract.json")
     resident_calibration_contract = read_json(run / "resident_calibration_contract.json")
+    local_norm_contract = read_json(run / "local_norm_contract.json")
     pipeline_contract = read_json(run / "pipeline_contract.json")
     assert integration["source_stage"] == "resident_calibrated_stack"
     assert integration["outputs"][0]["backend"] == "cuda_resident_stack"
@@ -2378,10 +2379,16 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert resident_result_contract["passed"] is True
     assert resident_result_contract["outputs"][0]["filter"] == "H"
     assert resident_result_contract["outputs"][0]["backend"] == "cuda_resident_stack"
+    assert local_norm_contract["artifact_type"] == "local_norm_contract"
+    assert local_norm_contract["contract_surface"] == "resident_in_vram"
+    assert local_norm_contract["passed"] is True
+    assert any(item["stage"] == "local_norm_contract" for item in state["artifacts"])
     assert pipeline_contract["audit_type"] == "pipeline_invariant_contract"
     assert pipeline_contract["passed"] is True
     pipeline_checks = {item["name"]: item for item in pipeline_contract["checks"]}
     assert pipeline_checks["integration_resident_result_contract"]["passed"] is True
+    assert pipeline_checks["local_normalization_continuous_contract_audit"]["passed"] is True
+    assert pipeline_contract["artifacts"]["local_norm_contract"]["attached"] is True
     assert any(item["stage"] == "pipeline_contract" for item in state["artifacts"])
     stack_contract_out = tmp_path / "stack_engine_contract.json"
     assert (
@@ -3394,6 +3401,7 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
         "resident_memory_admission",
         "resident_source_dq_cache_calibration",
         "resident_calibration_integration",
+        "local_norm_contract",
         "pipeline_contract",
     ]
     assert "resident_source_dq_cache_calibration" in state["completed_stages"]
@@ -4294,6 +4302,8 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):
     integration = read_json(run / "integration_results.json")
     registration = read_json(run / "registration_results.json")
     local_norm = read_json(run / "local_norm_results.json")
+    local_norm_contract = read_json(run / "local_norm_contract.json")
+    pipeline_contract = read_json(run / "pipeline_contract.json")
     resident = read_json(run / "resident_artifacts.json")
     resident_registration = resident["artifacts"][0]["resident_registration"]
     assert integration["outputs"][0]["resident_registration"] == "translation_ncc_subpixel"
@@ -4305,6 +4315,13 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):
     assert local_norm["groups"][0]["frame_results"][0]["status"] == "reference"
     assert local_norm["groups"][0]["frame_results"][1]["grid_coefficients"]["tile_size"] == 8
     assert local_norm["groups"][0]["frame_results"][1]["grid_coefficients"]["valid_pixel_total"] > 0
+    assert local_norm_contract["contract_surface"] == "resident_in_vram"
+    assert local_norm_contract["enabled"] is True
+    assert local_norm_contract["passed"] is True
+    assert local_norm_contract["summary"]["output_count"] == 2
+    assert local_norm_contract["summary"]["status_counts"] == {"reference": 1, "ok": 1}
+    pipeline_checks = {item["name"]: item for item in pipeline_contract["checks"]}
+    assert pipeline_checks["local_normalization_continuous_contract_audit"]["passed"] is True
     assert registration["results"][0]["status"] == "reference"
     assert resident_registration["mode"] == "translation_ncc_subpixel"
     assert resident["artifacts"][0]["resident_local_normalization"]["enabled"] is True

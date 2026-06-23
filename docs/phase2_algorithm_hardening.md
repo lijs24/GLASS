@@ -15217,6 +15217,66 @@ Completed in Gate446:
   - default run contract:
     `C:\glass_runs\phase2_s2_gate559_pipeline_contract_default\runs_20260623_174914\default_contract\pipeline_contract.json`.
 
+### S2-Gate 560: Resident Local Normalization Contract
+
+- Continued Phase 2 mainline LN hardening by making resident CUDA
+  local-normalization evidence a first-class `local_norm_contract` surface.
+- Completed:
+  - extended `glass.report.local_norm_contract` with
+    `contract_surface=resident_in_vram`;
+  - validated resident `groups[].frame_results` for reference, ok, partial,
+    empty, and zero-weight LN states;
+  - validated resident grid coefficient shape, tile size, valid-pixel totals,
+    empty-tile counts, status grids, finite scale, and finite offset values;
+  - made default resident `glass run` write `local_norm_contract.json` and
+    `local_norm_contract.md` whenever `local_norm_results.json` exists;
+  - passed the generated LN contract into default `pipeline_contract.json`, so
+    LN-on resident runs self-audit without a later guardrails command.
+- Tests:
+  - syntax check: `python -m py_compile src\glass\report\local_norm_contract.py
+    src\glass\cli.py tests\test_local_norm_contract.py
+    tests\test_resident_cuda_run.py`;
+  - focused LN/resident tests: `11 passed in 1.43 s`;
+  - wider pipeline/resident contract suite: `63 passed in 2.55 s`;
+  - full pytest: `1197 passed in 45.00 s`.
+- Real 200-light LN-on validation:
+  - GLASS run:
+    `C:\glass_runs\phase2_s2_gate560_resident_ln_contract\runs_20260623_175507\ln_on_contract`;
+  - LN-off reference run:
+    `C:\glass_runs\phase2_s2_gate559_pipeline_contract_default\runs_20260623_174914\default_contract`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_560_resident_ln_contract_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `7.1932722 s` |
+  | Run timing total | `6.8284103000187315 s` |
+  | Resident calibration/integration/LN stage | `6.5044172999914736 s` |
+  | Local norm contract stage | `0.17231280001578853 s` |
+  | Pipeline contract stage | `0.1486287000006996 s` |
+  | LN mode | `resident_grid_mean_std` |
+  | LN contract status | `passed` |
+  | Pipeline contract status | `passed` |
+  | LN contract output count | `200` |
+  | LN status counts | `109 ok / 83 partial / 1 reference / 7 skipped_zero_weight` |
+  | Input/integrated/zero-weight frames | `200 / 193 / 7` |
+
+- Interpretation:
+  - this is an LN engineering and correctness gate, not a speedup gate;
+  - LN-on output is expected to differ from LN-off output, and the summary
+    records the LN-on vs LN-off master diff for audit context;
+  - no calibration, registration, warp, rejection, weighting, DQ bit, or CUDA
+    pixel math was changed.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_560_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_560_resident_ln_contract_summary.json`;
+  - resident LN contract:
+    `C:\glass_runs\phase2_s2_gate560_resident_ln_contract\runs_20260623_175507\ln_on_contract\local_norm_contract.json`;
+  - pipeline contract:
+    `C:\glass_runs\phase2_s2_gate560_resident_ln_contract\runs_20260623_175507\ln_on_contract\pipeline_contract.json`.
+
 ## Gate Rules
 
 Each gate requires:

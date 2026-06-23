@@ -139,6 +139,95 @@ def _write_disabled_local_norm_run(run: Path) -> None:
     )
 
 
+def _resident_grid_coefficients(*, valid_pixel_total: int = 16) -> dict:
+    return {
+        "model": "resident_grid_pair_mean_std",
+        "tile_size": 8,
+        "grid_rows": 1,
+        "grid_cols": 1,
+        "scale_mean": 1.0,
+        "scale_min": 1.0,
+        "scale_max": 1.0,
+        "offset_mean": 0.0,
+        "offset_min": 0.0,
+        "offset_max": 0.0,
+        "valid_pixel_total": valid_pixel_total,
+        "empty_tiles": 0 if valid_pixel_total else 1,
+        "offset_only_tiles": 0,
+        "ok_tiles": 1 if valid_pixel_total else 0,
+        "scales": [[1.0]],
+        "offsets": [[0.0]],
+        "valid_pixels": [[valid_pixel_total]],
+        "statuses": [["ok" if valid_pixel_total else "empty"]],
+    }
+
+
+def _write_resident_local_norm_run(
+    run: Path,
+    *,
+    enabled: bool = True,
+    omit_grid: bool = False,
+) -> None:
+    run.mkdir(parents=True)
+    frame_results = []
+    if enabled:
+        frame_results = [
+            {
+                "frame_id": "L1",
+                "reference_frame_id": "L1",
+                "model": "resident_grid_mean_std",
+                "scale": 1.0,
+                "offset": 0.0,
+                "source_mean": None,
+                "source_std": None,
+                "reference_mean": 0.0,
+                "reference_std": 0.0,
+                "valid_pixels": None,
+                "grid_coefficients": None,
+                "status": "reference",
+                "warnings": [],
+            },
+            {
+                "frame_id": "L2",
+                "reference_frame_id": "L1",
+                "model": "resident_grid_mean_std",
+                "scale": 1.0,
+                "offset": 0.0,
+                "source_mean": None,
+                "source_std": None,
+                "reference_mean": 0.0,
+                "reference_std": 0.0,
+                "valid_pixels": None,
+                "grid_coefficients": None if omit_grid else _resident_grid_coefficients(),
+                "status": "ok",
+                "warnings": [],
+            },
+        ]
+    write_json(
+        run / "local_norm_results.json",
+        {
+            "schema_version": 1,
+            "source_stage": "resident_calibrated_stack",
+            "mode": "resident_grid_mean_std" if enabled else "off",
+            "enabled": enabled,
+            "crop_box": None,
+            "groups": [
+                {
+                    "filter": "H",
+                    "enabled": enabled,
+                    "mode": "resident_grid_mean_std" if enabled else "off",
+                    "tile_size": 8 if enabled else None,
+                    "reference_frame_id": "L1",
+                    "reference_index": 0,
+                    "crop_box": None,
+                    "frame_results": frame_results,
+                    "warnings": [],
+                }
+            ],
+        },
+    )
+
+
 def test_local_norm_contract_passes_for_continuous_field_artifact(tmp_path: Path) -> None:
     run = tmp_path / "run"
     _write_enabled_local_norm_run(run)
@@ -165,6 +254,45 @@ def test_local_norm_contract_passes_for_disabled_passthrough(tmp_path: Path) -> 
     assert payload["enabled"] is False
     assert payload["summary"]["residual_quality"]["output_count"] == 0
     assert payload["outputs"][0]["status"] == "disabled_passthrough"
+
+
+def test_local_norm_contract_passes_for_resident_in_vram_grid(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_resident_local_norm_run(run)
+
+    payload = build_local_norm_contract(run)
+
+    assert payload["passed"] is True
+    assert payload["contract_surface"] == "resident_in_vram"
+    assert payload["enabled"] is True
+    assert payload["summary"]["output_count"] == 2
+    assert payload["summary"]["status_counts"] == {"reference": 1, "ok": 1}
+    assert payload["outputs"][1]["grid_contract"]["passed"] is True
+
+
+def test_local_norm_contract_passes_for_resident_disabled_in_vram(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_resident_local_norm_run(run, enabled=False)
+
+    payload = build_local_norm_contract(run)
+
+    assert payload["passed"] is True
+    assert payload["contract_surface"] == "resident_in_vram"
+    assert payload["enabled"] is False
+    assert payload["summary"]["output_count"] == 0
+    assert payload["model"] == "off"
+
+
+def test_local_norm_contract_rejects_resident_grid_missing_coefficients(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_resident_local_norm_run(run, omit_grid=True)
+
+    payload = build_local_norm_contract(run)
+
+    assert payload["passed"] is False
+    assert payload["failed_checks"] == ["output_contracts_passed"]
+    assert payload["failed_outputs"][0]["frame_id"] == "L2"
+    assert "grid_contract" in payload["failed_outputs"][0]["failed_checks"]
 
 
 def test_local_norm_contract_rejects_piecewise_enabled_model(tmp_path: Path) -> None:

@@ -13,6 +13,8 @@ EXPECTED_COEFFICIENT_FIELD_MODEL = "bilinear_tile_center_v1"
 EXPECTED_INTERPOLATION = "bilinear_tile_center"
 DISABLED_MODEL = "disabled_passthrough"
 FULL_FIELD_STATUSES = {"written", "omitted_due_to_size"}
+RESIDENT_MODES = {"resident_global_mean_std", "resident_grid_mean_std", "off"}
+RESIDENT_FRAME_STATUSES = {"reference", "ok", "partial", "offset_only", "empty", "skipped_zero_weight"}
 
 
 def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
@@ -75,6 +77,90 @@ def _grid_shape_ok(value: Any, rows: int | None, cols: int | None) -> bool:
     if len(value) != rows:
         return False
     return all(isinstance(row, list) and len(row) == cols for row in value)
+
+
+def _grid_list_shape_ok(value: Any, rows: int | None, cols: int | None) -> bool:
+    return _grid_shape_ok(value, rows, cols)
+
+
+def _resident_grid_contract(grid: Any, *, status: str) -> dict[str, Any]:
+    if not isinstance(grid, dict):
+        required = status not in {"reference", "skipped_zero_weight"}
+        return {
+            "present": False,
+            "passed": not required,
+            "required": required,
+            "failed_checks": ["grid_coefficients_missing"] if required else [],
+            "checks": [
+                _check(
+                    "grid_coefficients_present",
+                    not required,
+                    {"status": status, "required": required},
+                )
+            ],
+        }
+    rows = int(grid.get("grid_rows") or 0) if _positive_int(grid.get("grid_rows")) else None
+    cols = int(grid.get("grid_cols") or 0) if _positive_int(grid.get("grid_cols")) else None
+    valid_total = None
+    if _nonnegative_int(grid.get("valid_pixel_total")):
+        valid_total = int(grid.get("valid_pixel_total") or 0)
+    checks = [
+        _check("grid_coefficients_present", True, {"status": status}),
+        _check("model_recorded", bool(grid.get("model")), {"model": grid.get("model")}),
+        _check("tile_size_positive", _positive_int(grid.get("tile_size")), {"tile_size": grid.get("tile_size")}),
+        _check("grid_rows_positive", rows is not None, {"grid_rows": grid.get("grid_rows")}),
+        _check("grid_cols_positive", cols is not None, {"grid_cols": grid.get("grid_cols")}),
+        _check(
+            "scales_shape_matches_grid",
+            _grid_list_shape_ok(grid.get("scales"), rows, cols),
+            {"grid_rows": rows, "grid_cols": cols},
+        ),
+        _check(
+            "offsets_shape_matches_grid",
+            _grid_list_shape_ok(grid.get("offsets"), rows, cols),
+            {"grid_rows": rows, "grid_cols": cols},
+        ),
+        _check(
+            "valid_pixels_shape_matches_grid",
+            _grid_list_shape_ok(grid.get("valid_pixels"), rows, cols),
+            {"grid_rows": rows, "grid_cols": cols},
+        ),
+        _check(
+            "statuses_shape_matches_grid",
+            _grid_list_shape_ok(grid.get("statuses"), rows, cols),
+            {"grid_rows": rows, "grid_cols": cols},
+        ),
+        _check(
+            "valid_pixel_total_recorded",
+            valid_total is not None,
+            {"valid_pixel_total": grid.get("valid_pixel_total")},
+        ),
+        _check(
+            "empty_tiles_recorded",
+            _nonnegative_int(grid.get("empty_tiles")),
+            {"empty_tiles": grid.get("empty_tiles")},
+        ),
+        _check("ok_tiles_recorded", _nonnegative_int(grid.get("ok_tiles")), {"ok_tiles": grid.get("ok_tiles")}),
+        _check(
+            "nonempty_status_has_valid_pixels",
+            status in {"reference", "skipped_zero_weight", "empty"} or (valid_total is not None and valid_total > 0),
+            {"status": status, "valid_pixel_total": valid_total},
+        ),
+    ]
+    return {
+        "present": True,
+        "passed": all(item["passed"] for item in checks),
+        "required": True,
+        "model": grid.get("model"),
+        "tile_size": grid.get("tile_size"),
+        "grid_rows": grid.get("grid_rows"),
+        "grid_cols": grid.get("grid_cols"),
+        "valid_pixel_total": grid.get("valid_pixel_total"),
+        "empty_tiles": grid.get("empty_tiles"),
+        "ok_tiles": grid.get("ok_tiles"),
+        "failed_checks": [item["name"] for item in checks if not item["passed"]],
+        "checks": checks,
+    }
 
 
 def _residual_summary_contract(summary: Any) -> dict[str, Any]:
@@ -400,6 +486,173 @@ def _disabled_row_contract(item: dict[str, Any], *, index: int, run_root: Path) 
     }
 
 
+def _resident_frame_contract(
+    item: dict[str, Any],
+    *,
+    index: int,
+    group: dict[str, Any],
+    group_index: int,
+) -> dict[str, Any]:
+    mode = str(item.get("model") or group.get("mode") or "")
+    status = str(item.get("status") or "")
+    grid_contract = _resident_grid_contract(item.get("grid_coefficients"), status=status)
+    scale = _finite_float(item.get("scale"))
+    offset = _finite_float(item.get("offset"))
+    checks = [
+        _check("frame_id_present", bool(item.get("frame_id")), {"frame_id": item.get("frame_id")}),
+        _check(
+            "reference_frame_id_present",
+            bool(item.get("reference_frame_id") or group.get("reference_frame_id")),
+            {
+                "frame_reference_frame_id": item.get("reference_frame_id"),
+                "group_reference_frame_id": group.get("reference_frame_id"),
+            },
+        ),
+        _check("resident_model_recorded", mode in RESIDENT_MODES, {"model": mode, "allowed": sorted(RESIDENT_MODES)}),
+        _check(
+            "status_supported",
+            status in RESIDENT_FRAME_STATUSES,
+            {"status": status, "allowed": sorted(RESIDENT_FRAME_STATUSES)},
+        ),
+        _check("scale_finite", scale is not None, {"scale": item.get("scale")}),
+        _check("offset_finite", offset is not None, {"offset": item.get("offset")}),
+        _check(
+            "grid_contract",
+            bool(grid_contract.get("passed")),
+            grid_contract,
+            "Resident grid LN rows must carry in-VRAM coefficient grids when a non-reference frame was normalized.",
+        ),
+    ]
+    return {
+        "index": index,
+        "group_index": group_index,
+        "frame_id": item.get("frame_id"),
+        "status": status,
+        "enabled": bool(group.get("enabled")),
+        "model": mode,
+        "resident_in_vram": True,
+        "reference_frame_id": item.get("reference_frame_id") or group.get("reference_frame_id"),
+        "scale": item.get("scale"),
+        "offset": item.get("offset"),
+        "grid_contract": grid_contract,
+        "passed": all(row["passed"] for row in checks),
+        "failed_checks": [row["name"] for row in checks if not row["passed"]],
+        "checks": checks,
+    }
+
+
+def _resident_group_contracts(local_norm: dict[str, Any]) -> list[dict[str, Any]]:
+    output_contracts: list[dict[str, Any]] = []
+    groups = local_norm.get("groups") if isinstance(local_norm.get("groups"), list) else []
+    for group_index, group in enumerate(groups):
+        if not isinstance(group, dict):
+            continue
+        frame_results = group.get("frame_results") if isinstance(group.get("frame_results"), list) else []
+        for frame_index, item in enumerate(frame_results):
+            if isinstance(item, dict):
+                output_contracts.append(
+                    _resident_frame_contract(
+                        item,
+                        index=len(output_contracts),
+                        group=group,
+                        group_index=group_index,
+                    )
+                )
+    return output_contracts
+
+
+def _resident_local_norm_contract(
+    local_norm: dict[str, Any],
+    *,
+    run_root: Path,
+    local_norm_path: Path,
+    created_at: str,
+) -> dict[str, Any]:
+    enabled = bool(local_norm.get("enabled"))
+    groups = local_norm.get("groups") if isinstance(local_norm.get("groups"), list) else []
+    group_objects = [group for group in groups if isinstance(group, dict)]
+    output_contracts = _resident_group_contracts(local_norm)
+    mode = str(local_norm.get("mode") or ("off" if not enabled else ""))
+    top_checks = [
+        _check("local_norm_results_present", True, {"path": str(local_norm_path)}),
+        _check(
+            "schema_version_recorded",
+            _positive_int(local_norm.get("schema_version")),
+            {"schema_version": local_norm.get("schema_version")},
+        ),
+        _check(
+            "enabled_state_recorded",
+            isinstance(local_norm.get("enabled"), bool),
+            {"enabled": local_norm.get("enabled")},
+        ),
+        _check(
+            "source_stage_is_resident",
+            local_norm.get("source_stage") == "resident_calibrated_stack",
+            {"source_stage": local_norm.get("source_stage")},
+        ),
+        _check("resident_mode_recorded", mode in RESIDENT_MODES, {"mode": mode, "allowed": sorted(RESIDENT_MODES)}),
+        _check("crop_box_recorded", "crop_box" in local_norm, {"crop_box": local_norm.get("crop_box") if "crop_box" in local_norm else "missing"}),
+        _check(
+            "groups_list_recorded",
+            isinstance(groups, list) and len(group_objects) == len(groups),
+            {"group_count": len(groups), "object_group_count": len(group_objects)},
+        ),
+    ]
+    if enabled:
+        top_checks.extend(
+            [
+                _check("enabled_groups_present", bool(group_objects), {"group_count": len(group_objects)}),
+                _check("resident_outputs_present", bool(output_contracts), {"output_count": len(output_contracts)}),
+            ]
+        )
+    top_checks.append(
+        _check(
+            "output_contracts_passed",
+            all(item["passed"] for item in output_contracts),
+            {
+                "output_count": len(output_contracts),
+                "failed": [item["frame_id"] or item["index"] for item in output_contracts if not item["passed"]],
+            },
+        )
+    )
+    passed = all(item["passed"] for item in top_checks)
+    failed_outputs = [item for item in output_contracts if not item["passed"]]
+    status_counts: dict[str, int] = {}
+    for item in output_contracts:
+        status = str(item.get("status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    return {
+        "schema_version": 1,
+        "artifact_type": "local_norm_contract",
+        "contract_surface": "resident_in_vram",
+        "created_at": created_at,
+        "run_dir": str(run_root),
+        "local_norm_path": str(local_norm_path),
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "enabled": enabled,
+        "reference_frame_id": next((group.get("reference_frame_id") for group in group_objects if group.get("reference_frame_id")), None),
+        "model": mode,
+        "coefficient_field_model": "resident_in_vram_grid" if mode == "resident_grid_mean_std" else mode,
+        "crop_box": local_norm.get("crop_box") if "crop_box" in local_norm else "missing",
+        "summary": {
+            "output_count": len(output_contracts),
+            "failed_output_count": len(failed_outputs),
+            "group_count": len(group_objects),
+            "enabled": enabled,
+            "mode": mode,
+            "status_counts": status_counts,
+        },
+        "checks": top_checks,
+        "outputs": output_contracts,
+        "failed_checks": [item["name"] for item in top_checks if not item["passed"]],
+        "failed_outputs": [
+            {"frame_id": item["frame_id"], "index": item["index"], "failed_checks": item["failed_checks"]}
+            for item in failed_outputs
+        ],
+    }
+
+
 def _residual_quality_summary(output_contracts: list[dict[str, Any]]) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     rms_values: list[float] = []
@@ -473,6 +726,13 @@ def build_local_norm_contract(run_dir: str | Path) -> dict[str, Any]:
         }
 
     enabled = bool(local_norm.get("enabled"))
+    if local_norm.get("source_stage") == "resident_calibrated_stack" or isinstance(local_norm.get("groups"), list):
+        return _resident_local_norm_contract(
+            local_norm,
+            run_root=run_root,
+            local_norm_path=local_norm_path,
+            created_at=created_at,
+        )
     outputs = local_norm.get("local_norm_results") if isinstance(local_norm.get("local_norm_results"), list) else []
     top_checks = [
         _check("local_norm_results_present", True, {"path": str(local_norm_path)}),

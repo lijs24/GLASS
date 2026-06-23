@@ -854,7 +854,11 @@ def _write_default_pipeline_contract_artifact(run: Path, state) -> Path | None:
         return None
     pipeline_contract_path = run / "pipeline_contract.json"
     pipeline_contract_markdown = run / "pipeline_contract.md"
-    audit = build_pipeline_contract_audit(run)
+    local_norm_contract_payload = _read_report_json_if_exists(_report_local_norm_contract_path(run))
+    audit = build_pipeline_contract_audit(
+        run,
+        local_norm_contract=local_norm_contract_payload,
+    )
     write_pipeline_contract_audit(
         pipeline_contract_path,
         audit,
@@ -876,6 +880,29 @@ def _write_default_pipeline_contract_artifact(run: Path, state) -> Path | None:
     elif not audit.get("passed"):
         state.warnings.append("default pipeline contract failed in a non-blocking diagnostic small-frame run")
     return pipeline_contract_path
+
+
+def _write_default_local_norm_contract_artifact(run: Path, state) -> Path | None:
+    if not (run / "local_norm_results.json").exists():
+        return None
+    local_norm_contract_path = run / "local_norm_contract.json"
+    local_norm_contract_markdown = run / "local_norm_contract.md"
+    audit = build_local_norm_contract(run)
+    write_local_norm_contract(
+        local_norm_contract_path,
+        audit,
+        markdown=local_norm_contract_markdown,
+    )
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="local_norm_contract",
+            path=str(local_norm_contract_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    return local_norm_contract_path
 
 
 def _pipeline_contract_failure_blocks_default_run(audit: dict[str, Any]) -> bool:
@@ -1713,6 +1740,13 @@ def cmd_run(args: argparse.Namespace) -> int:
                 source_frames=[],
             )
         )
+        if (out / "local_norm_results.json").exists():
+            _timed_stage(
+                out,
+                timing,
+                "local_norm_contract",
+                lambda: _write_default_local_norm_contract_artifact(out, state),
+            )
         pipeline_contract_path = None
         if (out / "integration_results.json").exists() and (out / "resident_artifacts.json").exists():
             pipeline_contract_path = _timed_stage(

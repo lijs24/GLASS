@@ -1,0 +1,114 @@
+{
+  "gate": "S2-Gate 560",
+  "run": "C:\\glass_runs\\phase2_s2_gate560_resident_ln_contract\\runs_20260623_175507\\ln_on_contract",
+  "ln_off_reference_run": "C:\\glass_runs\\phase2_s2_gate559_pipeline_contract_default\\runs_20260623_174914\\default_contract",
+  "shell_elapsed_s": 7.1932722,
+  "run_timing_total_elapsed_s": 6.8284103000187315,
+  "run_timing_stages": [
+    {
+      "elapsed_s": 0.0030515000107698143,
+      "stage": "resident_memory_admission",
+      "started_at": "2026-06-23T09:55:07+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 6.5044172999914736,
+      "stage": "resident_calibration_integration",
+      "started_at": "2026-06-23T09:55:07+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.17231280001578853,
+      "stage": "local_norm_contract",
+      "started_at": "2026-06-23T09:55:14+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.1486287000006996,
+      "stage": "pipeline_contract",
+      "started_at": "2026-06-23T09:55:14+00:00",
+      "status": "ok"
+    }
+  ],
+  "local_norm_enabled": true,
+  "local_norm_mode": "resident_grid_mean_std",
+  "local_norm_group_count": 1,
+  "local_norm_contract_passed": true,
+  "local_norm_contract_surface": "resident_in_vram",
+  "local_norm_contract_output_count": 200,
+  "local_norm_contract_status_counts": {
+    "ok": 109,
+    "partial": 83,
+    "reference": 1,
+    "skipped_zero_weight": 7
+  },
+  "pipeline_contract_passed": true,
+  "pipeline_local_norm_contract_attached": true,
+  "pipeline_local_norm_contract_passed": true,
+  "pipeline_failed_checks": [],
+  "run_state_failed_stage": null,
+  "run_state_artifact_stages": [
+    "resident_calibration",
+    "resident_calibration_contract",
+    "resident_calibration_integration",
+    "resident_result_contract",
+    "resident_registration_quality",
+    "resident_frame_masks",
+    "resident_dq_pixel_closure",
+    "resident_source_dq_execution",
+    "resident_master_cache",
+    "resident_local_normalization",
+    "resident_memory_admission",
+    "resident_source_dq_strategy",
+    "local_norm_contract",
+    "pipeline_contract"
+  ],
+  "frame_accounting_summary": {
+    "calibrated_frames": 0,
+    "calibration_artifact_type": "resident_cuda_calibration_artifacts",
+    "calibration_master_count": 3,
+    "exception_frames": 7,
+    "final_status_counts": {
+      "integrated": 193,
+      "quality_rejected": 7
+    },
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "integration_conflict_frames": 0,
+    "integration_status_counts": {
+      "used": 193,
+      "zero_weight": 7
+    },
+    "not_integrated_frames": 0,
+    "quality_accepted_frames": 0,
+    "quality_rejected_frames": 7,
+    "registration_accepted_frames": 193,
+    "resident_calibrated_frames": 200,
+    "resident_calibrated_light_ledger_rows": 200,
+    "resident_frame_mask_active_frames": 193,
+    "resident_frame_mask_masked_frames": 7,
+    "resident_frame_mask_unaudited_frames": 0,
+    "resident_native_calibration_artifact": true,
+    "warp_accepted_frames": 0,
+    "warp_skipped_frames": 0,
+    "zero_weight_frames": 7
+  },
+  "resident_local_normalization": {
+    "enabled": true,
+    "mode": "resident_grid_mean_std",
+    "reference_frame_id": "F000196",
+    "tile_size": 256,
+    "warning_count": 0
+  },
+  "master_sha256": "c0d2fda42d0f85fe383ba24a2dbe7ef26023f860c8bbba37383b161ba4fa7d4f",
+  "ln_off_master_sha256": "8bc069ce6858ab5e065b5d9af297c35c36d4240c13980546e43cfb480115e110",
+  "ln_on_vs_ln_off_master_diff": {
+    "max_abs": 19759.52734375,
+    "rms": 73.69269561767578,
+    "mean": -58.04133987426758,
+    "shape": [
+      6422,
+      9600
+    ]
+  }
+}
