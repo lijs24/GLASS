@@ -14337,6 +14337,98 @@ Completed in Gate446:
   - Gate544 hash compare:
     `C:\glass_runs\phase2_s2_gate545_native_queue_read\hash_compare_gate544_default.json`.
 
+### S2-Gate 546: Native Queue Inline Drain Probe
+
+- Continued the resident CUDA I/O/calibration mainline by testing whether native
+  queue completions should be consumed inline by the main calibration loop
+  instead of by the Gate545 background drain thread.
+- Completed:
+  - added `GLASS_RESIDENT_NATIVE_QUEUE_DRAIN_MODE=inline` as an explicit
+    experiment mode;
+  - kept the queue opt-in default drain mode as `thread`;
+  - shared the same completion materialization helper between thread and inline
+    drain modes;
+  - recorded `native_queue_read_drain_mode`,
+    `native_queue_read_inline_wait_count`, and
+    `native_queue_read_thread_wait_count` in resident artifacts and light
+    pipeline profiles;
+  - added focused tests proving inline mode is explicit and thread mode remains
+    the queue default.
+- Tests:
+  - focused queue/default tests: `3 passed in 1.16 s`;
+  - full pytest: `1184 passed in 44.47 s`.
+- Real 200-light same-session probe:
+  - inline run:
+    `C:\glass_runs\phase2_s2_gate546_inline_queue_drain\runs_20260623_160000\native_queue_inline_release`;
+  - thread-drain run:
+    `C:\glass_runs\phase2_s2_gate546_inline_queue_drain\runs_20260623_160000\native_queue_thread_release`;
+  - plan:
+    `C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json`.
+- Thread-drain queue result:
+  - shell/internal elapsed: `5.500654 s` / `5.139208300039172 s`;
+  - backend counts: `native_u16be_raw_queue: 200`;
+  - drain mode: `thread`;
+  - queue submits/completions/workers: `200` / `200` / `16`;
+  - queue cumulative native read time: `25.162665299999983 s`;
+  - thread wait count: `206`;
+  - inline wait count: `0`;
+  - light read/upload/calibrate: `2.5636506999726407 s`;
+  - light read wait wall: `1.167211199644953 s`;
+  - worker native FITS materialize/read cumulative: `25.062246 s`;
+  - ready queue wait time: `1.163724199985154 s`;
+  - out-of-order consumed frames: `68`;
+  - registration/warp: `0.254920499806758 s`;
+  - integration: `0.3027371999924071 s`;
+  - output write: `0.2994240000261925 s`;
+  - speedup versus recorded WBPP reference (`1092.541 s`):
+    `198.62020043434833x`.
+- Inline-drain queue result:
+  - shell/internal elapsed: `5.56227 s` / `5.198796700045932 s`;
+  - backend counts: `native_u16be_raw_queue: 200`;
+  - drain mode: `inline`;
+  - queue submits/completions/workers: `200` / `200` / `16`;
+  - queue cumulative native read time: `25.23642249999999 s`;
+  - inline wait count: `201`;
+  - thread wait count: `0`;
+  - light read/upload/calibrate: `2.561797199945431 s`;
+  - light read wait wall: `1.1694663995294832 s`;
+  - worker native FITS materialize/read cumulative: `25.1924351 s`;
+  - ready queue wait time: `1.1658721001003869 s`;
+  - out-of-order consumed frames: `155`;
+  - registration/warp: `0.25686300004599616 s`;
+  - integration: `0.3037078999914229 s`;
+  - output write: `0.3114779999596067 s`;
+  - speedup versus recorded WBPP reference:
+    `196.41998680394875x`.
+- Interpretation:
+  - inline drain preserved output pixels but was slower than thread drain by
+    `0.061615999999999893 s` in the same session;
+  - inline consumed more frames out of original order (`155` versus `68`) but
+    did not reduce wall time, so ready-order freedom alone is not the current
+    bottleneck;
+  - the Gate545 background drain remains the safer queue opt-in default;
+  - the next substantial optimization should move beyond Python completion
+    materialization entirely, for example a native read-to-calibration wave
+    coordinator that submits H2D/decode/calibration directly from native
+    completions.
+- Numerical validation:
+  - inline and thread-drain queue runs are SHA256-identical for master, weight
+    map, coverage map, low/high rejection maps, and DQ map;
+  - inline also matches the Gate545 fresh default hashes;
+  - inherited WBPP coverage-masked comparison remains:
+    RMS `0.0004279821839256963`, p99 abs diff
+    `0.0001313822576776147`, robust-fit RMS
+    `4.2529498303511286e-05`, coverage fraction
+    `0.9892770479074376`, compared pixels `56997300`.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_546_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_546_inline_queue_drain_summary.json`;
+  - thread-vs-inline hash compare:
+    `C:\glass_runs\phase2_s2_gate546_inline_queue_drain\hash_compare_thread_vs_inline.json`;
+  - Gate545-default hash compare:
+    `C:\glass_runs\phase2_s2_gate546_inline_queue_drain\hash_compare_gate545_default.json`.
+
 ## Gate Rules
 
 Each gate requires:

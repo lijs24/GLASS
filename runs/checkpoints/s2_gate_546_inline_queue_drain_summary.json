@@ -1,0 +1,135 @@
+{
+  "gate": "S2-Gate 546",
+  "title": "Native queue inline-drain probe",
+  "status": "green",
+  "created_at_local": "2026-06-23",
+  "scope": [
+    "Add explicit inline drain mode for the Gate545 native raw FITS completion queue.",
+    "Keep thread drain as the queue opt-in default.",
+    "Record drain mode and inline/thread wait counters in resident artifacts and resident light pipeline profiles.",
+    "Run real 200-light inline-vs-thread probe and keep the faster safer path as default."
+  ],
+  "commands": {
+    "focused_tests": ".venv/Scripts/python.exe -m pytest -q tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_queue_read_is_opt_in tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_queue_read_default_drain_is_thread tests/test_resident_cuda_run.py::test_cli_resident_cuda_default_fits_read_mode_is_guarded_auto",
+    "full_tests": ".venv/Scripts/python.exe -m pytest -q",
+    "inline_real_run": "GLASS_RESIDENT_NATIVE_QUEUE_READ=1 GLASS_RESIDENT_NATIVE_QUEUE_DRAIN_MODE=inline glass run --plan C:/glass_runs/phase2_s2_gate540_plan_spec_cache/runs_20260623_140314/processing_plan.json --out C:/glass_runs/phase2_s2_gate546_inline_queue_drain/runs_20260623_160000/native_queue_inline_release --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit --resident-master-cache-dir C:/glass_runs/phase2_s2_gate518_dq_stats_reuse/runs_20260623_094619/resident_master_cache",
+    "thread_real_run": "GLASS_RESIDENT_NATIVE_QUEUE_READ=1 glass run --plan C:/glass_runs/phase2_s2_gate540_plan_spec_cache/runs_20260623_140314/processing_plan.json --out C:/glass_runs/phase2_s2_gate546_inline_queue_drain/runs_20260623_160000/native_queue_thread_release --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --reference-frame-id LIGHT_H_0136 --resident-output-maps audit --resident-master-cache-dir C:/glass_runs/phase2_s2_gate518_dq_stats_reuse/runs_20260623_094619/resident_master_cache"
+  },
+  "tests": {
+    "focused": "3 passed in 1.16s",
+    "full_pytest": "1184 passed in 44.47s"
+  },
+  "cuda": {
+    "available": true,
+    "device": {
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "compute_capability": "12.0",
+      "memory_total_mib": 97886,
+      "driver_version": "596.21"
+    },
+    "native_backend": true,
+    "raw_fits_read_queue_available": true
+  },
+  "real_200_light": {
+    "plan": "C:/glass_runs/phase2_s2_gate540_plan_spec_cache/runs_20260623_140314/processing_plan.json",
+    "wbpp_reference_elapsed_s": 1092.541,
+    "thread_drain": {
+      "run": "C:/glass_runs/phase2_s2_gate546_inline_queue_drain/runs_20260623_160000/native_queue_thread_release",
+      "shell_elapsed_s": 5.500654,
+      "internal_elapsed_s": 5.139208300039172,
+      "speedup_vs_wbpp_shell": 198.62020043434833,
+      "backend_counts": {
+        "native_u16be_raw_queue": 200
+      },
+      "native_queue_read": {
+        "drain_mode": "thread",
+        "submit_count": 200,
+        "completion_count": 200,
+        "worker_count": 16,
+        "cumulative_s": 25.162665299999983,
+        "completion_wait_s": 2.2931545997271314,
+        "inline_wait_count": 0,
+        "thread_wait_count": 206
+      },
+      "timing_s": {
+        "light_read_upload_calibrate": 2.5636506999726407,
+        "light_read_wait_wall": 1.167211199644953,
+        "worker_native_fits_materialize_read_cumulative": 25.062246,
+        "ready_queue_wait": 1.163724199985154,
+        "resident_registration_warp": 0.254920499806758,
+        "resident_integration": 0.3027371999924071,
+        "output_write": 0.2994240000261925
+      },
+      "ready_queue_callbacks": 200,
+      "out_of_order_consumed_frames": 68
+    },
+    "inline_drain": {
+      "run": "C:/glass_runs/phase2_s2_gate546_inline_queue_drain/runs_20260623_160000/native_queue_inline_release",
+      "shell_elapsed_s": 5.56227,
+      "internal_elapsed_s": 5.198796700045932,
+      "speedup_vs_thread_shell": 0.9889225082565212,
+      "delta_vs_thread_shell_s": 0.061615999999999893,
+      "speedup_vs_wbpp_shell": 196.41998680394875,
+      "backend_counts": {
+        "native_u16be_raw_queue": 200
+      },
+      "native_queue_read": {
+        "drain_mode": "inline",
+        "submit_count": 200,
+        "completion_count": 200,
+        "worker_count": 16,
+        "cumulative_s": 25.23642249999999,
+        "completion_wait_s": 1.163592199794948,
+        "inline_wait_count": 201,
+        "thread_wait_count": 0
+      },
+      "timing_s": {
+        "light_read_upload_calibrate": 2.561797199945431,
+        "light_read_wait_wall": 1.1694663995294832,
+        "worker_native_fits_materialize_read_cumulative": 25.1924351,
+        "ready_queue_wait": 1.1658721001003869,
+        "resident_registration_warp": 0.25686300004599616,
+        "resident_integration": 0.3037078999914229,
+        "output_write": 0.3114779999596067
+      },
+      "ready_queue_callbacks": 200,
+      "out_of_order_consumed_frames": 155
+    }
+  },
+  "numerical_validation": {
+    "inline_sha256_matches_thread": true,
+    "inline_sha256_matches_gate545_default": true,
+    "matched_outputs": [
+      "resident_master_H.fits",
+      "resident_weight_map_H.fits",
+      "resident_coverage_map_H.fits",
+      "resident_low_rejection_map_H.fits",
+      "resident_high_rejection_map_H.fits",
+      "resident_dq_map_H.fits"
+    ],
+    "hash_compare_thread_vs_inline": "C:/glass_runs/phase2_s2_gate546_inline_queue_drain/hash_compare_thread_vs_inline.json",
+    "hash_compare_gate545_default": "C:/glass_runs/phase2_s2_gate546_inline_queue_drain/hash_compare_gate545_default.json",
+    "inherited_wbpp_compare": {
+      "rms_diff": 0.0004279821839256963,
+      "abs_diff_p99": 0.0001313822576776147,
+      "robust_fit_rms_diff": 0.000042529498303511286,
+      "coverage_fraction": 0.9892770479074376,
+      "compared_pixels": 56997300
+    }
+  },
+  "decision": {
+    "promote_inline_drain": false,
+    "queue_default_drain_mode": "thread",
+    "reason": "Inline drain is bitwise-correct but slower than thread drain in the same 200-light session."
+  },
+  "known_limitations": [
+    "Inline drain is an explicit experiment and not a promoted optimization.",
+    "The thread-drain queue path remains opt-in; default GLASS still uses guarded native_u16 raw reads without queue unless GLASS_RESIDENT_NATIVE_QUEUE_READ=1.",
+    "Python completion materialization remains the bottleneck class to remove in a future native read-to-calibration coordinator."
+  ],
+  "next_gate": "Prototype a native read-to-calibration wave coordinator that avoids Python completion materialization instead of moving it between Python threads.",
+  "clean_room": {
+    "compliant": true,
+    "notes": "This gate uses GLASS code, user image data, GLASS timing artifacts, and user-generated reference metrics only. It does not inspect external implementation source or alter input data."
+  }
+}

@@ -987,6 +987,14 @@ class _LightPrefetcher:
         self.native_queue_read_requested = bool(
             self.native_queue_read_candidate and self.native_queue_read_policy == "env_enabled"
         )
+        native_queue_drain_mode = str(
+            os.environ.get("GLASS_RESIDENT_NATIVE_QUEUE_DRAIN_MODE", "thread")
+        ).strip().lower()
+        self.native_queue_read_drain_mode = (
+            "inline"
+            if native_queue_drain_mode in {"inline", "main", "direct"}
+            else "thread"
+        )
         native_batch_policy = str(os.environ.get("GLASS_RESIDENT_NATIVE_BATCH_READ", "")).strip().lower()
         native_batch_env_enabled = native_batch_policy in {"1", "true", "yes", "on"}
         if self.native_queue_read_requested and native_batch_env_enabled:
@@ -1064,6 +1072,8 @@ class _LightPrefetcher:
         self.native_queue_read_worker_count = 0
         self.native_queue_read_cumulative_s = 0.0
         self.native_queue_read_completion_wait_s = 0.0
+        self.native_queue_read_inline_wait_count = 0
+        self.native_queue_read_thread_wait_count = 0
 
     def __enter__(self) -> "_LightPrefetcher":
         if self.depth > 0:
@@ -1134,11 +1144,12 @@ class _LightPrefetcher:
                 glass_cuda = _cuda_module_required()
                 self.native_read_queue = glass_cuda.create_raw_fits_read_queue(self.workers)
                 self.native_queue_read_worker_count = self.workers
-                self.native_queue_executor = ThreadPoolExecutor(
-                    max_workers=1,
-                    thread_name_prefix="glass-native-read-queue",
-                )
-                self.native_queue_future = self.native_queue_executor.submit(self._drain_native_queue)
+                if self.native_queue_read_drain_mode == "thread":
+                    self.native_queue_executor = ThreadPoolExecutor(
+                        max_workers=1,
+                        thread_name_prefix="glass-native-read-queue",
+                    )
+                    self.native_queue_future = self.native_queue_executor.submit(self._drain_native_queue)
             else:
                 executor_workers = (
                     max(1, self.workers // max(1, self.native_batch_read_frames))
@@ -1237,33 +1248,48 @@ class _LightPrefetcher:
             "fits_native_queue_completed_count": int(completion.get("completed_count", 0) or 0),
         }
 
+    def _consume_native_queue_completion(self, timeout_s: float = 0.1) -> bool:
+        queue = self.native_read_queue
+        if queue is None:
+            return False
+        wait_start = perf_counter()
+        completion = queue.wait_completed(float(timeout_s))
+        wait_elapsed = perf_counter() - wait_start
+        self.native_queue_read_completion_wait_s += wait_elapsed
+        if self.native_queue_read_drain_mode == "thread":
+            self.native_queue_read_thread_wait_count += 1
+        else:
+            self.native_queue_read_inline_wait_count += 1
+        if completion is None:
+            return False
+        completion_dict = dict(completion)
+        index = int(completion_dict["frame_index"])
+        with self.ready_condition:
+            base_profile = self.native_queue_pending_profiles.pop(index, {})
+            slot_id = self.inflight_slots.get(index)
+            if slot_id is None:
+                return False
+            profile = self._queue_completion_profile(completion_dict, base_profile)
+            self.native_queue_result_cache[index] = (self.pinned_slots[slot_id], profile)
+            self.native_queue_read_completion_count += 1
+            self.native_queue_read_cumulative_s += float(profile.get("fits_native_total_s", 0.0) or 0.0)
+            self.ready_indices.add(index)
+            self.ready_queue_callback_count += 1
+            self.ready_condition.notify_all()
+        return True
+
     def _drain_native_queue(self) -> None:
         while True:
-            queue = self.native_read_queue
-            if queue is None:
-                return
-            wait_start = perf_counter()
-            completion = queue.wait_completed(0.1)
-            wait_elapsed = perf_counter() - wait_start
-            self.native_queue_read_completion_wait_s += wait_elapsed
-            if completion is None:
+            try:
+                consumed = self._consume_native_queue_completion(0.1)
+            except Exception:
+                with self.ready_condition:
+                    self.ready_condition.notify_all()
+                raise
+            if not consumed:
                 if self.native_queue_stopping:
                     return
                 continue
-            completion_dict = dict(completion)
-            index = int(completion_dict["frame_index"])
-            with self.ready_condition:
-                base_profile = self.native_queue_pending_profiles.pop(index, {})
-                slot_id = self.inflight_slots.get(index)
-                if slot_id is None:
-                    continue
-                profile = self._queue_completion_profile(completion_dict, base_profile)
-                self.native_queue_result_cache[index] = (self.pinned_slots[slot_id], profile)
-                self.native_queue_read_completion_count += 1
-                self.native_queue_read_cumulative_s += float(profile.get("fits_native_total_s", 0.0) or 0.0)
-                self.ready_indices.add(index)
-                self.ready_queue_callback_count += 1
-                self.ready_condition.notify_all()
 
     def _fill(self) -> None:
         with self.lock:
@@ -1454,7 +1480,10 @@ class _LightPrefetcher:
                         if self.next_submit < len(self.light_frames):
                             break
                         raise KeyError(f"native queue has no pending light frame {index}")
-                    self.ready_condition.wait(timeout=0.1)
+                    if self.native_queue_read_drain_mode == "thread":
+                        self.ready_condition.wait(timeout=0.1)
+                        continue
+                self._consume_native_queue_completion(0.1)
             self._fill()
             return self.result(index)
         if self.executor is None:
@@ -1526,7 +1555,14 @@ class _LightPrefetcher:
                 if has_pending_candidate:
                     wait_start = perf_counter()
                     self.ready_queue_wait_count += 1
-                    self.ready_condition.wait(timeout=0.1)
+                    if self.native_queue_read_enabled and self.native_queue_read_drain_mode == "inline":
+                        self.ready_condition.release()
+                        try:
+                            self._consume_native_queue_completion(0.1)
+                        finally:
+                            self.ready_condition.acquire()
+                    else:
+                        self.ready_condition.wait(timeout=0.1)
                     self.ready_queue_wait_s += perf_counter() - wait_start
                     continue
             self.flush_refill()
@@ -11010,6 +11046,7 @@ def run_resident_calibration_integration(
                 "native_queue_read_requested": bool(light_prefetch.native_queue_read_requested),
                 "native_queue_read_available": bool(light_prefetch.native_queue_read_available),
                 "native_queue_read_enabled": bool(light_prefetch.native_queue_read_enabled),
+                "native_queue_read_drain_mode": str(light_prefetch.native_queue_read_drain_mode),
                 "native_queue_read_submit_count": int(light_prefetch.native_queue_read_submit_count),
                 "native_queue_read_completion_count": int(
                     light_prefetch.native_queue_read_completion_count
@@ -11018,6 +11055,12 @@ def run_resident_calibration_integration(
                 "native_queue_read_cumulative_s": float(light_prefetch.native_queue_read_cumulative_s),
                 "native_queue_read_completion_wait_s": float(
                     light_prefetch.native_queue_read_completion_wait_s
+                ),
+                "native_queue_read_inline_wait_count": int(
+                    light_prefetch.native_queue_read_inline_wait_count
+                ),
+                "native_queue_read_thread_wait_count": int(
+                    light_prefetch.native_queue_read_thread_wait_count
                 ),
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
@@ -11121,6 +11164,7 @@ def run_resident_calibration_integration(
                 "native_queue_read_requested": bool(light_prefetch.native_queue_read_requested),
                 "native_queue_read_available": bool(light_prefetch.native_queue_read_available),
                 "native_queue_read_enabled": bool(light_prefetch.native_queue_read_enabled),
+                "native_queue_read_drain_mode": str(light_prefetch.native_queue_read_drain_mode),
                 "native_queue_read_submit_count": int(light_prefetch.native_queue_read_submit_count),
                 "native_queue_read_completion_count": int(
                     light_prefetch.native_queue_read_completion_count
@@ -11129,6 +11173,12 @@ def run_resident_calibration_integration(
                 "native_queue_read_cumulative_s": float(light_prefetch.native_queue_read_cumulative_s),
                 "native_queue_read_completion_wait_s": float(
                     light_prefetch.native_queue_read_completion_wait_s
+                ),
+                "native_queue_read_inline_wait_count": int(
+                    light_prefetch.native_queue_read_inline_wait_count
+                ),
+                "native_queue_read_thread_wait_count": int(
+                    light_prefetch.native_queue_read_thread_wait_count
                 ),
                 "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
                 "host_pinned_bytes": int(
@@ -11672,6 +11722,7 @@ def run_resident_calibration_integration(
                         "native_queue_read_requested": bool(light_prefetch.native_queue_read_requested),
                         "native_queue_read_available": bool(light_prefetch.native_queue_read_available),
                         "native_queue_read_enabled": bool(light_prefetch.native_queue_read_enabled),
+                        "native_queue_read_drain_mode": str(light_prefetch.native_queue_read_drain_mode),
                         "native_queue_read_submit_count": int(light_prefetch.native_queue_read_submit_count),
                         "native_queue_read_completion_count": int(
                             light_prefetch.native_queue_read_completion_count
@@ -11682,6 +11733,12 @@ def run_resident_calibration_integration(
                         ),
                         "native_queue_read_completion_wait_s": float(
                             light_prefetch.native_queue_read_completion_wait_s
+                        ),
+                        "native_queue_read_inline_wait_count": int(
+                            light_prefetch.native_queue_read_inline_wait_count
+                        ),
+                        "native_queue_read_thread_wait_count": int(
+                            light_prefetch.native_queue_read_thread_wait_count
                         ),
                         "prefetch_max_inflight_slots": int(prefetch_max_inflight_slots),
                         "prefetch_host_allocation_mode": str(light_prefetch.pinned_host_allocation_mode),

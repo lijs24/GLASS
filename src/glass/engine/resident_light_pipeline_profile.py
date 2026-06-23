@@ -228,6 +228,9 @@ def build_resident_light_pipeline_profile(
             "native_queue_read_enabled": bool(
                 resident_io_pipeline.get("native_queue_read_enabled", False)
             ),
+            "native_queue_read_drain_mode": resident_io_pipeline.get(
+                "native_queue_read_drain_mode"
+            ),
             "native_queue_read_submit_count": _int_value(
                 resident_io_pipeline,
                 "native_queue_read_submit_count",
@@ -247,6 +250,14 @@ def build_resident_light_pipeline_profile(
             "native_queue_read_completion_wait_s": _float_value(
                 resident_io_pipeline,
                 "native_queue_read_completion_wait_s",
+            ),
+            "native_queue_read_inline_wait_count": _int_value(
+                resident_io_pipeline,
+                "native_queue_read_inline_wait_count",
+            ),
+            "native_queue_read_thread_wait_count": _int_value(
+                resident_io_pipeline,
+                "native_queue_read_thread_wait_count",
             ),
             "prefetch_fill_blocked_no_slot_count": _int_value(
                 resident_io_pipeline,

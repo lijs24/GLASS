@@ -6041,6 +6041,7 @@ def test_cli_resident_cuda_native_u16_queue_read_is_opt_in(tmp_path: Path, monke
     assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_BATCH_READ", raising=False)
     monkeypatch.setenv("GLASS_RESIDENT_NATIVE_QUEUE_READ", "1")
+    monkeypatch.setenv("GLASS_RESIDENT_NATIVE_QUEUE_DRAIN_MODE", "inline")
     assert main(
         [
             "run",
@@ -6077,11 +6078,77 @@ def test_cli_resident_cuda_native_u16_queue_read_is_opt_in(tmp_path: Path, monke
     assert io_pipeline["native_queue_read_requested"] is True
     assert io_pipeline["native_queue_read_available"] is True
     assert io_pipeline["native_queue_read_enabled"] is True
+    assert io_pipeline["native_queue_read_drain_mode"] == "inline"
     assert io_pipeline["native_queue_read_submit_count"] == 2
     assert io_pipeline["native_queue_read_completion_count"] == 2
     assert io_pipeline["native_queue_read_worker_count"] >= 1
+    assert io_pipeline["native_queue_read_inline_wait_count"] >= 1
+    assert io_pipeline["native_queue_read_thread_wait_count"] == 0
     assert io_pipeline["fits_backend_counts"]["native_u16be_raw_queue"] == 2
     assert io_pipeline["native_batch_read_enabled"] is False
+
+
+def test_cli_resident_cuda_native_u16_queue_read_default_drain_is_thread(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = cuda_module_or_skip()
+    if (
+        not hasattr(
+            module.ResidentCalibratedStack,
+            "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed",
+        )
+        or not hasattr(module, "raw_fits_read_queue_available")
+        or not module.raw_fits_read_queue_available()
+    ):
+        pytest.skip("native u16 GPU queued read resident path is not available")
+    dataset = _u16_gpu_decode_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_native_u16_gpu_queue_read_thread_drain"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_BATCH_READ", raising=False)
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_QUEUE_DRAIN_MODE", raising=False)
+    monkeypatch.setenv("GLASS_RESIDENT_NATIVE_QUEUE_READ", "1")
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-fits-read-mode",
+            "native_u16_gpu",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    io_pipeline = read_json(run / "resident_artifacts.json")["artifacts"][0]["resident_io_pipeline"]
+    assert io_pipeline["native_queue_read_enabled"] is True
+    assert io_pipeline["native_queue_read_drain_mode"] == "thread"
+    assert io_pipeline["native_queue_read_completion_count"] == 2
+    assert io_pipeline["native_queue_read_thread_wait_count"] >= 1
+    assert io_pipeline["native_queue_read_inline_wait_count"] == 0
+    assert io_pipeline["fits_backend_counts"]["native_u16be_raw_queue"] == 2
 
 
 def test_cli_resident_cuda_auto_selects_native_u16_gpu_for_compatible_group(tmp_path: Path):
