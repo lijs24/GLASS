@@ -15885,6 +15885,67 @@ Completed in Gate446:
     runtime completeness, real 200-light regression, or resident registration/
     warp throughput and numerical consistency.
 
+### S2-Gate 579: Default 200-Light Resident DQ Benchmark Gate
+
+- Promotes the Gate578 resident calibrated-light DQ handoff from an observed
+  pipeline-contract detail into a hard requirement of the 200-light default
+  benchmark contracts.
+- Completed:
+  - updated `benchmarks/phase2_m38_h_200_ln_on_default_contract.json` and the
+    older `benchmarks/phase2_m38_h_200_contract.json` so
+    `required_check_names` now includes
+    `resident_calibrated_light_dq_contract`;
+  - updated acceptance-audit test fixtures to emit the new pipeline-contract
+    check;
+  - added a negative acceptance-audit test proving that a benchmark contract
+    fails when a supplied pipeline contract lacks
+    `resident_calibrated_light_dq_contract`;
+  - reran the current HEAD default resident CUDA 200-light route and validated
+    it against WBPP black-box output using the tightened benchmark contract.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate579_current_default_contract\current_head_default`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate579_current_default_contract\current_head_default\compare_vs_wbpp_fastintegration_scaled_coverage190.json`;
+  - pixel-verified pipeline contract:
+    `C:\glass_runs\phase2_s2_gate579_current_default_contract\current_head_default\pipeline_contract_pixel_verify.json`;
+  - StackEngine contract:
+    `C:\glass_runs\phase2_s2_gate579_current_default_contract\current_head_default\stack_engine_contract.json`;
+  - acceptance audit:
+    `C:\glass_runs\phase2_s2_gate579_current_default_contract\current_head_default\acceptance_audit_gate579.json`;
+  - speedup summary:
+    `runs\benchmarks\m38_wbpp_speedup_summary_gate579_default_contract.json`;
+  - GLASS-vs-Gate575 hash parity:
+    `C:\glass_runs\phase2_s2_gate579_current_default_contract\current_head_default\gate579_vs_gate575_hash_parity.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Run timing total | `7.746504300041124 s` |
+  | WBPP black-box reference elapsed | `1092.541 s` |
+  | Speedup vs WBPP reference | `141.03664797477745x` |
+  | Active/rejected frames | `193 / 7` |
+  | Reference scout backend/reference | `cpu / F000225` |
+  | Reference selection source | `frame_quality` |
+  | Master SHA256 | `3c5f942f3be7fe629c6be55c1e2d14a94b8f23128c057384f03df8f09a38333d` |
+  | Gate575 output hash parity | `all six integration FITS artifacts identical` |
+  | Compare shape match | `true` |
+  | Coverage190 fraction after border crop | `0.905523489118409` |
+  | RMS diff vs WBPP | `0.005340835487175878` |
+  | p99 abs diff vs WBPP | `0.002133606873685496` |
+  | Acceptance audit | `passed`, `109 checks`, `0 failed` |
+  | Required benchmark check | `contract_pipeline_contract_check:resident_calibrated_light_dq_contract` passed |
+  | Pixel pipeline contract | `passed`, `25 checks`, `0 failed` |
+  | StackEngine contract | `passed`, default-promotion ready |
+
+- Interpretation:
+  - the default 200-light benchmark now fails if resident calibrated-light DQ
+    semantics are not explicitly backed by resident source-DQ execution;
+  - current HEAD remains bitwise identical to the Gate575/Gate576 safe default
+    outputs while slightly improving the measured total runtime in this run;
+  - this is a benchmark-contract and real-regression gate on the main resident
+    StackEngine/DQ path, not a report-only gate and not an image-math change.
+
 ## Gate Rules
 
 Each gate requires:

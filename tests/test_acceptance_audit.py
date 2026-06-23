@@ -441,6 +441,7 @@ def _add_pipeline_contract_requirement(path: Path) -> None:
         "required_check_names": [
             "calibration_master_surface_contract",
             "resident_calibrated_light_contract",
+            "resident_calibrated_light_dq_contract",
             "integration_default_engine_policy",
             "stack_engine_runtime_default_path",
             "integration_resident_result_contract",
@@ -622,7 +623,12 @@ def _runtime_default_check(
     }
 
 
-def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
+def _write_pipeline_contract(
+    path: Path,
+    *,
+    passed: bool = True,
+    include_resident_calibrated_dq: bool = True,
+) -> None:
     runtime_default = _runtime_default_state(passed=passed, legacy_master=not passed)
     checks = [
         {
@@ -637,6 +643,24 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
             "evidence": {"light_count": 3, "failed": [] if passed else ["light_001"]},
             "note": "",
         },
+        *(
+            [
+                {
+                    "name": "resident_calibrated_light_dq_contract",
+                    "passed": passed,
+                    "evidence": {
+                        "light_count": 3,
+                        "source_dq_status": "passed" if passed else "failed",
+                        "source_dq_passed": passed,
+                        "contract_sources": ["resident_source_dq_execution"] if passed else [],
+                        "failed": [] if passed else ["light_001"],
+                    },
+                    "note": "",
+                }
+            ]
+            if include_resident_calibrated_dq
+            else []
+        ),
         {
             "name": "integration_resident_result_contract",
             "passed": passed,
@@ -1311,7 +1335,7 @@ def test_acceptance_audit_accepts_passing_pipeline_contract(tmp_path: Path):
     assert checks["pipeline_contract_integration_default_engine_policy"]["passed"] is True
     assert checks["pipeline_contract_stack_engine_runtime_default"]["passed"] is True
     assert audit["pipeline_contract"]["passed"] is True
-    assert audit["pipeline_contract"]["check_count"] == 5
+    assert audit["pipeline_contract"]["check_count"] == 6
     assert audit["pipeline_contract"]["integration_default_engine_policy"] is True
     assert audit["pipeline_contract"]["integration_engine_policy"]["resident_count"] == 1
     assert audit["pipeline_contract"]["runtime_default"]["status"] == "passed"
@@ -2052,6 +2076,7 @@ def test_acceptance_audit_fails_failed_pipeline_contract(tmp_path: Path):
     assert audit["pipeline_contract"]["failed_checks"] == [
         "calibration_master_surface_contract",
         "resident_calibrated_light_contract",
+        "resident_calibrated_light_dq_contract",
         "integration_resident_result_contract",
         "stack_engine_runtime_default_path",
     ]
@@ -2127,6 +2152,7 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
     assert checks["contract_pipeline_contract_min_check_count"] is True
     assert checks["contract_pipeline_contract_check:calibration_master_surface_contract"] is True
     assert checks["contract_pipeline_contract_check:resident_calibrated_light_contract"] is True
+    assert checks["contract_pipeline_contract_check:resident_calibrated_light_dq_contract"] is True
     assert checks["contract_pipeline_contract_check:integration_default_engine_policy"] is True
     assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is True
     assert checks["contract_pipeline_contract_no_failed_checks"] is True
@@ -2134,8 +2160,8 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
     assert pipeline_evidence["status"] == "passed"
     assert pipeline_evidence["required_by_benchmark_contract"] is True
     assert pipeline_evidence["pipeline_contract_passed"] is True
-    assert pipeline_evidence["pipeline_contract_check_count"] == 5
-    assert pipeline_evidence["benchmark_check_count"] == 10
+    assert pipeline_evidence["pipeline_contract_check_count"] == 6
+    assert pipeline_evidence["benchmark_check_count"] == 11
     assert pipeline_evidence["failed_check_count"] == 0
     assert {item["name"] for item in pipeline_evidence["checks"]} >= {
         "pipeline_contract_present",
@@ -2145,10 +2171,56 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
         "contract_pipeline_contract_passed",
         "contract_pipeline_contract_check:calibration_master_surface_contract",
         "contract_pipeline_contract_check:resident_calibrated_light_contract",
+        "contract_pipeline_contract_check:resident_calibrated_light_dq_contract",
         "contract_pipeline_contract_check:integration_default_engine_policy",
         "contract_pipeline_contract_check:stack_engine_runtime_default_path",
         "contract_pipeline_contract_check:integration_resident_result_contract",
     }
+
+
+def test_acceptance_audit_benchmark_pipeline_contract_requires_resident_calibrated_light_dq(
+    tmp_path: Path,
+):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_pipeline_contract_requirement(contract)
+    _write_pipeline_contract(pipeline, passed=True, include_resident_calibrated_dq=False)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+        pipeline_contract_json=pipeline,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    missing = checks[
+        "contract_pipeline_contract_check:resident_calibrated_light_dq_contract"
+    ]
+    assert missing["passed"] is False
+    assert missing["evidence"]["required"] == "resident_calibrated_light_dq_contract"
+    assert "resident_calibrated_light_contract" in missing["evidence"]["available"]
 
 
 def test_acceptance_audit_benchmark_pipeline_contract_requires_artifact(tmp_path: Path):
