@@ -20,6 +20,14 @@ from glass.engine.quality import measure_calibrated_quality
 from glass.engine.registration import register_calibrated_frames
 from glass.engine.resident_calibration_artifacts import build_resident_calibration_artifacts
 from glass.engine.resident_cuda import build_resident_memory_admission, run_resident_calibration_integration
+from glass.engine.resident_reference_scout import (
+    DEFAULT_REFERENCE_SCOUT_MAX_FRAMES,
+    DEFAULT_REFERENCE_SCOUT_MAX_STARS,
+    DEFAULT_REFERENCE_SCOUT_SAMPLE_SIDE,
+    DEFAULT_REFERENCE_SCOUT_SAMPLE_STRIDE,
+    DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA,
+    write_resident_reference_scout,
+)
 from glass.engine.resident_source_dq_strategy import build_resident_source_dq_strategy
 from glass.engine.warp import warp_registered_frames
 from glass.engine.resume import resume_summary
@@ -353,6 +361,7 @@ DEFAULT_RESIDENT_WARP_INTERPOLATION = "auto"
 DEFAULT_RESIDENT_WARP_INTERPOLATION_EFFECTIVE = "lanczos3"
 DEFAULT_RESIDENT_WARP_INTERPOLATION_FALLBACK = "bilinear"
 DEFAULT_RESIDENT_REFERENCE_FALLBACK = "auto"
+DEFAULT_RESIDENT_REFERENCE_SCOUT = "auto"
 RESIDENT_MATRIX_REGISTRATION_MODES = {
     "similarity_cuda_catalog",
     "similarity_cuda_triangle",
@@ -958,6 +967,10 @@ def _resident_reference_admission_path(run: Path) -> Path:
     return run / "resident_reference_admission.json"
 
 
+def _resident_reference_scout_path(run: Path) -> Path:
+    return run / "resident_reference_scout.json"
+
+
 def _read_quality_reference_for_admission(run: Path) -> dict[str, Any]:
     quality_path = run / "frame_quality.json"
     if not quality_path.exists():
@@ -992,12 +1005,62 @@ def _read_quality_reference_for_admission(run: Path) -> dict[str, Any]:
     }
 
 
+def _resident_reference_scout_is_needed(run: Path, args: argparse.Namespace) -> bool:
+    requested = str(getattr(args, "resident_reference_scout", DEFAULT_RESIDENT_REFERENCE_SCOUT))
+    if requested == "off":
+        return False
+    requested_fallback = str(getattr(args, "resident_reference_fallback", DEFAULT_RESIDENT_REFERENCE_FALLBACK))
+    if requested_fallback == "allow-first-light":
+        return False
+    resident_registration = str(getattr(args, "resident_registration", "off"))
+    if resident_registration not in RESIDENT_MATRIX_REGISTRATION_MODES:
+        return False
+    registration_resolution = getattr(args, "_resident_registration_resolution", None)
+    registration_source = (
+        str(registration_resolution.get("source"))
+        if isinstance(registration_resolution, dict) and registration_resolution.get("source") is not None
+        else "unknown"
+    )
+    if registration_source not in {"resident_cuda_default", "explicit_auto"}:
+        return False
+    if getattr(args, "reference_frame_id", None) or getattr(args, "resident_registration_results", None):
+        return False
+    quality_reference = _read_quality_reference_for_admission(run)
+    return not bool(quality_reference.get("reference_frame_id"))
+
+
+def _write_resident_reference_scout_if_needed(
+    run: Path,
+    args: argparse.Namespace,
+    *,
+    plan_path: str | Path,
+) -> Path | None:
+    if not _resident_reference_scout_is_needed(run, args):
+        return None
+    scout_path = write_resident_reference_scout(
+        plan_path,
+        run,
+        sample_stride=getattr(args, "resident_reference_scout_stride", DEFAULT_REFERENCE_SCOUT_SAMPLE_STRIDE),
+        sample_side=getattr(args, "resident_reference_scout_sample_side", DEFAULT_REFERENCE_SCOUT_SAMPLE_SIDE),
+        max_frames=getattr(args, "resident_reference_scout_max_frames", DEFAULT_REFERENCE_SCOUT_MAX_FRAMES),
+        threshold_sigma=getattr(
+            args,
+            "resident_reference_scout_threshold_sigma",
+            DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA,
+        ),
+        max_stars=getattr(args, "resident_reference_scout_max_stars", DEFAULT_REFERENCE_SCOUT_MAX_STARS),
+    )
+    args._resident_reference_scout = str(scout_path)
+    return scout_path
+
+
 def _resident_reference_admission_message(admission: dict[str, Any]) -> str:
     return (
         "resident reference admission failed: default resident matrix registration "
         "would use first_light_fallback; provide --reference-frame-id, precompute "
-        "frame_quality.json in the run directory, provide --resident-registration-results, "
-        "or use --resident-reference-fallback allow-first-light for an explicit diagnostic run."
+        "frame_quality.json in the run directory, keep --resident-reference-scout auto enabled, "
+        "provide --resident-registration-results, or use --resident-reference-fallback allow-first-light "
+        "for an explicit diagnostic run."
     )
 
 
@@ -1053,6 +1116,7 @@ def _write_resident_reference_admission(run: Path, args: argparse.Namespace) -> 
         "recommended_actions": [
             "--reference-frame-id <frame-id-or-filename>",
             "generate frame_quality.json before resident registration",
+            "--resident-reference-scout auto",
             "--resident-registration-results <registration_results.json>",
             "--resident-reference-fallback allow-first-light for diagnostic runs only",
         ],
@@ -1863,6 +1927,14 @@ def cmd_audit(args: argparse.Namespace) -> int:
     plan = _timed_stage(out, timing, "plan", lambda: build_processing_plan(manifest, manifest_path))
     write_json(plan_path, plan)
     if plan.executable and args.memory_mode == "resident":
+        resident_reference_scout_path = None
+        if _resident_reference_scout_is_needed(out, args):
+            resident_reference_scout_path = _timed_stage(
+                out,
+                timing,
+                "resident_reference_scout",
+                lambda: _write_resident_reference_scout_if_needed(out, args, plan_path=plan_path),
+            )
         try:
             resident_reference_admission_path = _timed_stage(
                 out,
@@ -1970,6 +2042,18 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
             ),
         )
+        if resident_reference_scout_path is not None:
+            state.artifacts.append(
+                PipelineArtifact(
+                    stage="resident_reference_scout",
+                    path=str(resident_reference_scout_path),
+                    format="json",
+                    created_at=now_iso(),
+                    source_frames=[],
+                )
+            )
+            if "resident_reference_scout" not in state.completed_stages:
+                state.completed_stages.insert(0, "resident_reference_scout")
         state.artifacts.append(
             PipelineArtifact(
                 stage="resident_reference_admission",
@@ -2050,6 +2134,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         out = Path(args.out)
         timing = _new_timing("run", args.backend, None)
         _annotate_timing_execution_defaults(timing, args)
+        resident_reference_scout_path = None
+        if _resident_reference_scout_is_needed(out, args):
+            resident_reference_scout_path = _timed_stage(
+                out,
+                timing,
+                "resident_reference_scout",
+                lambda: _write_resident_reference_scout_if_needed(out, args, plan_path=args.plan),
+            )
         try:
             resident_reference_admission_path = _timed_stage(
                 out,
@@ -2186,6 +2278,18 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
             ),
         )
+        if resident_reference_scout_path is not None:
+            state.artifacts.append(
+                PipelineArtifact(
+                    stage="resident_reference_scout",
+                    path=str(resident_reference_scout_path),
+                    format="json",
+                    created_at=now_iso(),
+                    source_frames=[],
+                )
+            )
+            if "resident_reference_scout" not in state.completed_stages:
+                state.completed_stages.insert(0, "resident_reference_scout")
         if source_dq_cache_route_path is not None:
             if "resident_source_dq_cache_calibration" not in state.completed_stages:
                 state.completed_stages.insert(0, "resident_source_dq_cache_calibration")
@@ -5777,6 +5881,45 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-reference-scout",
+        choices=["auto", "off"],
+        default=DEFAULT_RESIDENT_REFERENCE_SCOUT,
+        help=(
+            "raw-light sampled reference scout for default resident matrix-registration runs; "
+            "auto writes resident_reference_scout.json and frame_quality.json when no explicit reference exists"
+        ),
+    )
+    run.add_argument(
+        "--resident-reference-scout-stride",
+        type=int,
+        default=DEFAULT_REFERENCE_SCOUT_SAMPLE_STRIDE,
+        help="pixel sampling stride for the resident raw-light reference scout",
+    )
+    run.add_argument(
+        "--resident-reference-scout-sample-side",
+        type=int,
+        default=DEFAULT_REFERENCE_SCOUT_SAMPLE_SIDE,
+        help="center-crop side length read per light by the resident raw-light reference scout",
+    )
+    run.add_argument(
+        "--resident-reference-scout-max-frames",
+        type=int,
+        default=DEFAULT_REFERENCE_SCOUT_MAX_FRAMES,
+        help="maximum evenly-spaced light frames evaluated by the resident raw-light reference scout; 0 means all",
+    )
+    run.add_argument(
+        "--resident-reference-scout-threshold-sigma",
+        type=float,
+        default=DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA,
+        help="star detection threshold for the resident raw-light reference scout",
+    )
+    run.add_argument(
+        "--resident-reference-scout-max-stars",
+        type=int,
+        default=DEFAULT_REFERENCE_SCOUT_MAX_STARS,
+        help="maximum sampled stars retained per frame by the resident raw-light reference scout",
+    )
+    run.add_argument(
         "--exclude-frame-id",
         action="append",
         default=[],
@@ -6191,6 +6334,45 @@ def build_parser() -> argparse.ArgumentParser:
             "resident reference fallback policy; auto blocks first-light fallback for default-promoted "
             "resident matrix-registration science audits"
         ),
+    )
+    audit.add_argument(
+        "--resident-reference-scout",
+        choices=["auto", "off"],
+        default=DEFAULT_RESIDENT_REFERENCE_SCOUT,
+        help=(
+            "raw-light sampled reference scout for default resident matrix-registration audits; "
+            "auto writes resident_reference_scout.json and frame_quality.json when no explicit reference exists"
+        ),
+    )
+    audit.add_argument(
+        "--resident-reference-scout-stride",
+        type=int,
+        default=DEFAULT_REFERENCE_SCOUT_SAMPLE_STRIDE,
+        help="pixel sampling stride for the resident raw-light reference scout in audit runs",
+    )
+    audit.add_argument(
+        "--resident-reference-scout-sample-side",
+        type=int,
+        default=DEFAULT_REFERENCE_SCOUT_SAMPLE_SIDE,
+        help="center-crop side length read per light by the resident raw-light reference scout in audit runs",
+    )
+    audit.add_argument(
+        "--resident-reference-scout-max-frames",
+        type=int,
+        default=DEFAULT_REFERENCE_SCOUT_MAX_FRAMES,
+        help="maximum evenly-spaced light frames evaluated by the resident raw-light reference scout; 0 means all",
+    )
+    audit.add_argument(
+        "--resident-reference-scout-threshold-sigma",
+        type=float,
+        default=DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA,
+        help="star detection threshold for the resident raw-light reference scout in audit runs",
+    )
+    audit.add_argument(
+        "--resident-reference-scout-max-stars",
+        type=int,
+        default=DEFAULT_REFERENCE_SCOUT_MAX_STARS,
+        help="maximum sampled stars retained per frame by the resident raw-light reference scout in audit runs",
     )
     audit.add_argument("--exclude-frame-id", action="append", default=[])
     audit.set_defaults(func=cmd_audit)

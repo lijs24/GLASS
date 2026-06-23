@@ -622,3 +622,28 @@ Residual thresholds are opt-in. They are intended as an internal consistency
 guard for registered GLASS outputs, not as an equivalence claim against an
 external stack. The check does not alter registration, interpolation,
 integration, or CUDA kernels.
+
+## S2-Gate 570 Resident Reference Scout
+
+S2-Gate 570 adds a default resident reference scout for CUDA matrix-registration
+science runs. When no explicit reference, external registration result, or
+precomputed `frame_quality.json` exists, the CLI runs
+`resident_reference_scout` before reference admission. The scout reads only a
+bounded, centered crop from an evenly spaced subset of raw light frames, applies
+the GLASS star detector to the sampled data, and writes both
+`resident_reference_scout.json` and a minimal `frame_quality.json`.
+
+The selection policy is deliberately simple and auditable:
+
+- inspect at most `--resident-reference-scout-max-frames` light frames;
+- read a centered `--resident-reference-scout-sample-side` crop per frame;
+- apply `--resident-reference-scout-stride` within the crop;
+- prefer the dominant `PIERSIDE`/rotation orientation when metadata is known;
+- then sort by star count, combined sample quality, FWHM, eccentricity, and
+  background RMS.
+
+This avoids the unsafe first-light fallback while keeping startup cost low on
+external disks. It is still a CPU/raw-light scout, not the final resident GPU
+quality-reference implementation. The intended next step is to replace the
+inside of this stage with resident GPU star catalogs and batched quality metrics
+while preserving the same artifact contract.

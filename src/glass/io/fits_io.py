@@ -273,6 +273,21 @@ class FitsImageReader:
             out = out * np.float32(self.bscale) + np.float32(self.bzero)
         return np.asarray(out, dtype=dtype)
 
+    def read_sampled(self, stride: int = 1, dtype=np.float32) -> np.ndarray:
+        if self._data is None:
+            raise RuntimeError("FitsImageReader is not open")
+        step = max(1, int(stride))
+        raw = self._data[::step, ::step]
+        out = np.asarray(raw, dtype=np.float32)
+        if self.blank is not None:
+            mask = np.asarray(raw == self.blank)
+            if np.any(mask):
+                out = out.copy()
+                out[mask] = np.nan
+        if self.bscale != 1.0 or self.bzero != 0.0:
+            out = out * np.float32(self.bscale) + np.float32(self.bzero)
+        return np.asarray(out, dtype=dtype)
+
     def read_full_into(self, output: np.ndarray) -> np.ndarray:
         if self._data is None:
             raise RuntimeError("FitsImageReader is not open")

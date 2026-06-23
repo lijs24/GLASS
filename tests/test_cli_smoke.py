@@ -18,6 +18,7 @@ from glass.cli import build_parser
 from glass.cli import main
 from glass.engine.contracts import DQFlag
 from glass.engine.pipeline import initialize_run
+from glass.engine.resident_reference_scout import write_resident_reference_scout
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from tests.conftest import cuda_module_or_skip
@@ -51,6 +52,84 @@ def _write_uniform_no_star_dataset(root: Path) -> None:
                 "CCD-TEMP": -10.0,
                 "XBINNING": 1,
                 "YBINNING": 1,
+            },
+        )
+
+
+def _write_two_light_reference_scout_dataset(root: Path) -> None:
+    shape = (32, 32)
+    specs = [
+        ("bias", "bias_001.fits", 0.0, np.full(shape, 100.0, dtype=np.float32)),
+        ("dark", "dark_001.fits", 60.0, np.full(shape, 110.0, dtype=np.float32)),
+        ("flat", "flat_001.fits", 60.0, np.full(shape, 1000.0, dtype=np.float32)),
+    ]
+    yy, xx = np.indices(shape, dtype=np.float32)
+    weak_light = np.full(shape, 1200.0, dtype=np.float32)
+    star_light = np.full(shape, 1200.0, dtype=np.float32)
+    for x, y, flux in [(8.0, 9.0, 5000.0), (16.0, 18.0, 7000.0), (24.0, 11.0, 6000.0)]:
+        star_light += flux * np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * 0.8**2)))
+    specs.extend(
+        [
+            ("light", "light_001.fits", 60.0, weak_light),
+            ("light", "light_002.fits", 60.0, star_light),
+        ]
+    )
+    for frame_type, name, exposure, data in specs:
+        write_fits_data(
+            root / frame_type / name,
+            data,
+            {
+                "IMAGETYP": frame_type,
+                "FILTER": "H",
+                "EXPTIME": exposure,
+                "GAIN": 100.0,
+                "OFFSET": 20.0,
+                "CCD-TEMP": -10.0,
+                "XBINNING": 1,
+                "YBINNING": 1,
+            },
+        )
+
+
+def _write_orientation_reference_scout_dataset(root: Path) -> None:
+    shape = (40, 40)
+    yy, xx = np.indices(shape, dtype=np.float32)
+
+    def light(stars: list[tuple[float, float, float]]) -> np.ndarray:
+        data = np.full(shape, 1200.0, dtype=np.float32)
+        for x, y, flux in stars:
+            data += flux * np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * 0.8**2)))
+        return data
+
+    specs = [
+        ("bias", "bias_001.fits", 0.0, "West", np.full(shape, 100.0, dtype=np.float32)),
+        ("dark", "dark_001.fits", 60.0, "West", np.full(shape, 110.0, dtype=np.float32)),
+        ("flat", "flat_001.fits", 60.0, "West", np.full(shape, 1000.0, dtype=np.float32)),
+        ("light", "light_west_001.fits", 60.0, "West", light([(12.0, 12.0, 3000.0)])),
+        ("light", "light_west_002.fits", 60.0, "West", light([(26.0, 24.0, 3500.0)])),
+        (
+            "light",
+            "light_east_001.fits",
+            60.0,
+            "East",
+            light([(8.0, 8.0, 8000.0), (20.0, 22.0, 8000.0), (32.0, 15.0, 8000.0)]),
+        ),
+    ]
+    for frame_type, name, exposure, pierside, data in specs:
+        write_fits_data(
+            root / frame_type / name,
+            data,
+            {
+                "IMAGETYP": frame_type,
+                "FILTER": "H",
+                "EXPTIME": exposure,
+                "GAIN": 100.0,
+                "OFFSET": 20.0,
+                "CCD-TEMP": -10.0,
+                "XBINNING": 1,
+                "YBINNING": 1,
+                "PIERSIDE": pierside,
+                "OBJCTROT": 92.0,
             },
         )
 
@@ -564,7 +643,7 @@ def test_run_default_resident_matrix_registration_can_explicitly_allow_first_lig
     assert admission["resident_registration_source"] == "resident_cuda_default"
 
 
-def test_cli_resident_run_blocks_default_first_light_reference_fallback(
+def test_cli_resident_run_can_disable_reference_scout_and_block_first_light_fallback(
     small_fits_dataset,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -582,7 +661,7 @@ def test_cli_resident_run_blocks_default_first_light_reference_fallback(
 
     monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fail_if_resident_compute_starts)
 
-    assert main(["run", "--plan", str(plan), "--out", str(run)]) == 2
+    assert main(["run", "--plan", str(plan), "--out", str(run), "--resident-reference-scout", "off"]) == 2
     admission = read_json(run / "resident_reference_admission.json")
     state = read_json(run / "run_state.json")
     timing = read_json(run / "run_timing.json")
@@ -594,7 +673,89 @@ def test_cli_resident_run_blocks_default_first_light_reference_fallback(
     assert state["artifacts"][0]["stage"] == "resident_reference_admission"
     assert timing["stages"][0]["stage"] == "resident_reference_admission"
     assert timing["stages"][0]["status"] == "failed"
+    assert not (run / "resident_reference_scout.json").exists()
     assert not (run / "resident_memory_admission.json").exists()
+
+
+def test_cli_resident_run_auto_reference_scout_feeds_reference_admission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_auto_reference"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
+
+    def fake_memory_admission(run_dir, _args, *, plan_path=None):
+        path = Path(run_dir) / "resident_memory_admission.json"
+        write_json(path, {"schema_version": 1, "blocking": False, "plan_path": str(plan_path)})
+        return path
+
+    def fake_resident_run(_plan_path, out_dir, *_args, **_kwargs):
+        state = initialize_run(Path(out_dir))
+        state.current_stage = "integration"
+        state.completed_stages.append("resident_calibration_integration")
+        return state
+
+    monkeypatch.setattr("glass.cli._write_resident_memory_admission", fake_memory_admission)
+    monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fake_resident_run)
+
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--resident-reference-scout-stride",
+                "1",
+            ]
+        )
+        == 0
+    )
+    scout = read_json(run / "resident_reference_scout.json")
+    quality = read_json(run / "frame_quality.json")
+    admission = read_json(run / "resident_reference_admission.json")
+    state = read_json(run / "run_state.json")
+    timing = read_json(run / "run_timing.json")
+
+    reference_row = next(row for row in scout["frame_quality"] if row["frame_id"] == scout["reference_frame_id"])
+    assert Path(reference_row["source_path"]).name == "light_002.fits"
+    assert quality["reference_frame_id"] == scout["reference_frame_id"]
+    assert quality["source_artifact"] == str(run / "resident_reference_scout.json")
+    assert admission["blocking"] is False
+    assert admission["quality_reference"]["reference_frame_id"] == scout["reference_frame_id"]
+    assert "resident_reference_scout" in state["completed_stages"]
+    assert any(item["stage"] == "resident_reference_scout" for item in state["artifacts"])
+    assert [item["stage"] for item in timing["stages"][:2]] == [
+        "resident_reference_scout",
+        "resident_reference_admission",
+    ]
+
+
+def test_resident_reference_scout_prefers_dominant_orientation(tmp_path: Path) -> None:
+    dataset = tmp_path / "dataset"
+    _write_orientation_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "scout"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    scout_path = write_resident_reference_scout(plan, run, sample_stride=1, max_frames=0)
+    scout = read_json(scout_path)
+    reference_row = next(row for row in scout["frame_quality"] if row["frame_id"] == scout["reference_frame_id"])
+
+    assert scout["dominant_orientation_key"] == ["west", "92.0"]
+    assert scout["orientation_constraint_applied"] is True
+    assert Path(reference_row["source_path"]).name.startswith("light_west_")
+    assert reference_row["orientation_key"] == ["west", "92.0"]
 
 
 def test_run_defaults_fallback_to_tile_when_cuda_unavailable() -> None:

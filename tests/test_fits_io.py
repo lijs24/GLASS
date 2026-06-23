@@ -298,6 +298,22 @@ def test_fits_image_reader_maps_blank_to_nan(tmp_path):
     assert tile[0, 0] == 0
 
 
+def test_fits_image_reader_sampled_read_preserves_blank_mapping(tmp_path):
+    path = tmp_path / "sampled_blank.fits"
+    raw = np.arange(20, dtype=np.int16).reshape(4, 5)
+    raw[2, 2] = -999
+    hdu = fits.PrimaryHDU(raw)
+    hdu.header["BLANK"] = -999
+    hdu.writeto(path)
+
+    with FitsImageReader(path) as reader:
+        sampled = reader.read_sampled(stride=2)
+
+    assert sampled.shape == (2, 3)
+    assert sampled[0, 0] == 0
+    assert np.isnan(sampled[1, 1])
+
+
 def test_write_fits_data_can_preserve_integer_count_maps(tmp_path):
     path = tmp_path / "coverage.fits"
     counts = np.array([[0, 1, 2], [30, 200, 32767]], dtype=np.int16)
