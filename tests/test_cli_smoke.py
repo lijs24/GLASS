@@ -18,6 +18,7 @@ from glass.cli import build_parser
 from glass.cli import main
 from glass.engine.contracts import DQFlag
 from glass.engine.pipeline import initialize_run
+from glass.engine.resident_registration_health import build_resident_registration_health
 from glass.engine.resident_reference_scout import write_resident_reference_scout
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
@@ -29,6 +30,89 @@ def _parse_cli(argv: list[str]):
     args = parser.parse_args(argv)
     args._glass_argv = list(argv)
     return args
+
+
+def _write_resident_registration_quality(
+    run: Path,
+    *,
+    frame_count: int,
+    accepted_count: int,
+    registration_mode: str = "similarity_cuda_triangle",
+) -> None:
+    run.mkdir(parents=True, exist_ok=True)
+    accepted_count = max(0, min(int(accepted_count), int(frame_count)))
+    decisions = []
+    for index in range(int(frame_count)):
+        frame_id = f"F{index + 1:06d}"
+        if index == 0 and accepted_count > 0:
+            status = "reference"
+            final_status = "reference"
+            accepted = True
+        elif index < accepted_count:
+            status = "accepted"
+            final_status = "ok"
+            accepted = True
+        else:
+            status = "rejected"
+            final_status = "excluded"
+            accepted = False
+        decisions.append(
+            {
+                "schema_version": 1,
+                "frame_id": frame_id,
+                "registration_mode": registration_mode,
+                "requested_action": "auto",
+                "effective_action": "exclude",
+                "original_status": "reference" if status == "reference" else "ok",
+                "final_status": final_status,
+                "decision_status": status,
+                "action_applied": "none" if accepted else "exclude",
+                "accepted": accepted,
+                "matched_stars": 8 if accepted else 3,
+                "inliers": 8 if accepted else 3,
+                "rms_px": 0.5 if accepted else 1.25,
+                "thresholds": {
+                    "min_inliers": 4,
+                    "max_rms_px": None,
+                    "max_rms_enabled": False,
+                    "catalog_capacity_limited": False,
+                },
+                "diagnostics": {},
+                "reasons": [] if accepted else ["registration_inliers_below_min:3<4"],
+            }
+        )
+    rejected_ids = [item["frame_id"] for item in decisions if not item["accepted"]]
+    write_json(
+        run / "resident_registration_quality.json",
+        {
+            "schema_version": 1,
+            "source_stage": "resident_calibrated_stack",
+            "registration_mode": registration_mode,
+            "requested_action": "auto",
+            "min_inliers": 4,
+            "max_rms_px": None,
+            "summary": {
+                "frame_count": int(frame_count),
+                "decision_status_counts": {
+                    "reference": 1 if accepted_count > 0 else 0,
+                    "accepted": max(0, accepted_count - 1),
+                    "rejected": max(0, int(frame_count) - accepted_count),
+                },
+                "final_status_counts": {
+                    "reference": 1 if accepted_count > 0 else 0,
+                    "ok": max(0, accepted_count - 1),
+                    "excluded": max(0, int(frame_count) - accepted_count),
+                },
+                "action_counts": {
+                    "none": accepted_count,
+                    "exclude": max(0, int(frame_count) - accepted_count),
+                },
+                "rejected_frame_ids": rejected_ids,
+                "warning_frame_ids": [],
+            },
+            "decisions": decisions,
+        },
+    )
 
 
 def _write_uniform_no_star_dataset(root: Path) -> None:
@@ -700,6 +784,7 @@ def test_cli_resident_run_auto_reference_scout_feeds_reference_admission(
         state = initialize_run(Path(out_dir))
         state.current_stage = "integration"
         state.completed_stages.append("resident_calibration_integration")
+        _write_resident_registration_quality(Path(out_dir), frame_count=2, accepted_count=2)
         return state
 
     monkeypatch.setattr("glass.cli._write_resident_memory_admission", fake_memory_admission)
@@ -741,6 +826,86 @@ def test_cli_resident_run_auto_reference_scout_feeds_reference_admission(
         "resident_reference_scout",
         "resident_reference_admission",
     ]
+    assert (run / "resident_registration_health.json").exists()
+
+
+def test_resident_registration_health_passes_healthy_quality(tmp_path: Path) -> None:
+    run = tmp_path / "healthy"
+    _write_resident_registration_quality(run, frame_count=200, accepted_count=193)
+
+    health = build_resident_registration_health(run)
+
+    assert health["effective_action"] == "fail"
+    assert health["passed"] is True
+    assert health["blocking"] is False
+    assert health["summary"]["accepted_count"] == 193
+    assert health["summary"]["accepted_fraction"] == pytest.approx(0.965)
+
+
+def test_resident_registration_health_blocks_catastrophic_rejection(tmp_path: Path) -> None:
+    run = tmp_path / "catastrophic"
+    _write_resident_registration_quality(run, frame_count=200, accepted_count=6)
+
+    health = build_resident_registration_health(run)
+
+    assert health["effective_action"] == "fail"
+    assert health["passed"] is False
+    assert health["blocking"] is True
+    assert health["summary"]["accepted_count"] == 6
+    assert "resident_registration_min_accepted_fraction" in health["failed_checks"]
+
+
+def test_cli_resident_run_blocks_catastrophic_registration_health(
+    small_fits_dataset,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_bad_registration_health"
+    assert main(["scan", "--root", str(small_fits_dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
+
+    def fake_resident_compute(*args, **kwargs):
+        out_dir = Path(kwargs.get("out_dir") or args[1])
+        state = initialize_run(out_dir)
+        state.current_stage = "integration"
+        state.completed_stages.append("resident_calibration_integration")
+        _write_resident_registration_quality(out_dir, frame_count=200, accepted_count=6)
+        return state
+
+    monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fake_resident_compute)
+
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--backend",
+                "cuda",
+                "--memory-mode",
+                "resident",
+                "--resident-reference-fallback",
+                "allow-first-light",
+            ]
+        )
+        == 2
+    )
+    health = read_json(run / "resident_registration_health.json")
+    state = read_json(run / "run_state.json")
+    timing = read_json(run / "run_timing.json")
+
+    assert health["blocking"] is True
+    assert health["summary"]["accepted_count"] == 6
+    assert state["failed_stage"] == "resident_registration_health"
+    assert any(item["stage"] == "resident_registration_health" for item in state["artifacts"])
+    assert timing["stages"][-1]["stage"] == "resident_registration_health"
+    assert timing["stages"][-1]["status"] == "failed"
 
 
 def test_resident_reference_scout_prefers_dominant_orientation(tmp_path: Path) -> None:
@@ -1347,7 +1512,9 @@ def test_cli_resident_run_passes_reduced_chunk_capacity_from_admission(
     def fake_resident_compute(*args, **kwargs):
         captured["args"] = args
         captured["kwargs"] = kwargs
-        return initialize_run(kwargs.get("out_dir") or args[1])
+        out_dir = Path(kwargs.get("out_dir") or args[1])
+        _write_resident_registration_quality(out_dir, frame_count=20, accepted_count=20)
+        return initialize_run(out_dir)
 
     monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
     monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fake_resident_compute)
@@ -1420,7 +1587,9 @@ def test_cli_resident_run_passes_explicit_chunk_capacity_from_admission(
     def fake_resident_compute(*args, **kwargs):
         captured["args"] = args
         captured["kwargs"] = kwargs
-        return initialize_run(kwargs.get("out_dir") or args[1])
+        out_dir = Path(kwargs.get("out_dir") or args[1])
+        _write_resident_registration_quality(out_dir, frame_count=20, accepted_count=20)
+        return initialize_run(out_dir)
 
     monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
     monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fake_resident_compute)

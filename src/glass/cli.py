@@ -29,6 +29,13 @@ from glass.engine.resident_reference_scout import (
     DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA,
     write_resident_reference_scout,
 )
+from glass.engine.resident_registration_health import (
+    DEFAULT_RESIDENT_REGISTRATION_HEALTH_GATE,
+    DEFAULT_RESIDENT_REGISTRATION_HEALTH_MIN_ACCEPTED_FRACTION,
+    DEFAULT_RESIDENT_REGISTRATION_HEALTH_MIN_ACCEPTED_FRAMES,
+    build_resident_registration_health,
+    resolve_resident_registration_health_action,
+)
 from glass.engine.resident_source_dq_strategy import build_resident_source_dq_strategy
 from glass.engine.warp import warp_registered_frames
 from glass.engine.resume import resume_summary
@@ -307,6 +314,15 @@ class ResidentReferenceAdmissionBlocked(RuntimeError):
     def __init__(self, message: str, *, admission: dict[str, Any], path: Path):
         super().__init__(message)
         self.admission = admission
+        self.path = path
+
+
+class ResidentRegistrationHealthBlocked(RuntimeError):
+    """Raised when resident registration keeps too few usable light frames."""
+
+    def __init__(self, message: str, *, health: dict[str, Any], path: Path):
+        super().__init__(message)
+        self.health = health
         self.path = path
 
 
@@ -1260,6 +1276,83 @@ def _write_resident_memory_admission_failed_state(
     write_run_state(run, state)
 
 
+def _resident_registration_health_message(health: dict[str, Any]) -> str:
+    summary = health.get("summary") if isinstance(health.get("summary"), dict) else {}
+    thresholds = health.get("thresholds") if isinstance(health.get("thresholds"), dict) else {}
+    return (
+        "resident registration health gate failed"
+        f": accepted={summary.get('accepted_count')}/{summary.get('frame_count')}"
+        f" ({float(summary.get('accepted_fraction') or 0.0):.3f}), "
+        f"required_fraction={thresholds.get('min_accepted_fraction')}, "
+        f"required_frames={thresholds.get('min_accepted_frames')}"
+    )
+
+
+def _resident_registration_health_is_needed(args: argparse.Namespace) -> bool:
+    action = resolve_resident_registration_health_action(
+        getattr(args, "resident_registration_health_gate", DEFAULT_RESIDENT_REGISTRATION_HEALTH_GATE),
+        registration_mode=getattr(args, "resident_registration", ""),
+    )
+    return action != "off"
+
+
+def _write_resident_registration_health(
+    run: Path,
+    args: argparse.Namespace,
+    state,
+) -> Path:
+    health = build_resident_registration_health(
+        run,
+        requested_action=getattr(args, "resident_registration_health_gate", DEFAULT_RESIDENT_REGISTRATION_HEALTH_GATE),
+        min_accepted_fraction=getattr(
+            args,
+            "resident_registration_health_min_accepted_fraction",
+            DEFAULT_RESIDENT_REGISTRATION_HEALTH_MIN_ACCEPTED_FRACTION,
+        ),
+        min_accepted_frames=getattr(
+            args,
+            "resident_registration_health_min_accepted_frames",
+            DEFAULT_RESIDENT_REGISTRATION_HEALTH_MIN_ACCEPTED_FRAMES,
+        ),
+        registration_mode=getattr(args, "resident_registration", None),
+    )
+    health_path = run / "resident_registration_health.json"
+    write_json(health_path, health, compact=True)
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_registration_health",
+            path=str(health_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    if "resident_registration_health" not in state.completed_stages and not health.get("blocking"):
+        state.completed_stages.append("resident_registration_health")
+    if health.get("blocking"):
+        raise ResidentRegistrationHealthBlocked(
+            _resident_registration_health_message(health),
+            health=health,
+            path=health_path,
+        )
+    if health.get("status") == "warning":
+        state.warnings.append(_resident_registration_health_message(health))
+    return health_path
+
+
+def _write_resident_registration_health_failed_state(
+    run: Path,
+    state,
+    exc: ResidentRegistrationHealthBlocked,
+) -> None:
+    state.current_stage = "resident_registration_health"
+    state.failed_stage = "resident_registration_health"
+    message = str(exc)
+    if message not in state.errors:
+        state.errors.append(message)
+    write_run_state(run, state)
+
+
 def _write_resident_source_dq_strategy(
     run: Path,
     args: argparse.Namespace,
@@ -2078,6 +2171,18 @@ def cmd_audit(args: argparse.Namespace) -> int:
         )
         if "resident_memory_admission" not in state.completed_stages:
             state.completed_stages.insert(0, "resident_memory_admission")
+        if _resident_registration_health_is_needed(args):
+            try:
+                _timed_stage(
+                    out,
+                    timing,
+                    "resident_registration_health",
+                    lambda: _write_resident_registration_health(out, args, state),
+                )
+            except ResidentRegistrationHealthBlocked as exc:
+                _write_resident_registration_health_failed_state(out, state, exc)
+                console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
+                return 2
     elif plan.executable:
         try:
             state = _run_full_pipeline(
@@ -2335,6 +2440,18 @@ def cmd_run(args: argparse.Namespace) -> int:
                 source_frames=[],
             )
         )
+        if _resident_registration_health_is_needed(args):
+            try:
+                _timed_stage(
+                    out,
+                    timing,
+                    "resident_registration_health",
+                    lambda: _write_resident_registration_health(out, args, state),
+                )
+            except ResidentRegistrationHealthBlocked as exc:
+                _write_resident_registration_health_failed_state(out, state, exc)
+                console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
+                return 2
         if (out / "local_norm_results.json").exists():
             _timed_stage(
                 out,
@@ -5849,6 +5966,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional maximum registration RMS for resident admission; omitted records RMS without gating on it",
     )
     run.add_argument(
+        "--resident-registration-health-gate",
+        choices=["auto", "off", "warn", "fail"],
+        default=DEFAULT_RESIDENT_REGISTRATION_HEALTH_GATE,
+        help=(
+            "whole-run resident registration health action; auto fails matrix-registration runs when too few "
+            "light frames survive registration quality gating"
+        ),
+    )
+    run.add_argument(
+        "--resident-registration-health-min-accepted-fraction",
+        type=float,
+        default=DEFAULT_RESIDENT_REGISTRATION_HEALTH_MIN_ACCEPTED_FRACTION,
+        help="minimum fraction of light frames that must remain accepted in resident matrix-registration runs",
+    )
+    run.add_argument(
+        "--resident-registration-health-min-accepted-frames",
+        type=int,
+        default=DEFAULT_RESIDENT_REGISTRATION_HEALTH_MIN_ACCEPTED_FRAMES,
+        help="minimum accepted light-frame count for resident registration health",
+    )
+    run.add_argument(
         "--resident-frame-weight-proposal",
         help="optional frame-weight proposal JSON produced by frame-weight-proposal; default disabled",
     )
@@ -6305,6 +6443,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument("--resident-registration-quality-min-inliers", type=int, default=4)
     audit.add_argument("--resident-registration-quality-max-rms-px", type=float)
+    audit.add_argument(
+        "--resident-registration-health-gate",
+        choices=["auto", "off", "warn", "fail"],
+        default=DEFAULT_RESIDENT_REGISTRATION_HEALTH_GATE,
+        help="whole-run resident registration health action for resident audit runs",
+    )
+    audit.add_argument(
+        "--resident-registration-health-min-accepted-fraction",
+        type=float,
+        default=DEFAULT_RESIDENT_REGISTRATION_HEALTH_MIN_ACCEPTED_FRACTION,
+        help="minimum accepted-frame fraction for resident audit registration health",
+    )
+    audit.add_argument(
+        "--resident-registration-health-min-accepted-frames",
+        type=int,
+        default=DEFAULT_RESIDENT_REGISTRATION_HEALTH_MIN_ACCEPTED_FRAMES,
+        help="minimum accepted-frame count for resident audit registration health",
+    )
     audit.add_argument(
         "--resident-frame-weight-proposal",
         help="optional frame-weight proposal JSON produced by frame-weight-proposal for resident audit",

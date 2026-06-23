@@ -652,3 +652,28 @@ external disks. The CUDA backend is currently opt-in because the first real
 poor registration reference. The intended next step is to add a real
 reference-health gate using resident registration evidence or calibrated-frame
 GPU catalogs before any CUDA scout path becomes the `auto` default.
+
+## S2-Gate 572 Resident Registration Health Gate
+
+S2-Gate 572 promotes resident registration quality from per-frame diagnostics
+to a whole-run admission check. After resident CUDA writes
+`resident_registration_quality.json`, the CLI now writes
+`resident_registration_health.json` and fails default matrix-registration runs
+when too few light frames remain accepted.
+
+The default policy is:
+
+- `--resident-registration-health-gate auto` resolves to `fail` for the
+  default `similarity_cuda_triangle` path, where GLASS records per-frame
+  resident quality decisions;
+- at least `--resident-registration-health-min-accepted-fraction 0.75` of light
+  frames must remain accepted;
+- at least `--resident-registration-health-min-accepted-frames 2` light frames
+  must remain accepted;
+- `warn` and `off` remain explicit diagnostic escape hatches.
+
+This gate catches the real S2-Gate 571 negative CUDA scout probe, where only
+`6/200` frames survived registration, while preserving the default safe scout
+path with `193/200` accepted frames and the same output master hash. The check
+does not alter registration, warp, LN, rejection, or integration math; it only
+changes whether a run is allowed to report success.
