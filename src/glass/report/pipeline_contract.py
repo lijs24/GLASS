@@ -104,6 +104,16 @@ def _nonnegative_int(value: Any) -> bool:
         return False
 
 
+def _duplicates(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for value in values:
+        if value in seen:
+            duplicates.add(value)
+        seen.add(value)
+    return sorted(duplicates)
+
+
 def _stack_result_contract_state_from_provenance(
     provenance: Any,
     *,
@@ -1617,6 +1627,221 @@ def _resident_frame_mask_state(
     }
 
 
+def _resident_registration_quality_state(
+    run_root: Path,
+    *,
+    required: bool,
+    frame_accounting: dict[str, Any],
+    resident_frame_mask: dict[str, Any],
+) -> dict[str, Any]:
+    path = run_root / "resident_registration_quality.json"
+    if not path.exists():
+        return {
+            "path": str(path),
+            "exists": False,
+            "required": bool(required),
+            "status": "missing" if required else "not_present",
+            "passed": not required,
+            "summary": {},
+            "groups": [],
+            "failed_checks": ["resident_registration_quality_missing"] if required else [],
+            "closure": {"status": "missing" if required else "not_required", "passed": not required},
+        }
+
+    payload = _load_json_object(path)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    decisions_raw = payload.get("decisions") if isinstance(payload.get("decisions"), list) else []
+    decisions = [item for item in decisions_raw if isinstance(item, dict)]
+    registration_mode = str(payload.get("registration_mode") or "")
+    mode_off = registration_mode in {"off", "none", "disabled"}
+    quality_closure_required = (
+        required
+        and not mode_off
+        and (
+            registration_mode == "similarity_cuda_triangle"
+            or bool(decisions)
+            or (_optional_rounded_int(summary.get("frame_count")) or 0) > 0
+        )
+    )
+    accounting_summary = (
+        frame_accounting.get("summary") if isinstance(frame_accounting.get("summary"), dict) else {}
+    )
+    frame_mask_summary = resident_frame_mask.get("summary") if isinstance(resident_frame_mask.get("summary"), dict) else {}
+    input_light_frames = _optional_rounded_int(accounting_summary.get("input_light_frames"))
+    integrated_frames = _optional_rounded_int(accounting_summary.get("integrated_frames"))
+    zero_weight_frames = _optional_rounded_int(accounting_summary.get("zero_weight_frames"))
+    frame_mask_active = _optional_rounded_int(frame_mask_summary.get("active_frame_count"))
+    frame_mask_masked = _optional_rounded_int(frame_mask_summary.get("masked_frame_count"))
+    summary_frame_count = _optional_rounded_int(summary.get("frame_count"))
+    summary_rejected_ids = {str(item) for item in summary.get("rejected_frame_ids") or []}
+    mask_masked_ids = {str(item) for item in frame_mask_summary.get("masked_frame_ids") or []}
+    decision_frame_ids = [str(item.get("frame_id")) for item in decisions if item.get("frame_id")]
+    decision_status_values = [str(item.get("decision_status") or "unknown") for item in decisions]
+    decision_status_counts_from_rows = {
+        status: decision_status_values.count(status) for status in set(decision_status_values)
+    }
+    duplicate_frame_ids = _duplicates(decision_frame_ids)
+    rejected_decision_ids = {
+        str(item.get("frame_id"))
+        for item in decisions
+        if item.get("frame_id")
+        and (
+            str(item.get("decision_status") or "") == "rejected"
+            or str(item.get("final_status") or "") == "excluded"
+            or str(item.get("action_applied") or "") == "exclude"
+        )
+    }
+    active_decision_count = sum(
+        int(decision_status_counts_from_rows.get(key) or 0)
+        for key in ("accepted", "reference", "disabled")
+    )
+    rejected_decision_count = len(rejected_decision_ids)
+    unsupported_statuses = sorted(
+        set(decision_status_values).difference(
+            {
+                "accepted",
+                "reference",
+                "rejected",
+                "warning",
+                "disabled",
+                "already_excluded",
+                "already_failed",
+                "not_applicable",
+            }
+        )
+    )
+
+    checks = [
+        _check(
+            "resident_registration_quality_present",
+            True,
+            {"path": str(path), "required": bool(required)},
+        ),
+        _check(
+            "schema_version_recorded",
+            _positive_int(payload.get("schema_version")),
+            {"schema_version": payload.get("schema_version")},
+        ),
+        _check(
+            "source_stage_is_resident",
+            payload.get("source_stage") == "resident_calibrated_stack",
+            {"source_stage": payload.get("source_stage")},
+        ),
+        _check(
+            "registration_mode_recorded",
+            bool(registration_mode),
+            {"registration_mode": registration_mode},
+        ),
+        _check(
+            "decisions_are_objects",
+            len(decisions) == len(decisions_raw),
+            {"decision_count": len(decisions_raw), "object_decision_count": len(decisions)},
+        ),
+        _check(
+            "summary_frame_count_matches_decisions",
+            summary_frame_count == len(decisions),
+            {"summary_frame_count": summary_frame_count, "decision_count": len(decisions)},
+        ),
+        _check(
+            "decision_frame_ids_unique",
+            not duplicate_frame_ids,
+            {"duplicate_frame_ids": duplicate_frame_ids[:20]},
+        ),
+        _check(
+            "decision_statuses_supported",
+            not unsupported_statuses,
+            {"unsupported_statuses": unsupported_statuses},
+        ),
+        _check(
+            "summary_rejected_ids_match_decisions",
+            summary_rejected_ids == rejected_decision_ids,
+            {
+                "summary_rejected_frame_ids": sorted(summary_rejected_ids),
+                "decision_rejected_frame_ids": sorted(rejected_decision_ids),
+            },
+        ),
+    ]
+    if quality_closure_required:
+        checks.extend(
+            [
+                _check(
+                    "decision_count_matches_input_light_frames",
+                    input_light_frames is None or len(decisions) == input_light_frames,
+                    {"decision_count": len(decisions), "input_light_frames": input_light_frames},
+                ),
+                _check(
+                    "active_decision_count_matches_integrated_frames",
+                    integrated_frames is None or active_decision_count == integrated_frames,
+                    {
+                        "active_decision_count": active_decision_count,
+                        "integrated_frames": integrated_frames,
+                    },
+                ),
+                _check(
+                    "rejected_decision_count_matches_zero_weight_frames",
+                    zero_weight_frames is None or rejected_decision_count == zero_weight_frames,
+                    {
+                        "rejected_decision_count": rejected_decision_count,
+                        "zero_weight_frames": zero_weight_frames,
+                    },
+                ),
+                _check(
+                    "active_decision_count_matches_frame_masks",
+                    frame_mask_active is None or active_decision_count == frame_mask_active,
+                    {
+                        "active_decision_count": active_decision_count,
+                        "frame_mask_active_frame_count": frame_mask_active,
+                    },
+                ),
+                _check(
+                    "rejected_decisions_match_masked_frames",
+                    (not mask_masked_ids and frame_mask_masked in {0, None})
+                    or rejected_decision_ids == mask_masked_ids,
+                    {
+                        "rejected_decision_frame_ids": sorted(rejected_decision_ids),
+                        "frame_mask_masked_frame_ids": sorted(mask_masked_ids),
+                        "frame_mask_masked_frame_count": frame_mask_masked,
+                    },
+                ),
+            ]
+        )
+
+    passed = all(item["passed"] for item in checks)
+    return {
+        "path": str(path),
+        "exists": True,
+        "required": bool(required),
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "schema_version": payload.get("schema_version"),
+        "source_stage": payload.get("source_stage"),
+        "registration_mode": registration_mode,
+        "requested_action": payload.get("requested_action"),
+        "min_inliers": payload.get("min_inliers"),
+        "max_rms_px": payload.get("max_rms_px"),
+        "summary": summary,
+        "closure": {
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "mode_off": mode_off,
+            "quality_closure_required": quality_closure_required,
+            "decision_count": len(decisions),
+            "summary_frame_count": summary_frame_count,
+            "active_decision_count": active_decision_count,
+            "rejected_decision_count": rejected_decision_count,
+            "input_light_frames": input_light_frames,
+            "integrated_frames": integrated_frames,
+            "zero_weight_frames": zero_weight_frames,
+            "frame_mask_active_frame_count": frame_mask_active,
+            "frame_mask_masked_frame_count": frame_mask_masked,
+            "rejected_decision_frame_ids": sorted(rejected_decision_ids),
+            "frame_mask_masked_frame_ids": sorted(mask_masked_ids),
+        },
+        "failed_checks": [item["name"] for item in checks if not item["passed"]],
+        "checks": checks,
+    }
+
+
 def _resident_dq_pixel_closure_state(
     run_root: Path,
     *,
@@ -1828,6 +2053,12 @@ def build_pipeline_contract_audit(
         required=resident_integration_required,
         frame_accounting=frame_accounting,
     )
+    resident_registration_quality = _resident_registration_quality_state(
+        run_root,
+        required=resident_integration_required,
+        frame_accounting=frame_accounting,
+        resident_frame_mask=resident_frame_mask,
+    )
     resident_dq_pixel_closure = _resident_dq_pixel_closure_state(
         run_root,
         required=resident_integration_required,
@@ -1999,6 +2230,31 @@ def build_pipeline_contract_audit(
                 "failed_groups": resident_frame_mask["failed_groups"],
             },
             "Resident frame-level mask admission must explain every zero-weight resident frame and close against frame accounting when available.",
+        ),
+        _check(
+            "resident_registration_quality_contract",
+            bool(resident_registration_quality["passed"]),
+            {
+                "exists": resident_registration_quality["exists"],
+                "required": resident_registration_quality["required"],
+                "status": resident_registration_quality["status"],
+                "registration_mode": resident_registration_quality.get("registration_mode"),
+                "requested_action": resident_registration_quality.get("requested_action"),
+                "decision_count": resident_registration_quality["closure"].get("decision_count"),
+                "active_decision_count": resident_registration_quality["closure"].get("active_decision_count"),
+                "rejected_decision_count": resident_registration_quality["closure"].get("rejected_decision_count"),
+                "input_light_frames": resident_registration_quality["closure"].get("input_light_frames"),
+                "integrated_frames": resident_registration_quality["closure"].get("integrated_frames"),
+                "zero_weight_frames": resident_registration_quality["closure"].get("zero_weight_frames"),
+                "frame_mask_active_frame_count": resident_registration_quality["closure"].get(
+                    "frame_mask_active_frame_count"
+                ),
+                "frame_mask_masked_frame_count": resident_registration_quality["closure"].get(
+                    "frame_mask_masked_frame_count"
+                ),
+                "failed_checks": resident_registration_quality["failed_checks"],
+            },
+            "Resident registration quality decisions must explain accepted and excluded frames before integration.",
         ),
         _check(
             "resident_dq_pixel_closure_contract",
@@ -2353,6 +2609,13 @@ def build_pipeline_contract_audit(
                 "status": resident_frame_mask["status"],
                 "passed": resident_frame_mask["passed"],
             },
+            "resident_registration_quality": {
+                "path": resident_registration_quality["path"],
+                "exists": resident_registration_quality["exists"],
+                "required": resident_registration_quality["required"],
+                "status": resident_registration_quality["status"],
+                "passed": resident_registration_quality["passed"],
+            },
             "resident_dq_pixel_closure": {
                 "path": resident_dq_pixel_closure["path"],
                 "exists": resident_dq_pixel_closure["exists"],
@@ -2403,6 +2666,7 @@ def build_pipeline_contract_audit(
         "frame_accounting": frame_accounting_admission,
         "resident_source_dq_execution": resident_source_dq_execution,
         "resident_frame_masks": resident_frame_mask,
+        "resident_registration_quality": resident_registration_quality,
         "resident_dq_pixel_closure": resident_dq_pixel_closure,
         "stack_engine_runtime_default": stack_engine_runtime_default,
         "pixel_verification": {
@@ -2548,6 +2812,30 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
             f"unknown `{group_summary.get('unknown_zero_weight_frame_count')}`, "
             f"passed `{group_summary.get('passed')}`"
         )
+    registration_quality = audit.get("resident_registration_quality") or {}
+    registration_closure = (
+        registration_quality.get("closure") if isinstance(registration_quality.get("closure"), dict) else {}
+    )
+    reg_summary = (
+        registration_quality.get("summary") if isinstance(registration_quality.get("summary"), dict) else {}
+    )
+    lines.extend(["", "## Resident Registration Quality", ""])
+    lines.append(
+        "- "
+        f"exists `{registration_quality.get('exists')}`, "
+        f"required `{registration_quality.get('required')}`, "
+        f"status `{registration_quality.get('status')}`, "
+        f"passed `{registration_quality.get('passed')}`, "
+        f"mode `{registration_quality.get('registration_mode')}`, "
+        f"decisions `{registration_closure.get('decision_count')}`, "
+        f"active `{registration_closure.get('active_decision_count')}`, "
+        f"rejected `{registration_closure.get('rejected_decision_count')}`"
+    )
+    lines.append(
+        "- "
+        f"decision statuses `{reg_summary.get('decision_status_counts')}`, "
+        f"final statuses `{reg_summary.get('final_status_counts')}`"
+    )
     pixel_closure = audit.get("resident_dq_pixel_closure") or {}
     pixel_closure_summary = (
         pixel_closure.get("closure") if isinstance(pixel_closure.get("closure"), dict) else {}

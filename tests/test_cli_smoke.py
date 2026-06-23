@@ -1578,6 +1578,51 @@ def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Pa
             ],
         },
     )
+    write_json(
+        run / "resident_registration_quality.json",
+        {
+            "schema_version": 1,
+            "source_stage": "resident_calibrated_stack",
+            "registration_mode": "similarity_cuda_triangle",
+            "requested_action": "auto",
+            "min_inliers": 4,
+            "max_rms_px": None,
+            "summary": {
+                "frame_count": 3,
+                "decision_status_counts": {"reference": 1, "accepted": 2},
+                "final_status_counts": {"reference": 1, "ok": 2},
+                "action_counts": {"none": 3},
+                "rejected_frame_ids": [],
+                "warning_frame_ids": [],
+            },
+            "decisions": [
+                {
+                    "schema_version": 1,
+                    "frame_id": frame_id,
+                    "registration_mode": "similarity_cuda_triangle",
+                    "requested_action": "auto",
+                    "effective_action": "exclude",
+                    "original_status": "reference" if index == 0 else "ok",
+                    "final_status": "reference" if index == 0 else "ok",
+                    "decision_status": "reference" if index == 0 else "accepted",
+                    "action_applied": "none",
+                    "accepted": True,
+                    "matched_stars": 0 if index == 0 else 8,
+                    "inliers": 0 if index == 0 else 8,
+                    "rms_px": 0.0 if index == 0 else 0.5,
+                    "thresholds": {
+                        "min_inliers": 4,
+                        "max_rms_px": None,
+                        "max_rms_enabled": False,
+                        "catalog_capacity_limited": False,
+                    },
+                    "diagnostics": {},
+                    "reasons": [],
+                }
+                for index, frame_id in enumerate(["F1", "F2", "F3"])
+            ],
+        },
+    )
     closure_checks = [
         "frame_mask_contract_passed",
         "frame_mask_active_matches_output_link",

@@ -15369,6 +15369,58 @@ Completed in Gate446:
     integration math, CUDA kernels, DQ bit definitions, frame admission, or
     output pixels.
 
+### S2-Gate 563: Resident Registration Quality Pipeline Contract
+
+- Continues the Phase 2 registration/warp mainline by making resident
+  registration-quality evidence a default resident `pipeline_contract.json`
+  surface.
+- Completed:
+  - `glass pipeline-contract` now reads
+    `resident_registration_quality.json`;
+  - resident integration outputs require the registration-quality artifact to
+    exist;
+  - for active quality-gated resident modes such as
+    `similarity_cuda_triangle`, registration decisions must close against
+    frame accounting and resident frame masks;
+  - rejected registration-quality decisions must match the masked frame ids;
+  - accepted/reference decisions must match integrated/active frames;
+  - non-quality-gated resident modes such as preview/NCC diagnostic modes keep
+    the artifact and mode recorded but do not require a nonempty decision
+    ledger.
+- Tests:
+  - syntax check:
+    `.venv\Scripts\python.exe -m py_compile
+    src\glass\report\pipeline_contract.py tests\test_pipeline_contract.py
+    tests\test_cli_smoke.py`;
+  - focused registration-quality pipeline tests: `5 passed in 0.25 s`;
+  - wider pipeline/resident contract suite: `45 passed in 2.35 s`;
+  - full suite: `1204 passed in 45.44 s`.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate563_resident_registration_quality_contract\runs_20260623_181913\ln_on_registration_quality_contract`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_563_resident_registration_quality_contract_summary.json`.
+- Key validation summary:
+
+  | Metric | Value |
+  | --- | ---: |
+  | Shell elapsed | `7.4156317 s` |
+  | Run timing total | `7.059272500046063 s` |
+  | Pipeline contract status | `passed` |
+  | Resident registration-quality contract | `passed` |
+  | Registration mode | `similarity_cuda_triangle` |
+  | Decision count | `200` |
+  | Active/rejected decisions | `193 / 7` |
+  | Decision statuses | `192 accepted / 1 reference / 7 rejected` |
+  | Rejected ids vs frame-mask masked ids | `identical` |
+  | Output SHA256 vs Gate562 | `all identical` |
+- Interpretation:
+  - this gate makes resident registration-quality admission a default
+    run-level contract, closing it to DQ/mask and frame-accounting artifacts;
+  - it does not change star detection, registration fitting, warp,
+    local-normalization, rejection, integration, CUDA kernels, DQ bits, or
+    output pixels.
+
 ## Gate Rules
 
 Each gate requires:

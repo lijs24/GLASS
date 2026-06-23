@@ -164,6 +164,101 @@ def _write_resident_mask_artifacts(path: Path, *, frame_count: int = 3, active_f
     )
 
 
+def _write_resident_registration_quality_artifact(
+    path: Path,
+    *,
+    frame_count: int = 3,
+    active_frame_count: int = 3,
+    registration_mode: str = "similarity_cuda_triangle",
+) -> None:
+    active = max(0, min(int(active_frame_count), int(frame_count)))
+    masked = max(0, int(frame_count) - active)
+    decisions = []
+    for index in range(int(frame_count)):
+        frame_id = f"F{index + 1}"
+        if index == 0 and active > 0:
+            decision_status = "reference"
+            final_status = "reference"
+            accepted = True
+            action = "none"
+            reasons: list[str] = []
+            inliers = 0
+            matched = 0
+            rms = 0.0
+        elif index < active:
+            decision_status = "accepted"
+            final_status = "ok"
+            accepted = True
+            action = "none"
+            reasons = []
+            inliers = 8
+            matched = 8
+            rms = 0.5
+        else:
+            decision_status = "rejected"
+            final_status = "excluded"
+            accepted = False
+            action = "exclude"
+            reasons = ["registration_inliers_below_min:2<4"]
+            inliers = 2
+            matched = 2
+            rms = 2.0
+        decisions.append(
+            {
+                "schema_version": 1,
+                "frame_id": frame_id,
+                "registration_mode": registration_mode,
+                "requested_action": "auto",
+                "effective_action": "exclude",
+                "original_status": "reference" if decision_status == "reference" else "ok",
+                "final_status": final_status,
+                "decision_status": decision_status,
+                "action_applied": action,
+                "accepted": accepted,
+                "matched_stars": matched,
+                "inliers": inliers,
+                "rms_px": rms,
+                "thresholds": {
+                    "min_inliers": 4,
+                    "max_rms_px": None,
+                    "max_rms_enabled": False,
+                    "catalog_capacity_limited": False,
+                },
+                "diagnostics": {},
+                "reasons": reasons,
+            }
+        )
+    summary = {
+        "frame_count": int(frame_count),
+        "decision_status_counts": {
+            **({"reference": 1} if active > 0 else {}),
+            **({"accepted": max(0, active - 1)} if active > 1 else {}),
+            **({"rejected": masked} if masked else {}),
+        },
+        "final_status_counts": {
+            **({"reference": 1} if active > 0 else {}),
+            **({"ok": max(0, active - 1)} if active > 1 else {}),
+            **({"excluded": masked} if masked else {}),
+        },
+        "action_counts": {"none": active, **({"exclude": masked} if masked else {})},
+        "rejected_frame_ids": [f"F{index + 1}" for index in range(active, int(frame_count))],
+        "warning_frame_ids": [],
+    }
+    write_json(
+        path / "resident_registration_quality.json",
+        {
+            "schema_version": 1,
+            "source_stage": "resident_calibrated_stack",
+            "registration_mode": registration_mode,
+            "requested_action": "auto",
+            "min_inliers": 4,
+            "max_rms_px": None,
+            "summary": summary,
+            "decisions": decisions,
+        },
+    )
+
+
 def _write_resident_pipeline_run(
     path: Path,
     *,
@@ -296,6 +391,7 @@ def _write_resident_pipeline_run(
             },
         )
     _write_resident_mask_artifacts(path, frame_count=3, active_frame_count=active_frame_count)
+    _write_resident_registration_quality_artifact(path, frame_count=3, active_frame_count=active_frame_count)
 
 
 def _write_resident_source_dq_execution_fixture(path: Path, *, passed: bool = True) -> None:
@@ -728,8 +824,10 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["passed"] is True
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
     assert checks["resident_frame_mask_admission_contract"]["passed"] is True
+    assert checks["resident_registration_quality_contract"]["passed"] is True
     assert checks["resident_dq_pixel_closure_contract"]["passed"] is True
     assert audit["resident_frame_masks"]["closure"]["active_frame_count"] == 3
+    assert audit["resident_registration_quality"]["closure"]["active_decision_count"] == 3
     assert audit["resident_dq_pixel_closure"]["closure"]["active_frame_count"] == 3
 
 
@@ -745,6 +843,37 @@ def test_pipeline_contract_requires_resident_frame_masks_for_resident_output(tmp
     assert checks["resident_frame_mask_admission_contract"]["passed"] is False
     assert checks["resident_frame_mask_admission_contract"]["evidence"]["required"] is True
     assert checks["resident_frame_mask_admission_contract"]["evidence"]["exists"] is False
+
+
+def test_pipeline_contract_requires_resident_registration_quality_for_resident_output(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    (run / "resident_registration_quality.json").unlink()
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+
+    assert audit["passed"] is False
+    assert checks["resident_registration_quality_contract"]["passed"] is False
+    assert checks["resident_registration_quality_contract"]["evidence"]["required"] is True
+    assert checks["resident_registration_quality_contract"]["evidence"]["exists"] is False
+
+
+def test_pipeline_contract_blocks_resident_registration_quality_mask_drift(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run, active_frame_count=2)
+    _write_resident_registration_quality_artifact(run, frame_count=3, active_frame_count=3)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    evidence = checks["resident_registration_quality_contract"]["evidence"]
+
+    assert audit["passed"] is False
+    assert checks["resident_registration_quality_contract"]["passed"] is False
+    assert evidence["active_decision_count"] == 3
+    assert evidence["frame_mask_active_frame_count"] == 2
+    assert "active_decision_count_matches_frame_masks" in evidence["failed_checks"]
+    assert "rejected_decisions_match_masked_frames" in evidence["failed_checks"]
 
 
 def test_pipeline_contract_blocks_resident_frame_mask_accounting_drift(tmp_path: Path):
@@ -939,6 +1068,7 @@ def test_default_resident_run_pipeline_contract_small_diagnostic_degenerate_is_n
         },
     )
     _write_resident_mask_artifacts(run, frame_count=2, active_frame_count=1)
+    _write_resident_registration_quality_artifact(run, frame_count=2, active_frame_count=1)
     state = initialize_run(run)
     state.current_stage = "integration"
 
