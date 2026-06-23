@@ -106,6 +106,8 @@ _RESIDENT_MASTER_STACK_TILE_SIZE = 512
 _RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_resident_cuda_raw_u16_mean_master_cache_v1"
 _RESIDENT_MASTER_RAW_U16_STREAM_COUNT = 4
 _RESIDENT_MASTER_RAW_U16_WAVE_FRAMES = 4
+_OUTPUT_DIAGNOSTICS_EXACT_PERCENTILE_MAX_PIXELS = 2_000_000
+_OUTPUT_DIAGNOSTICS_PERCENTILE_SAMPLE_PIXELS = 1_000_000
 
 
 def _cuda_module_required():
@@ -1943,13 +1945,42 @@ def _apply_resident_registration_matrix_batch(
     return [str(model or "unavailable") for model in models], timing
 
 
+def _diagnostic_percentiles(
+    finite_values: np.ndarray,
+    quantiles: tuple[float, ...],
+    *,
+    exact_max_pixels: int = _OUTPUT_DIAGNOSTICS_EXACT_PERCENTILE_MAX_PIXELS,
+    sample_pixels: int = _OUTPUT_DIAGNOSTICS_PERCENTILE_SAMPLE_PIXELS,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    values = np.asarray(finite_values, dtype=np.float32).reshape(-1)
+    value_count = int(values.size)
+    if value_count <= int(exact_max_pixels):
+        return np.percentile(values, quantiles), {
+            "percentile_method": "exact",
+            "percentile_approximation": False,
+            "percentile_sample_pixels": value_count,
+            "percentile_total_pixels": value_count,
+            "percentile_stride": 1,
+        }
+    target = max(1, min(int(sample_pixels), value_count))
+    stride = max(1, int(np.ceil(value_count / target)))
+    sample = values[::stride]
+    return np.percentile(sample, quantiles), {
+        "percentile_method": "deterministic_stride_sample",
+        "percentile_approximation": True,
+        "percentile_sample_pixels": int(sample.size),
+        "percentile_total_pixels": value_count,
+        "percentile_stride": stride,
+    }
+
+
 def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) -> dict[str, Any]:
     values = np.asarray(data, dtype=np.float32)
     total_pixels = int(values.size)
     finite_mask = np.isfinite(values)
-    finite = values[finite_mask]
-    nonfinite_count = total_pixels - int(finite.size)
-    if finite.size == 0:
+    finite_count = int(np.count_nonzero(finite_mask))
+    nonfinite_count = total_pixels - finite_count
+    if finite_count == 0:
         return {
             "total_pixels": total_pixels,
             "finite_pixels": 0,
@@ -1963,9 +1994,13 @@ def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) 
                 "nonfinite_count": nonfinite_count,
             },
         }
+    finite = values.reshape(-1) if finite_count == total_pixels else values[finite_mask]
 
     percentile_names = ("p001", "p01", "p1", "p50", "p99", "p999", "p9999")
-    percentile_values = np.percentile(finite, (0.01, 0.1, 1.0, 50.0, 99.0, 99.9, 99.99))
+    percentile_values, percentile_metadata = _diagnostic_percentiles(
+        finite,
+        (0.01, 0.1, 1.0, 50.0, 99.0, 99.9, 99.99),
+    )
     percentiles = {
         name: float(value)
         for name, value in zip(percentile_names, percentile_values, strict=True)
@@ -2013,11 +2048,17 @@ def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) 
             "mean": float(np.mean(finite)),
             "std": float(np.std(finite)),
             **percentiles,
+            **percentile_metadata,
         },
         "normalization_probe": {
             "method": "diagnostic_only_p0_1_to_p99_9",
             "black": robust_low,
             "white": robust_high,
+            "percentile_method": percentile_metadata["percentile_method"],
+            "percentile_approximation": percentile_metadata["percentile_approximation"],
+            "percentile_sample_pixels": percentile_metadata["percentile_sample_pixels"],
+            "percentile_total_pixels": percentile_metadata["percentile_total_pixels"],
+            "percentile_stride": percentile_metadata["percentile_stride"],
             "scale": float(1.0 / robust_span) if robust_span > 0 else 1.0,
             "offset": float(-robust_low),
             "would_clip_low_count": would_clip_low_count,

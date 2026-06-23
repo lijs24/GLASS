@@ -1,0 +1,156 @@
+{
+  "gate": "S2-Gate 523",
+  "title": "Resident output diagnostics sampled percentiles",
+  "created_at": "2026-06-23",
+  "external_run_root": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417",
+  "change_summary": [
+    "large resident output diagnostics use deterministic stride-sampled percentiles",
+    "small arrays keep exact np.percentile diagnostics",
+    "min/max/mean/std and clipping counts remain full-frame exact",
+    "output artifacts record percentile method, approximation flag, sample size, total pixels, and stride"
+  ],
+  "runs": {
+    "warm_auto": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\warm_auto",
+      "internal_elapsed_s": 6.588916799984872,
+      "shell_elapsed_s": 6.9436691999999995,
+      "light_read_upload_calibrate_s": 2.534972599998582,
+      "resident_registration_component_accounted_s": 1.9595226004949398,
+      "resident_registration_warp_s": 0.4696958005079068,
+      "resident_integration_s": 0.3035649000084959,
+      "output_write_s": 0.3010476999916136,
+      "dq_map_runtime_dtype": "int16",
+      "output_diagnostics_percentile_method": "deterministic_stride_sample",
+      "output_diagnostics_percentile_approximation": true,
+      "output_diagnostics_percentile_sample_pixels": 994375,
+      "output_diagnostics_percentile_total_pixels": 61651200,
+      "output_diagnostics_percentile_stride": 62,
+      "normalization_probe_percentile_method": "deterministic_stride_sample"
+    },
+    "warm_repeat_auto": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\warm_repeat_auto",
+      "internal_elapsed_s": 6.617358400020748,
+      "shell_elapsed_s": 6.9960698,
+      "light_read_upload_calibrate_s": 2.5480217000003904,
+      "resident_registration_component_accounted_s": 1.961877500796786,
+      "resident_registration_warp_s": 0.4720224002376199,
+      "resident_integration_s": 0.30665360001148656,
+      "output_write_s": 0.2962530999793671,
+      "dq_map_runtime_dtype": "int16",
+      "output_diagnostics_percentile_method": "deterministic_stride_sample",
+      "output_diagnostics_percentile_approximation": true,
+      "output_diagnostics_percentile_sample_pixels": 994375,
+      "output_diagnostics_percentile_total_pixels": 61651200,
+      "output_diagnostics_percentile_stride": 62,
+      "normalization_probe_percentile_method": "deterministic_stride_sample"
+    },
+    "full_run_cache_policy_run": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\full_run_cache_policy_run",
+      "internal_elapsed_s": 13.876236599928234,
+      "shell_elapsed_s": 14.230714599999999,
+      "light_read_upload_calibrate_s": 9.64852200000314,
+      "resident_registration_component_accounted_s": 1.9547476995787807,
+      "resident_registration_warp_s": 0.4713707001064904,
+      "resident_integration_s": 0.3150378999998793,
+      "output_write_s": 0.30745540000498295,
+      "dq_map_runtime_dtype": "int16",
+      "output_diagnostics_percentile_method": "deterministic_stride_sample",
+      "output_diagnostics_percentile_approximation": true,
+      "output_diagnostics_percentile_sample_pixels": 994375,
+      "output_diagnostics_percentile_total_pixels": 61651200,
+      "output_diagnostics_percentile_stride": 62,
+      "normalization_probe_percentile_method": "deterministic_stride_sample"
+    },
+    "warm_profile_sampled_diagnostics": {
+      "output_dir": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\warm_profile_sampled_diagnostics",
+      "internal_elapsed_s": 7.153722299961373,
+      "shell_elapsed_s": 7.7545141,
+      "light_read_upload_calibrate_s": 2.6861173000070266,
+      "resident_registration_component_accounted_s": 1.9918886993790068,
+      "resident_registration_warp_s": 0.5504480999079533,
+      "resident_integration_s": 0.3058115000021644,
+      "output_write_s": 0.3161021000123583,
+      "dq_map_runtime_dtype": "int16",
+      "output_diagnostics_percentile_method": "deterministic_stride_sample",
+      "output_diagnostics_percentile_approximation": true,
+      "output_diagnostics_percentile_sample_pixels": 994375,
+      "output_diagnostics_percentile_total_pixels": 61651200,
+      "output_diagnostics_percentile_stride": 62,
+      "normalization_probe_percentile_method": "deterministic_stride_sample"
+    }
+  },
+  "baselines": {
+    "gate522": {
+      "warm_repeat_shell_elapsed_s": 7.3860233,
+      "warm_repeat_internal_elapsed_s": 7.029533999972045,
+      "full_shell_elapsed_s": 13.2148972,
+      "full_internal_elapsed_s": 12.840817800024524,
+      "profile_output_diagnostics_s": 0.828,
+      "profile_percentile_s": 0.457
+    },
+    "current_main_before_gate523": {
+      "root": "C:\\glass_runs\\phase2_s2_gate523_real_200_ab_current_main\\runs_20260623_104906",
+      "warm_repeat_shell_elapsed_s": 7.4455019,
+      "warm_repeat_internal_elapsed_s": 7.092796100012492,
+      "full_shell_elapsed_s": 14.1900733,
+      "full_internal_elapsed_s": 13.79622289998224
+    },
+    "profile_before_gate523": {
+      "profile": "C:\\glass_runs\\phase2_s2_gate523_profile_current_main\\runs_20260623_105222\\warm_profile_current.prof",
+      "output_diagnostics_s": 0.828,
+      "percentile_s": 0.457,
+      "profile_internal_elapsed_s": 7.721449400065467
+    }
+  },
+  "profile_after_gate523": {
+    "profile": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\warm_profile_sampled_diagnostics.prof",
+    "launcher": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\warm_profile_sampled_diagnostics_launcher.json",
+    "profile_internal_elapsed_s": 7.153722299961373,
+    "profile_shell_elapsed_s": 7.7545141,
+    "output_diagnostics_s": 0.265952,
+    "diagnostic_percentiles_s": 0.012553,
+    "np_percentile_s": 0.012514
+  },
+  "profile_deltas": {
+    "output_diagnostics_s_saved_vs_profile_before": 0.5620479999999999,
+    "percentile_s_saved_vs_profile_before": 0.444486,
+    "profile_internal_elapsed_delta_s": -0.5677271001040936
+  },
+  "real_timing_deltas": {
+    "warm_repeat_shell_vs_current_main_s": -0.4494321000000001,
+    "warm_repeat_internal_vs_current_main_s": -0.475437699991744,
+    "full_shell_vs_current_main_s": 0.04064129999999899,
+    "full_internal_vs_current_main_s": 0.08001369994599372
+  },
+  "comparisons": {
+    "gate523_vs_gate522": {
+      "json": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\compare_gate523_vs_gate522.json",
+      "html": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\compare_gate523_vs_gate522.html",
+      "rms": 0.0,
+      "p99_abs": 0.0,
+      "max_abs": 0.0
+    },
+    "full_vs_warm_repeat": {
+      "json": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\compare_full_vs_warm_repeat.json",
+      "html": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\compare_full_vs_warm_repeat.html",
+      "rms": 0.0,
+      "p99_abs": 0.0,
+      "max_abs": 0.0
+    },
+    "gate523_vs_wbpp": {
+      "json": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\compare_gate523_vs_wbpp.json",
+      "html": "C:\\glass_runs\\phase2_s2_gate523_output_diagnostics_sample\\runs_20260623_105417\\compare_gate523_vs_wbpp.html",
+      "shape_match": true,
+      "robust_fit_rms": 0.0015009512947433384,
+      "robust_fit_p99": 0.00034034321741462114,
+      "fit_fraction": 0.982980688129347,
+      "speedup_vs_wbpp_shell": 156.1649656497138
+    }
+  },
+  "interpretation": [
+    "This is an audit-path output diagnostics optimization; it does not change science pixels or DQ/rejection semantics.",
+    "The profile hotspot moved as intended, but end-to-end warm/full timings remain dominated by I/O/calibration and registration/warp variance.",
+    "Next substantive gates should target resident light-pipeline overlap and resident registration/warp batching."
+  ],
+  "clean_room": "Only GLASS code, GLASS artifacts, and user-generated WBPP black-box outputs were used; no official PixInsight/WBPP/PJSR source was accessed."
+}

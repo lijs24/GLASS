@@ -97,11 +97,35 @@ def test_resident_output_diagnostics_reports_range_and_clipping():
     assert diagnostics["nonfinite_pixels"] == 1
     assert diagnostics["statistics"]["min"] == -1.0
     assert diagnostics["statistics"]["max"] == 70000.0
+    assert diagnostics["statistics"]["percentile_method"] == "exact"
+    assert diagnostics["statistics"]["percentile_approximation"] is False
     assert diagnostics["normalization_probe"]["method"] == "diagnostic_only_p0_1_to_p99_9"
+    assert diagnostics["normalization_probe"]["percentile_method"] == "exact"
     assert diagnostics["clipping_probe"]["lt_0_count"] == 1
     assert diagnostics["clipping_probe"]["gt_1_count"] == 2
     assert diagnostics["clipping_probe"]["gt_65535_count"] == 1
     assert diagnostics["clipping_probe"]["zero_weight_pixels"] == 1
+
+
+def test_resident_output_diagnostics_large_array_uses_deterministic_percentile_sample():
+    data = np.linspace(-1.0, 2.0, 2_000_001, dtype=np.float32)
+
+    diagnostics = _output_diagnostics(data)
+
+    assert diagnostics["total_pixels"] == data.size
+    assert diagnostics["finite_pixels"] == data.size
+    assert diagnostics["nonfinite_pixels"] == 0
+    assert diagnostics["statistics"]["min"] == pytest.approx(float(data.min()))
+    assert diagnostics["statistics"]["max"] == pytest.approx(float(data.max()))
+    assert diagnostics["statistics"]["percentile_method"] == "deterministic_stride_sample"
+    assert diagnostics["statistics"]["percentile_approximation"] is True
+    assert diagnostics["statistics"]["percentile_sample_pixels"] < data.size
+    assert diagnostics["statistics"]["percentile_stride"] > 1
+    assert diagnostics["normalization_probe"]["percentile_method"] == "deterministic_stride_sample"
+    assert diagnostics["normalization_probe"]["percentile_approximation"] is True
+    assert diagnostics["clipping_probe"]["lt_0_count"] == int(np.count_nonzero(data < 0.0))
+    assert diagnostics["clipping_probe"]["gt_1_count"] == int(np.count_nonzero(data > 1.0))
+    assert diagnostics["clipping_probe"]["gt_65535_count"] == 0
 
 
 def test_resident_stack_calibrates_and_integrates_like_cpu():

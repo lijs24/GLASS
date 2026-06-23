@@ -13009,6 +13009,66 @@ Completed in Gate446:
   - external summary:
     `C:\glass_runs\phase2_s2_gate522_dq_int16_runtime\runs_20260623_104044\gate522_dq_int16_runtime_summary.json`.
 
+### S2-Gate 523: Resident Output Diagnostics Sampled Percentiles
+
+- Returned to the real 200-light audit path and addressed a measured Python
+  hotspot in resident output diagnostics. This gate does not change science
+  pixels, calibration, registration, warp, rejection, DQ flags, frame
+  admission, or integration formulas.
+- Completed:
+  - kept exact output-diagnostic percentiles for small arrays;
+  - switched large output-diagnostic percentile probes to deterministic
+    stride sampling;
+  - kept `min`, `max`, `mean`, `std`, finite/non-finite counts, and clipping
+    counts as full-frame exact scans;
+  - recorded `percentile_method`, `percentile_approximation`,
+    `percentile_sample_pixels`, `percentile_total_pixels`, and
+    `percentile_stride` in both `statistics` and `normalization_probe`;
+  - added focused tests for exact small-array diagnostics and large-array
+    sampled diagnostics.
+- Real 200-light validation:
+  - run root:
+    `C:\glass_runs\phase2_s2_gate523_output_diagnostics_sample\runs_20260623_105417`;
+  - input: M38 H-alpha plan with `200` light frames; active integration frame
+    count remained `193`;
+  - warm-repeat with shared master cache: internal `6.617358400020748 s`,
+    shell `6.9960698 s`;
+  - full run with per-run master cache policy: internal
+    `13.876236599928234 s`, shell `14.230714599999999 s`;
+  - WBPP black-box elapsed time: `1092.541 s`;
+  - measured warm shell speedup versus WBPP: `156.1649656497138x`.
+- Profile evidence:
+  - before profile:
+    `C:\glass_runs\phase2_s2_gate523_profile_current_main\runs_20260623_105222\warm_profile_current.prof`;
+  - after profile:
+    `C:\glass_runs\phase2_s2_gate523_output_diagnostics_sample\runs_20260623_105417\warm_profile_sampled_diagnostics.prof`;
+  - `_output_diagnostics` cumulative time dropped from about `0.828 s` to
+    `0.265952 s`;
+  - `np.percentile` time dropped from about `0.457 s` to `0.012514 s`;
+  - profile internal run time dropped by `0.5677271001040936 s`.
+- Numerical validation:
+  - Gate523 warm-repeat master matches Gate522 warm-repeat master bitwise;
+  - Gate523 full run matches Gate523 warm-repeat master bitwise;
+  - GLASS vs WBPP black-box compare is shape-matched; robust linear fit over
+    fit pixels has RMS `0.0015009512947433384`, p99 absolute difference
+    `0.00034034321741462114`, and fit fraction `0.982980688129347`.
+- Interpretation:
+  - this is an audit-path runtime optimization for a measured resident
+    benchmark hotspot;
+  - output diagnostic percentile probes are now explicitly approximate on large
+    arrays, while clipping counts and core science outputs remain exact;
+  - warm audit timing improved versus the immediately preceding current-main
+    measurement, but full cold-cache timing remains dominated by master
+    build/load and I/O variance;
+  - the next substantive gates should target resident light-pipeline overlap
+    and resident registration/warp batching.
+- Artifacts:
+  - checkpoint: `runs/checkpoints/s2_gate_523_status.md`;
+  - checkpoint summary:
+    `runs/checkpoints/s2_gate_523_output_diagnostics_sample_summary.json`;
+  - external summary:
+    `C:\glass_runs\phase2_s2_gate523_output_diagnostics_sample\runs_20260623_105417\gate523_output_diagnostics_sample_summary.json`.
+
 ## Gate Rules
 
 Each gate requires:
