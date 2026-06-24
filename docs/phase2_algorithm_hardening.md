@@ -313,6 +313,94 @@ Validation commands:
 - `python -m ruff check src\glass\cli.py tests\test_cli_smoke.py`
 - `python -m pytest -q`
 
+### S2-Gate 617: Resident Pipelined Warp Guard
+
+Gate 617 tests the deeper resident warp scheduling idea that Gate616 left open:
+multi-stream matrix-warp chunks. The experiment added explicit stream-launch
+wrappers and an opt-in `pipelined` dispatch, then ran the real 200-light default
+route. The result was not acceptable for audit/science output maps: the native
+warp path did not improve, and the output maps showed a tiny but real 5-pixel
+coverage/rejection drift. The gate therefore does not promote the experiment.
+It adds guardrails so the default resident path remains the deterministic
+Gate616 `chunked` route.
+
+Implementation:
+
+- Adds CUDA stream launch wrappers for resident batch matrix warp and
+  scatter/scatter-reduce kernels.
+- Adds native/Python `pipelined` batch matrix-warp dispatch as an experimental
+  path.
+- `glass_cuda.ResidentCalibratedStack.apply_matrix_*_frames(...,
+  dispatch="pipelined")` now rejects `track_coverage=True`.
+- `run_resident_calibration_integration` rejects
+  `resident_warp_batch_dispatch="pipelined"` unless
+  `resident_output_maps="minimal"`, keeping audit/science maps on the
+  deterministic chunked route.
+- CLI/admission accept the explicit dispatch for controlled experiments, but
+  the full resident science/audit path is guarded before execution.
+
+Real 200-light evidence:
+
+- Probe root:
+  `C:\glass_runs\phase2_s2_gate617_pipelined_warp`
+- Rejected candidate:
+  `real_200_pipelined`
+- Rejected candidate gate:
+  `resident_regression_gate_pipelined_vs_gate616.json`
+- Blocking-stream retry:
+  `real_200_pipelined_blocking_stream`
+- Blocking-stream gate:
+  `resident_regression_gate_pipelined_blocking_vs_gate616.json`
+- Default same-build baseline:
+  `real_200_default_guarded_chunked_direct_launch`
+- Default same-build repeat:
+  `real_200_default_guarded_chunked_direct_launch_repeat`
+- Passing default same-build gate:
+  `resident_regression_gate_default_same_build_repeat.json`
+
+Key results:
+
+- Pipelined audit/science candidate failed `resident_determinism_passed` versus
+  Gate616.
+- The drift was confined to one output group with five numerical drift rows:
+  master, weight, coverage, high rejection, and DQ maps. Coverage/weight
+  differed by only about five pixels, but any unexplained output-map drift is
+  blocking for a default path.
+- Pipelined native warp total was `0.5054357 s` versus Gate616 chunked
+  `0.4868301 s`, so the experiment was also not a native warp speedup.
+- Current default chunked route passed same-build real 200-light
+  resident-regression-gate with elapsed ratio `1.0284459040041496`, zero
+  artifact/frame/registration/accounting/output/numerical drift, `193 / 200`
+  active frames, and `7` masked frames.
+- `resident-output-maps minimal` with registration currently fails the
+  warp-quality contract because geometric coverage closure is intentionally
+  unavailable there; this is a separate contract gap, not a promoted route.
+
+Decision:
+
+- Do not promote pipelined resident matrix warp.
+- Keep `chunked` as the default and only deterministic resident audit/science
+  matrix-warp dispatch.
+- Treat future warp scheduling work as a new kernel/contract design problem:
+  likely separate immutable source/destination surfaces or a dedicated
+  per-lane coverage-map reduction model, not just concurrent launches around
+  the current in-place stack scatter.
+
+Validation commands:
+
+- `cmake --build build --config Release --target _glass_cuda_native -j 8`
+  through the VS developer environment.
+- `python -m pytest -q
+  tests/test_cuda_resident_stack.py::test_resident_stack_fused_and_batch_lanczos3_unclamped_skip_nan_footprint
+  tests/test_resident_cuda_run.py::test_resident_run_rejects_pipelined_dispatch_with_audit_maps`
+- `python -m pytest -q
+  tests/test_resident_cuda_run.py::test_resident_registration_matrix_batch_honors_pipelined_dispatch
+  tests/test_resident_cuda_run.py::test_resident_memory_admission_accepts_pipelined_dispatch
+  tests/test_cli_smoke.py::test_cli_resident_run_accepts_pipelined_warp_dispatch`
+- Real 200-light pipelined rejected A/B and default same-build A/B listed
+  above.
+- `python -m pytest -q`
+
 ### S2-Gate 581: Native Completion Runtime Preset
 
 Gate 581 returns the current work to a substantive resident CUDA runtime path

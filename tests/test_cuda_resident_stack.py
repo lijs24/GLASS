@@ -738,6 +738,38 @@ def test_resident_stack_fused_and_batch_lanczos3_unclamped_skip_nan_footprint():
     assert np.allclose(batch_master, expected_master, rtol=2e-5, atol=2e-5)
     assert np.allclose(batch_weight, expected_weight, rtol=1e-6, atol=1e-6)
 
+    with pytest.raises(ValueError, match="requires track_coverage=False"):
+        batch_stack.apply_matrix_lanczos3_frames(
+            list(range(len(frames))),
+            matrices,
+            np.nan,
+            -1.0,
+            dispatch="pipelined",
+            max_chunk_capacity_frames=2,
+            track_coverage=True,
+        )
+
+    pipelined_stack = module.ResidentCalibratedStack(len(frames), 20, 22)
+    for index, frame in enumerate(frames):
+        pipelined_stack.upload_calibrated_frame(index, frame)
+    pipelined_timing = pipelined_stack.apply_matrix_lanczos3_frames(
+        list(range(len(frames))),
+        matrices,
+        np.nan,
+        -1.0,
+        dispatch="pipelined",
+        max_chunk_capacity_frames=2,
+        track_coverage=False,
+    )
+    pipelined_master, pipelined_weight = pipelined_stack.integrate_mean(weights)
+
+    assert pipelined_timing["timing_model"] == "native_pipelined_batch_warp_serial_coverage"
+    assert pipelined_timing["inverse_upload_mode"] == "pipelined_chunk_device_batch"
+    assert pipelined_timing["coverage_reduce_serialized"] is False
+    assert pipelined_timing["batch_lane_count"] >= 1
+    assert np.allclose(pipelined_master, expected_master, rtol=2e-5, atol=2e-5)
+    assert np.allclose(pipelined_weight, expected_weight, rtol=1e-6, atol=1e-6)
+
 
 def test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu():
     module = cuda_module_or_skip()

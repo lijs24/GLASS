@@ -367,7 +367,7 @@ def _memory_estimate(
         width=width,
         enabled=bool(
             resident_registration == "similarity_cuda_triangle"
-            and resident_warp_batch_dispatch == "chunked"
+            and resident_warp_batch_dispatch in {"chunked", "pipelined"}
         ),
         planned_warp_frame_count=chunked_warp_frame_count,
         planned_capacity_frames=chunked_warp_capacity_frames,
@@ -525,7 +525,7 @@ def build_resident_memory_admission(
     )
     chunked_enabled = bool(
         resident_registration == "similarity_cuda_triangle"
-        and resident_warp_batch_dispatch == "chunked"
+        and resident_warp_batch_dispatch in {"chunked", "pipelined"}
         and not integration_dispatch["fused_matrix_admission"]
     )
     explicit_chunk_capacity: int | None = None
@@ -660,7 +660,7 @@ def build_resident_memory_admission(
     selected_dispatch = (
         "loop"
         if (
-            resident_warp_batch_dispatch == "chunked"
+            resident_warp_batch_dispatch in {"chunked", "pipelined"}
             and recommended_action == "resident_loop_dispatch_or_tile_fallback"
         )
         else resident_warp_batch_dispatch
@@ -2695,7 +2695,7 @@ def _apply_resident_registration_matrix_batch(
             "dispatch": batch_dispatch,
             "track_coverage": bool(track_coverage),
         }
-        if batch_dispatch == "chunked" and chunk_capacity_frames is not None:
+        if batch_dispatch in {"chunked", "pipelined"} and chunk_capacity_frames is not None:
             batch_kwargs["max_chunk_capacity_frames"] = int(chunk_capacity_frames)
         if interpolation == "lanczos3" and matrix_batch_available:
             timing = dict(
@@ -6883,15 +6883,20 @@ def run_resident_calibration_integration(
         raise ValueError("resident_registration_max_shift must be non-negative")
     if resident_warp_interpolation not in {"bilinear", "lanczos3"}:
         raise ValueError("resident_warp_interpolation must be bilinear or lanczos3")
-    if resident_warp_batch_dispatch not in {"loop", "chunked"}:
-        raise ValueError("resident_warp_batch_dispatch must be loop or chunked")
+    if resident_warp_batch_dispatch not in {"loop", "chunked", "pipelined"}:
+        raise ValueError("resident_warp_batch_dispatch must be loop, chunked, or pipelined")
     if resident_warp_chunk_capacity_frames is not None and resident_warp_chunk_capacity_frames <= 0:
         raise ValueError("resident_warp_chunk_capacity_frames must be positive when provided")
+    if resident_warp_batch_dispatch == "pipelined" and resident_output_maps != "minimal":
+        raise ValueError(
+            "resident_warp_batch_dispatch=pipelined is experimental and currently requires "
+            "resident_output_maps=minimal; audit/science output maps use the deterministic chunked path"
+        )
     if resident_integration_dispatch not in {"stack", "fused_matrix", "auto"}:
         raise ValueError("resident_integration_dispatch must be stack, fused_matrix, or auto")
     resident_warp_chunk_capacity_effective = (
         int(resident_warp_chunk_capacity_frames)
-        if resident_warp_batch_dispatch == "chunked" and resident_warp_chunk_capacity_frames is not None
+        if resident_warp_batch_dispatch in {"chunked", "pipelined"} and resident_warp_chunk_capacity_frames is not None
         else None
     )
     fused_matrix_registration_modes = _FUSED_MATRIX_REGISTRATION_MODES

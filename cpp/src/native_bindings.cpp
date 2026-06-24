@@ -153,6 +153,17 @@ void glass_warp_matrix_bilinear_batch_f32_launch(
     int width,
     int height,
     float fill);
+void glass_warp_matrix_bilinear_batch_f32_launch_stream(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    cudaStream_t stream);
 void glass_warp_matrix_lanczos3_batch_f32_launch(
     const float* stack,
     float* batch_output,
@@ -164,6 +175,18 @@ void glass_warp_matrix_lanczos3_batch_f32_launch(
     int height,
     float fill,
     float clamping_threshold);
+void glass_warp_matrix_lanczos3_batch_f32_launch_stream(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    float clamping_threshold,
+    cudaStream_t stream);
 void glass_warp_matrix_lanczos3_batch_unclamped_f32_launch(
     const float* stack,
     float* batch_output,
@@ -174,6 +197,17 @@ void glass_warp_matrix_lanczos3_batch_unclamped_f32_launch(
     int width,
     int height,
     float fill);
+void glass_warp_matrix_lanczos3_batch_unclamped_f32_launch_stream(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    cudaStream_t stream);
 void glass_warp_batch_coverage_reduce_f32_launch(
     const unsigned char* batch_coverage,
     float* coverage_accumulator,
@@ -185,6 +219,13 @@ void glass_warp_batch_scatter_f32_launch(
     const unsigned long long* frame_indices,
     int frame_count,
     std::size_t pixels_per_frame);
+void glass_warp_batch_scatter_f32_launch_stream(
+    const float* batch_output,
+    float* stack,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame,
+    cudaStream_t stream);
 void glass_warp_batch_scatter_reduce_f32_launch(
     const float* batch_output,
     const unsigned char* batch_coverage,
@@ -193,6 +234,15 @@ void glass_warp_batch_scatter_reduce_f32_launch(
     const unsigned long long* frame_indices,
     int frame_count,
     std::size_t pixels_per_frame);
+void glass_warp_batch_scatter_reduce_f32_launch_stream(
+    const float* batch_output,
+    const unsigned char* batch_coverage,
+    float* stack,
+    float* coverage_accumulator,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame,
+    cudaStream_t stream);
 void glass_coverage_accumulate_f32_launch(const float* coverage, float* accumulator, std::size_t n);
 void glass_coverage_accumulate_full_f32_launch(float* accumulator, std::size_t n);
 void glass_matrix_alignment_metrics_f32_launch(
@@ -1070,6 +1120,27 @@ class CudaEvent {
 
  private:
   cudaEvent_t event_ = nullptr;
+};
+
+class CudaStream {
+ public:
+  explicit CudaStream(const char* operation) {
+    check_cuda(cudaStreamCreate(&stream_), operation);
+  }
+
+  CudaStream(const CudaStream&) = delete;
+  CudaStream& operator=(const CudaStream&) = delete;
+
+  ~CudaStream() {
+    if (stream_ != nullptr) {
+      cudaStreamDestroy(stream_);
+    }
+  }
+
+  cudaStream_t get() const { return stream_; }
+
+ private:
+  cudaStream_t stream_ = nullptr;
 };
 
 double cuda_event_elapsed_s(const CudaEvent& start, const CudaEvent& stop, const char* operation) {
@@ -7117,6 +7188,374 @@ class ResidentCalibratedStack {
     result["sync_s"] = sync_s;
     result["total_s"] = seconds_since(total_start);
     return result;
+  }
+
+  py::dict apply_matrix_frames_pipelined_impl(
+      py::object indices_obj,
+      py::object matrices_obj,
+      float fill,
+      float clamping_threshold,
+      int max_chunk_capacity_frames,
+      bool track_coverage,
+      int stream_count,
+      const char* interpolation) {
+    if (max_chunk_capacity_frames < 0) {
+      throw std::invalid_argument("max_chunk_capacity_frames must be non-negative");
+    }
+    if (stream_count <= 0) {
+      throw std::invalid_argument("stream_count must be positive");
+    }
+    const std::string interpolation_name(interpolation);
+    const bool lanczos3 = interpolation_name == "lanczos3";
+    const auto indices = parse_index_sequence(indices_obj, "indices");
+    const auto matrices = parse_matrix_stack(matrices_obj);
+    if (indices.size() != matrices.size()) {
+      throw std::invalid_argument("indices and matrices must have the same length");
+    }
+    if (indices.empty()) {
+      py::dict result;
+      result["schema_version"] = 1;
+      result["frame_count"] = 0;
+      result["interpolation"] = interpolation_name;
+      result["timing_model"] = "native_pipelined_batch_warp_serial_coverage";
+      result["inverse_upload_mode"] = "pipelined_chunk_device_batch";
+      result["batch_chunk_frames"] = 0;
+      result["batch_chunk_count"] = 0;
+      result["batch_stream_count"] = static_cast<unsigned long long>(stream_count);
+      result["batch_lane_count"] = 0;
+      result["batch_max_chunk_capacity_frames"] = static_cast<unsigned long long>(
+          std::max(0, max_chunk_capacity_frames));
+      result["batch_capacity_source"] =
+          max_chunk_capacity_frames > 0 ? "explicit_max_chunk_capacity" : "native_preferred";
+      result["batch_workspace_bytes"] = 0;
+      result["batch_output_bytes"] = 0;
+      result["batch_coverage_bytes"] = 0;
+      result["chunk_metadata_upload_mode"] = "per_lane_chunk_async_metadata";
+      result["index_upload_count"] = 0;
+      result["inverse_upload_count"] = 0;
+      result["index_upload_s"] = 0.0;
+      result["inverse_prepare_s"] = 0.0;
+      result["inverse_batch_alloc_s"] = 0.0;
+      result["inverse_batch_bytes"] = 0;
+      result["inverse_input_bytes"] = 0;
+      result["inverse_upload_s"] = 0.0;
+      result["kernel_enqueue_s"] = 0.0;
+      result["coverage_reduce_enqueue_s"] = 0.0;
+      result["scatter_enqueue_s"] = 0.0;
+      result["postprocess_enqueue_s"] = 0.0;
+      result["postprocess_mode"] = track_coverage ? "serialized_fused_scatter_reduce" : "parallel_scatter_only";
+      if (lanczos3) {
+        result["lanczos3_clamping_enabled"] = clamping_threshold >= 0.0f;
+        result["lanczos3_clamp_path"] =
+            clamping_threshold >= 0.0f ? "generic_runtime_clamp" : "unclamped_specialized";
+      }
+      result["warp_kernel_launches"] = 0;
+      result["coverage_reduce_kernel_launches"] = 0;
+      result["scatter_kernel_launches"] = 0;
+      result["postprocess_kernel_launches"] = 0;
+      result["coverage_reduce_serialized"] = track_coverage;
+      result["track_coverage"] = track_coverage;
+      result["coverage_accumulator_updated"] = false;
+      result["warp_coverage_frame_count_delta"] = 0;
+      result["device_copy_enqueue_s"] = 0.0;
+      result["sync_s"] = 0.0;
+      result["total_s"] = 0.0;
+      return result;
+    }
+    for (const std::size_t index : indices) {
+      require_loaded(index, lanczos3 ? "pipelined matrix Lanczos3 warp" : "pipelined matrix bilinear warp");
+    }
+
+    const auto total_start = Clock::now();
+    if (track_coverage) {
+      allocate_warp_coverage_if_needed();
+    }
+    std::vector<unsigned long long> index_host(indices.size(), 0ULL);
+    std::vector<float> inverse_host(indices.size() * 9, 0.0f);
+    const auto inverse_prepare_start = Clock::now();
+    for (std::size_t i = 0; i < indices.size(); ++i) {
+      index_host[i] = static_cast<unsigned long long>(indices[i]);
+      const auto inverse = invert_matrix3x3(matrices[i]);
+      std::copy(inverse.begin(), inverse.end(), inverse_host.begin() + static_cast<std::ptrdiff_t>(i * 9));
+    }
+    const double inverse_prepare_s = seconds_since(inverse_prepare_start);
+
+    constexpr std::size_t preferred_frames = 8;
+    const std::size_t requested_capacity = std::min(
+        indices.size(),
+        max_chunk_capacity_frames > 0 ? static_cast<std::size_t>(max_chunk_capacity_frames) : preferred_frames);
+    auto first_workspace = allocate_batch_warp_workspace(requested_capacity, requested_capacity, track_coverage);
+    std::size_t chunk_capacity = first_workspace.capacity_frames;
+    std::size_t planned_chunk_count = (indices.size() + chunk_capacity - 1) / chunk_capacity;
+    std::size_t lane_count = std::min(
+        static_cast<std::size_t>(std::max(1, stream_count)),
+        std::max<std::size_t>(1, planned_chunk_count));
+    std::vector<BatchWarpWorkspace> workspaces;
+    workspaces.reserve(lane_count);
+    workspaces.push_back(std::move(first_workspace));
+    double allocation_s = workspaces[0].allocation_s;
+    for (std::size_t lane = 1; lane < lane_count; ++lane) {
+      auto lane_workspace = allocate_batch_warp_workspace(chunk_capacity, chunk_capacity, track_coverage);
+      allocation_s += lane_workspace.allocation_s;
+      chunk_capacity = std::min(chunk_capacity, lane_workspace.capacity_frames);
+      workspaces.push_back(std::move(lane_workspace));
+    }
+    if (chunk_capacity == 0) {
+      throw std::runtime_error("pipelined batch warp workspace capacity resolved to zero");
+    }
+    planned_chunk_count = (indices.size() + chunk_capacity - 1) / chunk_capacity;
+    lane_count = std::min(lane_count, planned_chunk_count);
+    std::vector<std::unique_ptr<CudaStream>> streams;
+    streams.reserve(lane_count);
+    for (std::size_t lane = 0; lane < lane_count; ++lane) {
+      streams.push_back(std::make_unique<CudaStream>("cudaStreamCreate(resident pipelined matrix warp lane)"));
+    }
+
+    std::size_t workspace_bytes = 0;
+    std::size_t output_bytes = 0;
+    std::size_t coverage_bytes = 0;
+    std::size_t inverse_bytes = 0;
+    std::size_t index_bytes = 0;
+    for (std::size_t lane = 0; lane < lane_count; ++lane) {
+      workspace_bytes += workspaces[lane].output_bytes
+          + workspaces[lane].coverage_bytes
+          + workspaces[lane].inverse_bytes
+          + workspaces[lane].index_bytes;
+      output_bytes += workspaces[lane].output_bytes;
+      coverage_bytes += workspaces[lane].coverage_bytes;
+      inverse_bytes += workspaces[lane].inverse_bytes;
+      index_bytes += workspaces[lane].index_bytes;
+    }
+
+    double index_upload_s = 0.0;
+    double inverse_upload_s = 0.0;
+    double kernel_enqueue_s = 0.0;
+    double coverage_reduce_enqueue_s = 0.0;
+    double scatter_enqueue_s = 0.0;
+    double postprocess_enqueue_s = 0.0;
+    std::size_t chunk_count = 0;
+    std::size_t warp_kernel_launches = 0;
+    std::size_t coverage_reduce_kernel_launches = 0;
+    std::size_t scatter_kernel_launches = 0;
+    std::size_t postprocess_kernel_launches = 0;
+    std::vector<std::unique_ptr<CudaEvent>> postprocess_events;
+    postprocess_events.reserve(planned_chunk_count);
+    cudaEvent_t previous_postprocess_event = nullptr;
+    const bool lanczos3_clamping_enabled = clamping_threshold >= 0.0f;
+
+    for (std::size_t begin = 0; begin < indices.size(); begin += chunk_capacity) {
+      const std::size_t chunk_frames = std::min(chunk_capacity, indices.size() - begin);
+      const std::size_t lane = chunk_count % lane_count;
+      auto& workspace = workspaces[lane];
+      cudaStream_t stream = streams[lane]->get();
+
+      const auto index_upload_start = Clock::now();
+      check_cuda(
+          cudaMemcpyAsync(
+              workspace.indices.get(),
+              index_host.data() + begin,
+              chunk_frames * sizeof(unsigned long long),
+              cudaMemcpyHostToDevice,
+              stream),
+          "cudaMemcpyAsync(resident pipelined matrix warp chunk indices)");
+      index_upload_s += seconds_since(index_upload_start);
+      const auto inverse_upload_start = Clock::now();
+      check_cuda(
+          cudaMemcpyAsync(
+              workspace.inverses.get(),
+              inverse_host.data() + begin * 9,
+              chunk_frames * 9 * sizeof(float),
+              cudaMemcpyHostToDevice,
+              stream),
+          "cudaMemcpyAsync(resident pipelined matrix warp chunk inverses)");
+      inverse_upload_s += seconds_since(inverse_upload_start);
+
+      const auto kernel_start = Clock::now();
+      if (lanczos3) {
+        if (lanczos3_clamping_enabled) {
+          glass_warp_matrix_lanczos3_batch_f32_launch_stream(
+              d_stack_,
+              workspace.output.get(),
+              workspace.coverage.get(),
+              workspace.indices.get(),
+              workspace.inverses.get(),
+              static_cast<int>(chunk_frames),
+              static_cast<int>(width_),
+              static_cast<int>(height_),
+              fill,
+              clamping_threshold,
+              stream);
+        } else {
+          glass_warp_matrix_lanczos3_batch_unclamped_f32_launch_stream(
+              d_stack_,
+              workspace.output.get(),
+              workspace.coverage.get(),
+              workspace.indices.get(),
+              workspace.inverses.get(),
+              static_cast<int>(chunk_frames),
+              static_cast<int>(width_),
+              static_cast<int>(height_),
+              fill,
+              stream);
+        }
+      } else {
+        glass_warp_matrix_bilinear_batch_f32_launch_stream(
+            d_stack_,
+            workspace.output.get(),
+            workspace.coverage.get(),
+            workspace.indices.get(),
+            workspace.inverses.get(),
+            static_cast<int>(chunk_frames),
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            fill,
+            stream);
+      }
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_frames_pipelined kernel launch");
+      kernel_enqueue_s += seconds_since(kernel_start);
+      ++warp_kernel_launches;
+
+      const auto postprocess_start = Clock::now();
+      if (track_coverage) {
+        if (previous_postprocess_event != nullptr) {
+          check_cuda(
+              cudaStreamWaitEvent(stream, previous_postprocess_event, 0),
+              "cudaStreamWaitEvent(resident pipelined matrix warp coverage chain)");
+        }
+        glass_warp_batch_scatter_reduce_f32_launch_stream(
+            workspace.output.get(),
+            workspace.coverage.get(),
+            d_stack_,
+            d_warp_coverage_,
+            workspace.indices.get(),
+            static_cast<int>(chunk_frames),
+            pixels_per_frame_,
+            stream);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.apply_matrix_frames_pipelined fused scatter/reduce launch");
+        auto event = std::make_unique<CudaEvent>("cudaEventCreate(resident pipelined matrix warp postprocess)");
+        check_cuda(
+            cudaEventRecord(event->get(), stream),
+            "cudaEventRecord(resident pipelined matrix warp postprocess)");
+        previous_postprocess_event = event->get();
+        postprocess_events.push_back(std::move(event));
+        ++coverage_reduce_kernel_launches;
+        warp_coverage_frame_count_ += chunk_frames;
+      } else {
+        glass_warp_batch_scatter_f32_launch_stream(
+            workspace.output.get(),
+            d_stack_,
+            workspace.indices.get(),
+            static_cast<int>(chunk_frames),
+            pixels_per_frame_,
+            stream);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.apply_matrix_frames_pipelined scatter-only launch");
+        ++scatter_kernel_launches;
+      }
+      postprocess_enqueue_s += seconds_since(postprocess_start);
+      ++postprocess_kernel_launches;
+      ++chunk_count;
+    }
+
+    const auto sync_start = Clock::now();
+    for (std::size_t lane = 0; lane < lane_count; ++lane) {
+      check_cuda(
+          cudaStreamSynchronize(streams[lane]->get()),
+          "ResidentCalibratedStack.apply_matrix_frames_pipelined synchronize lane");
+    }
+    const double sync_s = seconds_since(sync_start);
+
+    py::dict result;
+    result["schema_version"] = 1;
+    result["frame_count"] = static_cast<unsigned long long>(indices.size());
+    result["interpolation"] = interpolation_name;
+    result["timing_model"] = "native_pipelined_batch_warp_serial_coverage";
+    result["inverse_upload_mode"] = "pipelined_chunk_device_batch";
+    result["batch_chunk_frames"] = static_cast<unsigned long long>(chunk_capacity);
+    result["batch_chunk_count"] = static_cast<unsigned long long>(chunk_count);
+    result["batch_stream_count"] = static_cast<unsigned long long>(stream_count);
+    result["batch_lane_count"] = static_cast<unsigned long long>(lane_count);
+    result["batch_max_chunk_capacity_frames"] = static_cast<unsigned long long>(
+        std::max(0, max_chunk_capacity_frames));
+    result["batch_capacity_source"] =
+        max_chunk_capacity_frames > 0 ? "explicit_max_chunk_capacity" : "native_preferred";
+    result["batch_workspace_bytes"] = static_cast<unsigned long long>(workspace_bytes);
+    result["batch_output_bytes"] = static_cast<unsigned long long>(output_bytes);
+    result["batch_coverage_bytes"] = static_cast<unsigned long long>(coverage_bytes);
+    result["batch_inverse_workspace_bytes"] = static_cast<unsigned long long>(inverse_bytes);
+    result["batch_index_workspace_bytes"] = static_cast<unsigned long long>(index_bytes);
+    result["chunk_metadata_upload_mode"] = "per_lane_chunk_async_metadata";
+    result["index_upload_count"] = static_cast<unsigned long long>(chunk_count);
+    result["inverse_upload_count"] = static_cast<unsigned long long>(chunk_count);
+    result["index_upload_s"] = index_upload_s;
+    result["inverse_prepare_s"] = inverse_prepare_s;
+    result["inverse_batch_alloc_s"] = allocation_s;
+    result["inverse_batch_bytes"] = static_cast<unsigned long long>(inverse_bytes);
+    result["inverse_input_bytes"] = static_cast<unsigned long long>(indices.size() * 9 * sizeof(float));
+    result["inverse_upload_s"] = inverse_upload_s;
+    result["kernel_enqueue_s"] = kernel_enqueue_s;
+    result["coverage_reduce_enqueue_s"] = coverage_reduce_enqueue_s;
+    result["scatter_enqueue_s"] = scatter_enqueue_s;
+    result["postprocess_enqueue_s"] = postprocess_enqueue_s;
+    result["postprocess_mode"] = track_coverage ? "serialized_fused_scatter_reduce" : "parallel_scatter_only";
+    if (lanczos3) {
+      result["lanczos3_clamping_enabled"] = lanczos3_clamping_enabled;
+      result["lanczos3_clamp_path"] =
+          lanczos3_clamping_enabled ? "generic_runtime_clamp" : "unclamped_specialized";
+    }
+    result["warp_kernel_launches"] = static_cast<unsigned long long>(warp_kernel_launches);
+    result["coverage_reduce_kernel_launches"] = static_cast<unsigned long long>(coverage_reduce_kernel_launches);
+    result["scatter_kernel_launches"] = static_cast<unsigned long long>(scatter_kernel_launches);
+    result["postprocess_kernel_launches"] = static_cast<unsigned long long>(postprocess_kernel_launches);
+    result["coverage_reduce_serialized"] = track_coverage;
+    result["track_coverage"] = track_coverage;
+    result["coverage_accumulator_updated"] = track_coverage;
+    result["warp_coverage_frame_count_delta"] = static_cast<unsigned long long>(
+        track_coverage ? indices.size() : 0);
+    result["device_copy_enqueue_s"] = postprocess_enqueue_s;
+    result["sync_s"] = sync_s;
+    result["total_s"] = seconds_since(total_start);
+    return result;
+  }
+
+  py::dict apply_matrix_bilinear_frames_pipelined(
+      py::object indices_obj,
+      py::object matrices_obj,
+      float fill,
+      int max_chunk_capacity_frames = 0,
+      bool track_coverage = true,
+      int stream_count = 2) {
+    return apply_matrix_frames_pipelined_impl(
+        indices_obj,
+        matrices_obj,
+        fill,
+        -1.0f,
+        max_chunk_capacity_frames,
+        track_coverage,
+        stream_count,
+        "bilinear");
+  }
+
+  py::dict apply_matrix_lanczos3_frames_pipelined(
+      py::object indices_obj,
+      py::object matrices_obj,
+      float fill,
+      float clamping_threshold,
+      int max_chunk_capacity_frames = 0,
+      bool track_coverage = true,
+      int stream_count = 2) {
+    return apply_matrix_frames_pipelined_impl(
+        indices_obj,
+        matrices_obj,
+        fill,
+        clamping_threshold,
+        max_chunk_capacity_frames,
+        track_coverage,
+        stream_count,
+        "lanczos3");
   }
 
   py::dict apply_matrix_bilinear_frames(
@@ -17886,6 +18325,15 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("max_chunk_capacity_frames") = 0,
           py::arg("track_coverage") = true)
       .def(
+          "apply_matrix_bilinear_frames_pipelined",
+          &ResidentCalibratedStack::apply_matrix_bilinear_frames_pipelined,
+          py::arg("indices"),
+          py::arg("matrices"),
+          py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
+          py::arg("max_chunk_capacity_frames") = 0,
+          py::arg("track_coverage") = true,
+          py::arg("stream_count") = 2)
+      .def(
           "apply_matrix_bilinear_frames_loop",
           &ResidentCalibratedStack::apply_matrix_bilinear_frames_loop,
           py::arg("indices"),
@@ -17901,6 +18349,16 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("clamping_threshold") = -1.0f,
           py::arg("max_chunk_capacity_frames") = 0,
           py::arg("track_coverage") = true)
+      .def(
+          "apply_matrix_lanczos3_frames_pipelined",
+          &ResidentCalibratedStack::apply_matrix_lanczos3_frames_pipelined,
+          py::arg("indices"),
+          py::arg("matrices"),
+          py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
+          py::arg("clamping_threshold") = -1.0f,
+          py::arg("max_chunk_capacity_frames") = 0,
+          py::arg("track_coverage") = true,
+          py::arg("stream_count") = 2)
       .def(
           "apply_matrix_lanczos3_frames_loop",
           &ResidentCalibratedStack::apply_matrix_lanczos3_frames_loop,

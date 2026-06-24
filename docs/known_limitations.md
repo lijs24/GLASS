@@ -23,7 +23,12 @@ Current code is intentionally gated:
   S2-Gate 616 sets the default resident matrix-warp chunk capacity to `8`
   frames after real 200-light probes showed larger chunks used much more VRAM
   and slowed the current Lanczos3 batch kernel; explicit chunk-capacity
-  overrides remain available for profiling.
+  overrides remain available for profiling. S2-Gate 617 tested an opt-in
+  pipelined/multi-stream resident matrix-warp dispatch, but the real 200-light
+  audit/science route showed tiny output-map drift and no native warp speedup.
+  That route is therefore guarded: default audit/science output maps remain on
+  deterministic `chunked` warp, and `pipelined` requires no warp coverage
+  tracking plus `resident-output-maps minimal`.
   Resident `winsorized_sigma` defaults to an `auto` resolver: supported
   stack-dispatch audit/science groups with at most 512 frames use the hardened
   median/IQR CUDA path that matches the GLASS CPU baseline. For large default

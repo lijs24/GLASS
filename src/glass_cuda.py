@@ -3285,14 +3285,20 @@ class ResidentCalibratedStack:
         method_name = "apply_matrix_bilinear_frames"
         if dispatch == "loop" and hasattr(self._impl, "apply_matrix_bilinear_frames_loop"):
             method_name = "apply_matrix_bilinear_frames_loop"
-        if dispatch not in {"loop", "chunked"}:
-            raise ValueError("matrix bilinear batch dispatch must be loop or chunked")
+        if dispatch == "pipelined" and hasattr(self._impl, "apply_matrix_bilinear_frames_pipelined"):
+            method_name = "apply_matrix_bilinear_frames_pipelined"
+        if dispatch not in {"loop", "chunked", "pipelined"}:
+            raise ValueError("matrix bilinear batch dispatch must be loop, chunked, or pipelined")
+        if dispatch == "pipelined" and bool(track_coverage):
+            raise ValueError(
+                "pipelined matrix bilinear batch dispatch is experimental and requires track_coverage=False"
+            )
         if max_chunk_capacity_frames is not None and int(max_chunk_capacity_frames) <= 0:
             raise ValueError("max_chunk_capacity_frames must be positive when provided")
         if not hasattr(self._impl, method_name):
             raise RuntimeError(f"native ResidentCalibratedStack.{method_name} is not available")
         method = getattr(self._impl, method_name)
-        if dispatch == "chunked" and max_chunk_capacity_frames is not None:
+        if dispatch in {"chunked", "pipelined"} and max_chunk_capacity_frames is not None:
             result = method(
                 np.asarray(indices, dtype=np.int64),
                 np.asarray(matrices, dtype=np.float32),
@@ -3301,7 +3307,7 @@ class ResidentCalibratedStack:
                 bool(track_coverage),
             )
         else:
-            if dispatch == "chunked":
+            if dispatch in {"chunked", "pipelined"}:
                 result = method(
                     np.asarray(indices, dtype=np.int64),
                     np.asarray(matrices, dtype=np.float32),
@@ -3347,14 +3353,20 @@ class ResidentCalibratedStack:
         method_name = "apply_matrix_lanczos3_frames"
         if dispatch == "loop" and hasattr(self._impl, "apply_matrix_lanczos3_frames_loop"):
             method_name = "apply_matrix_lanczos3_frames_loop"
-        if dispatch not in {"loop", "chunked"}:
-            raise ValueError("matrix Lanczos3 batch dispatch must be loop or chunked")
+        if dispatch == "pipelined" and hasattr(self._impl, "apply_matrix_lanczos3_frames_pipelined"):
+            method_name = "apply_matrix_lanczos3_frames_pipelined"
+        if dispatch not in {"loop", "chunked", "pipelined"}:
+            raise ValueError("matrix Lanczos3 batch dispatch must be loop, chunked, or pipelined")
+        if dispatch == "pipelined" and bool(track_coverage):
+            raise ValueError(
+                "pipelined matrix Lanczos3 batch dispatch is experimental and requires track_coverage=False"
+            )
         if max_chunk_capacity_frames is not None and int(max_chunk_capacity_frames) <= 0:
             raise ValueError("max_chunk_capacity_frames must be positive when provided")
         if not hasattr(self._impl, method_name):
             raise RuntimeError(f"native ResidentCalibratedStack.{method_name} is not available")
         method = getattr(self._impl, method_name)
-        if dispatch == "chunked" and max_chunk_capacity_frames is not None:
+        if dispatch in {"chunked", "pipelined"} and max_chunk_capacity_frames is not None:
             result = method(
                 np.asarray(indices, dtype=np.int64),
                 np.asarray(matrices, dtype=np.float32),
@@ -3364,7 +3376,7 @@ class ResidentCalibratedStack:
                 bool(track_coverage),
             )
         else:
-            if dispatch == "chunked":
+            if dispatch in {"chunked", "pipelined"}:
                 result = method(
                     np.asarray(indices, dtype=np.int64),
                     np.asarray(matrices, dtype=np.float32),

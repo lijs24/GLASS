@@ -1377,7 +1377,7 @@ def _apply_resident_memory_admission_selection(
         or admission.get("effective_warp_batch_dispatch")
         or getattr(args, "resident_warp_batch_dispatch", "chunked")
     )
-    if selected_dispatch in {"loop", "chunked"}:
+    if selected_dispatch in {"loop", "chunked", "pipelined"}:
         args.resident_warp_batch_dispatch = selected_dispatch
     selected_capacity = admission.get("selected_chunk_capacity_frames")
     selected_capacity_source = str(admission.get("selected_chunk_capacity_source") or "")
@@ -1385,7 +1385,7 @@ def _apply_resident_memory_admission_selection(
     try:
         if (
             selected_capacity is not None
-            and selected_dispatch == "chunked"
+            and selected_dispatch in {"chunked", "pipelined"}
             and selected_capacity_source in {"explicit", "native_preferred", "reduced_for_budget"}
         ):
             parsed = int(selected_capacity)
@@ -6327,7 +6327,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-warp-batch-dispatch",
-        choices=["loop", "chunked"],
+        choices=["loop", "chunked", "pipelined"],
         default="chunked",
         help="resident matrix batch warp dispatch mode",
     )
@@ -6955,7 +6955,7 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--resident-warp-clamping-threshold", type=float, default=-1.0)
     audit.add_argument(
         "--resident-warp-batch-dispatch",
-        choices=["loop", "chunked"],
+        choices=["loop", "chunked", "pipelined"],
         default="chunked",
         help="resident matrix batch warp dispatch mode",
     )

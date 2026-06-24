@@ -3,6 +3,57 @@
 #include <cstddef>
 #include <math.h>
 
+void glass_warp_matrix_bilinear_batch_f32_launch_stream(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    cudaStream_t stream);
+void glass_warp_matrix_lanczos3_batch_f32_launch_stream(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    float clamping_threshold,
+    cudaStream_t stream);
+void glass_warp_matrix_lanczos3_batch_unclamped_f32_launch_stream(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    cudaStream_t stream);
+void glass_warp_batch_scatter_f32_launch_stream(
+    const float* batch_output,
+    float* stack,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame,
+    cudaStream_t stream);
+void glass_warp_batch_scatter_reduce_f32_launch_stream(
+    const float* batch_output,
+    const unsigned char* batch_coverage,
+    float* stack,
+    float* coverage_accumulator,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame,
+    cudaStream_t stream);
+
 __global__ void glass_coverage_accumulate_f32_kernel(
     const float* coverage,
     float* accumulator,
@@ -299,6 +350,24 @@ void glass_warp_matrix_bilinear_batch_f32_launch(
       stack, batch_output, batch_coverage, frame_indices, inverses, frame_count, width, height, fill);
 }
 
+void glass_warp_matrix_bilinear_batch_f32_launch_stream(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    cudaStream_t stream) {
+  constexpr int threads = 256;
+  const std::size_t total = static_cast<std::size_t>(frame_count) * width * height;
+  const int blocks = static_cast<int>((total + threads - 1) / threads);
+  glass_warp_matrix_bilinear_batch_f32_kernel<<<blocks, threads, 0, stream>>>(
+      stack, batch_output, batch_coverage, frame_indices, inverses, frame_count, width, height, fill);
+}
+
 __device__ float glass_sinc_f32(float x) {
   const float ax = fabsf(x);
   if (ax < 1.0e-6f) {
@@ -543,6 +612,34 @@ void glass_warp_matrix_lanczos3_batch_f32_launch(
       clamping_threshold);
 }
 
+void glass_warp_matrix_lanczos3_batch_f32_launch_stream(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    float clamping_threshold,
+    cudaStream_t stream) {
+  constexpr int threads = 256;
+  const std::size_t total = static_cast<std::size_t>(frame_count) * width * height;
+  const int blocks = static_cast<int>((total + threads - 1) / threads);
+  glass_warp_matrix_lanczos3_batch_f32_kernel<<<blocks, threads, 0, stream>>>(
+      stack,
+      batch_output,
+      batch_coverage,
+      frame_indices,
+      inverses,
+      frame_count,
+      width,
+      height,
+      fill,
+      clamping_threshold);
+}
+
 __global__ void glass_warp_matrix_lanczos3_batch_unclamped_f32_kernel(
     const float* stack,
     float* batch_output,
@@ -653,6 +750,32 @@ void glass_warp_matrix_lanczos3_batch_unclamped_f32_launch(
       fill);
 }
 
+void glass_warp_matrix_lanczos3_batch_unclamped_f32_launch_stream(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    cudaStream_t stream) {
+  constexpr int threads = 256;
+  const std::size_t total = static_cast<std::size_t>(frame_count) * width * height;
+  const int blocks = static_cast<int>((total + threads - 1) / threads);
+  glass_warp_matrix_lanczos3_batch_unclamped_f32_kernel<<<blocks, threads, 0, stream>>>(
+      stack,
+      batch_output,
+      batch_coverage,
+      frame_indices,
+      inverses,
+      frame_count,
+      width,
+      height,
+      fill);
+}
+
 __global__ void glass_warp_batch_coverage_reduce_f32_kernel(
     const unsigned char* batch_coverage,
     float* coverage_accumulator,
@@ -710,6 +833,20 @@ void glass_warp_batch_scatter_f32_launch(
       batch_output, stack, frame_indices, frame_count, pixels_per_frame);
 }
 
+void glass_warp_batch_scatter_f32_launch_stream(
+    const float* batch_output,
+    float* stack,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame,
+    cudaStream_t stream) {
+  constexpr int threads = 256;
+  const std::size_t total = static_cast<std::size_t>(frame_count) * pixels_per_frame;
+  const int blocks = static_cast<int>((total + threads - 1) / threads);
+  glass_warp_batch_scatter_f32_kernel<<<blocks, threads, 0, stream>>>(
+      batch_output, stack, frame_indices, frame_count, pixels_per_frame);
+}
+
 __global__ void glass_warp_batch_scatter_reduce_f32_kernel(
     const float* batch_output,
     const unsigned char* batch_coverage,
@@ -746,6 +883,27 @@ void glass_warp_batch_scatter_reduce_f32_launch(
   constexpr int threads = 256;
   const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
   glass_warp_batch_scatter_reduce_f32_kernel<<<blocks, threads>>>(
+      batch_output,
+      batch_coverage,
+      stack,
+      coverage_accumulator,
+      frame_indices,
+      frame_count,
+      pixels_per_frame);
+}
+
+void glass_warp_batch_scatter_reduce_f32_launch_stream(
+    const float* batch_output,
+    const unsigned char* batch_coverage,
+    float* stack,
+    float* coverage_accumulator,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame,
+    cudaStream_t stream) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  glass_warp_batch_scatter_reduce_f32_kernel<<<blocks, threads, 0, stream>>>(
       batch_output,
       batch_coverage,
       stack,

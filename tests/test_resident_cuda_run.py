@@ -52,6 +52,7 @@ from glass.engine.resident_cuda import (
     _select_star_guarded_seed,
     _tile_local_policy_application_arrays,
     _validate_resident_winsorized_runtime_contract,
+    run_resident_calibration_integration,
 )
 from glass.cpu.registration import translation_matrix
 from tests.conftest import cuda_module_or_skip
@@ -304,6 +305,42 @@ def test_resident_memory_admission_accepts_explicit_chunk_capacity() -> None:
         item["chunked_warp_capacity_frames"]
         for item in admission["peak_group"]["capacity_options"]
     ] == [16, 8, 4, 2, 1, 0]
+
+
+def test_resident_memory_admission_accepts_pipelined_dispatch() -> None:
+    frames = [
+        {"id": f"L{index:03d}", "frame_type": "light", "filter": "H", "height": 72, "width": 80}
+        for index in range(12)
+    ]
+
+    admission = build_resident_memory_admission(
+        {"frames": frames},
+        resident_registration="similarity_cuda_triangle",
+        resident_warp_batch_dispatch="pipelined",
+        resident_warp_chunk_capacity_frames=8,
+        vram_budget_gb=1.0,
+    )
+
+    assert admission["passed"] is True
+    assert admission["requested_warp_batch_dispatch"] == "pipelined"
+    assert admission["selected_warp_batch_dispatch"] == "pipelined"
+    assert admission["selected_chunk_capacity_frames"] == 8
+    assert admission["peak_group"]["planned_warp_frame_count"] == 11
+    assert admission["peak_group"]["chunked_warp_planned_workspace_bytes"] > 0
+
+
+def test_resident_run_rejects_pipelined_dispatch_with_audit_maps(tmp_path: Path) -> None:
+    plan = tmp_path / "processing_plan.json"
+    write_json(plan, {"frames": [], "light_plans": [], "executable": True})
+
+    with pytest.raises(ValueError, match="resident_output_maps=minimal"):
+        run_resident_calibration_integration(
+            plan,
+            tmp_path / "run",
+            resident_registration="similarity_cuda_triangle",
+            resident_warp_batch_dispatch="pipelined",
+            resident_output_maps="audit",
+        )
 
 
 def test_resident_memory_admission_counts_stem_excludes() -> None:
@@ -611,6 +648,68 @@ def test_resident_registration_matrix_batch_honors_chunk_capacity() -> None:
     assert timing["scatter_kernel_launches"] == 3
     assert timing["total_s"] == pytest.approx(1.0)
     assert timing["timing_model"] == "fake_chunked_one_sync"
+
+
+def test_resident_registration_matrix_batch_honors_pipelined_dispatch() -> None:
+    class FakeStack:
+        def __init__(self) -> None:
+            self.calls: list[list[int]] = []
+
+        def apply_matrix_lanczos3_frames(
+            self,
+            indices: list[int],
+            matrices: np.ndarray,
+            fill: float,
+            clamping_threshold: float,
+            dispatch: str = "loop",
+            max_chunk_capacity_frames: int | None = None,
+            track_coverage: bool = True,
+        ) -> dict[str, object]:
+            self.calls.append(list(indices))
+            assert dispatch == "pipelined"
+            assert max_chunk_capacity_frames == 8
+            assert track_coverage is False
+            assert matrices.shape[0] == len(indices)
+            assert np.isnan(fill)
+            assert clamping_threshold == pytest.approx(-1.0)
+            return {
+                "batched": True,
+                "frame_count": len(indices),
+                "fallback_frame_count": 0,
+                "timing_model": "native_pipelined_batch_warp_serial_coverage",
+                "inverse_upload_mode": "pipelined_chunk_device_batch",
+                "batch_chunk_frames": 8,
+                "batch_chunk_count": 2,
+                "batch_lane_count": 2,
+                "batch_stream_count": 2,
+                "coverage_reduce_serialized": False,
+                "track_coverage": track_coverage,
+                "coverage_accumulator_updated": track_coverage,
+                "total_s": 0.75,
+            }
+
+    stack = FakeStack()
+    matrices = [
+        (index, translation_matrix(float(index), -float(index)))
+        for index in range(9)
+    ]
+
+    models, timing = _apply_resident_registration_matrix_batch(
+        stack,
+        matrices,
+        interpolation="lanczos3",
+        clamping_threshold=-1.0,
+        batch_dispatch="pipelined",
+        chunk_capacity_frames=8,
+        track_coverage=False,
+    )
+
+    assert models == ["matrix_lanczos3_batch"] * 9
+    assert stack.calls == [[0, 1, 2, 3, 4, 5, 6, 7, 8]]
+    assert timing["timing_model"] == "native_pipelined_batch_warp_serial_coverage"
+    assert timing["inverse_upload_mode"] == "pipelined_chunk_device_batch"
+    assert timing["batch_lane_count"] == 2
+    assert timing["coverage_reduce_serialized"] is False
 
 
 def test_resident_registration_matrix_batch_can_skip_warp_coverage_tracking() -> None:
