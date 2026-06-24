@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 import glass.engine.resident_cuda as resident_cuda
+from glass.cpu.integration import weighted_integrate_stack
 from glass.engine.resident_cuda import _load_or_build_matching_masters
 from glass.io.fits_fast import SimpleFitsImageSpec
 from glass.io.fits_io import read_fits_data, write_fits_data
@@ -102,7 +103,9 @@ def test_resident_matching_master_cache_uses_stack_engine_contract(tmp_path: Pat
     assert stats["cache_hit"] is False
     assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_policy_master_cache_v2"
     assert stats["tile_stack_mode"] == "stack_engine_cpu"
-    assert stats["stack_engine_fallback_reason"] == "resident_cuda_mean_supports_no_rejection_only"
+    assert stats["stack_engine_fallback_reason"] == (
+        "resident_hardened_winsorized_requires_winsorized_sigma_rejection"
+    )
     assert stats["stack_engine_enabled"] is True
     assert stats["master_rejection_requested"] == "minmax"
     assert stats["master_rejection_applied"] == "minmax"
@@ -148,6 +151,145 @@ def test_resident_matching_master_cache_uses_stack_engine_contract(tmp_path: Pat
     assert np.allclose(cached_bias, bias)
     assert np.allclose(cached_dark, dark)
     assert np.allclose(cached_flat, flat)
+
+
+def test_resident_matching_master_cache_can_use_resident_cuda_hardened_winsorized_builder(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class FakeResidentCalibratedStack:
+        instances: list["FakeResidentCalibratedStack"] = []
+
+        def __init__(self, frame_count: int, height: int, width: int) -> None:
+            self.frame_count = int(frame_count)
+            self.height = int(height)
+            self.width = int(width)
+            self.frames: list[np.ndarray | None] = [None] * self.frame_count
+            FakeResidentCalibratedStack.instances.append(self)
+
+        def upload_calibrated_frame(self, index: int, frame) -> None:
+            arr = np.asarray(frame, dtype=np.float32)
+            assert arr.shape == (self.height, self.width)
+            self.frames[int(index)] = arr.copy()
+
+        def integrate_hardened_winsorized_sigma_timed(
+            self,
+            weights=None,
+            low_sigma: float = 3.0,
+            high_sigma: float = 3.0,
+        ):
+            stack = np.stack([frame for frame in self.frames if frame is not None], axis=0)
+            master, weight, coverage, low, high = weighted_integrate_stack(
+                stack,
+                weights=weights,
+                rejection="winsorized_sigma",
+                low_sigma=low_sigma,
+                high_sigma=high_sigma,
+            )
+            return master, weight, coverage, low, high, {
+                "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+                "resident_winsorized_mode": "hardened_cpu_parity",
+                "total_s": 0.01,
+            }
+
+    def fake_native_read(path, dtype=np.float32, output=None):
+        data = read_fits_data(path, dtype=dtype)
+        if output is not None:
+            output[...] = data
+            data = output
+        return data, {
+            "fits_reader_backend": "fake_native_direct_simple",
+            "fits_native_file_read_s": 0.001,
+            "fits_native_decode_s": 0.002,
+            "fits_native_total_s": 0.003,
+            "fits_native_bytes_read": int(np.asarray(data).nbytes),
+        }
+
+    monkeypatch.setattr(resident_cuda, "_resident_master_cuda_mean_available", lambda: (True, ""))
+    monkeypatch.setattr(resident_cuda, "read_simple_fits_image_native_direct_timed", fake_native_read)
+    monkeypatch.setattr("glass_cuda.ResidentCalibratedStack", FakeResidentCalibratedStack)
+
+    bias_ids = _write_constant_frames(tmp_path, "B", [10.0, 10.0, 10.0, 1000.0], exposure_s=0.0)
+    dark_ids = _write_constant_frames(tmp_path, "D", [100.0, 102.0, 104.0, 1000.0], exposure_s=120.0)
+    flat_ids = _write_constant_frames(tmp_path, "F", [100.0, 110.0, 120.0, 10000.0], exposure_s=1.0)
+    frames = {
+        frame_id: {
+            "id": frame_id,
+            "path": str(tmp_path / f"{frame_id}.fits"),
+            "exposure_s": 120.0 if frame_id.startswith("D") else 1.0,
+            "width": 4,
+            "height": 4,
+        }
+        for frame_id in [*bias_ids, *dark_ids, *flat_ids]
+    }
+    shape = {"height": 4, "width": 4}
+    groups = {
+        "B": {"group_id": "B", "group_type": "bias", "frames": bias_ids, "shape": shape},
+        "D": {"group_id": "D", "group_type": "dark", "frames": dark_ids, "shape": shape},
+        "F": {"group_id": "F", "group_type": "flat", "frames": flat_ids, "shape": shape},
+    }
+    policy = CalibrationPolicy(
+        master_dark_includes_bias=False,
+        flat_normalization="median",
+        flat_floor=0.05,
+        master_rejection="winsorized_sigma",
+        master_rejection_low_sigma=1.0,
+        master_rejection_high_sigma=1.0,
+        master_rejection_iterations=1,
+        master_rejection_min_samples=3,
+        master_rejection_max_fraction=0.5,
+    )
+
+    bias, dark, flat, stats, dark_exposure = _load_or_build_matching_masters(
+        tmp_path / "run_cuda_winsor",
+        "H",
+        4,
+        4,
+        frames,
+        groups,
+        "B",
+        "D",
+        "F",
+        policy,
+        master_cache_dir=tmp_path / "shared_cuda_winsor_cache",
+    )
+
+    expected_bias = weighted_integrate_stack(
+        np.stack([np.full((4, 4), value, dtype=np.float32) for value in [10.0, 10.0, 10.0, 1000.0]]),
+        rejection="winsorized_sigma",
+        low_sigma=1.0,
+        high_sigma=1.0,
+    )[0]
+    expected_dark_raw = weighted_integrate_stack(
+        np.stack([np.full((4, 4), value, dtype=np.float32) for value in [100.0, 102.0, 104.0, 1000.0]]),
+        rejection="winsorized_sigma",
+        low_sigma=1.0,
+        high_sigma=1.0,
+    )[0]
+
+    assert len(FakeResidentCalibratedStack.instances) == 3
+    assert stats["cache_hit"] is False
+    assert stats["tile_stack_mode"] == "stack_engine_cuda_hardened_winsorized"
+    assert stats["stack_engine_fallback_reason"] is None
+    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_policy_master_cache_v2"
+    assert stats["master_rejection_applied"] == "winsorized_sigma"
+    assert stats["master_rejection_dispatch_reason"] == (
+        "resident_master_cache_applied_policy_with_resident_cuda_hardened_winsorized"
+    )
+    bias_metrics = stats["stack_engine_metrics"]["bias"]
+    assert bias_metrics["execution_path"] == "resident_cuda_hardened_winsorized_sigma"
+    assert bias_metrics["resident_master_cache_builder_dispatch"] == (
+        "resident_cuda_native_direct_hardened_winsorized"
+    )
+    assert bias_metrics["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert bias_metrics["resident_hardened_policy_guard"]["triggered_pixels"] == 0
+    assert bias_metrics["result_contract_passed"] is True
+    assert stats["dq_provenance_summary"]["bias"]["engine"] == "stack_engine_cuda_hardened_winsorized"
+    assert stats["dq_provenance_summary"]["bias"]["sample_accounting_closure"]["status"] == "passed"
+    assert dark_exposure == 120.0
+    assert np.allclose(bias, expected_bias)
+    assert np.allclose(dark, expected_dark_raw - expected_bias)
+    assert np.allclose(np.median(flat), 1.0)
 
 
 def test_resident_matching_master_cache_can_use_resident_cuda_mean_builder(

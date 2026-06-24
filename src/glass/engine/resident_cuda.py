@@ -4914,6 +4914,41 @@ def _resident_master_cuda_mean_available() -> tuple[bool, str]:
     return True, ""
 
 
+def _resident_master_cuda_hardened_winsorized_available() -> tuple[bool, str]:
+    available, reason = _resident_master_cuda_mean_available()
+    if not available:
+        return available, reason
+    try:
+        import glass_cuda
+    except Exception as exc:
+        return False, f"glass_cuda_import_failed:{type(exc).__name__}:{exc}"
+    stack_cls = getattr(glass_cuda, "ResidentCalibratedStack", None)
+    if stack_cls is None:
+        return False, "resident_calibrated_stack_wrapper_unavailable"
+    if not hasattr(stack_cls, "integrate_hardened_winsorized_sigma_timed"):
+        return False, "resident_hardened_winsorized_method_unavailable"
+    return True, ""
+
+
+def _resident_master_cuda_hardened_winsorized_eligible(
+    policy: CalibrationPolicy,
+    frame_count: int,
+) -> tuple[bool, str]:
+    rejection = _resident_master_rejection_policy(policy)
+    if rejection.method != "winsorized_sigma" or rejection.iterations <= 0:
+        return False, "resident_hardened_winsorized_requires_winsorized_sigma_rejection"
+    if rejection.iterations != 1:
+        return False, "resident_hardened_winsorized_supports_one_iteration_only"
+    if frame_count > RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT:
+        return False, (
+            "resident_hardened_winsorized_frame_count_exceeds_limit:"
+            f"{frame_count}>{RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT}"
+        )
+    if rejection.low_sigma <= 0.0 or rejection.high_sigma <= 0.0:
+        return False, "resident_hardened_winsorized_requires_positive_sigma_thresholds"
+    return True, ""
+
+
 def _resident_master_raw_u16_eligible(specs: list[Any], stack: Any) -> tuple[bool, str]:
     method = "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed"
     if not hasattr(stack, method):
@@ -5169,6 +5204,285 @@ def _stack_resident_master_array_with_resident_cuda_mean(
     return result.master.astype(np.float32, copy=True), dict(result.metrics)
 
 
+def _stack_resident_master_array_with_resident_cuda_hardened_winsorized(
+    paths: list[Path],
+    policy: CalibrationPolicy,
+    *,
+    source_kind: str,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    if not paths:
+        raise ValueError("cannot stack an empty resident master frame list")
+    eligible, reason = _resident_master_cuda_hardened_winsorized_eligible(policy, len(paths))
+    if not eligible:
+        raise RuntimeError(reason)
+    import glass_cuda
+
+    specs = [simple_fits_image_spec(path) for path in paths]
+    height, width = specs[0].shape
+    for spec in specs[1:]:
+        if spec.shape != (height, width):
+            raise ValueError(f"resident master {source_kind} shape mismatch: {spec.shape} != {(height, width)}")
+
+    request = _resident_master_stack_request(
+        tuple(f"{source_kind}-{index}" for index in range(len(paths))),
+        policy,
+        source_kind=source_kind,
+        metadata={"resident_cuda_hardened_winsorized_fast_path": True},
+    )
+    rejection = _resident_master_rejection_policy(policy)
+    total_start = perf_counter()
+    allocate_start = perf_counter()
+    stack = glass_cuda.ResidentCalibratedStack(len(paths), height, width)
+    allocate_s = perf_counter() - allocate_start
+
+    per_frame_read_s: list[float] = []
+    per_frame_upload_s: list[float] = []
+    per_frame_nonfinite: list[int] = []
+    fits_backends: list[str] = []
+    fits_native_file_read_s: list[float] = []
+    fits_native_decode_s: list[float] = []
+    fits_native_total_s: list[float] = []
+    fits_native_bytes_read = 0
+    input_nonfinite_sample_total = 0
+    pixel_count = int(height) * int(width)
+    raw_u16_enabled, raw_u16_fallback_reason = _resident_master_raw_u16_eligible(specs, stack)
+    raw_u16_timing: dict[str, Any] | None = None
+    raw_h2d_bytes = 0
+    raw_float32_host_bytes_avoided = 0
+    host_buffer_bytes = 0
+    source_sample_format = "native_direct_float32_host"
+    native_method = (
+        "ResidentCalibratedStack.upload_calibrated_frame + "
+        "integrate_hardened_winsorized_sigma"
+    )
+
+    if raw_u16_enabled:
+        raw_buffers: list[np.ndarray | None] = []
+        for path, spec in zip(paths, specs, strict=True):
+            read_start = perf_counter()
+            raw, profile = read_simple_fits_u16be_raw_timed(path, spec=spec)
+            per_frame_read_s.append(perf_counter() - read_start)
+            raw_buffers.append(raw)
+            fits_backends.append(str(profile.get("fits_reader_backend") or "native_u16be_raw"))
+            if "fits_native_file_read_s" in profile:
+                fits_native_file_read_s.append(float(profile.get("fits_native_file_read_s", 0.0) or 0.0))
+            if "fits_native_decode_s" in profile:
+                fits_native_decode_s.append(float(profile.get("fits_native_decode_s", 0.0) or 0.0))
+            if "fits_native_total_s" in profile:
+                fits_native_total_s.append(float(profile.get("fits_native_total_s", 0.0) or 0.0))
+            fits_native_bytes_read += int(profile.get("fits_native_bytes_read", 0) or 0)
+            per_frame_nonfinite.append(0)
+
+        released_indices: list[int] = []
+
+        def _release_raw_buffers(indices: Any) -> None:
+            for index in indices:
+                idx = int(index)
+                if 0 <= idx < len(raw_buffers):
+                    raw_buffers[idx] = None
+                    released_indices.append(idx)
+
+        stream_count = min(_RESIDENT_MASTER_RAW_U16_STREAM_COUNT, len(paths))
+        wave_frames = min(_RESIDENT_MASTER_RAW_U16_WAVE_FRAMES, stream_count)
+        upload_start = perf_counter()
+        raw_u16_timing = stack.calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed(
+            list(range(len(paths))),
+            raw_buffers,
+            np.ones(len(paths), dtype=np.float32),
+            np.full(len(paths), np.nan, dtype=np.float32),
+            stream_count,
+            wave_frames,
+            _release_raw_buffers,
+            None,
+        )
+        per_frame_upload_s.append(perf_counter() - upload_start)
+        raw_h2d_bytes = int(raw_u16_timing.get("raw_h2d_bytes", 0) or 0)
+        raw_float32_host_bytes_avoided = int(raw_u16_timing.get("float32_host_bytes_avoided", 0) or 0)
+        host_buffer_bytes = raw_h2d_bytes
+        source_sample_format = str(raw_u16_timing.get("source_sample_format", "fits_bitpix16_bzero32768_big_endian"))
+        native_method = (
+            "ResidentCalibratedStack."
+            "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed + "
+            "integrate_hardened_winsorized_sigma"
+        )
+    else:
+        host_buffer = np.empty((height, width), dtype=np.float32)
+        host_buffer_bytes = int(host_buffer.nbytes)
+        for index, (path, spec) in enumerate(zip(paths, specs, strict=True)):
+            read_start = perf_counter()
+            frame, profile = read_simple_fits_image_native_direct_timed(path, dtype=np.float32, output=host_buffer)
+            per_frame_read_s.append(perf_counter() - read_start)
+            fits_backends.append(str(profile.get("fits_reader_backend") or "native_direct_simple"))
+            if "fits_native_file_read_s" in profile:
+                fits_native_file_read_s.append(float(profile.get("fits_native_file_read_s", 0.0) or 0.0))
+            if "fits_native_decode_s" in profile:
+                fits_native_decode_s.append(float(profile.get("fits_native_decode_s", 0.0) or 0.0))
+            if "fits_native_total_s" in profile:
+                fits_native_total_s.append(float(profile.get("fits_native_total_s", 0.0) or 0.0))
+            fits_native_bytes_read += int(profile.get("fits_native_bytes_read", 0) or 0)
+            if spec.bitpix > 0 and spec.blank is None:
+                nonfinite_count = 0
+            else:
+                nonfinite_count = int(np.count_nonzero(~np.isfinite(frame)))
+            per_frame_nonfinite.append(nonfinite_count)
+            input_nonfinite_sample_total += nonfinite_count
+
+            upload_start = perf_counter()
+            stack.upload_calibrated_frame(index, frame)
+            per_frame_upload_s.append(perf_counter() - upload_start)
+
+    integrate_start = perf_counter()
+    (
+        master,
+        weight_map,
+        coverage_map,
+        low_rejection_map,
+        high_rejection_map,
+        native_timing,
+    ) = stack.integrate_hardened_winsorized_sigma_timed(
+        None,
+        policy.master_rejection_low_sigma,
+        policy.master_rejection_high_sigma,
+    )
+    integrate_s = perf_counter() - integrate_start
+    total_s = perf_counter() - total_start
+
+    coverage_data = np.asarray(coverage_map, dtype=np.float32)
+    low_data = np.asarray(low_rejection_map, dtype=np.float32)
+    high_data = np.asarray(high_rejection_map, dtype=np.float32)
+    input_valid_map = coverage_data + low_data + high_data
+    rejected_map = low_data + high_data
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rejected_fraction = np.divide(
+            rejected_map,
+            input_valid_map,
+            out=np.zeros_like(rejected_map, dtype=np.float32),
+            where=input_valid_map > 0.0,
+        )
+    policy_guard = (
+        (input_valid_map > 0.0)
+        & (
+            (coverage_data < float(policy.master_rejection_min_samples))
+            | (rejected_fraction > float(policy.master_rejection_max_fraction))
+        )
+    )
+    policy_guard_pixel_count = int(np.count_nonzero(policy_guard))
+    if policy_guard_pixel_count:
+        raise RuntimeError(
+            "resident_cuda_hardened_winsorized_policy_guard_triggered:"
+            f"{policy_guard_pixel_count}_pixels_require_cpu_stack_engine"
+        )
+
+    input_sample_total = int(len(paths) * pixel_count)
+    input_valid_sample_total = int(round(float(np.sum(input_valid_map, dtype=np.float64))))
+    input_invalid_sample_total = max(0, input_sample_total - input_valid_sample_total)
+    valid_total = int(round(float(np.sum(coverage_data, dtype=np.float64))))
+    low_rejected_total = int(round(float(np.sum(low_data, dtype=np.float64))))
+    high_rejected_total = int(round(float(np.sum(high_data, dtype=np.float64))))
+    coverage_zero_pixel_total = int(np.count_nonzero(coverage_data <= 0.0))
+    low_rejected_pixel_total = int(np.count_nonzero(low_data > 0.0))
+    high_rejected_pixel_total = int(np.count_nonzero(high_data > 0.0))
+    execution_path = "resident_cuda_hardened_winsorized_sigma"
+    metrics: dict[str, Any] = {
+        "frame_count": len(paths),
+        "width": width,
+        "height": height,
+        "combine": "mean",
+        "rejection": rejection.method,
+        "rejection_scale_estimator": rejection_scale_estimator(rejection),
+        "valid_samples": valid_total,
+        "input_valid_samples": input_valid_sample_total,
+        "input_invalid_samples": input_invalid_sample_total,
+        "low_rejected": low_rejected_total,
+        "high_rejected": high_rejected_total,
+        "rejected_samples": low_rejected_total + high_rejected_total,
+        "execution_path": execution_path,
+        "tile_size": 0,
+        "tile_stack_mode": "stack_engine_cuda_hardened_winsorized",
+        "resident_master_cache_builder": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+        "resident_master_cache_builder_dispatch": "resident_cuda_raw_u16_hardened_winsorized"
+        if raw_u16_enabled
+        else "resident_cuda_native_direct_hardened_winsorized",
+        "native_method": native_method,
+        "master_rejection_requested": policy.master_rejection,
+        "master_rejection_applied": "winsorized_sigma",
+        "master_rejection_dispatch_reason": (
+            "resident_master_cache_applied_policy_with_resident_cuda_hardened_winsorized"
+        ),
+        "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+        "resident_hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
+        "resident_hardened_policy_guard_pixel_count": policy_guard_pixel_count,
+        "resident_hardened_policy_guard": {
+            "min_samples": int(policy.master_rejection_min_samples),
+            "max_reject_fraction": float(policy.master_rejection_max_fraction),
+            "triggered_pixels": policy_guard_pixel_count,
+        },
+        "timing_s": {
+            "total": float(total_s),
+            "resident_stack_allocate": float(allocate_s),
+            "fits_read": float(sum(per_frame_read_s)),
+            "resident_upload": float(sum(per_frame_upload_s)),
+            "resident_raw_u16_h2d_decode_store": float(sum(per_frame_upload_s)) if raw_u16_enabled else 0.0,
+            "resident_integrate_hardened_winsorized": float(integrate_s),
+        },
+        "native_timing_s": native_timing,
+        "fits_backend_counts": _value_counts(fits_backends),
+        "fits_native_file_read_cumulative_s": _timing_summary(fits_native_file_read_s)["total"],
+        "fits_native_decode_cumulative_s": _timing_summary(fits_native_decode_s)["total"],
+        "fits_native_total_cumulative_s": _timing_summary(fits_native_total_s)["total"],
+        "fits_native_bytes_read": int(fits_native_bytes_read),
+        "per_frame_nonfinite_sample_counts": per_frame_nonfinite,
+        "source_sample_format": source_sample_format,
+        "raw_u16_gpu_decode_enabled": bool(raw_u16_enabled),
+        "raw_u16_gpu_decode_fallback_reason": raw_u16_fallback_reason,
+        "raw_u16_gpu_decode_timing": raw_u16_timing,
+        "raw_h2d_bytes": int(raw_h2d_bytes),
+        "raw_float32_host_bytes_avoided": int(raw_float32_host_bytes_avoided),
+        "host_buffer_bytes": int(host_buffer_bytes),
+        "resident_stack_required_bytes": int(len(paths) * pixel_count * 4),
+    }
+    provenance: dict[str, Any] = {
+        "schema_version": 1,
+        "input_samples": input_sample_total,
+        "input_valid_samples_before_rejection": input_valid_sample_total,
+        "input_invalid_samples_before_rejection": input_invalid_sample_total,
+        "input_flagged_samples": 0,
+        "input_nonfinite_samples": int(input_nonfinite_sample_total),
+        "input_dq_flag_counts": {flag.name.lower(): 0 for flag in DQFlag if flag != DQFlag.VALID},
+        "valid_samples_after_rejection": valid_total,
+        "low_rejected_samples": low_rejected_total,
+        "high_rejected_samples": high_rejected_total,
+        "rejected_samples": low_rejected_total + high_rejected_total,
+        "rejection_policy": rejection_policy_provenance(rejection),
+        "output_coverage_zero_pixels": coverage_zero_pixel_total,
+        "output_low_rejected_pixels": low_rejected_pixel_total,
+        "output_high_rejected_pixels": high_rejected_pixel_total,
+        "output_dq_summary": None,
+        "semantics": (
+            "Resident master-cache hardened winsorized construction keeps calibration "
+            "frames resident on the CUDA device, applies the GLASS winsorized sigma "
+            "threshold kernel, and records StackEngine-compatible sample accounting. "
+            "A policy guard falls back to CPUStackEngine when the native rejection "
+            "maps would violate min-samples or max-reject-fraction constraints."
+        ),
+        "execution_path": execution_path,
+    }
+    result = StackEngineResult(
+        master=np.asarray(master, dtype=np.float32),
+        weight_map=np.asarray(weight_map, dtype=np.float32),
+        coverage_map=coverage_data,
+        low_rejection_map=low_data,
+        high_rejection_map=high_data,
+        dq_provenance=provenance,
+        metrics=metrics,
+    )
+    result_contract = build_stack_engine_result_contract(result, request=request)
+    result.dq_provenance["result_contract"] = result_contract
+    result.metrics["result_contract_passed"] = bool(result_contract["passed"])
+    result.metrics["dq_provenance"] = result.dq_provenance
+    return result.master.astype(np.float32, copy=True), dict(result.metrics)
+
+
 def _stack_resident_master_array_with_cpu_stack_engine(
     paths: list[Path],
     policy: CalibrationPolicy,
@@ -5221,7 +5535,25 @@ def _stack_resident_master_array_with_engine(
 ) -> tuple[np.ndarray, dict[str, Any]]:
     fallback_reason: str | None = None
     if _resident_master_uses_rejection(policy):
-        fallback_reason = "resident_cuda_mean_supports_no_rejection_only"
+        eligible, ineligible_reason = _resident_master_cuda_hardened_winsorized_eligible(policy, len(paths))
+        if eligible:
+            cuda_available, unavailable_reason = _resident_master_cuda_hardened_winsorized_available()
+            if cuda_available:
+                try:
+                    return _stack_resident_master_array_with_resident_cuda_hardened_winsorized(
+                        paths,
+                        policy,
+                        source_kind=source_kind,
+                    )
+                except (FastFitsUnsupported, RuntimeError, ValueError) as exc:
+                    fallback_reason = (
+                        "resident_cuda_hardened_winsorized_unavailable:"
+                        f"{type(exc).__name__}:{exc}"
+                    )
+            else:
+                fallback_reason = unavailable_reason
+        else:
+            fallback_reason = ineligible_reason
     else:
         cuda_available, unavailable_reason = _resident_master_cuda_mean_available()
         if cuda_available:

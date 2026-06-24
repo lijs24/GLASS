@@ -933,6 +933,102 @@ Interpretation:
   `unknown` FITS frames. That is harmless and auditable, but future work can
   add scanner-level ignore/include policies for DQ directories.
 
+### S2-Gate 596: Resident CUDA Hardened Winsorized Master Cache
+
+Gate 596 closes the cold-cache gap left by Gate595. Gate594 made resident
+master-cache construction honor `CalibrationPolicy.master_rejection`, and
+Gate595 made the CPU StackEngine robust path complete, but the real cold-cache
+200-light run still missed the default benchmark speed contract. This gate
+routes compatible default `winsorized_sigma` master bias/dark/flat construction
+through the existing GLASS resident CUDA hardened winsorized kernel while
+preserving CPUStackEngine fallback for unsupported policies.
+
+Implementation:
+
+- `_stack_resident_master_array_with_engine()` now dispatches active
+  `winsorized_sigma` master rejection to
+  `ResidentCalibratedStack.integrate_hardened_winsorized_sigma` when CUDA is
+  available and the request is compatible.
+- Compatible requests require one rejection iteration, positive sigma
+  thresholds, and at most the hardened kernel frame limit of `256` frames.
+- The resident CUDA path reuses the raw u16 FITS GPU-decode upload path for
+  calibration frames, then runs hardened winsorized reduction entirely through
+  the resident stack.
+- A policy guard checks the returned low/high rejection maps against
+  `master_rejection_min_samples` and `master_rejection_max_fraction`; if a
+  pixel would violate those constraints, the builder raises and falls back to
+  CPUStackEngine.
+- Metrics and DQ provenance are StackEngine-compatible and record
+  `tile_stack_mode=stack_engine_cuda_hardened_winsorized`,
+  `resident_winsorized_mode=hardened_cpu_parity`, result-contract status,
+  native timing, raw-u16 upload bytes, and policy-guard pixel counts.
+- Non-winsorized rejection modes, multi-iteration policies, excessive frame
+  counts, CUDA import/device failures, unsupported FITS layouts, and policy
+  guard triggers continue to fall back to CPUStackEngine.
+
+Real 200-light evidence:
+
+- Root:
+  `C:\glass_runs\phase2_s2_gate596_cuda_master_winsorized`
+- Run:
+  `C:\glass_runs\phase2_s2_gate596_cuda_master_winsorized\cold_default_cuda_hardened_winsorized`
+- Cache:
+  `C:\glass_runs\phase2_s2_gate596_cuda_master_winsorized\resident_master_cache_cuda_hardened`
+- Total elapsed: `19.273372500087135 s`.
+- Resident calibration/integration stage: `18.418523599975742 s`.
+- WBPP black-box reference time: `1092.541 s`.
+- Speedup versus reference: `56.68655031676789x`.
+- Compare RMS: `0.005316389020034645`.
+- Compare p99 absolute difference: `0.002127066696993994`.
+- Coverage>=190 fraction with the benchmark `128 px` border ignore:
+  `0.9067672428396554`.
+- Acceptance audit: passed.
+- Master-cache dispatch:
+  - top-level `tile_stack_mode=stack_engine_cuda_hardened_winsorized`;
+  - bias/dark/flat each used
+    `resident_cuda_raw_u16_hardened_winsorized`;
+  - each master result contract passed;
+  - each policy guard reported `0` triggered pixels.
+- Master-cache timings:
+  - bias total `0.8078936000820249 s`, hardened integrate
+    `0.21162339998409152 s`;
+  - dark total `1.1256047999486327 s`, hardened integrate
+    `0.18808859994169325 s`;
+  - flat total `0.5301240999251604 s`, hardened integrate
+    `0.18525479990057647 s`.
+
+Validation commands:
+
+- `.\.venv\Scripts\python.exe -m pytest -q
+  tests\test_resident_master_stack_engine.py`
+- `.\.venv\Scripts\python.exe -m pytest -q
+  tests\test_cuda_resident_stack.py -k hardened_winsorized_sigma`
+- `.\.venv\Scripts\python.exe -m ruff check
+  src\glass\engine\resident_cuda.py tests\test_resident_master_stack_engine.py`
+- real 200-light `glass run` with the default resident CUDA route and a fresh
+  `resident_master_cache_cuda_hardened` cache
+- `glass compare` against the WBPP black-box fastIntegration master using the
+  benchmark scale/offset, `--min-coverage 190`, and `--ignore-border-px 128`
+- `glass acceptance-audit` with
+  `benchmarks\phase2_m38_h_200_ln_on_default_contract.json` plus run-local
+  pipeline, StackEngine, and warp-quality contracts
+- `.\.venv\Scripts\python.exe -m pytest -q`
+
+Interpretation:
+
+- The default corrected robust master-cache cold path now passes the real
+  200-light benchmark speed contract instead of requiring a warm cache.
+- The run keeps the same result-agreement family as Gate595 and passes the
+  LN-on default acceptance contract.
+- The native hardened winsorized kernel remains bounded to at most `256`
+  calibration frames per master group. Larger groups or unsupported policies
+  intentionally fall back until a segmented/batched robust CUDA reduction is
+  implemented.
+- The next substantive gate should continue on resident default completeness:
+  reduce per-frame Python orchestration in registration/warp/LN/integration and
+  broaden hardened master coverage without weakening the StackEngine policy
+  guard.
+
 ### S2-Gate 595: Winsorized Master-Cache Fast Path And Real A/B
 
 Gate 595 follows directly from Gate594. After resident master-cache
