@@ -307,3 +307,34 @@ apart. Disabled resident LN remains explicit: the closure is reported as
 The gate is an accounting and contract hardening step only. It does not change
 the LN coefficient model, CUDA kernels, calibration, registration, rejection,
 or integration math.
+
+## S2-Gate 612 Resident In-Place Apply
+
+S2-Gate 612 changes resident CUDA local-normalization application from a
+temporary-output workflow to an in-place device update. The coefficient model is
+unchanged:
+
+- global LN still applies `value * scale + offset`;
+- grid LN still applies the per-tile scale and offset selected by pixel
+  position;
+- reference, zero-weight, empty, and partial statuses are unchanged.
+
+The implementation difference is operational. `ResidentCalibratedStack`
+previously allocated a full-frame device output for each normalized frame,
+launched the apply kernel into that output, synchronized, copied the full frame
+back over the resident source frame, and freed the temporary output. The
+resident apply kernels now write directly back into the resident frame. This is
+safe because each output pixel depends only on the same input pixel and its
+coefficient cell; there is no cross-pixel dependency.
+
+Artifacts record the mode so the behavior is auditable:
+
+- per-applied frame: `application_profile.mode = in_place_device_update`;
+- group summary: `application.mode_counts`;
+- group summary: `application.temporary_output_bytes = 0`;
+- resident summary: `resident_local_normalization.application`.
+
+The real 200-light Gate612 default regression preserved bit-identical master,
+weight, coverage, low-rejection, high-rejection, and DQ FITS outputs versus
+Gate611 while reducing resident LN wall time from about `1.066 s` to
+`0.507 s`.

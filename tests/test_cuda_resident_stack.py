@@ -1183,9 +1183,12 @@ def test_resident_stack_global_normalization_matches_reference_stats():
     mov_stats = stack.frame_global_stats(1)
     scale = ref_stats["std"] / mov_stats["std"]
     offset = ref_stats["mean"] - mov_stats["mean"] * scale
-    stack.apply_global_normalization_frame(1, scale, offset)
+    profile = stack.apply_global_normalization_frame(1, scale, offset)
     normalized, weight_map = stack.integrate_mean(np.array([0.0, 1.0], dtype=np.float32))
 
+    assert profile["mode"] == "in_place_device_update"
+    assert profile["temporary_output_bytes"] == 0
+    assert profile["device_to_device_copy_s"] == 0.0
     assert np.allclose(normalized, reference, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, np.ones_like(reference, dtype=np.float32))
 
@@ -1202,9 +1205,13 @@ def test_resident_stack_grid_normalization_matches_standalone_cuda():
 
     stack = module.ResidentCalibratedStack(1, frame.shape[0], frame.shape[1])
     stack.upload_calibrated_frame(0, frame)
-    stack.apply_grid_normalization_frame(0, scales, offsets, 3, 4)
+    profile = stack.apply_grid_normalization_frame(0, scales, offsets, 3, 4)
     normalized, weight_map = stack.integrate_mean()
 
+    assert profile["mode"] == "in_place_device_update"
+    assert profile["temporary_output_bytes"] == 0
+    assert profile["coefficient_count"] == scales.size
+    assert profile["device_to_device_copy_s"] == 0.0
     assert np.allclose(normalized, expected, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, np.ones_like(frame, dtype=np.float32))
 
@@ -1238,9 +1245,11 @@ def test_resident_stack_grid_stats_can_drive_in_vram_normalization():
 
     normalization_scales = stats["reference_std"] / stats["source_std"]
     normalization_offsets = stats["reference_mean"] - stats["source_mean"] * normalization_scales
-    stack.apply_grid_normalization_frame(1, normalization_scales, normalization_offsets, 2, 2)
+    profile = stack.apply_grid_normalization_frame(1, normalization_scales, normalization_offsets, 2, 2)
     normalized, weight_map = stack.integrate_mean(np.array([0.0, 1.0], dtype=np.float32))
 
+    assert profile["mode"] == "in_place_device_update"
+    assert profile["temporary_output_bytes"] == 0
     assert np.allclose(normalized, reference, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, np.ones_like(reference, dtype=np.float32))
 

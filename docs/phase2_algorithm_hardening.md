@@ -18250,6 +18250,63 @@ Phase 2 is complete when:
     GLASS synthetic data, and user-owned real benchmark artifacts;
   - no external or proprietary implementation source was inspected or used.
 
+### S2-Gate 612: Resident Local-Normalization In-Place Apply
+
+- Continued the Phase 2 default resident CUDA mainline by reducing the
+  local-normalization memory and copy cost without changing the LN coefficient
+  model or output pixels.
+- Completed:
+  - changed `ResidentCalibratedStack.apply_global_normalization_frame` and
+    `apply_grid_normalization_frame` to apply the LN transform directly to the
+    resident device frame instead of allocating a full-frame temporary output
+    and copying it back device-to-device;
+  - returned native application profiles with
+    `mode=in_place_device_update`, temporary-output bytes, coefficient-upload
+    timing, kernel enqueue timing, sync timing, and total timing;
+  - normalized those profiles in `glass_cuda.py`;
+  - recorded per-frame `application_profile`, group-level
+    `application.mode_counts`, `application.temporary_output_bytes`, and the
+    resident summary `resident_local_normalization.application`;
+  - updated resident CUDA tests to require the in-place profile and artifact
+    contract.
+- Focused validation:
+  - native rebuild:
+    `cmake --build build --config Release --target _glass_cuda_native`;
+  - resident stack LN tests:
+    `3 passed, 51 deselected`;
+  - GPU/CPU local-normalization tests:
+    `5 passed`;
+  - resident CLI LN smoke:
+    `1 passed, 114 deselected`.
+- Real 200-light default regression:
+  - run:
+    `C:\glass_runs\phase2_s2_gate612_ln_inplace\real_200_default_regression`;
+  - comparison:
+    `C:\glass_runs\phase2_s2_gate612_ln_inplace\real_200_vs_gate611_compare.json`;
+  - all six FITS outputs are SHA256-identical to Gate611: master, weight map,
+    coverage map, low rejection map, high rejection map, and DQ map;
+  - `pipeline_contract.json`, `resident_result_contract.json`,
+    `local_norm_contract.json`, `stack_engine_contract.json`, and
+    `warp_quality_contract.json` passed;
+  - resident LN timing improved from Gate611
+    `1.0661148000508547 s` to `0.5070594000862911 s`;
+  - total internal run timing improved from Gate611
+    `11.453746799845248 s` to `11.157036500168033 s`;
+  - the resident LN application artifact records `192` in-place device updates,
+    `temporary_output_bytes=0`, and `device_to_device_copy_s=0.0`.
+- Interpretation:
+  - this is a default-path execution and memory-model improvement, not a
+    presentation-only gate;
+  - the LN formula, grid coefficients, reference selection, frame admission,
+    registration, rejection, DQ bits, and output pixels are unchanged;
+  - the next substantive optimization should target the remaining resident
+    registration/warp orchestration or the bounded 512-frame hardened
+    integration reducer.
+- Clean-room note:
+  - this gate uses GLASS-owned CUDA kernels, GLASS resident artifact contracts,
+    GLASS tests, and user-owned real benchmark artifacts;
+  - no external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 610: Native Hardened Integration Timing Profile
 
 - Continued the Phase 2 integration mainline by isolating the largest current

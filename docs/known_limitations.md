@@ -5,7 +5,11 @@ Current code is intentionally gated:
 - XISF parsing is provisional and limited to the XML prefix.
 - CPU registration currently estimates only simple translation from ordered
   star lists.
-- Local normalization is a global helper placeholder until Gate 10.
+- Local normalization has resident CUDA global/grid mean-std support and is part
+  of the default high-VRAM path. S2-Gate 612 applies the per-frame LN transform
+  in place in VRAM, but grid-LN statistics are still evaluated one source frame
+  at a time; a future batched stats/apply kernel is still needed for the final
+  resident LN throughput target.
 - HTML reports include required sections but many stage-specific tables remain
   pending until their gates produce artifacts.
 - The resident CUDA path keeps calibrated light frames in VRAM and is fast on

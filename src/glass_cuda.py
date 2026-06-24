@@ -3891,10 +3891,32 @@ class ResidentCalibratedStack:
             "model": str(result["model"]),
         }
 
-    def apply_global_normalization_frame(self, index: int, scale: float, offset: float) -> None:
+    def apply_global_normalization_frame(self, index: int, scale: float, offset: float) -> dict[str, Any]:
         if not hasattr(self._impl, "apply_global_normalization_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_global_normalization_frame is not available")
-        self._impl.apply_global_normalization_frame(int(index), float(scale), float(offset))
+        result = self._impl.apply_global_normalization_frame(int(index), float(scale), float(offset))
+        if isinstance(result, dict):
+            return {
+                "schema_version": int(result.get("schema_version", 1)),
+                "mode": str(result.get("mode", "in_place_device_update")),
+                "model": str(result.get("model", "resident_global_mean_std")),
+                "frame_index": int(result.get("frame_index", index)),
+                "frame_bytes": int(result.get("frame_bytes", 0)),
+                "temporary_output_bytes": int(result.get("temporary_output_bytes", 0)),
+                "device_to_device_copy_s": float(result.get("device_to_device_copy_s", 0.0)),
+                "kernel_enqueue_s": float(result.get("kernel_enqueue_s", 0.0)),
+                "sync_s": float(result.get("sync_s", 0.0)),
+                "total_s": float(result.get("total_s", 0.0)),
+            }
+        return {
+            "schema_version": 1,
+            "mode": "legacy_temp_output_device_copy",
+            "model": "resident_global_mean_std",
+            "frame_index": int(index),
+            "temporary_output_bytes": None,
+            "device_to_device_copy_s": None,
+            "total_s": None,
+        }
 
     def apply_grid_normalization_frame(
         self,
@@ -3903,18 +3925,46 @@ class ResidentCalibratedStack:
         offsets: Any,
         tile_height: int,
         tile_width: int,
-    ) -> None:
+    ) -> dict[str, Any]:
         if not hasattr(self._impl, "apply_grid_normalization_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_grid_normalization_frame is not available")
         scale_grid = np.asarray(scales, dtype=np.float32)
         offset_grid = np.asarray(offsets, dtype=np.float32)
-        self._impl.apply_grid_normalization_frame(
+        result = self._impl.apply_grid_normalization_frame(
             int(index),
             scale_grid,
             offset_grid,
             int(tile_height),
             int(tile_width),
         )
+        if isinstance(result, dict):
+            return {
+                "schema_version": int(result.get("schema_version", 1)),
+                "mode": str(result.get("mode", "in_place_device_update")),
+                "model": str(result.get("model", "resident_grid_mean_std")),
+                "frame_index": int(result.get("frame_index", index)),
+                "frame_bytes": int(result.get("frame_bytes", 0)),
+                "temporary_output_bytes": int(result.get("temporary_output_bytes", 0)),
+                "coefficient_count": int(result.get("coefficient_count", scale_grid.size)),
+                "coefficient_bytes": int(result.get("coefficient_bytes", scale_grid.nbytes + offset_grid.nbytes)),
+                "coefficient_alloc_s": float(result.get("coefficient_alloc_s", 0.0)),
+                "coefficient_upload_s": float(result.get("coefficient_upload_s", 0.0)),
+                "device_to_device_copy_s": float(result.get("device_to_device_copy_s", 0.0)),
+                "kernel_enqueue_s": float(result.get("kernel_enqueue_s", 0.0)),
+                "sync_s": float(result.get("sync_s", 0.0)),
+                "total_s": float(result.get("total_s", 0.0)),
+            }
+        return {
+            "schema_version": 1,
+            "mode": "legacy_temp_output_device_copy",
+            "model": "resident_grid_mean_std",
+            "frame_index": int(index),
+            "temporary_output_bytes": None,
+            "coefficient_count": int(scale_grid.size),
+            "coefficient_bytes": int(scale_grid.nbytes + offset_grid.nbytes),
+            "device_to_device_copy_s": None,
+            "total_s": None,
+        }
 
     def star_local_max_mask(self, index: int, threshold: float) -> np.ndarray:
         if not hasattr(self._impl, "star_local_max_mask"):

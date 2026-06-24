@@ -8382,26 +8382,38 @@ class ResidentCalibratedStack {
     return result;
   }
 
-  void apply_global_normalization_frame(std::size_t index, float scale, float offset) {
+  py::dict apply_global_normalization_frame(std::size_t index, float scale, float offset) {
     require_loaded(index, "global local normalization");
-    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
-    float* d_output = nullptr;
+    const auto total_start = Clock::now();
+    double kernel_enqueue_s = 0.0;
+    double sync_s = 0.0;
     try {
-      check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident global normalization output)");
-      glass_local_norm_apply_f32_launch(d_stack_ + index * pixels_per_frame_, d_output, pixels_per_frame_, scale, offset);
+      float* frame = d_stack_ + index * pixels_per_frame_;
+      const auto kernel_start = Clock::now();
+      glass_local_norm_apply_f32_launch(frame, frame, pixels_per_frame_, scale, offset);
+      kernel_enqueue_s = seconds_since(kernel_start);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_global_normalization_frame kernel launch");
+      const auto sync_start = Clock::now();
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_global_normalization_frame synchronize");
-      check_cuda(
-          cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
-          "cudaMemcpy(resident global normalized frame)");
+      sync_s = seconds_since(sync_start);
     } catch (...) {
-      cudaFree(d_output);
       throw;
     }
-    cudaFree(d_output);
+    py::dict result;
+    result["schema_version"] = 1;
+    result["mode"] = "in_place_device_update";
+    result["model"] = "resident_global_mean_std";
+    result["frame_index"] = static_cast<unsigned long long>(index);
+    result["frame_bytes"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float));
+    result["temporary_output_bytes"] = static_cast<unsigned long long>(0);
+    result["device_to_device_copy_s"] = 0.0;
+    result["kernel_enqueue_s"] = kernel_enqueue_s;
+    result["sync_s"] = sync_s;
+    result["total_s"] = seconds_since(total_start);
+    return result;
   }
 
-  void apply_grid_normalization_frame(
+  py::dict apply_grid_normalization_frame(
       std::size_t index,
       py::array_t<float, py::array::c_style | py::array::forcecast> scales,
       py::array_t<float, py::array::c_style | py::array::forcecast> offsets,
@@ -8433,27 +8445,35 @@ class ResidentCalibratedStack {
     }
     const std::size_t coefficient_count =
         static_cast<std::size_t>(grid_rows) * static_cast<std::size_t>(grid_cols);
-    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
-    float* d_output = nullptr;
+    const auto total_start = Clock::now();
+    double coefficient_alloc_s = 0.0;
+    double coefficient_upload_s = 0.0;
+    double kernel_enqueue_s = 0.0;
+    double sync_s = 0.0;
     float* d_scales = nullptr;
     float* d_offsets = nullptr;
     try {
-      check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident grid normalization output)");
+      const auto alloc_start = Clock::now();
       check_cuda(
           cudaMalloc(&d_scales, coefficient_count * sizeof(float)),
           "cudaMalloc(resident grid normalization scales)");
       check_cuda(
           cudaMalloc(&d_offsets, coefficient_count * sizeof(float)),
           "cudaMalloc(resident grid normalization offsets)");
+      coefficient_alloc_s = seconds_since(alloc_start);
+      const auto upload_start = Clock::now();
       check_cuda(
           cudaMemcpy(d_scales, scales_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident grid normalization scales)");
       check_cuda(
           cudaMemcpy(d_offsets, offsets_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident grid normalization offsets)");
+      coefficient_upload_s = seconds_since(upload_start);
+      float* frame = d_stack_ + index * pixels_per_frame_;
+      const auto kernel_start = Clock::now();
       glass_local_norm_apply_grid_f32_launch(
-          d_stack_ + index * pixels_per_frame_,
-          d_output,
+          frame,
+          frame,
           d_scales,
           d_offsets,
           static_cast<int>(width_),
@@ -8462,20 +8482,34 @@ class ResidentCalibratedStack {
           tile_height,
           grid_cols,
           grid_rows);
+      kernel_enqueue_s = seconds_since(kernel_start);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_grid_normalization_frame kernel launch");
+      const auto sync_start = Clock::now();
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_grid_normalization_frame synchronize");
-      check_cuda(
-          cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
-          "cudaMemcpy(resident grid normalized frame)");
+      sync_s = seconds_since(sync_start);
     } catch (...) {
-      cudaFree(d_output);
       cudaFree(d_scales);
       cudaFree(d_offsets);
       throw;
     }
-    cudaFree(d_output);
     cudaFree(d_scales);
     cudaFree(d_offsets);
+    py::dict result;
+    result["schema_version"] = 1;
+    result["mode"] = "in_place_device_update";
+    result["model"] = "resident_grid_mean_std";
+    result["frame_index"] = static_cast<unsigned long long>(index);
+    result["frame_bytes"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float));
+    result["temporary_output_bytes"] = static_cast<unsigned long long>(0);
+    result["coefficient_count"] = static_cast<unsigned long long>(coefficient_count);
+    result["coefficient_bytes"] = static_cast<unsigned long long>(coefficient_count * sizeof(float) * 2);
+    result["coefficient_alloc_s"] = coefficient_alloc_s;
+    result["coefficient_upload_s"] = coefficient_upload_s;
+    result["device_to_device_copy_s"] = 0.0;
+    result["kernel_enqueue_s"] = kernel_enqueue_s;
+    result["sync_s"] = sync_s;
+    result["total_s"] = seconds_since(total_start);
+    return result;
   }
 
   py::array_t<unsigned char> star_local_max_mask(std::size_t index, float threshold) const {

@@ -760,6 +760,66 @@ def _value_counts(values: list[str]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+def _resident_local_norm_application_summary(
+    profiles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    timing_keys = (
+        "coefficient_alloc_s",
+        "coefficient_upload_s",
+        "device_to_device_copy_s",
+        "kernel_enqueue_s",
+        "sync_s",
+        "total_s",
+    )
+    timings = {key: 0.0 for key in timing_keys}
+    mode_counts: dict[str, int] = {}
+    temporary_output_bytes = 0
+    coefficient_bytes = 0
+    frame_bytes = 0
+    for profile in profiles:
+        mode = str(profile.get("mode") or "unknown")
+        mode_counts[mode] = mode_counts.get(mode, 0) + 1
+        for key in timing_keys:
+            value = profile.get(key)
+            if value is None:
+                continue
+            try:
+                timings[key] += float(value)
+            except (TypeError, ValueError):
+                continue
+        for key, target in (
+            ("temporary_output_bytes", "temporary_output_bytes"),
+            ("coefficient_bytes", "coefficient_bytes"),
+            ("frame_bytes", "frame_bytes"),
+        ):
+            value = profile.get(key)
+            if value is None:
+                continue
+            try:
+                numeric = int(value)
+            except (TypeError, ValueError):
+                continue
+            if target == "temporary_output_bytes":
+                temporary_output_bytes += numeric
+            elif target == "coefficient_bytes":
+                coefficient_bytes += numeric
+            else:
+                frame_bytes += numeric
+    return {
+        "schema_version": 1,
+        "applied_frame_count": len(profiles),
+        "mode_counts": dict(sorted(mode_counts.items())),
+        "in_place_device_update_count": int(mode_counts.get("in_place_device_update", 0)),
+        "temporary_output_bytes": int(temporary_output_bytes),
+        "coefficient_bytes": int(coefficient_bytes),
+        "frame_bytes": int(frame_bytes),
+        "timing_s": timings,
+        "peak_temporary_output_bytes_per_frame": 0
+        if int(mode_counts.get("in_place_device_update", 0)) == len(profiles)
+        else None,
+    }
+
+
 def _resident_fits_read_mode_selection(
     light_frames: list[dict[str, Any]],
     *,
@@ -11994,6 +12054,7 @@ def run_resident_calibration_integration(
                 f"resident_{resident_local_normalization_mode}" if local_norm_enabled else "off"
             )
             local_norm_frame_results: list[dict[str, Any]] = []
+            local_norm_application_profiles: list[dict[str, Any]] = []
             local_norm_warnings: list[str] = []
             if local_norm_enabled:
                 if resident_local_normalization_mode == "global_mean_std":
@@ -12022,6 +12083,7 @@ def run_resident_calibration_integration(
                     offset = 0.0
                     source_stats: dict[str, Any] | None = None
                     grid_coefficients: dict[str, Any] | None = None
+                    application_profile: dict[str, Any] | None = None
                     if frame_weight_values[index] <= 0.0:
                         status = "skipped_zero_weight"
                         warnings.append("frame was excluded or failed registration before local normalization")
@@ -12041,11 +12103,11 @@ def run_resident_calibration_integration(
                             status = "offset_only"
                             scale = 1.0
                             offset = reference_mean - source_mean
-                            stack.apply_global_normalization_frame(index, scale, offset)
+                            application_profile = stack.apply_global_normalization_frame(index, scale, offset)
                         else:
                             scale = reference_std / source_std
                             offset = reference_mean - source_mean * scale
-                            stack.apply_global_normalization_frame(index, scale, offset)
+                            application_profile = stack.apply_global_normalization_frame(index, scale, offset)
                     else:
                         grid_stats = stack.frame_pair_grid_stats(
                             reference_index,
@@ -12060,7 +12122,7 @@ def run_resident_calibration_integration(
                             frame_weights[frame["id"]] = 0.0
                             warnings.append("frame had no finite paired pixels for resident grid LN")
                         else:
-                            stack.apply_grid_normalization_frame(
+                            application_profile = stack.apply_grid_normalization_frame(
                                 index,
                                 coeffs["scales"],
                                 coeffs["offsets"],
@@ -12094,6 +12156,8 @@ def run_resident_calibration_integration(
                             "valid_pixels": coeffs["valid_pixels"].astype(np.uint64).tolist(),
                             "statuses": coeffs["statuses"],
                         }
+                    if application_profile is not None:
+                        local_norm_application_profiles.append(application_profile)
                     local_norm_frame_results.append(
                         {
                             "frame_id": str(frame["id"]),
@@ -12107,6 +12171,7 @@ def run_resident_calibration_integration(
                             "reference_std": reference_std,
                             "valid_pixels": None if source_stats is None else int(source_stats["valid_pixels"]),
                             "grid_coefficients": grid_coefficients,
+                            "application_profile": application_profile,
                             "status": status,
                             "warnings": warnings,
                         }
@@ -12130,6 +12195,7 @@ def run_resident_calibration_integration(
                     "reference_index": reference_index,
                     "crop_box": None,
                     "frame_results": local_norm_frame_results,
+                    "application": _resident_local_norm_application_summary(local_norm_application_profiles),
                     "timing_s": local_norm_elapsed,
                     "warnings": local_norm_warnings,
                 }
@@ -14586,6 +14652,7 @@ def run_resident_calibration_integration(
                         ),
                         "reference_frame_id": str(reference_frame["id"]),
                         "warning_count": len(local_norm_warnings),
+                        "application": local_norm_groups[-1].get("application", {}),
                     },
                     "resident_integration_weighting": {
                         "mode": weighting_mode,
