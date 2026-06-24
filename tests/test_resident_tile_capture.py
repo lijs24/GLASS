@@ -27,6 +27,23 @@ def test_resident_stack_download_frame_tile() -> None:
     assert np.array_equal(tile, frame[1:3, 1:4])
 
 
+def test_resident_stack_download_frames_tile() -> None:
+    cuda = cuda_module_or_skip()
+    stack = cuda.ResidentCalibratedStack(3, 4, 5)
+    frames = [
+        (np.arange(20, dtype=np.float32).reshape(4, 5) + np.float32(index * 100.0))
+        for index in range(3)
+    ]
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    tile_stack = np.asarray(stack.download_frames_tile([2, 0], 1, 1, 4, 3), dtype=np.float32)
+
+    assert tile_stack.shape == (2, 2, 3)
+    assert np.array_equal(tile_stack[0], frames[2][1:3, 1:4])
+    assert np.array_equal(tile_stack[1], frames[0][1:3, 1:4])
+
+
 def _write_capture_fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     run = tmp_path / "run"
     run.mkdir()

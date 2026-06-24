@@ -2637,6 +2637,46 @@ class ResidentCalibratedStack {
     return result;
   }
 
+  py::array_t<float> download_frames_tile(
+      py::object indices_obj,
+      std::size_t x0,
+      std::size_t y0,
+      std::size_t x1,
+      std::size_t y1) const {
+    const auto indices = parse_index_sequence(indices_obj, "indices");
+    if (indices.empty()) {
+      throw std::invalid_argument("indices must contain at least one frame index");
+    }
+    if (x0 >= x1 || y0 >= y1 || x1 > width_ || y1 > height_) {
+      throw std::out_of_range("resident frame tile bounds are invalid");
+    }
+    const std::size_t tile_width = x1 - x0;
+    const std::size_t tile_height = y1 - y0;
+    py::array_t<float> result(
+        {static_cast<py::ssize_t>(indices.size()),
+         static_cast<py::ssize_t>(tile_height),
+         static_cast<py::ssize_t>(tile_width)});
+    const py::buffer_info info = result.request();
+    auto* output = static_cast<float*>(info.ptr);
+    const std::size_t output_frame_stride = tile_width * tile_height;
+    for (std::size_t output_index = 0; output_index < indices.size(); ++output_index) {
+      const std::size_t frame_index = indices[output_index];
+      require_loaded(frame_index, "resident frame batch tile download");
+      const float* source = d_stack_ + frame_index * pixels_per_frame_ + y0 * width_ + x0;
+      check_cuda(
+          cudaMemcpy2D(
+              output + output_index * output_frame_stride,
+              tile_width * sizeof(float),
+              source,
+              width_ * sizeof(float),
+              tile_width * sizeof(float),
+              tile_height,
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy2D(resident frame batch tile)");
+    }
+    return result;
+  }
+
   void set_calibration_masters(py::object bias_obj, py::object dark_obj, py::object flat_obj) {
     upload_optional_master(bias_obj, &d_bias_, &has_bias_, "bias");
     upload_optional_master(dark_obj, &d_dark_, &has_dark_, "dark");
@@ -17064,6 +17104,14 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           "download_frame_tile",
           &ResidentCalibratedStack::download_frame_tile,
           py::arg("index"),
+          py::arg("x0"),
+          py::arg("y0"),
+          py::arg("x1"),
+          py::arg("y1"))
+      .def(
+          "download_frames_tile",
+          &ResidentCalibratedStack::download_frames_tile,
+          py::arg("indices"),
           py::arg("x0"),
           py::arg("y0"),
           py::arg("x1"),

@@ -2761,6 +2761,30 @@ class ResidentCalibratedStack:
             dtype=np.float32,
         )
 
+    def download_frames_tile_native_available(self) -> bool:
+        return hasattr(self._impl, "download_frames_tile")
+
+    def download_frames_tile(self, indices: Any, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
+        frame_indices = np.ascontiguousarray(np.asarray(indices, dtype=np.int64).reshape((-1,)))
+        if frame_indices.size == 0:
+            raise ValueError("indices must contain at least one frame index")
+        if hasattr(self._impl, "download_frames_tile"):
+            return np.asarray(
+                self._impl.download_frames_tile(
+                    frame_indices,
+                    int(x0),
+                    int(y0),
+                    int(x1),
+                    int(y1),
+                ),
+                dtype=np.float32,
+            )
+        tiles = [
+            self.download_frame_tile(int(index), int(x0), int(y0), int(x1), int(y1))
+            for index in frame_indices
+        ]
+        return np.stack(tiles, axis=0).astype(np.float32, copy=False)
+
     def upload_calibrated_frame(self, index: int, frame: Any) -> None:
         self._impl.upload_calibrated_frame(int(index), _as_f32_c(frame))
 

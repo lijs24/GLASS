@@ -17,10 +17,18 @@ import numpy as np
 
 from glass.cpu.registration import estimate_translation_phase_correlation, translation_matrix
 from glass.cpu.master_frames import image_stats
-from glass.engine.contracts import CombinePolicy, DQFlag, DQMask, OutputMapPolicy, RejectionPolicy, StackRequest
+from glass.engine.contracts import (
+    CombinePolicy,
+    DQFlag,
+    DQMask,
+    OutputMapPolicy,
+    RejectionPolicy,
+    StackRequest,
+    TileWindow,
+)
 from glass.engine.dq import dq_provenance_summary_from_resident, dq_provenance_summary_from_stack_engine
 from glass.engine.stack_contract import build_stack_engine_result_contract
-from glass.engine.stack_engine import CPUStackEngine, StackEngineResult
+from glass.engine.stack_engine import CPUStackEngine, StackEngineResult, _apply_rejection, _combine_tile
 from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_FRAME_THRESHOLD,
     RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_MAX_FRACTION,
@@ -98,6 +106,7 @@ from glass.io.fits_io import (
 from glass.io.image_source import FitsImageSource
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
+from glass.gpu.tile_scheduler import iter_tiles
 from glass.report.resident_result_contract import (
     build_resident_result_contract,
     write_resident_result_contract,
@@ -4075,16 +4084,13 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
     if not frame_ids:
         raise ValueError("resident hardened CPU fallback requires at least one frame")
     tile_size = max(1, int(tile_size))
-    sources = {
-        frame_id: _ResidentStackFrameImageSource(stack, index, frame_id, width, height)
-        for index, frame_id in enumerate(frame_ids)
-    }
     frame_weights = np.asarray(weights, dtype=np.float32)
     if frame_weights.size != len(frame_ids):
         raise ValueError(
             "resident hardened CPU fallback weight count does not match frame count: "
             f"{frame_weights.size}!={len(frame_ids)}"
         )
+    frame_indices = np.arange(len(frame_ids), dtype=np.int64)
     request = StackRequest(
         frame_ids=frame_ids,
         source_kind="light",
@@ -4107,23 +4113,190 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
         weights={frame_id: float(frame_weights[index]) for index, frame_id in enumerate(frame_ids)},
         metadata={
             "resident_hardened_cpu_stack_engine_fallback": True,
-            "resident_download_tile_source": "ResidentCalibratedStack.download_frame_tile",
+            "resident_download_tile_source": "ResidentCalibratedStack.download_frames_tile",
+            "resident_download_tile_fallback_source": "ResidentCalibratedStack.download_frame_tile",
         },
     )
+    master = np.zeros((int(height), int(width)), dtype=np.float32)
+    weight_map = np.zeros_like(master, dtype=np.float32)
+    coverage_map = np.zeros_like(master, dtype=np.float32)
+    low_rejection_map = np.zeros_like(master, dtype=np.float32)
+    high_rejection_map = np.zeros_like(master, dtype=np.float32)
+    accumulator_dtype = np.float32
+
+    input_sample_total = 0
+    input_valid_sample_total = 0
+    input_invalid_sample_total = 0
+    input_nonfinite_sample_total = 0
+    coverage_zero_pixel_total = 0
+    low_rejected_pixel_total = 0
+    high_rejected_pixel_total = 0
+    rejected_low_total = 0
+    rejected_high_total = 0
+    valid_total = 0
+    tile_count = 0
+    batch_tile_download_used = False
+    batch_tile_download_available = hasattr(stack, "download_frames_tile")
+    batch_tile_download_native_available = bool(
+        getattr(stack, "download_frames_tile_native_available", lambda: False)()
+    )
+    batch_tile_download_call_count = 0
+    single_frame_tile_download_call_count = 0
+    download_method_counts: dict[str, int] = {}
+
     start = perf_counter()
-    result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
+    for tile in iter_tiles(int(width), int(height), tile_size):
+        tile_count += 1
+        window = TileWindow(tile.y0, tile.y1, tile.x0, tile.x1)
+        if batch_tile_download_available:
+            stack_tile = np.asarray(
+                stack.download_frames_tile(
+                    frame_indices,
+                    int(window.x0),
+                    int(window.y0),
+                    int(window.x1),
+                    int(window.y1),
+                ),
+                dtype=np.float32,
+            )
+            download_method = "ResidentCalibratedStack.download_frames_tile"
+            batch_tile_download_used = True
+            batch_tile_download_call_count += 1
+        else:
+            if not hasattr(stack, "download_frame_tile"):
+                raise RuntimeError(
+                    "segmented resident CPU StackEngine fallback requires "
+                    "ResidentCalibratedStack.download_frames_tile or download_frame_tile"
+                )
+            stack_tile = np.stack(
+                [
+                    np.asarray(
+                        stack.download_frame_tile(
+                            int(frame_index),
+                            int(window.x0),
+                            int(window.y0),
+                            int(window.x1),
+                            int(window.y1),
+                        ),
+                        dtype=np.float32,
+                    )
+                    for frame_index in frame_indices
+                ],
+                axis=0,
+            )
+            download_method = "ResidentCalibratedStack.download_frame_tile_loop"
+            single_frame_tile_download_call_count += len(frame_ids)
+        download_method_counts[download_method] = download_method_counts.get(download_method, 0) + 1
+        expected_shape = (len(frame_ids), *window.shape)
+        if stack_tile.shape != expected_shape:
+            raise ValueError(
+                "resident batch tile download returned shape "
+                f"{stack_tile.shape}, expected {expected_shape}"
+            )
+        input_valid = np.isfinite(stack_tile)
+        valid, low, high = _apply_rejection(stack_tile, input_valid, request.rejection)
+        tile_master, tile_weight, tile_coverage, _tile_variance = _combine_tile(
+            stack_tile,
+            valid,
+            frame_weights,
+            method=request.combine.method,
+            accumulator_dtype=accumulator_dtype,
+        )
+        y_slice, x_slice = window.as_slices()
+        master[y_slice, x_slice] = tile_master
+        weight_map[y_slice, x_slice] = tile_weight
+        coverage_map[y_slice, x_slice] = tile_coverage
+        low_rejection_map[y_slice, x_slice] = low
+        high_rejection_map[y_slice, x_slice] = high
+
+        input_sample_total += int(stack_tile.size)
+        input_valid_sample_total += int(np.count_nonzero(input_valid))
+        input_invalid_sample_total += int(np.count_nonzero(~input_valid))
+        input_nonfinite_sample_total += int(np.count_nonzero(~np.isfinite(stack_tile)))
+        coverage_zero_pixel_total += int(np.count_nonzero(tile_coverage <= 0))
+        low_rejected_pixel_total += int(np.count_nonzero(low > 0))
+        high_rejected_pixel_total += int(np.count_nonzero(high > 0))
+        rejected_low_total += int(np.sum(low))
+        rejected_high_total += int(np.sum(high))
+        valid_total += int(np.sum(tile_coverage))
     total_s = perf_counter() - start
+    metrics: dict[str, float | int | str] = {
+        "frame_count": len(frame_ids),
+        "width": int(width),
+        "height": int(height),
+        "combine": request.combine.method,
+        "rejection": request.rejection.method,
+        "rejection_scale_estimator": rejection_scale_estimator(request.rejection),
+        "valid_samples": valid_total,
+        "input_valid_samples": input_valid_sample_total,
+        "input_invalid_samples": input_invalid_sample_total,
+        "low_rejected": rejected_low_total,
+        "high_rejected": rejected_high_total,
+        "rejected_samples": rejected_low_total + rejected_high_total,
+    }
+    dq_provenance: dict[str, Any] = {
+        "schema_version": 1,
+        "input_samples": input_sample_total,
+        "input_valid_samples_before_rejection": input_valid_sample_total,
+        "input_invalid_samples_before_rejection": input_invalid_sample_total,
+        "input_flagged_samples": 0,
+        "input_nonfinite_samples": input_nonfinite_sample_total,
+        "input_dq_flag_counts": {flag.name.lower(): 0 for flag in DQFlag if flag != DQFlag.VALID},
+        "valid_samples_after_rejection": valid_total,
+        "low_rejected_samples": rejected_low_total,
+        "high_rejected_samples": rejected_high_total,
+        "rejected_samples": rejected_low_total + rejected_high_total,
+        "rejection_policy": rejection_policy_provenance(request.rejection),
+        "output_coverage_zero_pixels": coverage_zero_pixel_total,
+        "output_low_rejected_pixels": low_rejected_pixel_total,
+        "output_high_rejected_pixels": high_rejected_pixel_total,
+        "output_dq_summary": None,
+        "resident_download_tile_source": (
+            "ResidentCalibratedStack.download_frames_tile"
+            if batch_tile_download_used
+            else "ResidentCalibratedStack.download_frame_tile"
+        ),
+        "semantics": (
+            "Resident calibrated samples are downloaded as stack tiles from VRAM and "
+            "processed through the GLASS StackEngine rejection/combine rules. Source-DQ "
+            "invalid samples are already represented as non-finite resident samples."
+        ),
+    }
+    result = StackEngineResult(
+        master=master,
+        weight_map=weight_map,
+        coverage_map=coverage_map,
+        low_rejection_map=low_rejection_map,
+        high_rejection_map=high_rejection_map,
+        variance_map=None,
+        dq_mask=None,
+        dq_provenance=dq_provenance,
+        metrics=metrics,
+    )
+    result_contract = build_stack_engine_result_contract(result, request=request)
+    result.dq_provenance["result_contract"] = result_contract
+    result.metrics["result_contract_passed"] = bool(result_contract["passed"])
     timing = {
         "schema_version": 1,
-        "native_method": "CPUStackEngine.stack_from_resident_download_tiles",
+        "native_method": "CPUStackEngine.batch_tile_replay_from_resident_download_tiles",
         "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
         "hardened_execution_route": RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
-        "execution_path": "resident_cpu_stack_engine_segmented_hardened_winsorized",
+        "execution_path": "resident_cpu_stack_engine_batch_tile_download_hardened_winsorized",
         "frame_count": len(frame_ids),
         "width": int(width),
         "height": int(height),
         "tile_size": int(tile_size),
-        "tile_count_estimate": int(((int(width) + tile_size - 1) // tile_size) * ((int(height) + tile_size - 1) // tile_size)),
+        "tile_count_estimate": int(
+            ((int(width) + tile_size - 1) // tile_size)
+            * ((int(height) + tile_size - 1) // tile_size)
+        ),
+        "tile_count": int(tile_count),
+        "batch_tile_download_available": bool(batch_tile_download_available),
+        "batch_tile_download_native_available": bool(batch_tile_download_native_available),
+        "batch_tile_download_used": bool(batch_tile_download_used),
+        "batch_tile_download_call_count": int(batch_tile_download_call_count),
+        "single_frame_tile_download_call_count": int(single_frame_tile_download_call_count),
+        "download_method_counts": download_method_counts,
         "low_sigma": float(low_sigma),
         "high_sigma": float(high_sigma),
         "min_samples": int(min_samples),

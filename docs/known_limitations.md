@@ -19,15 +19,19 @@ Current code is intentionally gated:
   coverage-preserving `rejection_max_fraction=0.015` guard unless the plan or
   CLI explicitly supplies a guard. Groups above the native 256-frame CUDA
   prototype use a segmented CPUStackEngine parity fallback that downloads
-  resident calibrated tiles to host and records the route. Minimal-output runs,
-  unsupported dispatch, or builds missing the required resident tile-download
-  support can still fall back to the faster mean/std approximation and record
-  the fallback reason.
+  resident calibrated tiles to host and records the route. Current CUDA builds
+  use a batch tile-download surface for that fallback when available, with a
+  single-frame tile loop retained as a compatibility escape hatch. Minimal-output
+  runs, unsupported dispatch, or builds missing the required resident
+  tile-download support can still fall back to the faster mean/std approximation
+  and record the fallback reason.
 - The resident CUDA hardened winsorized path is still a one-iteration,
   256-frame native prototype. The larger-frame segmented fallback is
   correctness-first, not the final high-throughput CUDA segmented reduction.
-  Richer robust rejection policies, cosmetic correction, and broader
-  data-shape support remain future work.
+  Gate607 reduces Python/native round trips in that fallback, but the robust
+  reduction still happens on host through the GLASS CPUStackEngine. Richer
+  robust rejection policies, cosmetic correction, and broader data-shape
+  support remain future work.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must

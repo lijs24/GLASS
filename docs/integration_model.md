@@ -135,6 +135,16 @@ segmented CUDA reduction as future work. The existing 200-light route remains
 the native CUDA resident hardened implementation and is protected by hash
 regression tests.
 
+S2-Gate 607 improves that over-limit fallback surface by adding a native
+resident batch tile download API. `ResidentCalibratedStack.download_frames_tile`
+returns one `(N, tile_h, tile_w)` stack tile for a requested frame-index set, so
+the segmented CPUStackEngine replay makes one resident/native call per tile
+instead of one call per frame per tile when the native method is available.
+Artifacts record batch availability, native availability, call counts, and
+download method counts. This does not change the math or promote the fallback
+to a final CUDA segmented reduction; it reduces orchestration overhead and
+creates the replacement point for a future all-device segmented reducer.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted
@@ -143,8 +153,9 @@ winsorized clipping, and a bounded native resident median/IQR hardened
 winsorized path. The tile-streaming CPU path remains the portable scientific
 baseline, while the resident path is the high-VRAM performance path for the
 200-light comparison dataset. Groups above the native hardened limit may use
-the segmented CPUStackEngine resident-tile fallback until the dedicated CUDA
-segmented reduction is implemented.
+the segmented CPUStackEngine resident-tile fallback, now preferably through
+the batch tile-download surface, until the dedicated CUDA segmented reduction
+is implemented.
 
 ## Variance Map
 

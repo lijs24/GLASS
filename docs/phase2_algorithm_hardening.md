@@ -18038,3 +18038,63 @@ Phase 2 is complete when:
   - this gate uses GLASS-owned resident dispatch, GLASS CPUStackEngine
     formulas, GLASS synthetic data, and GLASS runtime artifacts;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 607: Resident Batch Tile Download Surface
+
+- Continued the Phase 2 integration mainline by reducing orchestration overhead
+  in the Gate606 over-limit resident hardened fallback.
+- Completed:
+  - added native `ResidentCalibratedStack.download_frames_tile(indices, x0, y0,
+    x1, y1)`;
+  - added the Python wrapper method plus a compatibility fallback that loops
+    over existing `download_frame_tile`;
+  - changed the segmented CPUStackEngine replay to request one `(N, tile_h,
+    tile_w)` resident stack tile per tile when batch download is available;
+  - kept the single-frame tile-download loop as an escape hatch for older
+    native builds or fake test stacks;
+  - added artifact timing fields for batch availability, native availability,
+    batch call count, single-frame call count, and method counts.
+- Synthetic 260-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate607_batch_tile_download\resident_260_batch_tile`;
+  - dataset/plan reused the Gate606 260-light over-limit synthetic fixture;
+  - route remained:
+    `hardened_execution_route=cpu_stack_engine_segmented_resident_download`;
+  - `batch_tile_download_native_available=true`;
+  - `batch_tile_download_used=true`;
+  - `batch_tile_download_call_count=1`;
+  - `single_frame_tile_download_call_count=0`;
+  - `hardened_winsorized_timing_s.total_s=0.009082899894565344`;
+  - all six integration FITS outputs are SHA256-identical to Gate606.
+- Real 200-light default regression:
+  - run:
+    `C:\glass_runs\phase2_s2_gate607_batch_tile_download\real_200_default_regression`;
+  - default runtime preset:
+    `throughput-v4-native-completion`;
+  - `total_elapsed_s=12.123008000082336`;
+  - resident hardened route stayed native:
+    `hardened_execution_route=native_cuda_resident_stack`;
+  - native hardened integration timing:
+    `3.7297367000719532 s`;
+  - `pipeline_contract.json`: passed;
+  - six integration FITS outputs are SHA256-identical to Gate606.
+- Validation:
+  - focused resident segmented fallback tests:
+    `2 passed, 113 deselected`;
+  - focused native tile-capture tests:
+    `2 passed, 2 deselected`;
+  - ruff:
+    `All checks passed`;
+  - full pytest:
+    `1288 passed in 52.39 s`.
+- Interpretation:
+  - this is a substantive resident integration surface gate, not a report-only
+    or release-only gate;
+  - it does not alter calibration, registration, LN, rejection thresholds,
+    CPUStackEngine math, DQ semantics, or default 200-light output pixels;
+  - it creates a narrow future replacement point for an all-device segmented
+    CUDA hardened reducer.
+- Clean-room note:
+  - this gate uses GLASS-owned native resident storage, GLASS CPUStackEngine
+    formulas, GLASS synthetic data, and user-owned real benchmark artifacts;
+  - no external or proprietary implementation source was inspected or used.

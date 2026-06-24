@@ -1601,10 +1601,19 @@ def test_resident_segmented_cpu_hardened_fallback_matches_stack_engine_baseline(
         def __init__(self, data: list[np.ndarray]):
             self.data = data
             self.download_calls: list[tuple[int, int, int, int, int]] = []
+            self.batch_download_calls: list[tuple[tuple[int, ...], int, int, int, int]] = []
 
         def download_frame_tile(self, frame_index: int, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
             self.download_calls.append((frame_index, x0, y0, x1, y1))
             return self.data[frame_index][y0:y1, x0:x1]
+
+        def download_frames_tile_native_available(self) -> bool:
+            return True
+
+        def download_frames_tile(self, frame_indices, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
+            indices = tuple(int(index) for index in np.asarray(frame_indices, dtype=np.int64).reshape((-1,)))
+            self.batch_download_calls.append((indices, x0, y0, x1, y1))
+            return np.stack([self.data[index][y0:y1, x0:x1] for index in indices], axis=0)
 
     class ArraySource:
         path = None
@@ -1675,7 +1684,61 @@ def test_resident_segmented_cpu_hardened_fallback_matches_stack_engine_baseline(
     assert timing["frame_count"] == 260
     assert timing["tile_size"] == 2
     assert timing["result_contract_passed"] is True
-    assert len(fake_stack.download_calls) > len(frames)
+    assert timing["batch_tile_download_available"] is True
+    assert timing["batch_tile_download_native_available"] is True
+    assert timing["batch_tile_download_used"] is True
+    assert timing["batch_tile_download_call_count"] == 9
+    assert timing["single_frame_tile_download_call_count"] == 0
+    assert len(fake_stack.batch_download_calls) == 9
+    assert not fake_stack.download_calls
+
+
+def test_resident_segmented_cpu_hardened_fallback_keeps_single_frame_download_escape_hatch():
+    frames = [
+        np.full((4, 4), 10.0 + index, dtype=np.float32)
+        for index in range(6)
+    ]
+
+    class FakeResidentStackWithoutBatch:
+        width = 4
+        height = 4
+
+        def __init__(self, data: list[np.ndarray]):
+            self.data = data
+            self.download_calls: list[tuple[int, int, int, int, int]] = []
+
+        def download_frame_tile(self, frame_index: int, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
+            self.download_calls.append((frame_index, x0, y0, x1, y1))
+            return self.data[frame_index][y0:y1, x0:x1]
+
+    frame_records = [{"id": f"f{index:03d}"} for index in range(len(frames))]
+    fake_stack = FakeResidentStackWithoutBatch(frames)
+    master, weight, coverage, low, high, timing = (
+        _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
+            fake_stack,
+            frame_records,
+            np.ones((len(frames),), dtype=np.float32),
+            width=4,
+            height=4,
+            low_sigma=3.0,
+            high_sigma=3.0,
+            min_samples=3,
+            max_reject_fraction=0.5,
+            tile_size=2,
+        )
+    )
+
+    assert np.all(np.isfinite(master))
+    assert np.all(weight == 6.0)
+    assert np.all(coverage == 6.0)
+    assert np.count_nonzero(low) == 0
+    assert np.count_nonzero(high) == 0
+    assert timing["batch_tile_download_available"] is False
+    assert timing["batch_tile_download_native_available"] is False
+    assert timing["batch_tile_download_used"] is False
+    assert timing["batch_tile_download_call_count"] == 0
+    assert timing["single_frame_tile_download_call_count"] == 24
+    assert len(fake_stack.download_calls) == 24
 
 
 def test_resident_auto_large_stack_default_rejection_guard_is_coverage_preserving():
