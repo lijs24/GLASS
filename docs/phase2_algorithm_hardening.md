@@ -17576,3 +17576,62 @@ Phase 2 is complete when:
   - this gate changes GLASS-owned runtime policy over GLASS-owned CPU and CUDA
     winsorized implementations only;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 600: Hardened Winsorized Coverage Guard
+
+- Returned to the Phase 2 mainline by fixing the concrete 200-light coverage
+  failure found in Gate599's explicit resident `hardened_cpu_parity`
+  diagnostic run.
+- Completed:
+  - added `rejection_min_samples` and `rejection_max_fraction` to
+    `IntegrationPolicy`;
+  - threaded CLI overrides through resident CUDA `run`/`audit` with
+    `--integration-rejection-min-samples` and
+    `--integration-rejection-max-fraction`;
+  - applied the same per-pixel rejection guard in the CPU integration baseline
+    and native resident CUDA hardened winsorized kernel;
+  - wrote the guard fields into resident rejection descriptors, runtime
+    contracts, native timing payloads, and `integration_results.json`;
+  - kept old native extension compatibility for the default guard values while
+    requiring a rebuild for non-default guard overrides.
+- Guard semantics:
+  - proposed low/high sample rejection is cancelled for a pixel when the
+    remaining valid sample count would drop below `rejection_min_samples`;
+  - proposed rejection is also cancelled when the rejected fraction exceeds
+    `rejection_max_fraction`;
+  - this preserves coverage on high-frame resident stacks without changing the
+    underlying median/IQR hardened threshold calculation.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate600_hardened_rejection_guard\real_200_hardened_guard_max0015`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate600_hardened_rejection_guard\compare_hardened_guard0015_vs_wbpp_fastintegration_scaled_coverage190.json`;
+  - acceptance:
+    `C:\glass_runs\phase2_s2_gate600_hardened_rejection_guard\acceptance_hardened_guard0015_audit.json`.
+- Key result:
+
+  | Metric | Value |
+  | --- | ---: |
+  | GLASS total elapsed, shell measured | `12.1345343 s` |
+  | GLASS total elapsed, run timing | `11.703999100020155 s` |
+  | Resident integration stage | `3.844164100009948 s` |
+  | Native hardened integration | `3.844128599972464 s` |
+  | Speedup vs WBPP black-box | `93.34766609800222x` |
+  | RMS diff vs reference | `0.0055611675566298235` |
+  | abs diff p99 vs reference | `0.002161672392394391` |
+  | coverage>=190 acceptance fraction | `1.0` |
+
+- Interpretation:
+  - explicit 200-light resident hardened winsorized integration is now
+    scientifically admissible under the existing benchmark contract when the
+    coverage guard is set to `rejection_max_fraction=0.015`;
+  - the path remains slower than the default fast fallback, so default
+    promotion for groups over 64 frames should wait for further native
+    batching/performance work;
+  - the next substantive gate should focus on resident registration/warp/LN
+    orchestration or hardened rejection performance, not additional
+    report-only evidence.
+- Clean-room note:
+  - this gate changes GLASS-owned CPU/CUDA rejection guard logic and artifact
+    contracts only;
+  - no external or proprietary implementation source was inspected or used.

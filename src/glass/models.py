@@ -125,6 +125,8 @@ class IntegrationPolicy:
     iterations: int = 1
     low_sigma: float = 3.0
     high_sigma: float = 3.0
+    rejection_min_samples: int = 3
+    rejection_max_fraction: float = 0.5
     output_weight_map: bool = True
     output_rejection_maps: bool = True
     output_coverage_map: bool = True

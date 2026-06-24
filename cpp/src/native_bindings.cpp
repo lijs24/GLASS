@@ -583,7 +583,9 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     std::size_t frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
-    float high_sigma);
+    float high_sigma,
+    int min_samples,
+    float max_reject_fraction);
 void glass_integrate_resident_tile_local_sigma_clip_f32_launch(
     const float* stack,
     const float* weights,
@@ -10493,12 +10495,20 @@ class ResidentCalibratedStack {
   py::tuple integrate_hardened_winsorized_sigma(
       py::object weights_obj,
       float low_sigma,
-      float high_sigma) const {
+      float high_sigma,
+      int min_samples,
+      float max_reject_fraction) const {
     if (loaded_count_ != frame_count_) {
       throw std::runtime_error("all resident frames must be loaded before integration");
     }
     if (low_sigma <= 0.0f || high_sigma <= 0.0f) {
       throw std::invalid_argument("sigma thresholds must be positive");
+    }
+    if (min_samples < 1) {
+      throw std::invalid_argument("min_samples must be at least 1");
+    }
+    if (max_reject_fraction < 0.0f || max_reject_fraction > 1.0f) {
+      throw std::invalid_argument("max_reject_fraction must be between 0 and 1");
     }
     if (frame_count_ > 256) {
       throw std::invalid_argument(
@@ -10563,7 +10573,9 @@ class ResidentCalibratedStack {
           frame_count_,
           pixels_per_frame_,
           low_sigma,
-          high_sigma);
+          high_sigma,
+          min_samples,
+          max_reject_fraction);
       check_cuda(
           cudaGetLastError(),
           "ResidentCalibratedStack.integrate_hardened_winsorized_sigma kernel launch");
@@ -17244,7 +17256,9 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           &ResidentCalibratedStack::integrate_hardened_winsorized_sigma,
           py::arg("weights") = py::none(),
           py::arg("low_sigma") = 3.0f,
-          py::arg("high_sigma") = 3.0f)
+          py::arg("high_sigma") = 3.0f,
+          py::arg("min_samples") = 3,
+          py::arg("max_reject_fraction") = 0.5f)
       .def(
           "integrate_tile_local_sigma_clip",
           &ResidentCalibratedStack::integrate_tile_local_sigma_clip,

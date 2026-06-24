@@ -95,6 +95,8 @@ def resident_rejection_descriptor(
     low_sigma: float,
     high_sigma: float,
     *,
+    min_samples: int = 3,
+    max_reject_fraction: float = 0.5,
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     requested_resident_winsorized_mode: str | None = None,
     resident_winsorized_resolution_reason: str | None = None,
@@ -103,6 +105,8 @@ def resident_rejection_descriptor(
         "mode": str(method),
         "low_sigma": float(low_sigma),
         "high_sigma": float(high_sigma),
+        "min_samples": int(min_samples),
+        "max_reject_fraction": float(max_reject_fraction),
     }
     if method == "winsorized_sigma":
         if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE:

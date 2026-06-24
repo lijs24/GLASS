@@ -1399,7 +1399,9 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
     std::size_t frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
-    float high_sigma) {
+    float high_sigma,
+    int min_samples,
+    float max_reject_fraction) {
   const std::size_t pixel = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
   if (pixel >= pixels_per_frame) {
     return;
@@ -1492,6 +1494,34 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   const float low_threshold = winsor_mean - low_sigma * scale;
   const float high_threshold = winsor_mean + high_sigma * scale;
 
+  int low_reject_count = 0;
+  int high_reject_count = 0;
+  if (scale > 0.0f) {
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      const float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < low_threshold) {
+        ++low_reject_count;
+      } else if (value > high_threshold) {
+        ++high_reject_count;
+      }
+    }
+  }
+  const int reject_count = low_reject_count + high_reject_count;
+  const int minimum_samples = min_samples < 1 ? 1 : min_samples;
+  const float reject_fraction =
+      count > 0 ? static_cast<float>(reject_count) / static_cast<float>(count) : 0.0f;
+  const bool allow_rejection =
+      reject_count > 0 &&
+      (count - reject_count) >= minimum_samples &&
+      reject_fraction <= max_reject_fraction;
+
   float sum = 0.0f;
   float weight_sum = 0.0f;
   float coverage = 0.0f;
@@ -1506,11 +1536,11 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
     if (!isfinite(value)) {
       continue;
     }
-    if (scale > 0.0f && value < low_threshold) {
+    if (allow_rejection && value < low_threshold) {
       low_reject += 1.0f;
       continue;
     }
-    if (scale > 0.0f && value > high_threshold) {
+    if (allow_rejection && value > high_threshold) {
       high_reject += 1.0f;
       continue;
     }
@@ -1537,7 +1567,9 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     std::size_t frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
-    float high_sigma) {
+    float high_sigma,
+    int min_samples,
+    float max_reject_fraction) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
   glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<<<blocks, threads>>>(
@@ -1551,7 +1583,9 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
       frame_count,
       pixels_per_frame,
       low_sigma,
-      high_sigma);
+      high_sigma,
+      min_samples,
+      max_reject_fraction);
 }
 
 __global__ void glass_integrate_resident_tile_local_sigma_clip_f32_kernel(

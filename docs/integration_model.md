@@ -85,6 +85,18 @@ reason, and runtime contract are written into integration artifacts. The fast
 approximation remains available as an explicit escape hatch and is still
 labeled non-parity.
 
+S2-Gate 600 adds a rejection coverage guard to the CPU baseline and resident
+CUDA hardened winsorized path. `rejection_min_samples` and
+`rejection_max_fraction` are part of the `IntegrationPolicy` and can be
+overridden from the CLI with `--integration-rejection-min-samples` and
+`--integration-rejection-max-fraction`. For each output pixel, a proposed
+low/high rejection mask is applied only if the remaining valid sample count
+stays at or above `rejection_min_samples` and the rejected fraction is at or
+below `rejection_max_fraction`. Otherwise the pixel keeps the valid samples for
+the final mean and records no low/high rejection at that pixel. This keeps
+robust rejection from eroding scientifically important coverage on high-frame
+resident stacks while preserving parity between CPU and CUDA hardened behavior.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted
@@ -112,5 +124,5 @@ same population-variance map by accumulating `sum(w*x^2)` alongside `sum(w*x)`.
 ## Artifact
 
 `integration_results.json` records source stage, combine mode, weighting,
-rejection mode, sigma thresholds, per-frame weights, variance-map enablement,
-and all output map paths.
+rejection mode, sigma thresholds, rejection coverage guard, per-frame weights,
+variance-map enablement, and all output map paths.

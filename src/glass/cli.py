@@ -2421,6 +2421,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 out,
                 integration_weighting=args.integration_weighting,
                 integration_rejection=args.integration_rejection,
+                integration_rejection_min_samples=args.integration_rejection_min_samples,
+                integration_rejection_max_fraction=args.integration_rejection_max_fraction,
                 flat_floor=args.flat_floor,
                 resident_registration=args.resident_registration,
                 resident_registration_max_shift=args.resident_registration_max_shift,
@@ -2700,6 +2702,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 args.out,
                 integration_weighting=args.integration_weighting,
                 integration_rejection=args.integration_rejection,
+                integration_rejection_min_samples=args.integration_rejection_min_samples,
+                integration_rejection_max_fraction=args.integration_rejection_max_fraction,
                 flat_floor=args.flat_floor,
                 resident_registration=args.resident_registration,
                 resident_registration_max_shift=args.resident_registration_max_shift,
@@ -6230,6 +6234,18 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "none", "sigma_clip", "winsorized_sigma", "minmax", "percentile", "mad", "median_sigma"],
         default="auto",
     )
+    run.add_argument(
+        "--integration-rejection-min-samples",
+        type=int,
+        default=None,
+        help="override the minimum surviving samples required before applying per-pixel rejection",
+    )
+    run.add_argument(
+        "--integration-rejection-max-fraction",
+        type=float,
+        default=None,
+        help="override the maximum per-pixel rejected-sample fraction before rejection is cancelled",
+    )
     run.add_argument("--allow-partial", action="store_true")
     run.add_argument("--flat-floor", type=float, help="override calibration flat floor for this run")
     run.add_argument(
@@ -6858,6 +6874,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--integration-rejection",
         choices=["auto", "none", "sigma_clip", "winsorized_sigma", "minmax", "percentile", "mad", "median_sigma"],
         default="auto",
+    )
+    audit.add_argument(
+        "--integration-rejection-min-samples",
+        type=int,
+        default=None,
+        help="override the minimum surviving samples required before applying per-pixel rejection",
+    )
+    audit.add_argument(
+        "--integration-rejection-max-fraction",
+        type=float,
+        default=None,
+        help="override the maximum per-pixel rejected-sample fraction before rejection is cancelled",
     )
     audit.add_argument("--flat-floor", type=float, help="override calibration flat floor for resident audit")
     audit.add_argument(

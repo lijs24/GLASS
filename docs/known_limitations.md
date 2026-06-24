@@ -16,7 +16,11 @@ Current code is intentionally gated:
   CPU baseline; minimal-output runs, larger groups, unsupported dispatch, or
   older CUDA builds fall back to the faster mean/std approximation and record
   the fallback reason. Explicit `hardened_cpu_parity` remains available up to
-  the native 256-frame prototype limit for diagnostics.
+  the native 256-frame prototype limit for diagnostics. Large explicit
+  hardened runs now support a per-pixel rejection coverage guard, but the
+  default for groups over 64 frames remains guarded fast fallback until the
+  hardened path is further optimized and promoted with repeated real-data
+  evidence.
 - The resident CUDA path does not yet implement WBPP FastIntegration-equivalent
   internal alignment, Lanczos interpolation, cosmetic correction, or exact
   robust rejection. It can optionally run a preview-scale integer-translation

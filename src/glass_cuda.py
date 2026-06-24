@@ -4465,18 +4465,37 @@ class ResidentCalibratedStack:
         weights: Any | None = None,
         low_sigma: float = 3.0,
         high_sigma: float = 3.0,
+        min_samples: int = 3,
+        max_reject_fraction: float = 0.5,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         if not hasattr(self._impl, "integrate_hardened_winsorized_sigma"):
             raise RuntimeError(
                 "native ResidentCalibratedStack.integrate_hardened_winsorized_sigma is not available"
             )
-        master, weight_map, coverage, low_reject, high_reject = (
-            self._impl.integrate_hardened_winsorized_sigma(
+        if int(min_samples) < 1:
+            raise ValueError("min_samples must be at least 1")
+        if not 0.0 <= float(max_reject_fraction) <= 1.0:
+            raise ValueError("max_reject_fraction must be between 0 and 1")
+        try:
+            native_result = self._impl.integrate_hardened_winsorized_sigma(
+                None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
+                float(low_sigma),
+                float(high_sigma),
+                int(min_samples),
+                float(max_reject_fraction),
+            )
+        except TypeError:
+            if int(min_samples) != 3 or float(max_reject_fraction) != 0.5:
+                raise RuntimeError(
+                    "native ResidentCalibratedStack.integrate_hardened_winsorized_sigma "
+                    "does not support min_samples/max_reject_fraction; rebuild glass_cuda"
+                ) from None
+            native_result = self._impl.integrate_hardened_winsorized_sigma(
                 None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
                 float(low_sigma),
                 float(high_sigma),
             )
-        )
+        master, weight_map, coverage, low_reject, high_reject = native_result
         return (
             np.asarray(master, dtype=np.float32),
             np.asarray(weight_map, dtype=np.float32),
@@ -4490,10 +4509,18 @@ class ResidentCalibratedStack:
         weights: Any | None = None,
         low_sigma: float = 3.0,
         high_sigma: float = 3.0,
+        min_samples: int = 3,
+        max_reject_fraction: float = 0.5,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
         start = perf_counter()
         master, weight_map, coverage, low_reject, high_reject = (
-            self.integrate_hardened_winsorized_sigma(weights, low_sigma, high_sigma)
+            self.integrate_hardened_winsorized_sigma(
+                weights,
+                low_sigma,
+                high_sigma,
+                min_samples=min_samples,
+                max_reject_fraction=max_reject_fraction,
+            )
         )
         total_s = perf_counter() - start
         return (
@@ -4514,6 +4541,8 @@ class ResidentCalibratedStack:
                 "pixel_count": self.height * self.width,
                 "low_sigma": float(low_sigma),
                 "high_sigma": float(high_sigma),
+                "min_samples": int(min_samples),
+                "max_reject_fraction": float(max_reject_fraction),
                 "includes_device_sync_and_download": True,
                 "total_s": float(total_s),
             },

@@ -652,6 +652,25 @@ def test_run_resident_rejection_explicit_none_is_preserved() -> None:
     assert resolution["explicit"] is True
 
 
+def test_run_resident_rejection_guard_overrides_parse() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--integration-rejection-min-samples",
+            "190",
+            "--integration-rejection-max-fraction",
+            "0.05",
+        ]
+    )
+
+    assert args.integration_rejection_min_samples == 190
+    assert args.integration_rejection_max_fraction == 0.05
+
+
 def test_run_resident_rejection_auto_keeps_tile_path_auto() -> None:
     args = _parse_cli(["run", "--plan", "plan.json", "--out", "run", "--backend", "cpu"])
 

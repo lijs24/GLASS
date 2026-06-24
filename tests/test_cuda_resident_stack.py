@@ -2337,6 +2337,51 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     assert high_reject[1, 1] == 1
 
 
+def test_resident_stack_hardened_winsorized_sigma_honors_rejection_guard():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    frames = [np.ones((2, 2), dtype=np.float32) for _ in range(3)] + [
+        np.ones((2, 2), dtype=np.float32) * 12
+    ]
+    resident_stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            None,
+            2.4,
+            2.4,
+            max_reject_fraction=0.05,
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            np.stack(frames, axis=0),
+            rejection="winsorized_sigma",
+            low_sigma=2.4,
+            high_sigma=2.4,
+            max_reject_fraction=0.05,
+        )
+    )
+
+    assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5)
+    assert np.allclose(coverage, expected_coverage, rtol=1e-5, atol=1e-5)
+    assert np.allclose(low_reject, expected_low, rtol=1e-5, atol=1e-5)
+    assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)
+    assert timing["min_samples"] == 3
+    assert timing["max_reject_fraction"] == 0.05
+    assert np.all(coverage == 4)
+    assert np.sum(high_reject) == 0
+
+
 def _expected_matrix_warped_sigma(
     module: object,
     frames: list[np.ndarray],

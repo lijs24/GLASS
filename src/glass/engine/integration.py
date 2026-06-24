@@ -305,6 +305,8 @@ def _integrate_with_stack_engine(
     dq_path: Path,
     weighting: str,
     output_variance_map: bool,
+    rejection_min_samples: int,
+    rejection_max_fraction: float,
 ) -> tuple[int, dict[str, Any], str, dict[str, int], dict[str, Any]]:
     method = _stack_engine_rejection_method(rejection)
     with ExitStack() as stack:
@@ -322,7 +324,11 @@ def _integrate_with_stack_engine(
                 accumulator_dtype="float32",
             ),
             rejection=RejectionPolicy(
-                method=method, low_sigma=low_sigma, high_sigma=high_sigma, max_reject_fraction=0.5
+                method=method,
+                low_sigma=low_sigma,
+                high_sigma=high_sigma,
+                min_samples=rejection_min_samples,
+                max_reject_fraction=rejection_max_fraction,
             ),
             output_maps=OutputMapPolicy(
                 coverage=True,
@@ -374,6 +380,10 @@ def integrate_registered_frames(
     output_variance_map = _output_variance_map_enabled(policy)
     low_sigma = float(policy.get("low_sigma") or 3.0)
     high_sigma = float(policy.get("high_sigma") or 3.0)
+    rejection_min_samples = int(policy.get("rejection_min_samples", policy.get("min_samples", 3)))
+    rejection_max_fraction = float(
+        policy.get("rejection_max_fraction", policy.get("max_reject_fraction", 0.5))
+    )
     frame_weights = _quality_weights(run, records, weighting)
     cuda_module = _cuda_module_if_requested(backend)
     engine_selection = _integration_engine_selection(
@@ -436,6 +446,8 @@ def integrate_registered_frames(
                     dq_path,
                     weighting,
                     output_variance_map,
+                    rejection_min_samples,
+                    rejection_max_fraction,
                 )
             else:
                 master_writer = stack.enter_context(

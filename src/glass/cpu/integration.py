@@ -40,10 +40,16 @@ def weighted_integrate_stack(
     rejection: str = "none",
     low_sigma: float = 3.0,
     high_sigma: float = 3.0,
+    min_samples: int = 3,
+    max_reject_fraction: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     frames = np.asarray(stack, dtype=np.float32)
     if frames.ndim != 3:
         raise ValueError("stack must have shape (frame_count, height, width)")
+    if min_samples < 1:
+        raise ValueError("min_samples must be at least 1")
+    if not 0.0 <= max_reject_fraction <= 1.0:
+        raise ValueError("max_reject_fraction must be between 0 and 1")
     frame_count, height, width = frames.shape
     if weights is None:
         frame_weights = np.ones(frame_count, dtype=np.float32)
@@ -75,6 +81,22 @@ def weighted_integrate_stack(
         high_threshold = center + np.float32(high_sigma) * scale
         low = valid & (frames < low_threshold[None, :, :])
         high = valid & (frames > high_threshold[None, :, :])
+        rejected = low | high
+        if np.any(rejected):
+            total = np.sum(valid, axis=0)
+            rejected_count = np.sum(rejected, axis=0)
+            remaining = total - rejected_count
+            rejected_fraction = np.divide(
+                rejected_count,
+                np.maximum(total, 1),
+                out=np.zeros_like(total, dtype=np.float32),
+                where=total > 0,
+            )
+            allowed = (remaining >= int(min_samples)) & (
+                rejected_fraction <= np.float32(max_reject_fraction)
+            )
+            low &= allowed[None, :, :]
+            high &= allowed[None, :, :]
         low_reject = np.sum(low, axis=0).astype(np.float32)
         high_reject = np.sum(high, axis=0).astype(np.float32)
         valid = valid & ~(low | high)

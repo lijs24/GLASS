@@ -3789,6 +3789,8 @@ def _resident_winsorized_runtime_contract(
     resident_winsorized_mode: str,
     frame_count: int,
     dispatch_mode: str,
+    min_samples: int = 3,
+    max_reject_fraction: float = 0.5,
     hardened_available: bool = True,
     hardened_unavailable_reason: str | None = None,
     tile_local_policy_mode: str = "record",
@@ -3849,6 +3851,8 @@ def _resident_winsorized_runtime_contract(
         "resolution_reason": resolution_reason,
         "dispatch_mode": str(dispatch_mode),
         "resident_output_maps": resident_output_maps,
+        "min_samples": int(min_samples),
+        "max_reject_fraction": float(max_reject_fraction),
         "default_mode": RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
         "fast_approx_mode": RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
         "auto_hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT,
@@ -6217,6 +6221,8 @@ def run_resident_calibration_integration(
     run_dir: str | Path,
     integration_weighting: str = "auto",
     integration_rejection: str = "none",
+    integration_rejection_min_samples: int | None = None,
+    integration_rejection_max_fraction: float | None = None,
     flat_floor: float | None = None,
     resident_registration: str = "off",
     resident_registration_max_shift: int = 128,
@@ -6295,6 +6301,12 @@ def run_resident_calibration_integration(
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
     if integration_weighting not in {"auto", "none", "simple_snr"}:
         raise ValueError("resident CUDA mode supports integration weighting=none or simple_snr")
+    if integration_rejection_min_samples is not None and integration_rejection_min_samples < 1:
+        raise ValueError("integration_rejection_min_samples must be at least 1")
+    if integration_rejection_max_fraction is not None and (
+        integration_rejection_max_fraction < 0.0 or integration_rejection_max_fraction > 1.0
+    ):
+        raise ValueError("integration_rejection_max_fraction must be between 0 and 1")
     if resident_output_maps not in _RESIDENT_OUTPUT_MAP_POLICIES:
         raise ValueError("resident_output_maps must be audit, science, or minimal")
     if resident_inline_source_dq not in {"off", "cosmetic", "cosmetic_cuda"}:
@@ -6499,6 +6511,23 @@ def run_resident_calibration_integration(
             raise ValueError("flat_floor override must be positive")
         policy.flat_floor = float(flat_floor)
     integration_policy = plan.get("integration_policy", {})
+    rejection_min_samples = int(
+        integration_rejection_min_samples
+        if integration_rejection_min_samples is not None
+        else integration_policy.get("rejection_min_samples", integration_policy.get("min_samples", 3))
+    )
+    rejection_max_fraction = float(
+        integration_rejection_max_fraction
+        if integration_rejection_max_fraction is not None
+        else integration_policy.get(
+            "rejection_max_fraction",
+            integration_policy.get("max_reject_fraction", 0.5),
+        )
+    )
+    if rejection_min_samples < 1:
+        raise ValueError("resolved integration rejection min_samples must be at least 1")
+    if rejection_max_fraction < 0.0 or rejection_max_fraction > 1.0:
+        raise ValueError("resolved integration rejection max fraction must be between 0 and 1")
     registration_policy = dict(plan.get("registration_policy", {}))
     if resident_triangle_pixel_refine is not None:
         registration_policy["cuda_triangle_pixel_refine"] = bool(resident_triangle_pixel_refine)
@@ -6625,6 +6654,8 @@ def run_resident_calibration_integration(
                 resident_winsorized_mode=resident_winsorized_mode,
                 frame_count=len(light_frames),
                 dispatch_mode=resident_integration_dispatch,
+                min_samples=rejection_min_samples,
+                max_reject_fraction=rejection_max_fraction,
                 hardened_available=hardened_winsorized_available,
                 hardened_unavailable_reason=hardened_winsorized_unavailable_reason,
                 tile_local_policy_mode=resident_tile_local_policy_mode,
@@ -11891,7 +11922,13 @@ def run_resident_calibration_integration(
                     low_rejection_map,
                     high_rejection_map,
                     hardened_winsorized_timing,
-                ) = stack.integrate_hardened_winsorized_sigma_timed(weights_arg, low_sigma, high_sigma)
+                ) = stack.integrate_hardened_winsorized_sigma_timed(
+                    weights_arg,
+                    low_sigma,
+                    high_sigma,
+                    min_samples=rejection_min_samples,
+                    max_reject_fraction=rejection_max_fraction,
+                )
             else:
                 if not hasattr(stack, "integrate_sigma_clip"):
                     raise RuntimeError("resident CUDA backend does not expose integrate_sigma_clip")
@@ -12627,6 +12664,8 @@ def run_resident_calibration_integration(
                 rejection_mode,
                 low_sigma,
                 high_sigma,
+                min_samples=rejection_min_samples,
+                max_reject_fraction=rejection_max_fraction,
                 resident_winsorized_mode=group_resident_winsorized_mode,
                 requested_resident_winsorized_mode=resident_winsorized_mode,
                 resident_winsorized_resolution_reason=resident_winsorized_contract.get(
@@ -14514,6 +14553,8 @@ def run_resident_calibration_integration(
                 "mode": rejection_mode,
                 "low_sigma": low_sigma,
                 "high_sigma": high_sigma,
+                "min_samples": rejection_min_samples,
+                "max_reject_fraction": rejection_max_fraction,
                 "resident_winsorized_mode": effective_resident_winsorized_mode,
                 "requested_resident_winsorized_mode": resident_winsorized_mode,
                 "mixed_output_descriptors": True,
@@ -14532,6 +14573,8 @@ def run_resident_calibration_integration(
                 rejection_mode,
                 low_sigma,
                 high_sigma,
+                min_samples=rejection_min_samples,
+                max_reject_fraction=rejection_max_fraction,
                 resident_winsorized_mode=(
                     effective_resident_winsorized_mode
                     if effective_resident_winsorized_mode
@@ -14595,6 +14638,8 @@ def run_resident_calibration_integration(
                 "resident_winsorized_modes": resolved_resident_winsorized_modes,
                 "low_sigma": low_sigma,
                 "high_sigma": high_sigma,
+                "rejection_min_samples": rejection_min_samples,
+                "rejection_max_fraction": rejection_max_fraction,
                 "rejection_semantics": top_level_rejection_semantics,
                 "frame_weights": frame_weights,
                 "outputs": outputs,
