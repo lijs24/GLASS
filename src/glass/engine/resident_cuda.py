@@ -109,7 +109,7 @@ _RESIDENT_WINSORIZED_MODES = {
 }
 _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE = False
 _RESIDENT_MASTER_STACK_TILE_SIZE = 512
-_RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_resident_cuda_raw_u16_mean_master_cache_v1"
+_RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_resident_cuda_policy_master_cache_v2"
 _RESIDENT_MASTER_RAW_U16_STREAM_COUNT = 4
 _RESIDENT_MASTER_RAW_U16_WAVE_FRAMES = 4
 _OUTPUT_DIAGNOSTICS_EXACT_PERCENTILE_MAX_PIXELS = 2_000_000
@@ -4853,12 +4853,19 @@ class _ResidentMasterFitsImageSource(FitsImageSource):
 
 
 def _resident_master_rejection_policy(policy: CalibrationPolicy) -> RejectionPolicy:
-    del policy
     return RejectionPolicy(
-        method="none",
-        iterations=0,
-        min_samples=1,
+        method=policy.master_rejection,  # type: ignore[arg-type]
+        iterations=policy.master_rejection_iterations,
+        low_sigma=policy.master_rejection_low_sigma,
+        high_sigma=policy.master_rejection_high_sigma,
+        min_samples=policy.master_rejection_min_samples,
+        max_reject_fraction=policy.master_rejection_max_fraction,
     )
+
+
+def _resident_master_uses_rejection(policy: CalibrationPolicy) -> bool:
+    rejection = _resident_master_rejection_policy(policy)
+    return rejection.method != "none" and rejection.iterations > 0
 
 
 def _resident_master_stack_request(
@@ -5190,11 +5197,17 @@ def _stack_resident_master_array_with_cpu_stack_engine(
     metrics["tile_stack_mode"] = "stack_engine_cpu"
     metrics["resident_master_cache_builder"] = "CPUStackEngine"
     metrics["master_rejection_requested"] = policy.master_rejection
-    metrics["master_rejection_applied"] = "none"
+    metrics["master_rejection_applied"] = result.metrics.get("rejection", policy.master_rejection)
     metrics["master_rejection_dispatch_reason"] = (
-        "resident_master_cache_preserves_phase1_mean_builder_until_robust_master_stack_is_gpu_or_optimized"
+        "resident_master_cache_applied_policy_with_cpu_stack_engine"
+        if _resident_master_uses_rejection(policy)
+        else "resident_master_cache_no_rejection_policy_uses_cpu_stack_engine"
     )
-    metrics["resident_master_cache_builder_dispatch"] = "cpu_stack_engine_full_frame"
+    metrics["resident_master_cache_builder_dispatch"] = (
+        "cpu_stack_engine_tiled_rejection"
+        if _resident_master_uses_rejection(policy)
+        else "cpu_stack_engine_full_frame"
+    )
     metrics["stack_engine_fallback_reason"] = fallback_reason
     return result.master.astype(np.float32, copy=True), metrics
 
@@ -5206,19 +5219,22 @@ def _stack_resident_master_array_with_engine(
     source_kind: str,
     tile_size: int = _RESIDENT_MASTER_STACK_TILE_SIZE,
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    cuda_available, unavailable_reason = _resident_master_cuda_mean_available()
     fallback_reason: str | None = None
-    if cuda_available:
-        try:
-            return _stack_resident_master_array_with_resident_cuda_mean(
-                paths,
-                policy,
-                source_kind=source_kind,
-            )
-        except (FastFitsUnsupported, RuntimeError, ValueError) as exc:
-            fallback_reason = f"resident_cuda_mean_unavailable:{type(exc).__name__}:{exc}"
+    if _resident_master_uses_rejection(policy):
+        fallback_reason = "resident_cuda_mean_supports_no_rejection_only"
     else:
-        fallback_reason = unavailable_reason
+        cuda_available, unavailable_reason = _resident_master_cuda_mean_available()
+        if cuda_available:
+            try:
+                return _stack_resident_master_array_with_resident_cuda_mean(
+                    paths,
+                    policy,
+                    source_kind=source_kind,
+                )
+            except (FastFitsUnsupported, RuntimeError, ValueError) as exc:
+                fallback_reason = f"resident_cuda_mean_unavailable:{type(exc).__name__}:{exc}"
+        else:
+            fallback_reason = unavailable_reason
     return _stack_resident_master_array_with_cpu_stack_engine(
         paths,
         policy,
@@ -5315,6 +5331,26 @@ def _resident_stack_engine_audit_fields(
     if flat_normalization is not None:
         fields["flat_normalization"] = flat_normalization
     return fields
+
+
+def _resident_master_metric_summary(
+    metrics: dict[str, dict[str, Any]],
+    key: str,
+    *,
+    default: str,
+) -> str:
+    values = sorted(
+        {
+            str(value.get(key))
+            for value in metrics.values()
+            if isinstance(value, dict) and value.get(key) is not None
+        }
+    )
+    if not values:
+        return default
+    if len(values) == 1:
+        return values[0]
+    return "; ".join(values)
 
 
 def _load_or_build_matching_masters(
@@ -5450,9 +5486,19 @@ def _load_or_build_matching_masters(
         "cache_fingerprint": fingerprint,
         "cache_builder": _RESIDENT_MASTER_CACHE_BUILDER,
         "master_rejection_requested": policy.master_rejection,
-        "master_rejection_applied": "none",
-        "master_rejection_dispatch_reason": (
-            "resident_master_cache_preserves_phase1_mean_builder_until_robust_master_stack_is_gpu_or_optimized"
+        "master_rejection_applied": _resident_master_metric_summary(
+            master_metrics,
+            "master_rejection_applied",
+            default="none" if not _resident_master_uses_rejection(policy) else policy.master_rejection,
+        ),
+        "master_rejection_dispatch_reason": _resident_master_metric_summary(
+            master_metrics,
+            "master_rejection_dispatch_reason",
+            default=(
+                "resident_master_cache_no_rejection_policy"
+                if not _resident_master_uses_rejection(policy)
+                else "resident_master_cache_applied_policy_with_cpu_stack_engine"
+            ),
         ),
         **_resident_stack_engine_audit_fields(
             master_metrics,
@@ -5546,9 +5592,19 @@ def _load_or_build_aggregate_masters(
         "shape": {"height": height, "width": width},
         "cache_builder": _RESIDENT_MASTER_CACHE_BUILDER,
         "master_rejection_requested": policy.master_rejection,
-        "master_rejection_applied": "none",
-        "master_rejection_dispatch_reason": (
-            "resident_master_cache_preserves_phase1_mean_builder_until_robust_master_stack_is_gpu_or_optimized"
+        "master_rejection_applied": _resident_master_metric_summary(
+            master_metrics,
+            "master_rejection_applied",
+            default="none" if not _resident_master_uses_rejection(policy) else policy.master_rejection,
+        ),
+        "master_rejection_dispatch_reason": _resident_master_metric_summary(
+            master_metrics,
+            "master_rejection_dispatch_reason",
+            default=(
+                "resident_master_cache_no_rejection_policy"
+                if not _resident_master_uses_rejection(policy)
+                else "resident_master_cache_applied_policy_with_cpu_stack_engine"
+            ),
         ),
         **_resident_stack_engine_audit_fields(
             master_metrics,

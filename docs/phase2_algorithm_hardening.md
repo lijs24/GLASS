@@ -933,6 +933,85 @@ Interpretation:
   `unknown` FITS frames. That is harmless and auditable, but future work can
   add scanner-level ignore/include policies for DQ directories.
 
+### S2-Gate 594: Resident Master-Cache Rejection Policy
+
+Gate 594 returns to a core StackEngine/default-path target. Gate482 moved
+resident master-cache construction onto StackEngine-shaped artifacts, but kept
+the actual resident master combine as mean/no-rejection while recording
+`master_rejection_requested=winsorized_sigma`. That made cold-cache resident
+master bias/dark/flat faster, but it did not honor the default calibration
+policy. This gate makes resident master-cache construction apply
+`CalibrationPolicy.master_rejection` when rejection is active, while preserving
+the resident CUDA mean fast path for explicit no-rejection runs.
+
+Implementation:
+
+- `_resident_master_rejection_policy()` now mirrors `CalibrationPolicy`
+  rejection mode, sigma thresholds, iteration count, minimum samples, and
+  maximum rejection fraction.
+- `_stack_resident_master_array_with_engine()` dispatches to resident CUDA mean
+  only when master rejection is inactive. Active rejection routes directly to
+  CPUStackEngine and records
+  `resident_cuda_mean_supports_no_rejection_only`.
+- CPUStackEngine master-cache metrics now record actual
+  `master_rejection_applied`, dispatch reason, and
+  `cpu_stack_engine_tiled_rejection` when rejection is used.
+- Top-level resident master-cache stats now summarize actual applied rejection
+  instead of writing `none` unconditionally.
+- The resident master-cache builder id is bumped to
+  `resident_stack_engine_resident_cuda_policy_master_cache_v2` so older
+  no-rejection caches cannot be silently reused under the corrected semantics.
+
+Synthetic validation:
+
+- Artifact directory:
+  `C:\glass_runs\phase2_s2_gate594_resident_master_rejection`
+- Validation summary:
+  `C:\glass_runs\phase2_s2_gate594_resident_master_rejection\gate594_validation_summary.json`
+- Dataset: `20` bias, `20` dark, `20` flat frames, each `96x96`, with one
+  extreme outlier in each calibration group.
+- No-rejection policy:
+  - elapsed: `0.38482600008137524 s`;
+  - bias mean: `60.0`;
+  - dark mean after bias subtraction: `140.0`;
+  - `master_rejection_applied=none`.
+- Winsorized policy:
+  - elapsed: `1.1001293000299484 s`;
+  - bias mean: `10.0`;
+  - dark mean after bias subtraction: `90.0`;
+  - `master_rejection_applied=winsorized_sigma`.
+- Validation checks passed:
+  `none_applied_none`, `winsorized_applied_winsorized`,
+  `winsorized_bias_rejects_outlier`, `none_bias_includes_outlier`,
+  `cache_builder_is_v2`, and `all_finite`.
+
+Validation commands:
+
+- `.\.venv\Scripts\python.exe -m pytest -q
+  tests\test_resident_master_stack_engine.py`
+- `.\.venv\Scripts\python.exe -m ruff check
+  src\glass\engine\resident_cuda.py
+  tests\test_resident_master_stack_engine.py`
+- `.\.venv\Scripts\python.exe -m pytest -q
+  tests\test_resident_master_stack_engine.py
+  tests\test_resident_calibration_artifacts.py
+  tests\test_resident_cuda_run.py -k
+  "resident_master_cache or calibration_artifacts or master_cache"`
+- synthetic validation script that writes
+  `gate594_validation_summary.json` in the artifact directory above.
+
+Interpretation:
+
+- this is a science-path gate: resident master bias/dark/flat now honor the
+  requested calibration master rejection policy;
+- explicit no-rejection runs still keep the resident CUDA mean builder for fast
+  compatibility/performance probes;
+- cold real-data cache rebuilds may slow down until robust master reductions
+  are implemented on the resident CUDA path or optimized CPU path;
+- the next substantive gate should run a real 200-light A/B with this corrected
+  cache builder, quantify the cold-cache cost, and decide whether the immediate
+  follow-up is CUDA robust master reduction or a staged shared-cache default.
+
 ### S2-Gate 593: Source-DQ Sidecar Scan Contract
 
 Gate 593 closes a DQ/mask input-contract gap left visible by Gate590. GLASS can

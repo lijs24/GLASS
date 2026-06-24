@@ -28,7 +28,9 @@ def test_resident_matching_master_cache_uses_stack_engine_contract(tmp_path: Pat
     monkeypatch.setattr(
         resident_cuda,
         "_resident_master_cuda_mean_available",
-        lambda: (False, "unit_test_cuda_unavailable"),
+        lambda: (_ for _ in ()).throw(
+            AssertionError("resident CUDA mean availability should not be probed when master rejection is active")
+        ),
     )
     bias_ids = _write_constant_frames(tmp_path, "B", [10.0, 11.0, 12.0, 1000.0], exposure_s=0.0)
     dark_ids = _write_constant_frames(tmp_path, "D", [100.0, 102.0, 104.0, 106.0], exposure_s=120.0)
@@ -98,19 +100,25 @@ def test_resident_matching_master_cache_uses_stack_engine_contract(tmp_path: Pat
     )
 
     assert stats["cache_hit"] is False
-    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_raw_u16_mean_master_cache_v1"
+    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_policy_master_cache_v2"
     assert stats["tile_stack_mode"] == "stack_engine_cpu"
-    assert stats["stack_engine_fallback_reason"] == "unit_test_cuda_unavailable"
+    assert stats["stack_engine_fallback_reason"] == "resident_cuda_mean_supports_no_rejection_only"
     assert stats["stack_engine_enabled"] is True
     assert stats["master_rejection_requested"] == "minmax"
-    assert stats["master_rejection_applied"] == "none"
+    assert stats["master_rejection_applied"] == "minmax"
+    assert stats["master_rejection_dispatch_reason"] == (
+        "resident_master_cache_applied_policy_with_cpu_stack_engine"
+    )
     assert stats["flat_normalization"]["normalization_stage"] == "master_after_stack"
     assert dark_exposure == 120.0
-    assert np.allclose(bias, 258.25)
-    assert np.allclose(dark, -155.25)
+    assert np.allclose(bias, 11.5)
+    assert np.allclose(dark, 91.5)
     assert np.allclose(flat, 1.0)
-    assert stats["stack_engine_metrics"]["bias"]["rejection"] == "none"
-    assert stats["stack_engine_metrics"]["bias"]["execution_path"] == "full_frame_mean_no_rejection"
+    assert stats["stack_engine_metrics"]["bias"]["rejection"] == "minmax"
+    assert stats["stack_engine_metrics"]["bias"]["master_rejection_applied"] == "minmax"
+    assert stats["stack_engine_metrics"]["bias"]["resident_master_cache_builder_dispatch"] == (
+        "cpu_stack_engine_tiled_rejection"
+    )
     assert stats["stack_engine_metrics"]["bias"]["master_rejection_requested"] == "minmax"
     assert stats["stack_engine_metrics"]["bias"]["result_contract_passed"] is True
     assert stats["dq_provenance_summary"]["bias"]["source_schema"] == "stack_engine_dq_provenance"
@@ -209,7 +217,13 @@ def test_resident_matching_master_cache_can_use_resident_cuda_mean_builder(
         "D": {"group_id": "D", "group_type": "dark", "frames": dark_ids, "shape": shape},
         "F": {"group_id": "F", "group_type": "flat", "frames": flat_ids, "shape": shape},
     }
-    policy = CalibrationPolicy(master_dark_includes_bias=False, flat_normalization="median", flat_floor=0.05)
+    policy = CalibrationPolicy(
+        master_dark_includes_bias=False,
+        flat_normalization="median",
+        flat_floor=0.05,
+        master_rejection="none",
+        master_rejection_iterations=0,
+    )
 
     bias, dark, flat, stats, dark_exposure = _load_or_build_matching_masters(
         tmp_path / "run_cuda",
@@ -229,7 +243,7 @@ def test_resident_matching_master_cache_can_use_resident_cuda_mean_builder(
     assert stats["cache_hit"] is False
     assert stats["tile_stack_mode"] == "stack_engine_cuda_mean"
     assert stats["stack_engine_fallback_reason"] is None
-    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_raw_u16_mean_master_cache_v1"
+    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_policy_master_cache_v2"
     assert stats["stack_engine_metrics"]["bias"]["execution_path"] == "resident_cuda_mean_no_rejection"
     assert stats["stack_engine_metrics"]["bias"]["resident_master_cache_builder_dispatch"] == (
         "resident_cuda_native_direct_mean"
@@ -237,6 +251,7 @@ def test_resident_matching_master_cache_can_use_resident_cuda_mean_builder(
     assert stats["stack_engine_metrics"]["bias"]["resident_master_cache_builder"] == (
         "ResidentCalibratedStack.integrate_mean"
     )
+    assert stats["stack_engine_metrics"]["bias"]["master_rejection_applied"] == "none"
     assert stats["stack_engine_metrics"]["bias"]["fits_backend_counts"] == {"fake_native_direct_simple": 2}
     assert stats["dq_provenance_summary"]["bias"]["engine"] == "stack_engine_cuda_mean"
     assert stats["dq_provenance_summary"]["bias"]["sample_accounting_closure"]["status"] == "passed"
@@ -369,7 +384,13 @@ def test_resident_matching_master_cache_prefers_raw_u16_gpu_decode(
         "D": {"group_id": "D", "group_type": "dark", "frames": dark_ids, "shape": shape},
         "F": {"group_id": "F", "group_type": "flat", "frames": flat_ids, "shape": shape},
     }
-    policy = CalibrationPolicy(master_dark_includes_bias=False, flat_normalization="median", flat_floor=0.05)
+    policy = CalibrationPolicy(
+        master_dark_includes_bias=False,
+        flat_normalization="median",
+        flat_floor=0.05,
+        master_rejection="none",
+        master_rejection_iterations=0,
+    )
 
     bias, dark, flat, stats, dark_exposure = _load_or_build_matching_masters(
         tmp_path / "run_raw",
@@ -387,7 +408,7 @@ def test_resident_matching_master_cache_prefers_raw_u16_gpu_decode(
 
     assert len(FakeResidentCalibratedStack.instances) == 3
     assert stats["tile_stack_mode"] == "stack_engine_cuda_mean"
-    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_raw_u16_mean_master_cache_v1"
+    assert stats["cache_builder"] == "resident_stack_engine_resident_cuda_policy_master_cache_v2"
     assert stats["stack_engine_metrics"]["bias"]["resident_master_cache_builder_dispatch"] == (
         "resident_cuda_raw_u16_mean"
     )
