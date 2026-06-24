@@ -17481,3 +17481,59 @@ Phase 2 is complete when:
   - numerical output and benchmark acceptance remained unchanged;
   - the next substantive gate should return to registration/LN/integration
     resident work rather than adding more release/report-only gates.
+
+### S2-Gate 598: Resident LN Frame Accounting Closure
+
+- Continued the resident registration/LN/integration audit mainline by fixing
+  frame accounting for resident local-normalization rows.
+- Problem found:
+  - resident LN writes per-frame results under `groups[].frame_results`;
+  - `frame_accounting.json` only indexed legacy top-level
+    `local_norm_results[]`;
+  - zero-weight resident frames could therefore appear as
+    `local_norm_status=resident_applied` in exception rows even when
+    `local_norm_contract.json` correctly reported `skipped_zero_weight`.
+- Completed:
+  - added a unified local-normalization row reader for both legacy
+    `local_norm_results[]` and resident `groups[].frame_results`;
+  - changed frame accounting to use resident per-frame LN statuses when
+    present;
+  - added a regression test proving `skipped_zero_weight` survives into
+    `frame_accounting.json` exception rows;
+  - preserved final rejection attribution: the real rejected frames remain
+    `quality_rejected`, while their LN status now accurately records that LN
+    skipped zero-weight frames.
+- Tests:
+  - focused frame-accounting/local-norm tests: `15 passed`;
+  - resident local-norm/pipeline focused tests: `5 passed`;
+  - ruff on changed files: passed;
+  - full pytest: `1269 passed in 52.55 s`.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate598_ln_frame_accounting\real_200_cache_hit_ln_status`;
+  - summary:
+    `C:\glass_runs\phase2_s2_gate598_ln_frame_accounting\gate598_summary.json`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate598_ln_frame_accounting\compare_vs_wbpp_fastintegration_scaled_coverage190.json`;
+  - acceptance:
+    `C:\glass_runs\phase2_s2_gate598_ln_frame_accounting\acceptance_audit.json`.
+- Key result:
+
+  | Metric | Value |
+  | --- | ---: |
+  | GLASS total elapsed, shared master-cache hit | `8.033185199834406 s` |
+  | Resident calibration/integration | `7.188936799997464 s` |
+  | Speedup vs WBPP black-box | `136.00346224092047x` |
+  | RMS diff vs reference | `0.005316389020034645` |
+  | abs diff p99 vs reference | `0.002127066696993994` |
+  | exception frame count | `7` |
+  | exception LN status counts | `skipped_zero_weight: 7` |
+  | exception final status counts | `quality_rejected: 7` |
+
+- Interpretation:
+  - the resident LN/integration frame-state audit now matches the actual
+    resident LN rows;
+  - image math, frame admission, registration, warp, rejection, and output
+    agreement are unchanged;
+  - the next substantive gate can safely use frame accounting as evidence
+    while optimizing resident registration/warp/LN/integration behavior.

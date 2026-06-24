@@ -66,6 +66,22 @@ def _resident_frame_mask_rows(resident_frame_masks: dict[str, Any] | None) -> li
     return rows
 
 
+def _local_norm_rows(local_norm: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not local_norm:
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in local_norm.get("local_norm_results") or []:
+        if isinstance(item, dict):
+            rows.append(item)
+    for group in local_norm.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        for item in group.get("frame_results") or []:
+            if isinstance(item, dict):
+                rows.append(item)
+    return rows
+
+
 def _add_frame(
     frames: list[dict[str, Any]],
     seen: set[str],
@@ -110,7 +126,7 @@ def _input_frames(
         _add_frame(frames, seen, item.get("frame_id"))
     for item in (warp or {}).get("skipped_frames", []):
         _add_frame(frames, seen, item.get("frame_id"))
-    for item in (local_norm or {}).get("local_norm_results", []):
+    for item in _local_norm_rows(local_norm):
         _add_frame(frames, seen, item.get("frame_id"))
     for frame_id in (integration or {}).get("frame_weights", {}):
         _add_frame(frames, seen, frame_id)
@@ -319,7 +335,9 @@ def build_frame_accounting(
         str(item.get("frame_id")): item for item in (warp or {}).get("skipped_frames", [])
     }
     local_norm_by_id = {
-        str(item.get("frame_id")): item for item in (local_norm or {}).get("local_norm_results", [])
+        str(item.get("frame_id")): item
+        for item in _local_norm_rows(local_norm)
+        if item.get("frame_id") is not None
     }
     frame_weights = (integration or {}).get("frame_weights", {})
     has_resident_integration = (integration or {}).get("source_stage") == "resident_calibrated_stack"

@@ -382,3 +382,88 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
     assert written["summary"]["resident_dq_frame_mask_sources"] == ["resident_frame_masks"]
     assert written["summary"]["calibration_master_count"] == 3
     assert written["exception_summary"]["primary_stage_counts"] == {"registration": 1}
+
+
+def test_resident_frame_accounting_reads_grouped_local_norm_frame_results(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    write_json(run / "processing_plan.json", {"frames": [_plan_frame("ref"), _plan_frame("excluded")]})
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "artifact_type": "resident_cuda_calibration_artifacts",
+            "source_stage": "resident_calibrated_stack",
+            "calibrated_lights": [
+                {
+                    "frame_id": "ref",
+                    "status": "resident_in_vram",
+                    "source_stage": "resident_calibrated_stack",
+                    "backend": "cuda_resident_stack",
+                    **_resident_dq_contract("ref"),
+                },
+                {
+                    "frame_id": "excluded",
+                    "status": "resident_in_vram",
+                    "source_stage": "resident_calibrated_stack",
+                    "backend": "cuda_resident_stack",
+                    **_resident_dq_contract("excluded"),
+                },
+            ],
+        },
+    )
+    write_json(
+        run / "registration_results.json",
+        {
+            "source_stage": "resident_calibrated_stack",
+            "results": [
+                {"frame_id": "ref", "status": "reference"},
+                {
+                    "frame_id": "excluded",
+                    "status": "excluded",
+                    "warnings": ["registration quality rejected frame"],
+                },
+            ],
+        },
+    )
+    write_json(
+        run / "local_norm_results.json",
+        {
+            "schema_version": 1,
+            "source_stage": "resident_calibrated_stack",
+            "enabled": True,
+            "groups": [
+                {
+                    "filter": "H",
+                    "enabled": True,
+                    "mode": "resident_grid_mean_std",
+                    "reference_frame_id": "ref",
+                    "frame_results": [
+                        {"frame_id": "ref", "status": "reference", "warnings": []},
+                        {
+                            "frame_id": "excluded",
+                            "status": "skipped_zero_weight",
+                            "warnings": ["resident LN skipped zero-weight frame"],
+                        },
+                    ],
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "integration_results.json",
+        {
+            "source_stage": "resident_calibrated_stack",
+            "frame_weights": {"ref": 1.0, "excluded": 0.0},
+            "outputs": [{"filter": "H", "frame_count": 1}],
+        },
+    )
+
+    accounting = build_frame_accounting(run)
+    rows = {item["frame_id"]: item for item in accounting["frames"]}
+    exceptions = {item["frame_id"]: item for item in accounting["exception_frames"]}
+
+    assert rows["ref"]["local_norm_status"] == "reference"
+    assert rows["excluded"]["local_norm_status"] == "skipped_zero_weight"
+    assert rows["excluded"]["final_status"] == "registration_rejected"
+    assert "resident LN skipped zero-weight frame" in rows["excluded"]["warnings"]
+    assert exceptions["excluded"]["local_norm_status"] == "skipped_zero_weight"
