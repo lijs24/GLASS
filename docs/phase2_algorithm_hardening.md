@@ -6831,6 +6831,8 @@ integration where applicable.
   `--integration-rejection winsorized_sigma` is selected.
 - Preserve `fast_approx` as the default mode so the Phase 1/2 resident
   throughput baseline is not silently changed by the correctness prototype.
+  This historical default is superseded by S2-Gate 599, which promotes guarded
+  `auto` selection for auditable resident stack groups.
 - Make resident `auto` dispatch choose stack integration for hardened
   winsorized mode, and fail clearly for unsupported fused-matrix or tile-local
   policy combinations.
@@ -17537,3 +17539,40 @@ Phase 2 is complete when:
     agreement are unchanged;
   - the next substantive gate can safely use frame accounting as evidence
     while optimizing resident registration/warp/LN/integration behavior.
+
+### S2-Gate 599: Resident Winsorized Auto Parity Default
+
+- Returned to the resident CUDA integration mainline by changing the default
+  resident light-integration `winsorized_sigma` implementation from
+  unconditional `fast_approx` to a guarded `auto` resolver.
+- Completed:
+  - added `auto` as the CLI/API default for `--resident-winsorized-mode`;
+  - resolved winsorized mode per filter/shape group after frame count,
+    dispatch, output-map policy, and native method availability are known;
+  - selected `hardened_cpu_parity` automatically for small resident
+    stack-dispatch audit/science groups with at most 64 frames;
+  - preserved explicit `fast_approx` and explicit `hardened_cpu_parity`;
+  - fell back to `fast_approx` with a recorded reason for minimal-output runs,
+    groups over 64 default-auto frames, unsupported dispatch, tile-local apply mode, or
+    older CUDA builds without the hardened native methods;
+  - kept explicit `hardened_cpu_parity` guarded by the native 256-frame limit;
+  - wrote requested mode, effective mode, resolution reason, and runtime
+    contract into resident integration artifacts.
+- Why this matters:
+  - small resident stacks now get the CUDA median/IQR CPU-baseline-parity
+    implementation by default;
+  - the 200-light diagnostic explicit-hardened run completed successfully and
+    measured the cost/benefit, but it reduced post-rejection coverage below the
+    current benchmark contract, so the 200-light default stays on the
+    reasoned fast fallback until rejection coverage semantics are improved;
+  - `minimal` output-map runs remain optimized for master-only transfer and
+    can still use fused matrix integration.
+- Tests:
+  - resident winsorized contract and default CUDA parity tests: passed;
+  - resident/CLI/pipeline-contract focused suite: passed;
+  - full pytest and real 200-light validation are recorded in
+    `runs/checkpoints/s2_gate_599_status.md`.
+- Clean-room note:
+  - this gate changes GLASS-owned runtime policy over GLASS-owned CPU and CUDA
+    winsorized implementations only;
+  - no external or proprietary implementation source was inspected or used.

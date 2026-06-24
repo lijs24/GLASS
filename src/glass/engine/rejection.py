@@ -8,9 +8,11 @@ from glass.engine.contracts import RejectionPolicy
 
 
 CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR = "median_iqr_winsorized_standard_deviation_scale"
+RESIDENT_WINSORIZED_SIGMA_AUTO_MODE = "auto"
 RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE = "fast_approx"
 RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE = "hardened_cpu_parity"
 RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT = 256
+RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT = 64
 RESIDENT_WINSORIZED_SIGMA_ALGORITHM = "two_stage_winsorized_mean_std_rejection_approximation"
 RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR = "mean_std_two_stage_winsorized"
 RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS = "known_non_parity_pending_cuda_update"
@@ -94,6 +96,8 @@ def resident_rejection_descriptor(
     high_sigma: float,
     *,
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+    requested_resident_winsorized_mode: str | None = None,
+    resident_winsorized_resolution_reason: str | None = None,
 ) -> dict[str, Any]:
     descriptor: dict[str, Any] = {
         "mode": str(method),
@@ -105,6 +109,10 @@ def resident_rejection_descriptor(
             descriptor.update(
                 {
                     "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+                    "requested_resident_winsorized_mode": (
+                        requested_resident_winsorized_mode or resident_winsorized_mode
+                    ),
+                    "resident_winsorized_resolution_reason": resident_winsorized_resolution_reason,
                     "algorithm": RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM,
                     "scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
                     "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
@@ -122,6 +130,10 @@ def resident_rejection_descriptor(
         descriptor.update(
             {
                 "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+                "requested_resident_winsorized_mode": (
+                    requested_resident_winsorized_mode or resident_winsorized_mode
+                ),
+                "resident_winsorized_resolution_reason": resident_winsorized_resolution_reason,
                 "algorithm": RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
                 "scale_estimator": RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
                 "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,

@@ -1413,7 +1413,8 @@ def _write_resident_memory_admission(
         ),
         local_normalization=getattr(args, "local_normalization", "auto"),
         integration_rejection=getattr(args, "integration_rejection", "auto"),
-        resident_winsorized_mode=getattr(args, "resident_winsorized_mode", "fast_approx"),
+        resident_winsorized_mode=getattr(args, "resident_winsorized_mode", "auto"),
+        resident_output_maps=getattr(args, "resident_output_maps", "audit"),
         exclude_frame_ids=list(getattr(args, "exclude_frame_id", []) or []),
         vram_budget_gb=getattr(args, "vram_budget_gb", None),
         dispatch_explicit=_explicit_option(args, "--resident-warp-batch-dispatch"),
@@ -6196,11 +6197,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-winsorized-mode",
-        choices=["fast_approx", "hardened_cpu_parity"],
-        default="fast_approx",
+        choices=["auto", "fast_approx", "hardened_cpu_parity"],
+        default="auto",
         help=(
-            "resident CUDA winsorized_sigma implementation: fast_approx keeps the current optimized "
-            "mean/std approximation, hardened_cpu_parity opts into the Gate261 median/IQR parity prototype"
+            "resident CUDA winsorized_sigma implementation: auto uses the hardened median/IQR parity "
+            "path for supported resident stack groups and otherwise falls back to fast_approx; "
+            "fast_approx keeps the optimized mean/std approximation; hardened_cpu_parity requires "
+            "the Gate261 median/IQR parity implementation"
         ),
     )
     run.add_argument(
@@ -6812,11 +6815,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-winsorized-mode",
-        choices=["fast_approx", "hardened_cpu_parity"],
-        default="fast_approx",
+        choices=["auto", "fast_approx", "hardened_cpu_parity"],
+        default="auto",
         help=(
-            "resident CUDA winsorized_sigma implementation for audit: fast_approx keeps the current "
-            "optimized approximation, hardened_cpu_parity opts into the Gate261 median/IQR parity prototype"
+            "resident CUDA winsorized_sigma implementation for audit: auto uses the hardened median/IQR "
+            "parity path for supported resident stack groups and otherwise falls back to fast_approx; "
+            "fast_approx keeps the optimized approximation; hardened_cpu_parity requires the Gate261 "
+            "median/IQR parity implementation"
         ),
     )
     audit.add_argument(

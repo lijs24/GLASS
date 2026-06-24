@@ -64,28 +64,35 @@ Supported modes:
 The rejection maps count low and high outliers per output pixel.
 
 The current CPU tile path uses median/std thresholds for rejection. The current
-resident CUDA path uses a separate high-VRAM engineering baseline:
+resident CUDA path has two high-VRAM winsorized implementations:
 
 - `sigma_clip`: two-pass mean/std thresholds over finite, positive-weight
   resident samples.
-- `winsorized_sigma`: first-pass mean/std thresholds, winsorized mean/std
-  re-estimation, then final rejection of original samples outside those
-  thresholds.
+- `winsorized_sigma` `fast_approx`: first-pass mean/std thresholds,
+  winsorized mean/std re-estimation, then final rejection of original samples
+  outside those thresholds.
+- `winsorized_sigma` `hardened_cpu_parity`: resident CUDA median/IQR
+  winsorized sigma path matching the GLASS CPU baseline for supported groups.
 
-This resident `winsorized_sigma` mode is deliberately labeled as an
-approximation. It is useful for speed and diagnostic map development, but it is
-not yet a verified reproduction of PixInsight/ImageIntegration-style robust
-Winsorized Sigma Clipping. A future gate should implement robust per-pixel
-location/scale estimation, finite-sample behavior, and iteration/cutoff details
-behind the same public mode name.
+The resident default is `--resident-winsorized-mode auto`. Auto selects
+`hardened_cpu_parity` for small resident stack-dispatch groups when diagnostic
+maps (`audit` or `science`) are written, the native hardened method is present,
+and the group has at most 64 frames. It falls back to `fast_approx` for
+`minimal` output-map runs, unsupported dispatch, missing native methods, and
+larger groups. Explicit `hardened_cpu_parity` remains available up to the native
+prototype limit of 256 frames. The selected mode, requested mode, resolution
+reason, and runtime contract are written into integration artifacts. The fast
+approximation remains available as an explicit escape hatch and is still
+labeled non-parity.
 
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted
-mean integration, resident mean/std sigma clipping, and resident mean/std
-winsorized clipping. The tile-streaming CPU path remains the scientific baseline
-for correctness, while the resident path is the high-VRAM performance path for
-the M38 comparison dataset.
+mean integration, resident mean/std sigma clipping, resident mean/std
+winsorized clipping, and a bounded resident median/IQR hardened winsorized path.
+The tile-streaming CPU path remains the portable scientific baseline, while the
+resident path is the high-VRAM performance path for the 200-light comparison
+dataset.
 
 ## Variance Map
 

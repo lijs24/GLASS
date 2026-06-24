@@ -1410,6 +1410,63 @@ def test_resident_fast_winsorized_contract_does_not_apply_hardened_limit():
     assert contract["frame_limit_ok"] is True
 
 
+def test_resident_auto_winsorized_contract_selects_hardened_within_limit():
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="auto",
+        frame_count=32,
+        dispatch_mode="stack",
+        hardened_available=True,
+    )
+
+    _validate_resident_winsorized_runtime_contract(contract)
+    assert contract["requested_resident_winsorized_mode"] == "auto"
+    assert contract["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert contract["resolution_reason"] == "auto_hardened_frame_count_within_limit"
+    assert contract["default_mode"] == "auto"
+    assert contract["fast_approx_mode"] == "fast_approx"
+    assert contract["auto_hardened_frame_limit"] == 64
+    assert contract["hardened_requested"] is True
+    assert contract["frame_limit_ok"] is True
+    assert contract["dispatch_ok"] is True
+
+
+def test_resident_auto_winsorized_contract_falls_back_over_default_limit():
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="auto",
+        frame_count=200,
+        dispatch_mode="stack",
+        hardened_available=True,
+    )
+
+    _validate_resident_winsorized_runtime_contract(contract)
+    assert contract["requested_resident_winsorized_mode"] == "auto"
+    assert contract["resident_winsorized_mode"] == "fast_approx"
+    assert contract["resolution_reason"] == "auto_fast_frame_count_exceeds_default_hardened_limit:200>64"
+    assert contract["hardened_requested"] is False
+    assert contract["frame_limit_applies"] is False
+    assert contract["frame_limit_ok"] is True
+
+
+def test_resident_auto_winsorized_contract_falls_back_for_minimal_maps():
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="auto",
+        frame_count=200,
+        dispatch_mode="stack",
+        hardened_available=True,
+        resident_output_maps="minimal",
+    )
+
+    _validate_resident_winsorized_runtime_contract(contract)
+    assert contract["requested_resident_winsorized_mode"] == "auto"
+    assert contract["resident_winsorized_mode"] == "fast_approx"
+    assert contract["resolution_reason"] == "auto_fast_minimal_output_maps_without_diagnostics"
+    assert contract["resident_output_maps"] == "minimal"
+    assert contract["hardened_requested"] is False
+
+
 def test_resident_triangle_determinism_signatures_are_stable_and_sensitive():
     catalog = {
         "count": 3,
@@ -2206,8 +2263,6 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
             "off",
             "--resident-integration-dispatch",
             "auto",
-            "--resident-winsorized-mode",
-            "hardened_cpu_parity",
         ]
     ) == 0
 
@@ -2245,12 +2300,17 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert descriptor["approximation"] is False
     assert artifact["integration_rejection"] == descriptor
     assert integration["rejection_semantics"] == descriptor
+    assert integration["requested_resident_winsorized_mode"] == "auto"
     assert integration["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert integration["resident_winsorized_modes"] == ["hardened_cpu_parity"]
     assert dispatch["effective_mode"] == "stack"
-    assert dispatch["selection_reason"] == "auto_stack_hardened_winsorized_requires_stack"
+    assert dispatch["selection_reason"] == "auto_stack_winsorized_auto_may_select_hardened"
+    assert dispatch["requested_resident_winsorized_mode"] == "auto"
     assert dispatch["resident_winsorized_mode"] == "hardened_cpu_parity"
     assert dispatch["resident_winsorized_contract"] == winsorized_contract
+    assert winsorized_contract["requested_resident_winsorized_mode"] == "auto"
     assert winsorized_contract["hardened_requested"] is True
+    assert winsorized_contract["resolution_reason"] == "auto_hardened_frame_count_within_limit"
     assert winsorized_contract["frame_count"] == 4
     assert winsorized_contract["hardened_frame_limit"] == 256
     assert winsorized_contract["frame_limit_ok"] is True
@@ -2263,7 +2323,7 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert hardened_timing["pixel_count"] == expected_master.size
     assert hardened_timing["total_s"] >= 0.0
     assert contract["passed"] is True
-    assert any("hardened median/IQR" in warning for warning in integration["warnings"])
+    assert any("auto-selected hardened median/IQR" in warning for warning in integration["warnings"])
     assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
     assert np.allclose(weight, expected_weight, rtol=2e-5, atol=2e-5)
     assert np.allclose(coverage, expected_coverage, rtol=0.0, atol=0.0)

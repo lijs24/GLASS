@@ -22,6 +22,8 @@ from glass.engine.dq import dq_provenance_summary_from_resident, dq_provenance_s
 from glass.engine.stack_contract import build_stack_engine_result_contract
 from glass.engine.stack_engine import CPUStackEngine, StackEngineResult
 from glass.engine.rejection import (
+    RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT,
+    RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
     RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
@@ -104,6 +106,7 @@ from glass.report.resident_calibration_contract import (
 _AUTO_STAR_THRESHOLD_SIGMAS = (0.75, 1.0, 1.25, 1.5, 2.0, 3.0)
 _RESIDENT_OUTPUT_MAP_POLICIES = {"audit", "science", "minimal"}
 _RESIDENT_WINSORIZED_MODES = {
+    RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
     RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
 }
@@ -175,7 +178,8 @@ def _resolve_resident_integration_dispatch_for_admission(
     resident_warp_interpolation: str = "bilinear",
     local_normalization: str = "auto",
     integration_rejection: str = "auto",
-    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
+    resident_output_maps: str = "audit",
 ) -> dict[str, Any]:
     requested = str(resident_integration_dispatch or "stack")
     rejection_mode = "none" if integration_rejection == "auto" else str(integration_rejection or "none")
@@ -187,10 +191,19 @@ def _resolve_resident_integration_dispatch_for_admission(
     if requested == "auto":
         if (
             rejection_mode == "winsorized_sigma"
-            and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+            and resident_winsorized_mode
+            in {RESIDENT_WINSORIZED_SIGMA_AUTO_MODE, RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE}
+            and (
+                resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                or resident_output_maps != "minimal"
+            )
         ):
             effective = "stack"
-            reason = "auto_stack_hardened_winsorized_requires_stack"
+            reason = (
+                "auto_stack_winsorized_auto_may_select_hardened"
+                if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_AUTO_MODE
+                else "auto_stack_hardened_winsorized_requires_stack"
+            )
         elif local_norm_enabled:
             effective = "stack"
             reason = "auto_stack_local_normalization_enabled"
@@ -214,10 +227,19 @@ def _resolve_resident_integration_dispatch_for_admission(
             valid = False
         elif (
             rejection_mode == "winsorized_sigma"
-            and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+            and resident_winsorized_mode
+            in {RESIDENT_WINSORIZED_SIGMA_AUTO_MODE, RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE}
+            and (
+                resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                or resident_output_maps != "minimal"
+            )
         ):
             effective = "stack"
-            reason = "admission_stack_explicit_fused_hardened_winsorized_requires_stack"
+            reason = (
+                "admission_stack_explicit_fused_winsorized_auto_may_select_hardened"
+                if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_AUTO_MODE
+                else "admission_stack_explicit_fused_hardened_winsorized_requires_stack"
+            )
             valid = False
     elif requested != "stack":
         effective = "stack"
@@ -237,6 +259,7 @@ def _resolve_resident_integration_dispatch_for_admission(
         "integration_rejection": integration_rejection,
         "resolved_rejection_mode": rejection_mode,
         "resident_winsorized_mode": resident_winsorized_mode,
+        "resident_output_maps": resident_output_maps,
     }
 
 
@@ -458,7 +481,8 @@ def build_resident_memory_admission(
     resident_warp_interpolation: str = "bilinear",
     local_normalization: str = "auto",
     integration_rejection: str = "auto",
-    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
+    resident_output_maps: str = "audit",
     exclude_frame_ids: list[str] | None = None,
     vram_budget_gb: float | None = None,
     enforce_explicit_budget: bool = True,
@@ -483,6 +507,7 @@ def build_resident_memory_admission(
         local_normalization=local_normalization,
         integration_rejection=integration_rejection,
         resident_winsorized_mode=resident_winsorized_mode,
+        resident_output_maps=resident_output_maps,
     )
     chunked_enabled = bool(
         resident_registration == "similarity_cuda_triangle"
@@ -3747,25 +3772,89 @@ def _resident_output_map_selection(policy: str) -> dict[str, bool]:
     }
 
 
+def _resident_stack_hardened_winsorized_available(cuda_module: Any) -> tuple[bool, str | None]:
+    stack_cls = getattr(cuda_module, "ResidentCalibratedStack", None)
+    if stack_cls is None:
+        return False, "resident_calibrated_stack_unavailable"
+    if not hasattr(stack_cls, "integrate_hardened_winsorized_sigma"):
+        return False, "integrate_hardened_winsorized_sigma_unavailable"
+    if not hasattr(stack_cls, "integrate_hardened_winsorized_sigma_timed"):
+        return False, "integrate_hardened_winsorized_sigma_timed_unavailable"
+    return True, None
+
+
 def _resident_winsorized_runtime_contract(
     *,
     rejection_mode: str,
     resident_winsorized_mode: str,
     frame_count: int,
     dispatch_mode: str,
+    hardened_available: bool = True,
+    hardened_unavailable_reason: str | None = None,
+    tile_local_policy_mode: str = "record",
+    resident_output_maps: str = "audit",
 ) -> dict[str, Any]:
+    requested_mode = str(resident_winsorized_mode)
+    effective_mode = requested_mode
+    resolution_reason = "explicit_not_winsorized"
+    frame_limit_ok = int(frame_count) <= RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
+    if rejection_mode == "winsorized_sigma":
+        if requested_mode == RESIDENT_WINSORIZED_SIGMA_AUTO_MODE:
+            if dispatch_mode != "stack":
+                effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
+                resolution_reason = "auto_fast_dispatch_not_stack"
+            elif tile_local_policy_mode in {"apply_mean", "apply"}:
+                effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
+                resolution_reason = "auto_fast_tile_local_policy_apply_unsupported"
+            elif resident_output_maps == "minimal":
+                effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
+                resolution_reason = "auto_fast_minimal_output_maps_without_diagnostics"
+            elif int(frame_count) > RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT:
+                effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
+                resolution_reason = (
+                    "auto_fast_frame_count_exceeds_default_hardened_limit:"
+                    f"{int(frame_count)}>{RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT}"
+                )
+            elif not frame_limit_ok:
+                effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
+                resolution_reason = (
+                    "auto_fast_frame_count_exceeds_hardened_limit:"
+                    f"{int(frame_count)}>{RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT}"
+                )
+            elif not hardened_available:
+                effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
+                resolution_reason = (
+                    "auto_fast_hardened_winsorized_unavailable:"
+                    f"{hardened_unavailable_reason or 'unknown'}"
+                )
+            else:
+                effective_mode = RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                resolution_reason = "auto_hardened_frame_count_within_limit"
+        elif requested_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE:
+            effective_mode = RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+            resolution_reason = "explicit_hardened_cpu_parity"
+        else:
+            effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
+            resolution_reason = "explicit_fast_approx"
+
     hardened_requested = (
         rejection_mode == "winsorized_sigma"
-        and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+        and effective_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
     )
-    frame_limit_ok = int(frame_count) <= RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
     return {
         "schema_version": 1,
         "rejection": str(rejection_mode),
-        "resident_winsorized_mode": str(resident_winsorized_mode),
+        "requested_resident_winsorized_mode": requested_mode,
+        "resident_winsorized_mode": effective_mode,
+        "resolution_reason": resolution_reason,
         "dispatch_mode": str(dispatch_mode),
-        "default_mode": RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+        "resident_output_maps": resident_output_maps,
+        "default_mode": RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
+        "fast_approx_mode": RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+        "auto_hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT,
         "hardened_requested": hardened_requested,
+        "hardened_available": bool(hardened_available),
+        "hardened_unavailable_reason": hardened_unavailable_reason,
         "hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
         "frame_count": int(frame_count),
         "frame_limit_applies": hardened_requested,
@@ -3785,6 +3874,11 @@ def _resident_winsorized_runtime_contract(
 def _validate_resident_winsorized_runtime_contract(contract: dict[str, Any]) -> None:
     if not contract.get("hardened_requested"):
         return
+    if not contract.get("hardened_available", True):
+        raise ValueError(
+            "resident_winsorized_mode=hardened_cpu_parity requires native hardened winsorized CUDA support: "
+            f"{contract.get('hardened_unavailable_reason') or 'unknown'}"
+        )
     if not contract.get("dispatch_ok"):
         raise ValueError(
             "resident_winsorized_mode=hardened_cpu_parity requires resident_integration_dispatch=stack"
@@ -6193,7 +6287,7 @@ def run_resident_calibration_integration(
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
-    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
     resident_fits_read_mode: str = "astropy",
     resident_fits_read_mode_resolution: dict[str, Any] | None = None,
 ) -> RunState:
@@ -6212,7 +6306,7 @@ def run_resident_calibration_integration(
     if resident_inline_source_dq_max_invalid_fraction < 0.0:
         raise ValueError("resident_inline_source_dq_max_invalid_fraction must be non-negative")
     if resident_winsorized_mode not in _RESIDENT_WINSORIZED_MODES:
-        raise ValueError("resident_winsorized_mode must be fast_approx or hardened_cpu_parity")
+        raise ValueError("resident_winsorized_mode must be auto, fast_approx, or hardened_cpu_parity")
     if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
         raise ValueError("resident_fits_read_mode must be auto, fast, astropy, native_direct, or native_u16_gpu")
     if resident_master_cache_policy not in {"auto", "shared", "run"}:
@@ -6426,10 +6520,19 @@ def run_resident_calibration_integration(
     if resident_integration_dispatch == "auto":
         if (
             rejection_mode == "winsorized_sigma"
-            and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+            and resident_winsorized_mode
+            in {RESIDENT_WINSORIZED_SIGMA_AUTO_MODE, RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE}
+            and (
+                resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                or resident_output_maps != "minimal"
+            )
         ):
             resident_integration_dispatch = "stack"
-            resident_integration_dispatch_reason = "auto_stack_hardened_winsorized_requires_stack"
+            resident_integration_dispatch_reason = (
+                "auto_stack_winsorized_auto_may_select_hardened"
+                if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_AUTO_MODE
+                else "auto_stack_hardened_winsorized_requires_stack"
+            )
         elif local_norm_enabled:
             resident_integration_dispatch = "stack"
             resident_integration_dispatch_reason = "auto_stack_local_normalization_enabled"
@@ -6514,13 +6617,23 @@ def run_resident_calibration_integration(
             height = int(light_frames[0]["height"])
             width = int(light_frames[0]["width"])
             filt = _safe_filter_name(filter_name)
+            hardened_winsorized_available, hardened_winsorized_unavailable_reason = (
+                _resident_stack_hardened_winsorized_available(cuda_module)
+            )
             resident_winsorized_contract = _resident_winsorized_runtime_contract(
                 rejection_mode=rejection_mode,
                 resident_winsorized_mode=resident_winsorized_mode,
                 frame_count=len(light_frames),
                 dispatch_mode=resident_integration_dispatch,
+                hardened_available=hardened_winsorized_available,
+                hardened_unavailable_reason=hardened_winsorized_unavailable_reason,
+                tile_local_policy_mode=resident_tile_local_policy_mode,
+                resident_output_maps=resident_output_maps,
             )
             _validate_resident_winsorized_runtime_contract(resident_winsorized_contract)
+            group_resident_winsorized_mode = str(
+                resident_winsorized_contract["resident_winsorized_mode"]
+            )
             group_tile_local_policy_replay = copy.deepcopy(tile_local_policy_replay)
             tile_local_policy_any_enabled = tile_local_policy_any_enabled or bool(
                 group_tile_local_policy_replay.get("enabled")
@@ -11642,7 +11755,7 @@ def run_resident_calibration_integration(
                 stack_integration_native_map_workspace_mode = "not_applicable_mean_integration"
             elif (
                 rejection_mode == "winsorized_sigma"
-                and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                and group_resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
             ):
                 stack_integration_native_map_workspace_mode = "standard_hardened_winsorized_workspace"
             elif stack_integration_download_mode == "master_only":
@@ -11765,7 +11878,7 @@ def run_resident_calibration_integration(
                 master, weight_map = stack.integrate_mean(weights_arg)
             elif (
                 rejection_mode == "winsorized_sigma"
-                and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                and group_resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
             ):
                 if not hasattr(stack, "integrate_hardened_winsorized_sigma"):
                     raise RuntimeError(
@@ -12514,7 +12627,11 @@ def run_resident_calibration_integration(
                 rejection_mode,
                 low_sigma,
                 high_sigma,
-                resident_winsorized_mode=resident_winsorized_mode,
+                resident_winsorized_mode=group_resident_winsorized_mode,
+                requested_resident_winsorized_mode=resident_winsorized_mode,
+                resident_winsorized_resolution_reason=resident_winsorized_contract.get(
+                    "resolution_reason"
+                ),
             )
             resident_output_map_policy = {
                 "mode": resident_output_maps,
@@ -13977,7 +14094,8 @@ def run_resident_calibration_integration(
                         "deferred_matrix_frame_count": len(fused_matrix_deferred_frame_indices),
                         "interpolation": resident_warp_interpolation,
                         "clamping_threshold": resident_warp_clamping_threshold,
-                        "resident_winsorized_mode": resident_winsorized_mode,
+                        "requested_resident_winsorized_mode": resident_winsorized_mode,
+                        "resident_winsorized_mode": group_resident_winsorized_mode,
                         "resident_winsorized_contract": resident_winsorized_contract,
                         "hardened_winsorized_timing_s": hardened_winsorized_timing,
                         "download_mode": (
@@ -14366,11 +14484,81 @@ def run_resident_calibration_integration(
                 ],
             },
         )
+        output_rejection_descriptors = [
+            output.get("integration_rejection")
+            for output in outputs
+            if isinstance(output.get("integration_rejection"), dict)
+        ]
+        resolved_resident_winsorized_modes = sorted(
+            {
+                str(descriptor.get("resident_winsorized_mode"))
+                for descriptor in output_rejection_descriptors
+                if descriptor.get("resident_winsorized_mode") is not None
+            }
+        )
+        effective_resident_winsorized_mode = (
+            resolved_resident_winsorized_modes[0]
+            if len(resolved_resident_winsorized_modes) == 1
+            else "mixed"
+            if resolved_resident_winsorized_modes
+            else resident_winsorized_mode
+        )
+        unique_rejection_descriptor_keys = {
+            json.dumps(descriptor, sort_keys=True)
+            for descriptor in output_rejection_descriptors
+        }
+        if output_rejection_descriptors and len(unique_rejection_descriptor_keys) == 1:
+            top_level_rejection_semantics = output_rejection_descriptors[0]
+        elif output_rejection_descriptors:
+            top_level_rejection_semantics = {
+                "mode": rejection_mode,
+                "low_sigma": low_sigma,
+                "high_sigma": high_sigma,
+                "resident_winsorized_mode": effective_resident_winsorized_mode,
+                "requested_resident_winsorized_mode": resident_winsorized_mode,
+                "mixed_output_descriptors": True,
+                "output_descriptor_count": len(output_rejection_descriptors),
+                "cpu_baseline_parity": all(
+                    bool(descriptor.get("cpu_baseline_parity"))
+                    for descriptor in output_rejection_descriptors
+                ),
+                "approximation": any(
+                    bool(descriptor.get("approximation"))
+                    for descriptor in output_rejection_descriptors
+                ),
+            }
+        else:
+            top_level_rejection_semantics = resident_rejection_descriptor(
+                rejection_mode,
+                low_sigma,
+                high_sigma,
+                resident_winsorized_mode=(
+                    effective_resident_winsorized_mode
+                    if effective_resident_winsorized_mode
+                    in {
+                        RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+                        RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+                    }
+                    else RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
+                ),
+                requested_resident_winsorized_mode=resident_winsorized_mode,
+            )
         integration_warnings: list[str] = []
         if rejection_mode == "winsorized_sigma":
-            if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE:
+            if resolved_resident_winsorized_modes == [RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE]:
+                warning_prefix = (
+                    "auto-selected"
+                    if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_AUTO_MODE
+                    else "used the opt-in"
+                )
                 integration_warnings.append(
-                    "resident CUDA winsorized_sigma used the opt-in hardened median/IQR CPU-parity prototype"
+                    "resident CUDA winsorized_sigma "
+                    f"{warning_prefix} hardened median/IQR CPU-parity prototype"
+                )
+            elif len(resolved_resident_winsorized_modes) > 1:
+                integration_warnings.append(
+                    "resident CUDA winsorized_sigma used mixed per-group implementations: "
+                    + ", ".join(resolved_resident_winsorized_modes)
                 )
             else:
                 integration_warnings.append(
@@ -14402,15 +14590,12 @@ def run_resident_calibration_integration(
                 "combine": "mean",
                 "weighting": weighting_mode,
                 "rejection": rejection_mode,
-                "resident_winsorized_mode": resident_winsorized_mode,
+                "requested_resident_winsorized_mode": resident_winsorized_mode,
+                "resident_winsorized_mode": effective_resident_winsorized_mode,
+                "resident_winsorized_modes": resolved_resident_winsorized_modes,
                 "low_sigma": low_sigma,
                 "high_sigma": high_sigma,
-                "rejection_semantics": resident_rejection_descriptor(
-                    rejection_mode,
-                    low_sigma,
-                    high_sigma,
-                    resident_winsorized_mode=resident_winsorized_mode,
-                ),
+                "rejection_semantics": top_level_rejection_semantics,
                 "frame_weights": frame_weights,
                 "outputs": outputs,
                 "excluded_frame_tokens": sorted(excluded_tokens),
