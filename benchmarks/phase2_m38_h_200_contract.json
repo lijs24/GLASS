@@ -166,6 +166,7 @@
       "calibration_master_surface_contract",
       "resident_calibrated_light_contract",
       "resident_calibrated_light_dq_contract",
+      "resident_source_dq_integration_effect_contract",
       "frame_accounting_resident_dq_ledger_contract",
       "integration_resident_result_contract"
     ],

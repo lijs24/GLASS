@@ -722,6 +722,29 @@ def _sample_accounting_closure_state(output: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _integration_input_invalid_samples(output: dict[str, Any]) -> int | None:
+    candidates: list[int] = []
+    coverage = output.get("dq_coverage_provenance")
+    if isinstance(coverage, dict):
+        value = _optional_rounded_int(coverage.get("input_invalid_samples_before_rejection"))
+        if value is not None:
+            candidates.append(value)
+    summary = output.get("dq_provenance_summary")
+    if isinstance(summary, dict):
+        for value in (
+            summary.get("input_invalid_samples_before_rejection"),
+            (
+                summary.get("sample_accounting_closure")
+                if isinstance(summary.get("sample_accounting_closure"), dict)
+                else {}
+            ).get("input_invalid_samples_before_rejection"),
+        ):
+            numeric = _optional_rounded_int(value)
+            if numeric is not None:
+                candidates.append(numeric)
+    return max(candidates) if candidates else None
+
+
 def _verify_integration_rejection_sample_accounting(
     output: dict[str, Any],
     *,
@@ -1193,6 +1216,7 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
             index=index,
         )
         sample_closure = _sample_accounting_closure_state(output)
+        input_invalid = _integration_input_invalid_samples(output)
         rows.append(
             {
                 "item": item,
@@ -1211,6 +1235,7 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
                 "dq_summary_has_valid": isinstance(dq_summary, dict) and "valid" in dq_summary,
                 "dq_provenance_summary_present": isinstance(summary, dict),
                 "dq_provenance_engine": summary.get("engine") if isinstance(summary, dict) else None,
+                "input_invalid_samples_before_rejection": input_invalid,
                 "sample_accounting_closure": sample_closure,
                 "stack_result_contract": result_contract,
                 "resident_result_contract": resident_contract,
@@ -1226,6 +1251,78 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
             }
         )
     return rows
+
+
+def _resident_source_dq_integration_effect_state(
+    resident_source_dq_execution: dict[str, Any],
+    integration_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    summary = (
+        resident_source_dq_execution.get("summary")
+        if isinstance(resident_source_dq_execution.get("summary"), dict)
+        else {}
+    )
+    applied_invalid = _optional_rounded_int(summary.get("applied_invalid_samples"))
+    input_invalid = _optional_rounded_int(summary.get("input_invalid_samples_before_rejection"))
+    expected_invalid = applied_invalid if applied_invalid is not None else input_invalid
+    expected_invalid = int(expected_invalid or 0)
+    resident_rows = [row for row in integration_rows if _is_resident_integration_row(row)]
+    observed_rows: list[dict[str, Any]] = []
+    observed_total = 0
+    missing_rows: list[str] = []
+    for row in resident_rows:
+        observed = _optional_rounded_int(row.get("input_invalid_samples_before_rejection"))
+        if observed is None:
+            missing_rows.append(str(row.get("item")))
+            continue
+        observed_total += int(observed)
+        observed_rows.append(
+            {
+                "item": row.get("item"),
+                "input_invalid_samples_before_rejection": observed,
+            }
+        )
+
+    exists = bool(resident_source_dq_execution.get("exists"))
+    required = exists and expected_invalid > 0
+    if not exists:
+        status = "not_present"
+        passed = True
+    elif not required:
+        status = "no_invalid_samples"
+        passed = True
+    elif not resident_rows:
+        status = "missing_resident_integration_output"
+        passed = False
+    elif missing_rows and not observed_rows:
+        status = "missing_integration_invalid_provenance"
+        passed = False
+    elif observed_total < expected_invalid:
+        status = "source_dq_not_reflected_in_integration"
+        passed = False
+    else:
+        status = "passed"
+        passed = True
+
+    return {
+        "required": required,
+        "exists": exists,
+        "status": status,
+        "passed": passed,
+        "expected_applied_invalid_samples": expected_invalid,
+        "source_dq_input_invalid_samples_before_rejection": input_invalid,
+        "source_dq_applied_invalid_samples": applied_invalid,
+        "resident_integration_output_count": len(resident_rows),
+        "observed_integration_invalid_samples": observed_total if observed_rows else None,
+        "observed_rows": observed_rows,
+        "missing_provenance_outputs": missing_rows,
+        "semantics": (
+            "Resident source-DQ invalid samples must be visible in resident "
+            "integration input-invalid provenance. Additional invalid samples may "
+            "come from warp geometry or non-finite pixels, so the integration "
+            "total must be at least the source-DQ applied invalid sample count."
+        ),
+    }
 
 
 def _local_norm_rows(local_norm: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
@@ -2420,6 +2517,10 @@ def build_pipeline_contract_audit(
     integration_rows = _integration_rows(integration, run_root)
     integration_map_rows = _integration_map_rows(integration, run_root)
     integration_engine_policy = _integration_engine_policy_state(integration, integration_rows)
+    resident_source_dq_integration_effect = _resident_source_dq_integration_effect_state(
+        resident_source_dq_execution,
+        integration_rows,
+    )
     frame_accounting_admission = _frame_accounting_admission_state(frame_accounting)
     frame_accounting_resident_dq_ledger = _frame_accounting_resident_dq_ledger_state(
         frame_accounting,
@@ -2587,6 +2688,29 @@ def build_pipeline_contract_audit(
                 ).get("materializes_calibrated_dq_cache"),
             },
             "When resident source-DQ execution evidence is present, invalid samples must be applied in memory and the contract must pass.",
+        ),
+        _check(
+            "resident_source_dq_integration_effect_contract",
+            bool(resident_source_dq_integration_effect["passed"]),
+            {
+                "exists": resident_source_dq_integration_effect["exists"],
+                "required": resident_source_dq_integration_effect["required"],
+                "status": resident_source_dq_integration_effect["status"],
+                "expected_applied_invalid_samples": resident_source_dq_integration_effect[
+                    "expected_applied_invalid_samples"
+                ],
+                "observed_integration_invalid_samples": resident_source_dq_integration_effect[
+                    "observed_integration_invalid_samples"
+                ],
+                "resident_integration_output_count": resident_source_dq_integration_effect[
+                    "resident_integration_output_count"
+                ],
+                "observed_rows": resident_source_dq_integration_effect["observed_rows"],
+                "missing_provenance_outputs": resident_source_dq_integration_effect[
+                    "missing_provenance_outputs"
+                ],
+            },
+            "Resident source-DQ must affect integration provenance, not merely produce a source-side ledger.",
         ),
         _check(
             "resident_frame_mask_admission_contract",
@@ -3072,6 +3196,18 @@ def build_pipeline_contract_audit(
                 "status": resident_source_dq_execution["status"],
                 "passed": resident_source_dq_execution["passed"],
             },
+            "resident_source_dq_integration_effect": {
+                "exists": resident_source_dq_integration_effect["exists"],
+                "required": resident_source_dq_integration_effect["required"],
+                "status": resident_source_dq_integration_effect["status"],
+                "passed": resident_source_dq_integration_effect["passed"],
+                "expected_applied_invalid_samples": resident_source_dq_integration_effect[
+                    "expected_applied_invalid_samples"
+                ],
+                "observed_integration_invalid_samples": resident_source_dq_integration_effect[
+                    "observed_integration_invalid_samples"
+                ],
+            },
             "resident_frame_masks": {
                 "path": resident_frame_mask["path"],
                 "exists": resident_frame_mask["exists"],
@@ -3136,6 +3272,7 @@ def build_pipeline_contract_audit(
         "frame_accounting": frame_accounting_admission,
         "frame_accounting_resident_dq_ledger": frame_accounting_resident_dq_ledger,
         "resident_source_dq_execution": resident_source_dq_execution,
+        "resident_source_dq_integration_effect": resident_source_dq_integration_effect,
         "resident_frame_masks": resident_frame_mask,
         "resident_registration_quality": resident_registration_quality,
         "resident_dq_pixel_closure": resident_dq_pixel_closure,
@@ -3276,6 +3413,16 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
             f"applied `{group.get('applied_invalid_samples')}`, "
             f"cache `{group.get('materializes_calibrated_dq_cache')}`"
         )
+    source_dq_effect = audit.get("resident_source_dq_integration_effect") or {}
+    lines.extend(["", "## Resident Source-DQ Integration Effect", ""])
+    lines.append(
+        "- "
+        f"required `{source_dq_effect.get('required')}`, "
+        f"status `{source_dq_effect.get('status')}`, "
+        f"passed `{source_dq_effect.get('passed')}`, "
+        f"expected applied invalid `{source_dq_effect.get('expected_applied_invalid_samples')}`, "
+        f"observed integration invalid `{source_dq_effect.get('observed_integration_invalid_samples')}`"
+    )
     frame_masks = audit.get("resident_frame_masks") or {}
     mask_closure = frame_masks.get("closure") if isinstance(frame_masks.get("closure"), dict) else {}
     lines.extend(["", "## Resident Frame Masks", ""])

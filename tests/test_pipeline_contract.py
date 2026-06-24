@@ -475,6 +475,29 @@ def _write_resident_source_dq_execution_fixture(path: Path, *, passed: bool = Tr
             ],
         },
     )
+    _write_resident_integration_input_invalid_fixture(path, applied_invalid)
+
+
+def _write_resident_integration_input_invalid_fixture(path: Path, input_invalid: int) -> None:
+    integration_path = path / "integration_results.json"
+    if not integration_path.exists():
+        return
+    payload = read_json(integration_path)
+    outputs = payload.get("outputs") if isinstance(payload.get("outputs"), list) else []
+    if not outputs or not isinstance(outputs[0], dict):
+        return
+    output = outputs[0]
+    coverage = output.get("dq_coverage_provenance")
+    if not isinstance(coverage, dict):
+        coverage = {}
+        output["dq_coverage_provenance"] = coverage
+    coverage["input_invalid_samples_before_rejection"] = int(input_invalid)
+    summary = output.get("dq_provenance_summary")
+    if not isinstance(summary, dict):
+        summary = {}
+        output["dq_provenance_summary"] = summary
+    summary["input_invalid_samples_before_rejection"] = int(input_invalid)
+    write_json(integration_path, payload)
 
 
 def _write_frame_accounting_fixture(path: Path, *, conflict: bool = False) -> None:
@@ -1186,13 +1209,41 @@ def test_pipeline_contract_passes_resident_source_dq_execution_contract(tmp_path
 
     assert audit["passed"] is True
     assert checks["resident_source_dq_execution_contract"]["passed"] is True
+    assert checks["resident_source_dq_integration_effect_contract"]["passed"] is True
+    assert checks["resident_source_dq_integration_effect_contract"]["evidence"][
+        "expected_applied_invalid_samples"
+    ] == 2
+    assert checks["resident_source_dq_integration_effect_contract"]["evidence"][
+        "observed_integration_invalid_samples"
+    ] == 2
     assert checks["resident_source_dq_execution_contract"]["evidence"]["exists"] is True
     assert source_dq["status"] == "passed"
     assert source_dq["summary"]["input_invalid_samples_before_rejection"] == 2
     assert source_dq["summary"]["applied_invalid_samples"] == 2
     assert source_dq["groups"][0]["execution_route"] == "resident_in_memory_mask_streaming"
     assert source_dq["groups"][0]["materializes_calibrated_dq_cache"] is False
+    assert audit["resident_source_dq_integration_effect"]["status"] == "passed"
     assert audit["artifacts"]["resident_source_dq_execution"]["exists"] is True
+
+
+def test_pipeline_contract_fails_when_source_dq_not_reflected_in_integration(
+    tmp_path: Path,
+):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    _write_resident_source_dq_execution_fixture(run)
+    _write_resident_integration_input_invalid_fixture(run, 0)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    evidence = checks["resident_source_dq_integration_effect_contract"]["evidence"]
+
+    assert audit["passed"] is False
+    assert checks["resident_source_dq_execution_contract"]["passed"] is True
+    assert checks["resident_source_dq_integration_effect_contract"]["passed"] is False
+    assert evidence["status"] == "source_dq_not_reflected_in_integration"
+    assert evidence["expected_applied_invalid_samples"] == 2
+    assert evidence["observed_integration_invalid_samples"] == 0
 
 
 def test_pipeline_contract_fails_resident_source_dq_execution_contract(tmp_path: Path):

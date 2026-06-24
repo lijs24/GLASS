@@ -12,6 +12,7 @@ from glass.cpu.integration import weighted_integrate_stack
 from glass.engine.contracts import DQFlag
 from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
+from glass.report.pipeline_contract import build_pipeline_contract_audit
 from glass.engine.resident_cuda import (
     _apply_resident_registration_matrix_batch,
     _LightPrefetcher,
@@ -2680,6 +2681,14 @@ def test_cli_resident_cuda_run_applies_plan_source_dq_sidecar(tmp_path: Path):
     assert source_dq_execution["groups"][0]["streaming_memory"]["estimated_batch_mask_bytes"] == 512
     assert integration["resident_source_dq_execution_summary"]["passed"] is True
     assert any(item["stage"] == "resident_source_dq_execution" for item in read_json(run / "run_state.json")["artifacts"])
+    pipeline_contract = build_pipeline_contract_audit(run)
+    pipeline_checks = {item["name"]: item for item in pipeline_contract["checks"]}
+    source_dq_effect = pipeline_contract["resident_source_dq_integration_effect"]
+    assert pipeline_checks["resident_source_dq_integration_effect_contract"]["passed"] is True
+    assert source_dq_effect["required"] is True
+    assert source_dq_effect["status"] == "passed"
+    assert source_dq_effect["expected_applied_invalid_samples"] == 1
+    assert source_dq_effect["observed_integration_invalid_samples"] >= 1
     applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
     assert applied_rows[0]["sidecar_paths"] == [str(sidecar)]
 

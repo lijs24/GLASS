@@ -743,6 +743,107 @@ Interpretation:
   explicit plan-level policy opt-in, making it auditable rather than implicit;
 - resident CUDA all-VRAM performance and output pixels are unchanged.
 
+### S2-Gate 589: Resident Source-DQ Integration Effect Contract
+
+Gate 589 closes a DQ/mask pipeline gap between source-side resident DQ ledgers
+and integration output provenance. Earlier gates proved that resident
+source-DQ execution, resident calibrated-light DQ rows, frame masks, frame
+accounting, and output DQ maps existed and closed structurally. This gate adds
+the missing effect invariant: if resident source-DQ applies invalid samples,
+resident integration provenance must also show those samples as
+input-invalid samples before rejection.
+
+Implementation:
+
+- `pipeline-contract` now emits
+  `resident_source_dq_integration_effect_contract`.
+- The check reads `resident_source_dq_execution.json` and resident integration
+  output provenance. When source-DQ applied invalid samples are positive,
+  resident integration `input_invalid_samples_before_rejection` must be at
+  least that count.
+- The check allows additional integration invalid samples from geometric warp
+  coverage, non-finite pixels, or other valid resident DQ sources.
+- `pipeline_contract.json` exposes the full
+  `resident_source_dq_integration_effect` state, and the Markdown report now
+  summarizes expected versus observed invalid samples.
+- The M38 200-light benchmark contracts now require
+  `resident_source_dq_integration_effect_contract`, so acceptance fails if the
+  check is missing from the default pipeline contract.
+
+Synthetic/CUDA source-DQ validation:
+
+- Focused resident CUDA sidecar test:
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_applies_plan_source_dq_sidecar`.
+- The test injects one `HOT_PIXEL` source-DQ sidecar sample into a two-light
+  resident CUDA run.
+- The output master pixel at that coordinate is forced to come only from the
+  unmasked light, and the weight map drops from `2.0` to `1.0`.
+- The new pipeline-contract check passes with:
+  - `required=true`;
+  - `expected_applied_invalid_samples=1`;
+  - `observed_integration_invalid_samples>=1`.
+- A new negative fixture test corrupts integration provenance to `0` invalid
+  samples while source-DQ reports `2` applied invalid samples; the new check
+  fails with `source_dq_not_reflected_in_integration`.
+
+Real 200-light resident regression:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate589_source_dq_effect\default_resident_regression`
+- Summary:
+  `C:\glass_runs\phase2_s2_gate589_source_dq_effect\gate589_validation_summary.json`
+- Hash parity versus Gate588:
+  `C:\glass_runs\phase2_s2_gate589_source_dq_effect\hash_parity_vs_gate588.json`
+- Compare:
+  `C:\glass_runs\phase2_s2_gate589_source_dq_effect\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate589_source_dq_effect\acceptance_audit.json`
+- Stage timing sum: `9.812087000231259 s`.
+- Pipeline contract: `passed`, `25` checks.
+- New check:
+  - status: `no_invalid_samples`;
+  - required: `false`;
+  - expected source-DQ applied invalid samples: `0`;
+  - observed resident integration invalid samples: `90128774`.
+- Source-DQ execution summary: `200` frames, `0` frames with invalid samples,
+  no calibrated DQ disk cache materialized.
+- StackEngine contract: `passed`, default-promotion ready.
+- Warp-quality contract: `passed`.
+- Six integration FITS outputs are SHA256-identical to Gate588.
+- Compare versus WBPP black-box fastIntegration:
+  - GLASS time: `9.812087000231259 s`;
+  - WBPP black-box reference time: `1092.541 s`;
+  - speedup: `111.34644443880798x`;
+  - coverage190 fraction: `0.905523489118409`;
+  - RMS difference: `0.005340835487175878`;
+  - p99 absolute difference: `0.002133606873685496`.
+- Acceptance audit with the updated benchmark contract: `passed`.
+
+Validation commands:
+
+- `python -m ruff check src\glass\report\pipeline_contract.py
+  tests\test_pipeline_contract.py tests\test_resident_cuda_run.py
+  tests\test_acceptance_audit.py`
+- `python -m pytest -q tests\test_pipeline_contract.py`
+- `python -m pytest -q tests\test_resident_cuda_run.py -k
+  "source_dq_sidecar"`
+- `python -m pytest -q tests\test_acceptance_audit.py -k
+  "pipeline_contract"`
+- `python -m pytest -q`
+- Fresh 200-light resident run, `glass compare`, and `glass acceptance-audit`
+  listed above.
+
+Interpretation:
+
+- this is a DQ/mask effect gate, not a report-only gate: a future resident
+  fast path cannot claim source-DQ support unless integration provenance
+  reflects applied invalid samples;
+- the true 200-light default dataset has no source-DQ invalid sidecars, so the
+  new check is nonblocking there while still proving the default artifact
+  surface carries the effect state;
+- output pixels and maps are bitwise identical to Gate588, so the gate adds a
+  stronger invariant without changing scientific image math.
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident
