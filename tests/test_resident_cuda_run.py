@@ -2601,17 +2601,46 @@ def test_cli_resident_cuda_run_applies_plan_source_dq_sidecar(tmp_path: Path):
     run = tmp_path / "resident_run_source_dq_sidecar"
 
     assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
-    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
 
     sidecar = tmp_path / "source_dq" / "light_high_noise_dq.fits"
     dq = np.zeros((16, 16), dtype=np.float32)
     dq[4, 5] = float(int(DQFlag.HOT_PIXEL))
     write_fits_data(sidecar, dq)
+    source_dq_manifest = tmp_path / "source_dq_manifest.json"
+    write_json(
+        source_dq_manifest,
+        {
+            "schema_version": 1,
+            "artifact_type": "test_source_dq_manifest",
+            "bindings": [
+                {
+                    "frame_path": str(Path("light") / "light_high_noise.fits"),
+                    "dq_mask_path": str(sidecar.relative_to(tmp_path)),
+                    "flag": "hot_pixel",
+                    "flag_value": int(DQFlag.HOT_PIXEL),
+                    "pixel": [4, 5],
+                }
+            ],
+        },
+    )
+    assert (
+        main(
+            [
+                "plan",
+                "--manifest",
+                str(manifest),
+                "--out",
+                str(plan),
+                "--source-dq-manifest",
+                str(source_dq_manifest),
+            ]
+        )
+        == 0
+    )
     plan_payload = read_json(plan)
-    for frame in plan_payload["frames"]:
-        if frame.get("frame_type") == "light" and Path(str(frame["path"])).stem == "light_high_noise":
-            frame["source_dq_mask_path"] = str(sidecar.relative_to(tmp_path))
-    write_json(plan, plan_payload)
+    bound = [frame for frame in plan_payload["frames"] if frame.get("source_dq_mask_path")]
+    assert len(bound) == 1
+    assert Path(bound[0]["source_dq_mask_path"]) == sidecar
 
     assert main(
         [

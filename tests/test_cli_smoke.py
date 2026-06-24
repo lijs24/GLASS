@@ -1523,6 +1523,58 @@ def test_cli_scan_plan_report_audit_smoke(small_fits_dataset, tmp_path: Path):
     assert "--backend cpu" in run_command
 
 
+def test_cli_synthetic_source_dq_manifest_binds_into_plan(tmp_path: Path):
+    dataset = tmp_path / "synthetic"
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+
+    assert (
+        main(
+            [
+                "synthetic",
+                "--out",
+                str(dataset),
+                "--frames",
+                "4",
+                "--width",
+                "32",
+                "--height",
+                "24",
+                "--source-dq-sidecars",
+                "--source-dq-light-index",
+                "1",
+                "--source-dq-y",
+                "5",
+                "--source-dq-x",
+                "7",
+            ]
+        )
+        == 0
+    )
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert (
+        main(
+            [
+                "plan",
+                "--manifest",
+                str(manifest),
+                "--out",
+                str(plan),
+                "--source-dq-manifest",
+                str(dataset / "source_dq_manifest.json"),
+            ]
+        )
+        == 0
+    )
+
+    plan_payload = read_json(plan)
+    bound = [frame for frame in plan_payload["frames"] if frame.get("source_dq_mask_path")]
+    assert len(bound) == 1
+    assert bound[0]["frame_type"] == "light"
+    assert Path(bound[0]["source_dq_mask_path"]).exists()
+    assert Path(bound[0]["path"]).name == "light_001.fits"
+
+
 def test_cli_report_surfaces_quality_saturation_summary(tmp_path: Path):
     run = tmp_path / "run"
     report = tmp_path / "report.html"

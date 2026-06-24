@@ -2227,7 +2227,13 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
 def cmd_plan(args: argparse.Namespace) -> int:
     manifest = read_json(args.manifest)
-    plan = build_processing_plan(manifest, args.manifest)
+    source_dq_manifest = read_json(args.source_dq_manifest) if args.source_dq_manifest else None
+    plan = build_processing_plan(
+        manifest,
+        args.manifest,
+        source_dq_manifest=source_dq_manifest,
+        source_dq_manifest_path=args.source_dq_manifest,
+    )
     write_json(args.out, plan)
     console.print(f"Wrote processing plan: {args.out}")
     console.print({"executable": plan.executable, "warnings": len(plan.global_warnings)})
@@ -5572,6 +5578,10 @@ def cmd_synthetic(args: argparse.Namespace) -> int:
         height=args.height,
         filt=args.filter,
         known_shift=args.known_shift,
+        source_dq_sidecars=args.source_dq_sidecars,
+        source_dq_light_index=args.source_dq_light_index,
+        source_dq_y=args.source_dq_y,
+        source_dq_x=args.source_dq_x,
     )
     console.print(f"Wrote synthetic dataset: {args.out}")
     return 0
@@ -5908,6 +5918,10 @@ def build_parser() -> argparse.ArgumentParser:
     plan = sub.add_parser("plan", help="build processing_plan.json from a manifest")
     plan.add_argument("--manifest", required=True)
     plan.add_argument("--out", required=True)
+    plan.add_argument(
+        "--source-dq-manifest",
+        help="optional source-DQ sidecar manifest to bind onto light frame records",
+    )
     plan.set_defaults(func=cmd_plan)
 
     subset = sub.add_parser("subset", help="select a small executable subset from a manifest")
@@ -9706,6 +9720,14 @@ def build_parser() -> argparse.ArgumentParser:
     synthetic.add_argument("--height", type=int, default=512)
     synthetic.add_argument("--filter", default="H")
     synthetic.add_argument("--known-shift", action="store_true")
+    synthetic.add_argument(
+        "--source-dq-sidecars",
+        action="store_true",
+        help="write a small source-DQ sidecar manifest and FITS mask for one synthetic light",
+    )
+    synthetic.add_argument("--source-dq-light-index", type=int, default=0)
+    synthetic.add_argument("--source-dq-y", type=int)
+    synthetic.add_argument("--source-dq-x", type=int)
     synthetic.set_defaults(func=cmd_synthetic)
 
     return parser

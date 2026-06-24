@@ -45,6 +45,7 @@ class FrameRecord:
     header_summary: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     checksum_optional: str | None = None
+    source_dq_mask_path: str | None = None
 
 
 @dataclass(slots=True)

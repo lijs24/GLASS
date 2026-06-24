@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 
+from glass.engine.contracts import DQFlag
 from glass.io.json_io import write_json
 
 
@@ -65,6 +66,10 @@ def generate_synthetic_dataset(
     filt: str = "H",
     known_shift: bool = False,
     seed: int = 42,
+    source_dq_sidecars: bool = False,
+    source_dq_light_index: int = 0,
+    source_dq_y: int | None = None,
+    source_dq_x: int | None = None,
 ) -> dict[str, object]:
     out = Path(out_dir)
     rng = np.random.default_rng(seed)
@@ -101,6 +106,10 @@ def generate_synthetic_dataset(
         signal = 25000.0 * normalized_flat
         data = bias_level + dark_current * light_exp + signal + rng.normal(0, 20.0, size=shape)
         _write(out / "flat" / f"flat_{i:03d}.fits", data, _base_header("flat", filt, light_exp, gain, shape))
+    source_dq_bindings: list[dict[str, object]] = []
+    dq_light_index = max(0, min(int(source_dq_light_index), max(0, frames - 1)))
+    dq_y = max(0, min(int(source_dq_y if source_dq_y is not None else height // 2), height - 1))
+    dq_x = max(0, min(int(source_dq_x if source_dq_x is not None else width // 2), width - 1))
     for i in range(frames):
         dx = float((i % 5) - 2) if known_shift else 0.0
         dy = float(((i // 5) % 5) - 2) if known_shift else 0.0
@@ -113,10 +122,43 @@ def generate_synthetic_dataset(
         name = f"light_{i:03d}.fits"
         _write(out / "light" / name, data, _base_header("light", filt, light_exp, gain, shape))
         truth["known_transforms"][str(out / "light" / name)] = {"dx": dx, "dy": dy}
+        if source_dq_sidecars and i == dq_light_index:
+            sidecar_rel = Path("source_dq") / f"light_{i:03d}_dq.fits"
+            dq = np.zeros(shape, dtype=np.float32)
+            dq[dq_y, dq_x] = float(int(DQFlag.HOT_PIXEL))
+            _write(out / sidecar_rel, dq, _base_header("source_dq", filt, light_exp, gain, shape))
+            source_dq_bindings.append(
+                {
+                    "frame_path": str(Path("light") / name),
+                    "dq_mask_path": str(sidecar_rel),
+                    "flag": "hot_pixel",
+                    "flag_value": int(DQFlag.HOT_PIXEL),
+                    "pixel": [int(dq_y), int(dq_x)],
+                }
+            )
     truth["expected_master_statistics"] = {
         "master_bias_mean": bias_level,
         "master_dark_mean": bias_level + dark_current * dark_exp,
         "master_flat_median": 1.0,
     }
+    if source_dq_sidecars:
+        truth["source_dq_sidecars"] = {
+            "schema_version": 1,
+            "binding_count": len(source_dq_bindings),
+            "bindings": source_dq_bindings,
+        }
+        write_json(
+            out / "source_dq_manifest.json",
+            {
+                "schema_version": 1,
+                "artifact_type": "synthetic_source_dq_manifest",
+                "source": "glass.synthetic.generator",
+                "bindings": source_dq_bindings,
+                "summary": {
+                    "binding_count": len(source_dq_bindings),
+                    "flag_counts": {"hot_pixel": len(source_dq_bindings)},
+                },
+            },
+        )
     write_json(out / "golden_truth.json", truth)
     return truth

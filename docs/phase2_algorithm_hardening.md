@@ -844,6 +844,95 @@ Interpretation:
 - output pixels and maps are bitwise identical to Gate588, so the gate adds a
   stronger invariant without changing scientific image math.
 
+### S2-Gate 590: Source-DQ CLI Manifest Binding
+
+Gate 590 turns the Gate589 source-DQ positive path from a unit-test-only plan
+edit into a formal CLI workflow. GLASS can now generate a synthetic
+source-DQ sidecar manifest, bind that manifest during `glass plan`, and carry
+the resulting `FrameRecord.source_dq_mask_path` into resident CUDA integration
+without manual JSON mutation.
+
+Implementation:
+
+- `FrameRecord` now includes optional `source_dq_mask_path`.
+- `glass synthetic --source-dq-sidecars` writes:
+  - a `source_dq_manifest.json` file;
+  - one FITS DQ sidecar with a deterministic `HOT_PIXEL` sample;
+  - matching `golden_truth.json` provenance.
+- `glass plan --source-dq-manifest PATH` resolves the manifest bindings onto
+  light frame records. Bindings prefer `frame_id`, then path suffix/absolute
+  path matching, and store sidecar paths as absolute paths so resident runtime
+  does not depend on the plan file location.
+- `tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_applies_plan_source_dq_sidecar`
+  now uses the CLI manifest binding route rather than manually patching the
+  processing plan.
+
+Synthetic/CUDA CLI validation:
+
+- Dataset:
+  `C:\glass_runs\phase2_s2_gate590_source_dq_cli\synthetic_data`
+- Resident run:
+  `C:\glass_runs\phase2_s2_gate590_source_dq_cli\resident_run`
+- Source-DQ execution:
+  - frame count: `4`;
+  - applied frame count: `1`;
+  - applied invalid samples: `1`;
+  - route: `resident_in_memory_mask_streaming`;
+  - calibrated DQ cache materialized: `false`.
+- Pipeline source-DQ integration effect:
+  - required: `true`;
+  - expected applied invalid samples: `1`;
+  - observed integration invalid samples: `1`;
+  - status: `passed`.
+
+Real 200-light resident regression:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate590_source_dq_cli\default_resident_regression`
+- Summary:
+  `C:\glass_runs\phase2_s2_gate590_source_dq_cli\gate590_validation_summary.json`
+- Compare:
+  `C:\glass_runs\phase2_s2_gate590_source_dq_cli\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate590_source_dq_cli\acceptance_audit.json`
+- Hash parity versus Gate589:
+  `C:\glass_runs\phase2_s2_gate590_source_dq_cli\hash_parity_vs_gate589.json`
+- GLASS time: `8.27696210006252 s`.
+- WBPP black-box reference time: `1092.541 s`.
+- Speedup versus reference: `131.9978256263548x`.
+- Coverage190 fraction: `0.905523489118409`.
+- RMS difference: `0.005340835487175878`.
+- p99 absolute difference: `0.002133606873685496`.
+- Pipeline contract: `passed`, `25` checks.
+- Acceptance audit: `passed`.
+- Six integration FITS outputs are SHA256-identical to Gate589.
+- Real source-DQ execution still has zero input sidecar invalid samples, so the
+  real run exercises the nonblocking default path while the synthetic run proves
+  the positive effect path.
+
+Validation commands:
+
+- `python -m pytest -q tests/test_synthetic_generator.py tests/test_plan_builder.py
+  tests/test_cli_smoke.py::test_cli_synthetic_source_dq_manifest_binds_into_plan
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_applies_plan_source_dq_sidecar`
+- `python -m pytest -q`
+- `glass synthetic --source-dq-sidecars ...`
+- `glass scan ...`
+- `glass plan --source-dq-manifest ...`
+- Synthetic `glass run --backend cuda --memory-mode resident ...`
+- Fresh 200-light resident `glass run`, `glass compare`, and
+  `glass acceptance-audit` listed above.
+
+Interpretation:
+
+- this gate advances the Phase 2 DQ/mask pipeline contract, not a report-only
+  surface: source-DQ sidecars now enter through a documented CLI boundary;
+- default 200-light output pixels and diagnostic maps are bitwise unchanged
+  from Gate589;
+- source-DQ sidecars stored inside the scan root are currently scanned as
+  `unknown` FITS frames. That is harmless and auditable, but future work can
+  add scanner-level ignore/include policies for DQ directories.
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident
