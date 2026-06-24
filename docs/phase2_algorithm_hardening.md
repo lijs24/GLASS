@@ -933,6 +933,109 @@ Interpretation:
   `unknown` FITS frames. That is harmless and auditable, but future work can
   add scanner-level ignore/include policies for DQ directories.
 
+### S2-Gate 595: Winsorized Master-Cache Fast Path And Real A/B
+
+Gate 595 follows directly from Gate594. After resident master-cache
+construction started honoring `CalibrationPolicy.master_rejection`, the first
+real 200-light cold-cache probe showed that the existing CPUStackEngine
+winsorized path was not viable as-is: after about ten minutes, no v2 master
+cache file had been written. The root cause was the all-valid calibration-frame
+case still using nan-aware percentile/statistics operations tile by tile. This
+gate adds a clean-room all-valid finite winsorized fast path, then reruns the
+real 200-light cold/warm A/B.
+
+Implementation:
+
+- `glass.engine.rejection.center_and_scale()` now detects
+  `winsorized_sigma` tiles where every stack sample is valid and finite.
+- All-valid tiles compute median and IQR from `np.sort(..., axis=0)` plus
+  GLASS-owned linear percentile interpolation.
+- DQ-masked or non-finite tiles still use the existing nan-safe code path.
+- Tests prove the fast path avoids `np.nanmedian`, `np.nanpercentile`,
+  `np.nanmean`, and `np.nanstd` while matching the previous nan-stat reference.
+- StackEngine end-to-end tests prove an all-valid 20-frame outlier stack still
+  rejects the high outlier and reports `winsorized_sigma`.
+
+Synthetic microbenchmark:
+
+- Artifact:
+  `C:\glass_runs\phase2_s2_gate595_real_master_rejection_ab\winsorized_all_valid_microbenchmark.json`
+- Stack shape: `20 x 512 x 512`.
+- Old nan-stat reference: `10.096058700000867 s`.
+- New all-valid fast path: `0.08853980002459139 s`.
+- Speedup: `114.02847868638453x`.
+- Center max absolute difference: `3.0517578125e-05`.
+- Scale max absolute difference: `9.5367431640625e-07`.
+- Status: passed.
+
+Real 200-light A/B:
+
+- Root:
+  `C:\glass_runs\phase2_s2_gate595_real_master_rejection_ab`
+- Aborted pre-fast-path probe:
+  - run dir: `cold_default_v2`;
+  - stopped after about `10` minutes;
+  - cache files written: `0`;
+  - reason: existing CPUStackEngine winsorized path was too slow for real
+    cold-cache default use.
+- Cold v2 fast-path run:
+  - run dir: `cold_default_v2_fast`;
+  - cache dir: `resident_master_cache_v2_fast`;
+  - total elapsed: `122.64545549999457 s`;
+  - resident calibration/integration: `121.80481859995052 s`;
+  - cache hits/misses: `0 / 1`;
+  - v2 cache bytes: `739860125`;
+  - compare speedup vs WBPP reference: `8.908124606378491x`;
+  - compare RMS: `0.005316389020057793`;
+  - compare p99 absolute difference: `0.002127066696993994`.
+- Warm v2 fast-path run:
+  - run dir: `warm_default_v2_fast`;
+  - total elapsed: `8.189881100086495 s`;
+  - resident calibration/integration: `7.356546199996956 s`;
+  - cache hits/misses: `1 / 0`;
+  - compare speedup vs WBPP reference: `133.40132617901637x`;
+  - compare RMS: `0.005316389020057793`;
+  - compare p99 absolute difference: `0.002127066696993994`;
+  - coverage>=190 fraction: `0.9067672428396554`;
+  - acceptance audit: passed.
+- Cold/warm parity:
+  - artifact: `C:\glass_runs\phase2_s2_gate595_real_master_rejection_ab\cold_warm_hash_parity.json`;
+  - six of six integration FITS outputs are SHA256-identical.
+
+Validation commands:
+
+- `.\.venv\Scripts\python.exe -m pytest -q
+  tests\test_stack_engine.py::test_winsorized_sigma_all_valid_fast_path_matches_nan_reference
+  tests\test_stack_engine.py::test_cpu_stack_engine_winsorized_all_valid_rejects_outlier
+  tests\test_resident_master_stack_engine.py`
+- `.\.venv\Scripts\python.exe -m ruff check
+  src\glass\engine\rejection.py tests\test_stack_engine.py`
+- synthetic microbenchmark writing
+  `winsorized_all_valid_microbenchmark.json`
+- real 200-light `glass run` cold and warm with
+  `--resident-runtime-preset throughput-v3-io`,
+  `--resident-output-maps audit`, and a shared v2 master cache
+- `glass compare` against the WBPP black-box fastIntegration master using the
+  fixed benchmark scale/offset and coverage>=190 mask
+- `glass acceptance-audit` with
+  `benchmarks\phase2_m38_h_200_ln_on_default_contract.json` and run-local
+  pipeline, StackEngine, and warp-quality contracts.
+
+Interpretation:
+
+- Gate595 restores feasibility for the corrected v2 robust master-cache path:
+  it now completes the full real 200-light cold-cache run instead of producing
+  no cache after ten minutes.
+- Warm-cache performance and result consistency remain excellent: the run
+  passes the default LN 200-light benchmark contract at `133.40132617901637x`
+  speedup.
+- Cold-cache robust master construction is still not fast enough for the
+  default performance contract (`8.908124606378491x`, below the `20x`
+  requirement). This is now measured evidence rather than speculation.
+- The next substantive gate should implement a resident CUDA robust master
+  reduction or a more optimized CPU tiled robust reduction so cold-cache
+  corrected semantics can also pass the default speed contract.
+
 ### S2-Gate 594: Resident Master-Cache Rejection Policy
 
 Gate 594 returns to a core StackEngine/default-path target. Gate482 moved

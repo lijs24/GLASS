@@ -17,6 +17,7 @@ from glass.engine.contracts import (
     TileWindow,
 )
 import glass.engine.stack_engine as stack_engine_module
+from glass.engine.rejection import center_and_scale
 from glass.engine.stack_engine import CPUStackEngine
 
 
@@ -66,6 +67,85 @@ def _request(
         output_maps=maps or OutputMapPolicy(variance=True, dq=True),
         weights=weights or {},
     )
+
+
+def _winsorized_reference(
+    stack: np.ndarray,
+    valid: np.ndarray,
+    *,
+    low_sigma: float,
+    high_sigma: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    masked = np.where(valid, stack, np.nan)
+    first_center = np.nanmedian(masked, axis=0)
+    q25 = np.nanpercentile(masked, 25.0, axis=0)
+    q75 = np.nanpercentile(masked, 75.0, axis=0)
+    first_scale = ((q75 - q25) / np.float32(1.349)).astype(np.float32)
+    fallback_scale = np.nanstd(masked, axis=0)
+    first_scale = np.where(first_scale > 0, first_scale, fallback_scale)
+    low = first_center - np.float32(low_sigma) * first_scale
+    high = first_center + np.float32(high_sigma) * first_scale
+    winsorized = np.where(valid, np.clip(stack, low[None, :, :], high[None, :, :]), np.nan)
+    center = np.nanmean(winsorized, axis=0)
+    scale = np.nanstd(winsorized, axis=0)
+    scale = np.where(scale > 0, scale, first_scale)
+    return center.astype(np.float32), scale.astype(np.float32)
+
+
+def test_winsorized_sigma_all_valid_fast_path_matches_nan_reference(monkeypatch):
+    rng = np.random.default_rng(594)
+    stack = rng.normal(loc=100.0, scale=3.0, size=(20, 6, 7)).astype(np.float32)
+    stack[-1, 2, 3] = np.float32(500.0)
+    valid = np.ones_like(stack, dtype=bool)
+    expected_center, expected_scale = _winsorized_reference(
+        stack,
+        valid,
+        low_sigma=3.0,
+        high_sigma=3.0,
+    )
+
+    def fail_nan_stat(*args, **kwargs):
+        raise AssertionError("all-valid winsorized path should avoid nan statistics")
+
+    monkeypatch.setattr(np, "nanmedian", fail_nan_stat)
+    monkeypatch.setattr(np, "nanpercentile", fail_nan_stat)
+    monkeypatch.setattr(np, "nanmean", fail_nan_stat)
+    monkeypatch.setattr(np, "nanstd", fail_nan_stat)
+
+    center, scale = center_and_scale(
+        stack,
+        valid,
+        method="winsorized_sigma",
+        low_sigma=3.0,
+        high_sigma=3.0,
+    )
+
+    assert np.allclose(center, expected_center, rtol=1.0e-6, atol=1.0e-5)
+    assert np.allclose(scale, expected_scale, rtol=1.0e-6, atol=1.0e-5)
+
+
+def test_cpu_stack_engine_winsorized_all_valid_rejects_outlier():
+    frames = [np.ones((4, 4), dtype=np.float32) * 10.0 for _ in range(19)]
+    frames.append(np.ones((4, 4), dtype=np.float32) * 500.0)
+    request = _request(
+        len(frames),
+        rejection=RejectionPolicy(
+            method="winsorized_sigma",
+            iterations=1,
+            low_sigma=3.0,
+            high_sigma=3.0,
+            min_samples=3,
+            max_reject_fraction=0.5,
+        ),
+    )
+
+    result = CPUStackEngine(tile_size=2).stack(request, _sources(frames))
+
+    assert np.allclose(result.master, 10.0)
+    assert np.all(result.coverage_map == 19)
+    assert np.sum(result.high_rejection_map) == 16
+    assert result.metrics["rejection"] == "winsorized_sigma"
+    assert result.metrics["high_rejected"] == 16
 
 
 def test_cpu_stack_engine_tiled_matches_full_frame_mean():

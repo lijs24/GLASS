@@ -26,6 +26,13 @@ def center_and_scale(
     low_sigma: float,
     high_sigma: float,
 ) -> tuple[np.ndarray, np.ndarray]:
+    if method == "winsorized_sigma" and _all_valid_finite(stack, valid):
+        return _winsorized_sigma_all_valid(
+            stack,
+            low_sigma=low_sigma,
+            high_sigma=high_sigma,
+        )
+
     masked = np.where(valid, stack, np.nan)
     if method in {"sigma", "sigma_clip"}:
         center = np.nanmedian(masked, axis=0)
@@ -171,3 +178,47 @@ def _iqr_scale(masked: np.ndarray) -> np.ndarray:
     q25 = np.nanpercentile(masked, 25.0, axis=0)
     q75 = np.nanpercentile(masked, 75.0, axis=0)
     return ((q75 - q25) / np.float32(1.349)).astype(np.float32)
+
+
+def _all_valid_finite(stack: np.ndarray, valid: np.ndarray) -> bool:
+    return bool(np.all(valid)) and bool(np.all(np.isfinite(stack)))
+
+
+def _winsorized_sigma_all_valid(
+    stack: np.ndarray,
+    *,
+    low_sigma: float,
+    high_sigma: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    data = np.asarray(stack, dtype=np.float32)
+    sorted_stack = np.sort(data, axis=0)
+    first_center = _percentile_from_sorted(sorted_stack, 50.0)
+    q25 = _percentile_from_sorted(sorted_stack, 25.0)
+    q75 = _percentile_from_sorted(sorted_stack, 75.0)
+    first_scale = ((q75 - q25) / np.float32(1.349)).astype(np.float32)
+    fallback_scale = np.std(data, axis=0, dtype=np.float64).astype(np.float32)
+    first_scale = np.where(first_scale > 0, first_scale, fallback_scale)
+    low = first_center - np.float32(low_sigma) * first_scale
+    high = first_center + np.float32(high_sigma) * first_scale
+    winsorized = np.clip(data, low[None, :, :], high[None, :, :])
+    center = np.mean(winsorized, axis=0, dtype=np.float64).astype(np.float32)
+    scale = np.std(winsorized, axis=0, dtype=np.float64).astype(np.float32)
+    scale = np.where(scale > 0, scale, first_scale)
+    return center.astype(np.float32), scale.astype(np.float32)
+
+
+def _percentile_from_sorted(sorted_stack: np.ndarray, percentile: float) -> np.ndarray:
+    frame_count = int(sorted_stack.shape[0])
+    if frame_count <= 0:
+        raise ValueError("cannot compute percentile of an empty stack")
+    if frame_count == 1:
+        return np.asarray(sorted_stack[0], dtype=np.float32)
+    position = (np.float32(percentile) / np.float32(100.0)) * np.float32(frame_count - 1)
+    lower = int(np.floor(position))
+    upper = int(np.ceil(position))
+    fraction = np.float32(position - lower)
+    lower_values = np.asarray(sorted_stack[lower], dtype=np.float32)
+    if upper == lower:
+        return lower_values
+    upper_values = np.asarray(sorted_stack[upper], dtype=np.float32)
+    return (lower_values + (upper_values - lower_values) * fraction).astype(np.float32)
