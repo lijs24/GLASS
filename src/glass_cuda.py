@@ -4467,6 +4467,7 @@ class ResidentCalibratedStack:
         high_sigma: float = 3.0,
         min_samples: int = 3,
         max_reject_fraction: float = 0.5,
+        count_map_dtype: str = "float32",
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         if not hasattr(self._impl, "integrate_hardened_winsorized_sigma"):
             raise RuntimeError(
@@ -4476,6 +4477,9 @@ class ResidentCalibratedStack:
             raise ValueError("min_samples must be at least 1")
         if not 0.0 <= float(max_reject_fraction) <= 1.0:
             raise ValueError("max_reject_fraction must be between 0 and 1")
+        count_map_dtype = str(count_map_dtype)
+        if count_map_dtype not in {"float32", "uint16"}:
+            raise ValueError("count_map_dtype must be float32 or uint16")
         try:
             native_result = self._impl.integrate_hardened_winsorized_sigma(
                 None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
@@ -4483,25 +4487,35 @@ class ResidentCalibratedStack:
                 float(high_sigma),
                 int(min_samples),
                 float(max_reject_fraction),
+                count_map_dtype,
             )
         except TypeError:
-            if int(min_samples) != 3 or float(max_reject_fraction) != 0.5:
-                raise RuntimeError(
-                    "native ResidentCalibratedStack.integrate_hardened_winsorized_sigma "
-                    "does not support min_samples/max_reject_fraction; rebuild glass_cuda"
-                ) from None
-            native_result = self._impl.integrate_hardened_winsorized_sigma(
-                None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
-                float(low_sigma),
-                float(high_sigma),
-            )
+            try:
+                native_result = self._impl.integrate_hardened_winsorized_sigma(
+                    None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
+                    float(low_sigma),
+                    float(high_sigma),
+                    int(min_samples),
+                    float(max_reject_fraction),
+                )
+            except TypeError:
+                if int(min_samples) != 3 or float(max_reject_fraction) != 0.5:
+                    raise RuntimeError(
+                        "native ResidentCalibratedStack.integrate_hardened_winsorized_sigma "
+                        "does not support min_samples/max_reject_fraction; rebuild glass_cuda"
+                    ) from None
+                native_result = self._impl.integrate_hardened_winsorized_sigma(
+                    None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
+                    float(low_sigma),
+                    float(high_sigma),
+                )
         master, weight_map, coverage, low_reject, high_reject = native_result
         return (
             np.asarray(master, dtype=np.float32),
             np.asarray(weight_map, dtype=np.float32),
-            np.asarray(coverage, dtype=np.float32),
-            np.asarray(low_reject, dtype=np.float32),
-            np.asarray(high_reject, dtype=np.float32),
+            np.asarray(coverage),
+            np.asarray(low_reject),
+            np.asarray(high_reject),
         )
 
     def integrate_hardened_winsorized_sigma_timed(
@@ -4511,7 +4525,9 @@ class ResidentCalibratedStack:
         high_sigma: float = 3.0,
         min_samples: int = 3,
         max_reject_fraction: float = 0.5,
+        count_map_dtype: str = "float32",
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+        count_map_dtype = str(count_map_dtype)
         start = perf_counter()
         master, weight_map, coverage, low_reject, high_reject = (
             self.integrate_hardened_winsorized_sigma(
@@ -4520,9 +4536,11 @@ class ResidentCalibratedStack:
                 high_sigma,
                 min_samples=min_samples,
                 max_reject_fraction=max_reject_fraction,
+                count_map_dtype=count_map_dtype,
             )
         )
         total_s = perf_counter() - start
+        actual_count_map_dtype = str(np.asarray(coverage).dtype)
         return (
             master,
             weight_map,
@@ -4543,6 +4561,8 @@ class ResidentCalibratedStack:
                 "high_sigma": float(high_sigma),
                 "min_samples": int(min_samples),
                 "max_reject_fraction": float(max_reject_fraction),
+                "count_map_dtype_requested": count_map_dtype,
+                "count_map_dtype": actual_count_map_dtype,
                 "includes_device_sync_and_download": True,
                 "total_s": float(total_s),
             },

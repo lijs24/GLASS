@@ -11928,6 +11928,7 @@ def run_resident_calibration_integration(
                     high_sigma,
                     min_samples=rejection_min_samples,
                     max_reject_fraction=rejection_max_fraction,
+                    count_map_dtype="uint16",
                 )
             else:
                 if not hasattr(stack, "integrate_sigma_clip"):

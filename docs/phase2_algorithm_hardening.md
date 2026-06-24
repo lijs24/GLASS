@@ -17635,3 +17635,58 @@ Phase 2 is complete when:
   - this gate changes GLASS-owned CPU/CUDA rejection guard logic and artifact
     contracts only;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 601: Compact Hardened Count Maps
+
+- Continued the real resident CUDA mainline by reducing data movement in the
+  newly unblocked explicit resident `hardened_cpu_parity` path.
+- Completed:
+  - templated the native resident hardened winsorized CUDA kernel so count-map
+    outputs can be `float32` or `uint16`;
+  - kept the original float32 count-map launch and pybind default for direct
+    API compatibility;
+  - added a `uint16` count-map launch and Python `count_map_dtype` argument;
+  - switched resident light integration's hardened path to request
+    `count_map_dtype="uint16"`;
+  - recorded requested and actual count-map dtype in hardened native timing
+    artifacts;
+  - added CUDA parity tests proving compact count maps match the float32 map
+    path.
+- Why this matters:
+  - coverage, low-rejection, and high-rejection maps are integer sample-count
+    maps for the current resident stack limit;
+  - returning them as `uint16` cuts resident hardened D2H count-map transfer
+    bytes in half without changing master/weight math or rejection decisions;
+  - the written FITS count maps remain signed 16-bit output artifacts, matching
+    the existing resident output-map storage contract.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate601_compact_hardened_counts\real_200_hardened_compact_counts`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate601_compact_hardened_counts\compare_compact_hardened_vs_wbpp_fastintegration_scaled_coverage190.json`;
+  - acceptance:
+    `C:\glass_runs\phase2_s2_gate601_compact_hardened_counts\acceptance_compact_hardened_audit.json`.
+- Key result:
+
+  | Metric | Gate600 | Gate601 |
+  | --- | ---: | ---: |
+  | GLASS shell elapsed | `12.1345343 s` | `11.9914137 s` |
+  | GLASS run timing | `11.703999100020155 s` | `11.568675100104883 s` |
+  | Native hardened integration | `3.844128599972464 s` | `3.7782066999934614 s` |
+  | Hardened count-map dtype | `float32` | `uint16` |
+  | Speedup vs WBPP black-box | `93.34766609800222x` | `94.43959576581892x` |
+  | RMS diff vs reference | `0.0055611675566298235` | `0.0055611675566298235` |
+  | abs diff p99 vs reference | `0.002161672392394391` | `0.002161672392394391` |
+  | coverage>=190 acceptance fraction | `1.0` | `1.0` |
+
+- Interpretation:
+  - compact count maps give a small but measured resident hardened performance
+    gain while preserving numerical agreement and acceptance;
+  - the remaining 200-light hardened cost is dominated by per-pixel median/IQR
+    work and full audit-map/report plumbing, so the next substantive gate
+    should target batched/native hardened rejection work or resident DQ map
+    count-map consumption, not additional evidence-only reporting.
+- Clean-room note:
+  - this gate changes GLASS-owned CUDA output-map dtype plumbing and wrapper
+    contracts only;
+  - no external or proprietary implementation source was inspected or used.

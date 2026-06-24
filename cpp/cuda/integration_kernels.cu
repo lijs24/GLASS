@@ -1,6 +1,7 @@
 #include "common.cuh"
 
 #include <cstddef>
+#include <cstdint>
 #include <cmath>
 
 __device__ bool glass_fused_sample_matrix_bilinear_f32(
@@ -1388,14 +1389,27 @@ __device__ float glass_percentile_sorted_f32(const float* values, int count, flo
   return values[lower] * (1.0f - t) + values[upper] * t;
 }
 
+__device__ float glass_count_map_value_f32(float value, const float*) {
+  return value;
+}
+
+__device__ unsigned short glass_count_map_value_f32(float value, const unsigned short*) {
+  if (!isfinite(value) || value <= 0.0f) {
+    return 0;
+  }
+  const float clamped = fminf(value, 65535.0f);
+  return static_cast<unsigned short>(clamped + 0.5f);
+}
+
+template <typename CountT>
 __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
     const float* stack,
     const float* weights,
     float* master,
     float* weight_map,
-    float* coverage_map,
-    float* low_rejection_map,
-    float* high_rejection_map,
+    CountT* coverage_map,
+    CountT* low_rejection_map,
+    CountT* high_rejection_map,
     std::size_t frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
@@ -1426,9 +1440,9 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   if (count <= 0) {
     master[pixel] = 0.0f;
     weight_map[pixel] = 0.0f;
-    coverage_map[pixel] = 0.0f;
-    low_rejection_map[pixel] = 0.0f;
-    high_rejection_map[pixel] = 0.0f;
+    coverage_map[pixel] = glass_count_map_value_f32(0.0f, coverage_map);
+    low_rejection_map[pixel] = glass_count_map_value_f32(0.0f, low_rejection_map);
+    high_rejection_map[pixel] = glass_count_map_value_f32(0.0f, high_rejection_map);
     return;
   }
 
@@ -1551,9 +1565,9 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
 
   master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
   weight_map[pixel] = weight_sum;
-  coverage_map[pixel] = coverage;
-  low_rejection_map[pixel] = low_reject;
-  high_rejection_map[pixel] = high_reject;
+  coverage_map[pixel] = glass_count_map_value_f32(coverage, coverage_map);
+  low_rejection_map[pixel] = glass_count_map_value_f32(low_reject, low_rejection_map);
+  high_rejection_map[pixel] = glass_count_map_value_f32(high_reject, high_rejection_map);
 }
 
 void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
@@ -1564,6 +1578,38 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     float* coverage_map,
     float* low_rejection_map,
     float* high_rejection_map,
+    std::size_t frame_count,
+    std::size_t pixels_per_frame,
+    float low_sigma,
+    float high_sigma,
+    int min_samples,
+    float max_reject_fraction) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<<<blocks, threads>>>(
+      stack,
+      weights,
+      master,
+      weight_map,
+      coverage_map,
+      low_rejection_map,
+      high_rejection_map,
+      frame_count,
+      pixels_per_frame,
+      low_sigma,
+      high_sigma,
+      min_samples,
+      max_reject_fraction);
+}
+
+void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
+    const float* stack,
+    const float* weights,
+    float* master,
+    float* weight_map,
+    unsigned short* coverage_map,
+    unsigned short* low_rejection_map,
+    unsigned short* high_rejection_map,
     std::size_t frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,

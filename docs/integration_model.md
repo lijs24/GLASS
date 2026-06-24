@@ -97,6 +97,15 @@ the final mean and records no low/high rejection at that pixel. This keeps
 robust rejection from eroding scientifically important coverage on high-frame
 resident stacks while preserving parity between CPU and CUDA hardened behavior.
 
+S2-Gate 601 reduces resident hardened winsorized transfer and host memory
+pressure by allowing native count maps to be returned as `uint16`. The master
+and weight maps remain `float32`; coverage, low-rejection, and high-rejection
+maps are integer sample counts and are written to FITS as signed 16-bit count
+maps for 200-frame groups. The Python wrapper records
+`count_map_dtype_requested` and actual `count_map_dtype` in the native timing
+payload. The float32 count-map path remains available for direct API callers
+and compatibility.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted

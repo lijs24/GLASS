@@ -2332,9 +2332,60 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     assert timing["resident_winsorized_mode"] == "hardened_cpu_parity"
     assert timing["frame_count"] == len(frames)
     assert timing["pixel_count"] == 4
+    assert timing["count_map_dtype_requested"] == "float32"
+    assert timing["count_map_dtype"] == "float32"
     assert timing["total_s"] >= 0.0
     assert high_reject[0, 0] == 1
     assert high_reject[1, 1] == 1
+
+
+def test_resident_stack_hardened_winsorized_sigma_compact_count_maps_match_float_maps():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    frames = [
+        np.array([[1, 1], [10, 4]], dtype=np.float32),
+        np.array([[1, 2], [10, 4]], dtype=np.float32),
+        np.array([[1, 3], [10, 4]], dtype=np.float32),
+        np.array([[12, 4], [10, 40]], dtype=np.float32),
+    ]
+    weights = np.array([1.0, 2.0, 1.0, 1.0], dtype=np.float32)
+    resident_stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    float_result = resident_stack.integrate_hardened_winsorized_sigma_timed(
+        weights,
+        2.4,
+        2.4,
+        count_map_dtype="float32",
+    )
+    compact_result = resident_stack.integrate_hardened_winsorized_sigma_timed(
+        weights,
+        2.4,
+        2.4,
+        count_map_dtype="uint16",
+    )
+    float_master, float_weight, float_coverage, float_low, float_high, _ = float_result
+    compact_master, compact_weight, compact_coverage, compact_low, compact_high, timing = (
+        compact_result
+    )
+
+    assert compact_coverage.dtype == np.uint16
+    assert compact_low.dtype == np.uint16
+    assert compact_high.dtype == np.uint16
+    assert timing["count_map_dtype_requested"] == "uint16"
+    assert timing["count_map_dtype"] == "uint16"
+    assert np.allclose(compact_master, float_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(compact_weight, float_weight, rtol=1e-5, atol=1e-5)
+    assert np.allclose(compact_coverage.astype(np.float32), float_coverage, rtol=1e-5, atol=1e-5)
+    assert np.allclose(compact_low.astype(np.float32), float_low, rtol=1e-5, atol=1e-5)
+    assert np.allclose(compact_high.astype(np.float32), float_high, rtol=1e-5, atol=1e-5)
 
 
 def test_resident_stack_hardened_winsorized_sigma_honors_rejection_guard():

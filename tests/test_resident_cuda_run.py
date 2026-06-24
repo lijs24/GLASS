@@ -2325,6 +2325,8 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert hardened_timing["resident_winsorized_mode"] == "hardened_cpu_parity"
     assert hardened_timing["min_samples"] == 3
     assert hardened_timing["max_reject_fraction"] == 0.5
+    assert hardened_timing["count_map_dtype_requested"] == "uint16"
+    assert hardened_timing["count_map_dtype"] == "uint16"
     assert hardened_timing["frame_count"] == 4
     assert hardened_timing["pixel_count"] == expected_master.size
     assert hardened_timing["total_s"] >= 0.0

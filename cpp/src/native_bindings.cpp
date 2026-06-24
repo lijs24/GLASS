@@ -586,6 +586,20 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     float high_sigma,
     int min_samples,
     float max_reject_fraction);
+void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
+    const float* stack,
+    const float* weights,
+    float* master,
+    float* weight_map,
+    unsigned short* coverage_map,
+    unsigned short* low_rejection_map,
+    unsigned short* high_rejection_map,
+    std::size_t frame_count,
+    std::size_t pixels_per_frame,
+    float low_sigma,
+    float high_sigma,
+    int min_samples,
+    float max_reject_fraction);
 void glass_integrate_resident_tile_local_sigma_clip_f32_launch(
     const float* stack,
     const float* weights,
@@ -10497,7 +10511,8 @@ class ResidentCalibratedStack {
       float low_sigma,
       float high_sigma,
       int min_samples,
-      float max_reject_fraction) const {
+      float max_reject_fraction,
+      const std::string& count_map_dtype) const {
     if (loaded_count_ != frame_count_) {
       throw std::runtime_error("all resident frames must be loaded before integration");
     }
@@ -10509,6 +10524,9 @@ class ResidentCalibratedStack {
     }
     if (max_reject_fraction < 0.0f || max_reject_fraction > 1.0f) {
       throw std::invalid_argument("max_reject_fraction must be between 0 and 1");
+    }
+    if (count_map_dtype != "float32" && count_map_dtype != "uint16") {
+      throw std::invalid_argument("count_map_dtype must be float32 or uint16");
     }
     if (frame_count_ > 256) {
       throw std::invalid_argument(
@@ -10529,18 +10547,118 @@ class ResidentCalibratedStack {
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> low_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> high_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     const py::buffer_info master_info = master.request();
     const py::buffer_info weight_map_info = weight_map.request();
-    const py::buffer_info coverage_info = coverage_map.request();
-    const py::buffer_info low_info = low_rejection_map.request();
-    const py::buffer_info high_info = high_rejection_map.request();
 
     float* d_weights = nullptr;
     float* d_master = nullptr;
     float* d_weight_map = nullptr;
+    if (count_map_dtype == "uint16") {
+      py::array_t<std::uint16_t> coverage_map(
+          {static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      py::array_t<std::uint16_t> low_rejection_map(
+          {static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      py::array_t<std::uint16_t> high_rejection_map(
+          {static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      const py::buffer_info coverage_info = coverage_map.request();
+      const py::buffer_info low_info = low_rejection_map.request();
+      const py::buffer_info high_info = high_rejection_map.request();
+      unsigned short* d_coverage_map = nullptr;
+      unsigned short* d_low_rejection_map = nullptr;
+      unsigned short* d_high_rejection_map = nullptr;
+      try {
+        check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(resident hardened winsor weights)");
+        check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident hardened winsor master)");
+        check_cuda(
+            cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(resident hardened winsor weight map)");
+        check_cuda(
+            cudaMalloc(&d_coverage_map, pixels_per_frame_ * sizeof(unsigned short)),
+            "cudaMalloc(resident hardened winsor uint16 coverage map)");
+        check_cuda(
+            cudaMalloc(&d_low_rejection_map, pixels_per_frame_ * sizeof(unsigned short)),
+            "cudaMalloc(resident hardened winsor uint16 low rejection map)");
+        check_cuda(
+            cudaMalloc(&d_high_rejection_map, pixels_per_frame_ * sizeof(unsigned short)),
+            "cudaMalloc(resident hardened winsor uint16 high rejection map)");
+        check_cuda(
+            cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
+            "cudaMemcpy(resident hardened winsor weights)");
+        glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
+            d_stack_,
+            d_weights,
+            d_master,
+            d_weight_map,
+            d_coverage_map,
+            d_low_rejection_map,
+            d_high_rejection_map,
+            frame_count_,
+            pixels_per_frame_,
+            low_sigma,
+            high_sigma,
+            min_samples,
+            max_reject_fraction);
+        check_cuda(
+            cudaGetLastError(),
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma uint16 kernel launch");
+        check_cuda(
+            cudaDeviceSynchronize(),
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma uint16 synchronize");
+        check_cuda(
+            cudaMemcpy(master_info.ptr, d_master, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident hardened winsor master)");
+        check_cuda(
+            cudaMemcpy(
+                weight_map_info.ptr,
+                d_weight_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident hardened winsor weight map)");
+        check_cuda(
+            cudaMemcpy(
+                coverage_info.ptr,
+                d_coverage_map,
+                pixels_per_frame_ * sizeof(unsigned short),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident hardened winsor uint16 coverage map)");
+        check_cuda(
+            cudaMemcpy(
+                low_info.ptr,
+                d_low_rejection_map,
+                pixels_per_frame_ * sizeof(unsigned short),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident hardened winsor uint16 low rejection map)");
+        check_cuda(
+            cudaMemcpy(
+                high_info.ptr,
+                d_high_rejection_map,
+                pixels_per_frame_ * sizeof(unsigned short),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident hardened winsor uint16 high rejection map)");
+      } catch (...) {
+        cudaFree(d_weights);
+        cudaFree(d_master);
+        cudaFree(d_weight_map);
+        cudaFree(d_coverage_map);
+        cudaFree(d_low_rejection_map);
+        cudaFree(d_high_rejection_map);
+        throw;
+      }
+      cudaFree(d_weights);
+      cudaFree(d_master);
+      cudaFree(d_weight_map);
+      cudaFree(d_coverage_map);
+      cudaFree(d_low_rejection_map);
+      cudaFree(d_high_rejection_map);
+      return py::make_tuple(master, weight_map, coverage_map, low_rejection_map, high_rejection_map);
+    }
+
+    py::array_t<float> coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> low_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> high_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    const py::buffer_info coverage_info = coverage_map.request();
+    const py::buffer_info low_info = low_rejection_map.request();
+    const py::buffer_info high_info = high_rejection_map.request();
     float* d_coverage_map = nullptr;
     float* d_low_rejection_map = nullptr;
     float* d_high_rejection_map = nullptr;
@@ -17258,7 +17376,8 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("low_sigma") = 3.0f,
           py::arg("high_sigma") = 3.0f,
           py::arg("min_samples") = 3,
-          py::arg("max_reject_fraction") = 0.5f)
+          py::arg("max_reject_fraction") = 0.5f,
+          py::arg("count_map_dtype") = "float32")
       .def(
           "integrate_tile_local_sigma_clip",
           &ResidentCalibratedStack::integrate_tile_local_sigma_clip,
