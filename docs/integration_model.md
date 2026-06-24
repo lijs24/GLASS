@@ -153,6 +153,17 @@ download method counts. This does not change the math or promote the fallback
 to a final CUDA segmented reduction; it reduces orchestration overhead and
 creates the replacement point for a future all-device segmented reducer.
 
+S2-Gate 623 aligns that segmented CPUStackEngine replay with resident native
+frame-mask semantics. Before any tile download, the fallback now filters the
+resident frame list to finite positive integration weights. Zero-weight,
+nonpositive, or non-finite weighted frames are not downloaded and do not enter
+the CPUStackEngine rejection/combine request. Timing, DQ provenance, and metrics
+record the original resident frame count, active replay frame count, skipped
+inactive count, and StackEngine request frame count. A 520-frame synthetic probe
+with 20 zero-weight frames verified that the fallback downloaded only the 500
+active frame indices and matched the active-only CPUStackEngine result for all
+output maps.
+
 S2-Gate 608 raises the native exact hardened CUDA capacity from 256 to 512
 frames. The native kernel now stores and sorts up to 512 valid samples per
 pixel before applying the same median/IQR winsorized formula, so 260-frame

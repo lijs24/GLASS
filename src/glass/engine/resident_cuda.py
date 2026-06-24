@@ -4241,9 +4241,15 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
             "resident hardened CPU fallback weight count does not match frame count: "
             f"{frame_weights.size}!={len(frame_ids)}"
         )
-    frame_indices = np.arange(len(frame_ids), dtype=np.int64)
+    positive_weight_mask = np.isfinite(frame_weights) & (frame_weights > 0.0)
+    frame_indices = np.flatnonzero(positive_weight_mask).astype(np.int64)
+    if frame_indices.size == 0:
+        raise ValueError("resident hardened CPU fallback requires at least one positive-weight frame")
+    active_frame_ids = tuple(frame_ids[int(index)] for index in frame_indices)
+    active_frame_weights = frame_weights[frame_indices]
+    skipped_zero_weight_frame_count = int(len(frame_ids) - len(active_frame_ids))
     request = StackRequest(
-        frame_ids=frame_ids,
+        frame_ids=active_frame_ids,
         source_kind="light",
         combine=CombinePolicy(method="weighted_mean", accumulator_dtype="float32"),
         rejection=RejectionPolicy(
@@ -4261,11 +4267,17 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
             high_rejection=True,
             dq=False,
         ),
-        weights={frame_id: float(frame_weights[index]) for index, frame_id in enumerate(frame_ids)},
+        weights={
+            frame_id: float(active_frame_weights[index])
+            for index, frame_id in enumerate(active_frame_ids)
+        },
         metadata={
             "resident_hardened_cpu_stack_engine_fallback": True,
             "resident_download_tile_source": "ResidentCalibratedStack.download_frames_tile",
             "resident_download_tile_fallback_source": "ResidentCalibratedStack.download_frame_tile",
+            "resident_frame_count": len(frame_ids),
+            "resident_active_frame_count": len(active_frame_ids),
+            "resident_zero_weight_skipped_frame_count": skipped_zero_weight_frame_count,
         },
     )
     master = np.zeros((int(height), int(width)), dtype=np.float32)
@@ -4336,9 +4348,9 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
                 axis=0,
             )
             download_method = "ResidentCalibratedStack.download_frame_tile_loop"
-            single_frame_tile_download_call_count += len(frame_ids)
+            single_frame_tile_download_call_count += len(active_frame_ids)
         download_method_counts[download_method] = download_method_counts.get(download_method, 0) + 1
-        expected_shape = (len(frame_ids), *window.shape)
+        expected_shape = (len(active_frame_ids), *window.shape)
         if stack_tile.shape != expected_shape:
             raise ValueError(
                 "resident batch tile download returned shape "
@@ -4349,7 +4361,7 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
         tile_master, tile_weight, tile_coverage, _tile_variance = _combine_tile(
             stack_tile,
             valid,
-            frame_weights,
+            active_frame_weights,
             method=request.combine.method,
             accumulator_dtype=accumulator_dtype,
         )
@@ -4373,6 +4385,8 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
     total_s = perf_counter() - start
     metrics: dict[str, float | int | str] = {
         "frame_count": len(frame_ids),
+        "active_frame_count": len(active_frame_ids),
+        "zero_weight_skipped_frame_count": skipped_zero_weight_frame_count,
         "width": int(width),
         "height": int(height),
         "combine": request.combine.method,
@@ -4387,6 +4401,9 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
     }
     dq_provenance: dict[str, Any] = {
         "schema_version": 1,
+        "resident_frame_count": len(frame_ids),
+        "resident_active_frame_count": len(active_frame_ids),
+        "resident_zero_weight_skipped_frame_count": skipped_zero_weight_frame_count,
         "input_samples": input_sample_total,
         "input_valid_samples_before_rejection": input_valid_sample_total,
         "input_invalid_samples_before_rejection": input_invalid_sample_total,
@@ -4409,7 +4426,8 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
         ),
         "semantics": (
             "Resident calibrated samples are downloaded as stack tiles from VRAM and "
-            "processed through the GLASS StackEngine rejection/combine rules. Source-DQ "
+            "processed through the GLASS StackEngine rejection/combine rules after "
+            "zero-weight resident frames have been excluded from the replay. Source-DQ "
             "invalid samples are already represented as non-finite resident samples."
         ),
     }
@@ -4434,6 +4452,9 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
         "hardened_execution_route": RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
         "execution_path": "resident_cpu_stack_engine_batch_tile_download_hardened_winsorized",
         "frame_count": len(frame_ids),
+        "active_frame_count": len(active_frame_ids),
+        "zero_weight_skipped_frame_count": skipped_zero_weight_frame_count,
+        "stack_engine_request_frame_count": len(active_frame_ids),
         "width": int(width),
         "height": int(height),
         "tile_size": int(tile_size),

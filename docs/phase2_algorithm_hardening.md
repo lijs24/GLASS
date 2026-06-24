@@ -401,6 +401,50 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 623: Segmented Fallback Active-Frame Replay
+
+Gate 623 closes an engineering inconsistency in the over-native-limit resident
+hardened winsorized path. The native CUDA resident integration excludes
+zero-weight or non-finite-weight frames before rejection and accumulation, but
+the correctness-first segmented CPUStackEngine fallback downloaded every
+resident frame tile when a group exceeded the native 512-frame prototype limit.
+That wasted VRAM-to-host transfer and made the fallback contract less explicit
+for large quality-gated groups.
+
+Implementation:
+
+- Filter the segmented fallback frame list to finite positive integration
+  weights before building the CPUStackEngine request.
+- Download and replay only those active resident frame indices, through the
+  batch tile-download surface when available and the single-frame compatibility
+  loop otherwise.
+- Reject all-zero/all-inactive fallback groups with a clear error instead of
+  producing a silent empty integration.
+- Record original, active, and skipped frame counts in the fallback request
+  metadata, DQ provenance, metrics, and timing payloads.
+
+Validation:
+
+- Focused segmented fallback tests: `5 passed`, covering active-only parity
+  against CPUStackEngine, the single-frame download escape hatch, all-zero
+  weight rejection, and the over-native-limit contract resolver.
+- Synthetic 520-frame probe:
+  `C:\glass_runs\phase2_s2_gate623_segmented_active_frames\synthetic_520_active_frame_probe.json`.
+  The probe used `500` active frames and `20` zero-weight frames across `4`
+  tiles. Batch tile download was called `4` times, no zero-weight frame index
+  was downloaded, and master/weight/coverage/low/high maps all matched the
+  active-only CPUStackEngine baseline exactly.
+
+Decision:
+
+- Promote active-frame filtering inside the segmented fallback. This does not
+  replace the future all-device segmented reducer, but it aligns fallback
+  semantics with the resident native path and reduces transfer volume for
+  large quality-gated groups.
+- Keep the fallback labeled correctness-first: groups above the native
+  512-frame hardened CUDA limit still reduce on host through CPUStackEngine
+  until a scalable CUDA segmented/order-statistic reducer is implemented.
+
 ### S2-Gate 622: Guarded Unit-Weight Local-Reuse Integration Probe
 
 Gate 622 tested two high-impact possibilities against the current 200-light

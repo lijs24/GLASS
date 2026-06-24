@@ -1788,8 +1788,10 @@ def test_resident_segmented_cpu_hardened_fallback_matches_stack_engine_baseline(
 
     frame_records = [{"id": f"f{index:03d}"} for index in range(len(frames))]
     frame_ids = tuple(str(frame["id"]) for frame in frame_records)
+    active_indices = tuple(index for index, weight in enumerate(weights) if weight > 0.0)
+    active_frame_ids = tuple(frame_ids[index] for index in active_indices)
     request = StackRequest(
-        frame_ids=frame_ids,
+        frame_ids=active_frame_ids,
         source_kind="light",
         combine=CombinePolicy(method="weighted_mean", accumulator_dtype="float32"),
         rejection=RejectionPolicy(
@@ -1805,11 +1807,17 @@ def test_resident_segmented_cpu_hardened_fallback_matches_stack_engine_baseline(
             low_rejection=True,
             high_rejection=True,
         ),
-        weights={frame_id: float(weights[index]) for index, frame_id in enumerate(frame_ids)},
+        weights={
+            frame_id: float(weights[active_indices[index]])
+            for index, frame_id in enumerate(active_frame_ids)
+        },
     )
     expected = CPUStackEngine(tile_size=2).stack(
         request,
-        {frame_id: ArraySource(frames[index]) for index, frame_id in enumerate(frame_ids)},
+        {
+            frame_id: ArraySource(frames[active_indices[index]])
+            for index, frame_id in enumerate(active_frame_ids)
+        },
     )
 
     fake_stack = FakeResidentStack(frames)
@@ -1835,6 +1843,9 @@ def test_resident_segmented_cpu_hardened_fallback_matches_stack_engine_baseline(
     assert np.allclose(high, expected.high_rejection_map, rtol=0.0, atol=0.0)
     assert timing["hardened_execution_route"] == "cpu_stack_engine_segmented_resident_download"
     assert timing["frame_count"] == 260
+    assert timing["active_frame_count"] == 259
+    assert timing["zero_weight_skipped_frame_count"] == 1
+    assert timing["stack_engine_request_frame_count"] == 259
     assert timing["tile_size"] == 2
     assert timing["result_contract_passed"] is True
     assert timing["batch_tile_download_available"] is True
@@ -1843,6 +1854,8 @@ def test_resident_segmented_cpu_hardened_fallback_matches_stack_engine_baseline(
     assert timing["batch_tile_download_call_count"] == 9
     assert timing["single_frame_tile_download_call_count"] == 0
     assert len(fake_stack.batch_download_calls) == 9
+    assert all(5 not in call[0] for call in fake_stack.batch_download_calls)
+    assert all(len(call[0]) == 259 for call in fake_stack.batch_download_calls)
     assert not fake_stack.download_calls
 
 
@@ -1892,6 +1905,34 @@ def test_resident_segmented_cpu_hardened_fallback_keeps_single_frame_download_es
     assert timing["batch_tile_download_call_count"] == 0
     assert timing["single_frame_tile_download_call_count"] == 24
     assert len(fake_stack.download_calls) == 24
+
+
+def test_resident_segmented_cpu_hardened_fallback_requires_positive_weight_frame():
+    frames = [np.full((2, 2), 10.0 + index, dtype=np.float32) for index in range(3)]
+
+    class FakeResidentStack:
+        width = 2
+        height = 2
+
+        def __init__(self, data: list[np.ndarray]):
+            self.data = data
+
+        def download_frame_tile(self, frame_index: int, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
+            return self.data[frame_index][y0:y1, x0:x1]
+
+    with pytest.raises(ValueError, match="at least one positive-weight frame"):
+        _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
+            FakeResidentStack(frames),
+            [{"id": f"f{index:03d}"} for index in range(len(frames))],
+            np.zeros((len(frames),), dtype=np.float32),
+            width=2,
+            height=2,
+            low_sigma=3.0,
+            high_sigma=3.0,
+            min_samples=3,
+            max_reject_fraction=0.5,
+            tile_size=2,
+        )
 
 
 def test_resident_auto_large_stack_default_rejection_guard_is_coverage_preserving():
