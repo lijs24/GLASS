@@ -17432,3 +17432,52 @@ Phase 2 is complete when:
 - Reports explain timing, memory, quality, masks, rejection, and output
   differences.
 - The repository remains installable, testable, and auditable.
+
+### S2-Gate 597: Async Resident Master-Cache Persistence
+
+- Continued the substantive resident CUDA runtime path by overlapping
+  resident master-cache persistence with downstream light work.
+- Completed:
+  - added a single-writer resident master-cache write queue;
+  - changed the default resident CUDA matching-master path to return the
+    freshly built master arrays immediately and write the `.npy` cache files
+    in the background;
+  - preserved cache correctness by writing the stats JSON only after all
+    required master arrays are present;
+  - forced a join before `resident_master_cache.json` is validated and written;
+  - recorded async cache-write wait time, total write time, hidden write time,
+    and bytes in resident artifacts and the light pipeline profile.
+- Tests:
+  - focused resident master/profile/cache tests: `11 passed`;
+  - ruff on changed files: passed;
+  - full pytest: recorded in `runs/checkpoints/s2_gate_597_status.md`.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate597_async_master_cache\cold_default_async_master_cache_final`;
+  - summary:
+    `C:\glass_runs\phase2_s2_gate597_async_master_cache\gate597_summary.json`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate597_async_master_cache\compare_vs_wbpp_fastintegration_scaled_coverage190_final.json`;
+  - acceptance:
+    `C:\glass_runs\phase2_s2_gate597_async_master_cache\acceptance_audit_final.json`.
+- Key result:
+
+  | Metric | Gate596 | Gate597 |
+  | --- | ---: | ---: |
+  | GLASS total elapsed | `19.273372500087135 s` | `16.86062809964642 s` |
+  | Resident calibration/integration | `18.418523599975742 s` | `16.02315390005242 s` |
+  | Speedup vs WBPP black-box | `56.68655031676789x` | `64.79835706849565x` |
+  | RMS diff vs reference | `0.005316389020034645` | `0.005316389020034645` |
+  | abs diff p99 vs reference | `0.002127066696993994` | `0.002127066696993994` |
+
+- Async cache-write profile:
+  - written bytes: `739890155`;
+  - background write elapsed: `3.6264531000051647 s`;
+  - wait before cache artifact: `0.000014399993233382702 s`;
+  - hidden write time: `3.6264387000119314 s`.
+- Interpretation:
+  - cold-cache master persistence was successfully overlapped with later
+    resident pipeline work;
+  - numerical output and benchmark acceptance remained unchanged;
+  - the next substantive gate should return to registration/LN/integration
+    resident work rather than adding more release/report-only gates.

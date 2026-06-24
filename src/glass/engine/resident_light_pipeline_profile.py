@@ -35,6 +35,8 @@ def build_resident_light_pipeline_profile(
     native = _float_value(timing_s, "light_calibration_batch_native_total")
     calibrate_store = _float_value(timing_s, "light_calibrate_store")
     sync = _float_value(timing_s, "light_calibration_batch_sync")
+    cache_write_wait = _float_value(timing_s, "master_cache_async_write_wait")
+    cache_write_total = _float_value(timing_s, "master_cache_async_write_total")
     unaccounted = _float_value(timing_s, "light_loop_unaccounted")
     unaccounted_without_master = _float_value(timing_s, "light_loop_unaccounted_without_master")
     overlap_saved = _float_value(timing_s, "light_read_overlap_saved")
@@ -104,6 +106,20 @@ def build_resident_light_pipeline_profile(
             "worker_cumulative_to_wall_ratio": _float_value(
                 resident_io_overlap,
                 "worker_cumulative_to_wall_ratio",
+            ),
+        },
+        "background_cache_write": {
+            "mode": (resident_io_pipeline.get("master_cache_async_write") or {}).get("mode")
+            if isinstance(resident_io_pipeline.get("master_cache_async_write"), Mapping)
+            else None,
+            "wait_s": cache_write_wait,
+            "write_elapsed_s_total": cache_write_total,
+            "hidden_write_s": max(0.0, cache_write_total - cache_write_wait),
+            "written_bytes": _int_value(
+                resident_io_pipeline.get("master_cache_async_write")
+                if isinstance(resident_io_pipeline.get("master_cache_async_write"), Mapping)
+                else {},
+                "written_bytes",
             ),
         },
         "knobs": {

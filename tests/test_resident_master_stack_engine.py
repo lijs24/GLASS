@@ -6,9 +6,10 @@ import numpy as np
 
 import glass.engine.resident_cuda as resident_cuda
 from glass.cpu.integration import weighted_integrate_stack
-from glass.engine.resident_cuda import _load_or_build_matching_masters
+from glass.engine.resident_cuda import _ResidentMasterCacheWriteQueue, _load_or_build_matching_masters
 from glass.io.fits_fast import SimpleFitsImageSpec
 from glass.io.fits_io import read_fits_data, write_fits_data
+from glass.io.json_io import read_json
 from glass.models import CalibrationPolicy
 
 
@@ -144,6 +145,100 @@ def test_resident_matching_master_cache_uses_stack_engine_contract(tmp_path: Pat
     assert cached_stats["cache_hit"] is True
     assert cached_stats["stack_engine_enabled"] is True
     assert cached_stats["cache_scope"] == "shared"
+    assert cached_stats["cache_hit_load_mode"] == "npy_mmap_readonly"
+    assert isinstance(cached_bias, np.memmap)
+    assert isinstance(cached_dark, np.memmap)
+    assert isinstance(cached_flat, np.memmap)
+    assert np.allclose(cached_bias, bias)
+    assert np.allclose(cached_dark, dark)
+    assert np.allclose(cached_flat, flat)
+
+
+def test_resident_matching_master_cache_can_persist_async(tmp_path: Path) -> None:
+    bias_ids = _write_constant_frames(tmp_path, "B", [10.0, 11.0, 12.0], exposure_s=0.0)
+    dark_ids = _write_constant_frames(tmp_path, "D", [100.0, 102.0, 104.0], exposure_s=120.0)
+    flat_ids = _write_constant_frames(tmp_path, "F", [100.0, 110.0, 120.0], exposure_s=1.0)
+    frames = {
+        frame_id: {
+            "id": frame_id,
+            "path": str(tmp_path / f"{frame_id}.fits"),
+            "exposure_s": 120.0 if frame_id.startswith("D") else 1.0,
+            "width": 4,
+            "height": 4,
+        }
+        for frame_id in [*bias_ids, *dark_ids, *flat_ids]
+    }
+    shape = {"height": 4, "width": 4}
+    groups = {
+        "B": {"group_id": "B", "group_type": "bias", "frames": bias_ids, "shape": shape},
+        "D": {"group_id": "D", "group_type": "dark", "frames": dark_ids, "shape": shape},
+        "F": {"group_id": "F", "group_type": "flat", "frames": flat_ids, "shape": shape},
+    }
+    policy = CalibrationPolicy(
+        master_dark_includes_bias=False,
+        master_rejection="none",
+        flat_normalization="median",
+        flat_floor=0.05,
+    )
+    cache = tmp_path / "shared_async_cache"
+    writer = _ResidentMasterCacheWriteQueue()
+
+    try:
+        bias, dark, flat, stats, dark_exposure = _load_or_build_matching_masters(
+            tmp_path / "run_a",
+            "H",
+            4,
+            4,
+            frames,
+            groups,
+            "B",
+            "D",
+            "F",
+            policy,
+            master_cache_dir=cache,
+            cache_write_queue=writer,
+        )
+
+        assert stats["cache_hit"] is False
+        assert stats["cache_write_mode"] == "async_background"
+        assert stats["cache_write_state"] == "scheduled"
+        assert dark_exposure == 120.0
+        assert np.allclose(bias, 11.0)
+        assert np.allclose(dark, 91.0)
+        assert np.allclose(flat, 1.0)
+
+        summary = writer.wait_all()
+    finally:
+        writer.shutdown()
+
+    assert summary["submitted_count"] == 1
+    assert summary["completed_count"] == 1
+    assert summary["failed_count"] == 0
+    assert summary["written_bytes"] > 0
+    assert stats["cache_write_state"] == "completed"
+    assert stats["cache_write_total_bytes"] == summary["written_bytes"]
+
+    stats_files = list(cache.glob("*_master_stats.json"))
+    assert len(stats_files) == 1
+    cache_stats = read_json(stats_files[0])
+    assert cache_stats["cache_write_mode"] == "async_background"
+    assert cache_stats["cache_write_state"] == "completed"
+
+    cached_bias, cached_dark, cached_flat, cached_stats, _dark_exposure = _load_or_build_matching_masters(
+        tmp_path / "run_b",
+        "H",
+        4,
+        4,
+        frames,
+        groups,
+        "B",
+        "D",
+        "F",
+        policy,
+        master_cache_dir=cache,
+    )
+
+    assert cached_stats["cache_hit"] is True
     assert cached_stats["cache_hit_load_mode"] == "npy_mmap_readonly"
     assert isinstance(cached_bias, np.memmap)
     assert isinstance(cached_dark, np.memmap)

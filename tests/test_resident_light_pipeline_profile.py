@@ -63,10 +63,17 @@ def test_light_pipeline_profile_accounts_master_load_inside_light_loop() -> None
             "light_master_build_or_load_in_loop": 10.5,
             "light_read_wait_wall": 2.0,
             "light_calibration_batch_native_total": 0.8,
+            "master_cache_async_write_wait": 0.25,
+            "master_cache_async_write_total": 2.75,
             "light_loop_unaccounted": 0.2,
             "light_loop_unaccounted_without_master": 10.7,
         },
-        resident_io_pipeline={},
+        resident_io_pipeline={
+            "master_cache_async_write": {
+                "mode": "async_background",
+                "written_bytes": 739890139,
+            },
+        },
         resident_io_overlap={},
     )
 
@@ -74,4 +81,8 @@ def test_light_pipeline_profile_accounts_master_load_inside_light_loop() -> None
     assert profile["recommendation"] == "reuse_or_prebuild_master_calibration_cache"
     assert profile["components_s"]["master_build_or_load"] == 10.5
     assert profile["components_s"]["python_orchestration_unaccounted"] == 0.2
+    assert profile["background_cache_write"]["mode"] == "async_background"
+    assert profile["background_cache_write"]["wait_s"] == 0.25
+    assert profile["background_cache_write"]["hidden_write_s"] == 2.5
+    assert profile["background_cache_write"]["written_bytes"] == 739890139
     assert profile["fractions"]["python_orchestration_unaccounted_without_master"] == 10.7 / 14.0

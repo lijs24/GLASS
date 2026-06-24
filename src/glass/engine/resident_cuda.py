@@ -4817,6 +4817,152 @@ def _cached_master_files_complete(paths: dict[str, Path], stats: dict[str, Any])
     )
 
 
+def _resident_master_cache_write_files(
+    paths: dict[str, Path],
+    stats: dict[str, Any],
+    master_bias: np.ndarray | None,
+    master_dark: np.ndarray | None,
+    master_flat: np.ndarray | None,
+) -> dict[str, Any]:
+    start = perf_counter()
+    written_files: list[dict[str, Any]] = []
+    for kind, array in (
+        ("bias", master_bias),
+        ("dark", master_dark),
+        ("flat", master_flat),
+    ):
+        if array is None:
+            continue
+        path = paths[kind]
+        np.save(path, array)
+        written_files.append(
+            {
+                "kind": kind,
+                "path": str(path),
+                "size_bytes": int(path.stat().st_size) if path.exists() else 0,
+            }
+        )
+    array_elapsed = perf_counter() - start
+    stats_path = paths["stats"]
+    stats_to_write = {
+        **stats,
+        "cache_write_mode": stats.get("cache_write_mode", "synchronous"),
+        "cache_write_state": "completed",
+        "cache_write_array_elapsed_s": float(array_elapsed),
+        "cache_write_required_before_artifact": True,
+        "cache_write_file_count": len(written_files) + 1,
+        "cache_write_files": written_files,
+    }
+    write_json(stats_path, stats_to_write)
+    elapsed = perf_counter() - start
+    stats_size_bytes = int(stats_path.stat().st_size) if stats_path.exists() else 0
+    total_bytes = stats_size_bytes + sum(int(item["size_bytes"]) for item in written_files)
+    return {
+        "cache_write_state": "completed",
+        "cache_write_elapsed_s": float(elapsed),
+        "cache_write_array_elapsed_s": float(array_elapsed),
+        "cache_write_required_before_artifact": True,
+        "cache_write_file_count": len(written_files) + 1,
+        "cache_write_total_bytes": int(total_bytes),
+        "cache_write_files": [
+            *written_files,
+            {
+                "kind": "stats",
+                "path": str(stats_path),
+                "size_bytes": stats_size_bytes,
+            },
+        ],
+    }
+
+
+class _ResidentMasterCacheWriteQueue:
+    """Single-writer queue for overlapping master-cache persistence with light work."""
+
+    def __init__(self, *, max_workers: int = 1) -> None:
+        self._executor = ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix="glass-master-cache-writer",
+        )
+        self._pending: list[tuple[Future[dict[str, Any]], dict[str, Any]]] = []
+        self._submitted_count = 0
+        self._completed_count = 0
+        self._failed_count = 0
+        self._write_elapsed_s = 0.0
+        self._written_bytes = 0
+        self._shutdown = False
+
+    def submit(
+        self,
+        *,
+        paths: dict[str, Path],
+        stats: dict[str, Any],
+        master_bias: np.ndarray | None,
+        master_dark: np.ndarray | None,
+        master_flat: np.ndarray | None,
+    ) -> None:
+        if self._shutdown:
+            raise RuntimeError("resident master-cache writer is already shut down")
+        stats.update(
+            {
+                "cache_write_mode": "async_background",
+                "cache_write_state": "scheduled",
+                "cache_write_required_before_artifact": True,
+            }
+        )
+        future = self._executor.submit(
+            _resident_master_cache_write_files,
+            dict(paths),
+            dict(stats),
+            master_bias,
+            master_dark,
+            master_flat,
+        )
+        self._pending.append((future, stats))
+        self._submitted_count += 1
+
+    def wait_all(self) -> dict[str, Any]:
+        wait_start = perf_counter()
+        errors: list[str] = []
+        for future, stats in list(self._pending):
+            try:
+                result = future.result()
+            except Exception as exc:  # pragma: no cover - exercised through raised run failure
+                self._failed_count += 1
+                stats.update(
+                    {
+                        "cache_write_state": "failed",
+                        "cache_write_error": f"{type(exc).__name__}: {exc}",
+                    }
+                )
+                errors.append(f"{type(exc).__name__}: {exc}")
+            else:
+                self._completed_count += 1
+                self._write_elapsed_s += float(result.get("cache_write_elapsed_s") or 0.0)
+                self._written_bytes += int(result.get("cache_write_total_bytes") or 0)
+                stats.update(result)
+        self._pending.clear()
+        wait_elapsed = perf_counter() - wait_start
+        summary = {
+            "enabled": True,
+            "mode": "async_background",
+            "submitted_count": int(self._submitted_count),
+            "completed_count": int(self._completed_count),
+            "failed_count": int(self._failed_count),
+            "pending_count": len(self._pending),
+            "wait_elapsed_s": float(wait_elapsed),
+            "write_elapsed_s_total": float(self._write_elapsed_s),
+            "written_bytes": int(self._written_bytes),
+        }
+        if errors:
+            raise RuntimeError("resident master-cache async write failed: " + "; ".join(errors))
+        return summary
+
+    def shutdown(self) -> None:
+        if not self._shutdown:
+            self._executor.shutdown(wait=True)
+            self._shutdown = True
+
+
 class _ResidentMasterFitsImageSource(FitsImageSource):
     __slots__ = ("_last_tile", "_last_window_key")
     mask_from_finite_only = True
@@ -5697,6 +5843,7 @@ def _load_or_build_matching_masters(
     flat_group: str | None,
     policy: CalibrationPolicy,
     master_cache_dir: str | Path | None = None,
+    cache_write_queue: _ResidentMasterCacheWriteQueue | None = None,
 ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None, dict[str, Any], float | None]:
     cache, cache_scope = _resident_master_cache_root(run, master_cache_dir)
     cache.mkdir(parents=True, exist_ok=True)
@@ -5837,13 +5984,31 @@ def _load_or_build_matching_masters(
             flat_normalization=flat_normalization,
         ),
     }
-    if master_bias is not None:
-        np.save(paths["bias"], master_bias)
-    if master_dark is not None:
-        np.save(paths["dark"], master_dark)
-    if master_flat is not None:
-        np.save(paths["flat"], master_flat)
-    write_json(stats_path, stats)
+    if cache_write_queue is None:
+        stats.update(
+            {
+                "cache_write_mode": "synchronous",
+                "cache_write_state": "writing",
+                "cache_write_required_before_artifact": True,
+            }
+        )
+        stats.update(
+            _resident_master_cache_write_files(
+                paths,
+                dict(stats),
+                master_bias,
+                master_dark,
+                master_flat,
+            )
+        )
+    else:
+        cache_write_queue.submit(
+            paths=paths,
+            stats=stats,
+            master_bias=master_bias,
+            master_dark=master_dark,
+            master_flat=master_flat,
+        )
     return master_bias, master_dark, master_flat, stats, dark_exposure
 
 
@@ -6332,6 +6497,7 @@ def run_resident_calibration_integration(
     resident_dq_pixel_closure_groups: list[dict[str, Any]] = []
     resident_source_dq_execution_groups: list[dict[str, Any]] = []
     resident_master_cache_groups: list[dict[str, Any]] = []
+    resident_master_cache_write_queues: list[_ResidentMasterCacheWriteQueue] = []
     local_norm_groups: list[dict[str, Any]] = []
     tile_local_policy_any_enabled = False
     tile_local_policy_any_applied = False
@@ -6361,6 +6527,19 @@ def run_resident_calibration_integration(
             )
             master_elapsed = 0.0
             master_stats_sets: dict[str, Any] = {}
+            master_cache_write_queue = _ResidentMasterCacheWriteQueue()
+            resident_master_cache_write_queues.append(master_cache_write_queue)
+            master_cache_async_write_summary: dict[str, Any] = {
+                "enabled": True,
+                "mode": "async_background",
+                "submitted_count": 0,
+                "completed_count": 0,
+                "failed_count": 0,
+                "pending_count": 0,
+                "wait_elapsed_s": 0.0,
+                "write_elapsed_s_total": 0.0,
+                "written_bytes": 0,
+            }
 
             allocate_start = perf_counter()
             stack = cuda_module.ResidentCalibratedStack(len(light_frames), height, width)
@@ -6953,6 +7132,7 @@ def run_resident_calibration_integration(
                                         flat_group,
                                         policy,
                                         master_cache_dir=shared_master_cache_dir,
+                                        cache_write_queue=master_cache_write_queue,
                                     )
                                 )
                                 stack.set_calibration_masters(master_bias, master_dark, master_flat)
@@ -7524,6 +7704,7 @@ def run_resident_calibration_integration(
                                     flat_group,
                                     policy,
                                     master_cache_dir=shared_master_cache_dir,
+                                    cache_write_queue=master_cache_write_queue,
                                 )
                             )
                             stack.set_calibration_masters(master_bias, master_dark, master_flat)
@@ -11810,6 +11991,12 @@ def run_resident_calibration_integration(
             ]
             write_elapsed, write_breakdown, write_storage, output_write_workers = _write_resident_outputs(output_specs)
 
+            try:
+                master_cache_async_write_summary = master_cache_write_queue.wait_all()
+            finally:
+                master_cache_write_queue.shutdown()
+                resident_master_cache_write_queues.remove(master_cache_write_queue)
+
             first_master_stats = next(iter(master_stats_sets.values()), {})
             master_stats = {
                 "calibration_group_policy": "planner_matching_groups_per_light",
@@ -12098,6 +12285,7 @@ def run_resident_calibration_integration(
                     light_prefetch.native_queue_read_thread_wait_count
                 ),
                 **native_path_calibration_report,
+                "master_cache_async_write": master_cache_async_write_summary,
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -12125,6 +12313,12 @@ def run_resident_calibration_integration(
                 "light_native_path_calibration_total": float(native_path_calibration_total_s),
                 "light_calibrate_store": calibrate_store_timing["total"],
                 "light_calibration_batch_sync": float(calibration_batch_sync_s),
+                "master_cache_async_write_wait": float(
+                    master_cache_async_write_summary.get("wait_elapsed_s") or 0.0
+                ),
+                "master_cache_async_write_total": float(
+                    master_cache_async_write_summary.get("write_elapsed_s_total") or 0.0
+                ),
                 "light_loop_unaccounted": light_loop_unaccounted,
                 "light_loop_unaccounted_without_master": light_loop_unaccounted_without_master,
                 "light_read_overlap_saved": read_overlap_saved,
@@ -12234,6 +12428,7 @@ def run_resident_calibration_integration(
                     light_prefetch.native_queue_read_thread_wait_count
                 ),
                 **native_path_calibration_report,
+                "master_cache_async_write": master_cache_async_write_summary,
                 "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
                 "host_pinned_bytes": int(
                     max(prefetch_host_pinned_bytes, int(getattr(stack, "host_pinned_bytes", 0)))
@@ -12266,6 +12461,15 @@ def run_resident_calibration_integration(
                     "light_native_path_calibration_total": float(native_path_calibration_total_s),
                     "light_calibration_batch_stream_h2d_calibrate_store": float(calibration_batch_stream_s),
                     "light_calibration_batch_sync": float(calibration_batch_sync_s),
+                    "master_cache_async_write_wait": float(
+                        master_cache_async_write_summary.get("wait_elapsed_s") or 0.0
+                    ),
+                    "master_cache_async_write_total": float(
+                        master_cache_async_write_summary.get("write_elapsed_s_total") or 0.0
+                    ),
+                    "master_cache_async_write_written_bytes": int(
+                        master_cache_async_write_summary.get("written_bytes") or 0
+                    ),
                     "resident_registration_warp_total": registration_total,
                     "resident_registration_warp_during_load_total": registration_during_load_elapsed,
                     "resident_registration_warp_deferred_total": registration_deferred_elapsed,
@@ -12472,6 +12676,15 @@ def run_resident_calibration_integration(
                     ),
                     "timing_s": {
                         "master_build_or_load": master_elapsed,
+                        "master_cache_async_write_wait": float(
+                            master_cache_async_write_summary.get("wait_elapsed_s") or 0.0
+                        ),
+                        "master_cache_async_write_total": float(
+                            master_cache_async_write_summary.get("write_elapsed_s_total") or 0.0
+                        ),
+                        "master_cache_async_write_written_bytes": int(
+                            master_cache_async_write_summary.get("written_bytes") or 0
+                        ),
                         "resident_allocate_and_master_upload": allocate_elapsed,
                         "registration_preview_setup": registration_setup_elapsed,
                         "light_read_upload_calibrate": load_calibrate_elapsed,
@@ -12844,6 +13057,7 @@ def run_resident_calibration_integration(
                         "master_cache_policy_requested": master_cache_policy_record["requested"],
                         "master_cache_policy_effective": master_cache_policy_record["effective"],
                         "master_cache_policy_source": master_cache_policy_record["source"],
+                        "master_cache_async_write": master_cache_async_write_summary,
                         "host_pinned_bytes": int(
                             max(prefetch_host_pinned_bytes, int(getattr(stack, "host_pinned_bytes", 0)))
                         ),
@@ -14333,6 +14547,11 @@ def run_resident_calibration_integration(
         )
         return state
     except Exception as exc:
+        for writer in list(resident_master_cache_write_queues):
+            try:
+                writer.shutdown()
+            except Exception:
+                pass
         state.failed_stage = state.current_stage
         state.errors.append(str(exc))
         raise
