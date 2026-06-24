@@ -2673,6 +2673,10 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert hardened_timing["frame_count"] == 4
     assert hardened_timing["native_kernel_frame_capacity"] == 256
     assert hardened_timing["native_kernel_capacity_selector"] == "small_256"
+    assert hardened_timing["native_profile"]["schema_version"] == 1
+    assert hardened_timing["native_profile"]["kernel_sync_s"] >= 0.0
+    assert hardened_timing["native_profile"]["download_s"] >= 0.0
+    assert hardened_timing["native_profile"]["downloaded_arrays"] == 5
     assert hardened_timing["pixel_count"] == expected_master.size
     assert hardened_timing["total_s"] >= 0.0
     if output["dq_map_stats_native_method"] == "resident_dq_map_count_maps_i16":

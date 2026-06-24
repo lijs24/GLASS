@@ -18162,6 +18162,73 @@ Phase 2 is complete when:
     GLASS synthetic data, and user-owned real benchmark artifacts;
   - no external or proprietary implementation source was inspected or used.
 
+### S2-Gate 610: Native Hardened Integration Timing Profile
+
+- Continued the Phase 2 integration mainline by isolating the largest current
+  200-light resident integration cost before rewriting kernel internals.
+- Completed:
+  - added optional `profile` support to native
+    `ResidentCalibratedStack.integrate_hardened_winsorized_sigma`;
+  - kept the ordinary native return contract unchanged when `profile=false`;
+  - updated the Python timed wrapper to request the profile when available and
+    fall back cleanly on older native builds;
+  - recorded `native_profile` under `hardened_winsorized_timing_s`;
+  - added CUDA/API and CLI tests for profile schema, kernel timing, download
+    timing, and downloaded array count.
+- Real 200-light profiled validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate610_native_integration_profile\real_200_default_profiled`;
+  - `total_elapsed_s=11.776640900294296`;
+  - `resident_calibration_integration=10.933877700008452 s`;
+  - resident hardened route:
+    `hardened_execution_route=native_cuda_resident_stack`;
+  - timing selector:
+    `native_kernel_capacity_selector=small_256`;
+  - native hardened integration timing:
+    `3.752243599970825 s`;
+  - native profile:
+    - `allocation_s=0.0013176`;
+    - `weights_upload_s=0.0000149`;
+    - `kernel_sync_s=3.6350664`;
+    - `download_s=0.1124195`;
+    - `free_s=0.0033262`;
+    - `downloaded_arrays=5`;
+    - `downloaded_bytes=863116800`;
+  - six integration FITS outputs are SHA256-identical to Gate609;
+  - `pipeline_contract.json`: passed;
+  - `resident_result_contract.json`: passed.
+- Calibration stream probe performed before choosing this gate:
+  - matrix path:
+    `C:\glass_runs\phase2_s2_gate610_calibration_stream_probe`;
+  - `streams=8/wave=8/fill=25us` did not improve the default route;
+  - `streams=8/wave=4/fill=25us` did not clearly beat the default route;
+  - `streams=4/wave=4/fill=0us` reduced the calibration-integration substage
+    slightly in one run but did not consistently improve total elapsed time;
+  - no runtime preset change was promoted from this matrix.
+- Validation:
+  - native rebuild:
+    `cmake --build build --config Release --target _glass_cuda_native`;
+  - focused hardened CUDA tests:
+    `4 passed, 50 deselected`;
+  - focused resident CLI hardened parity test:
+    `1 passed, 114 deselected`;
+  - ruff:
+    `All checks passed`;
+  - full pytest:
+    `1289 passed in 52.25 s`.
+- Interpretation:
+  - this gate is not a release/report handoff; it closes the evidence gap that
+    was blocking the next real integration optimization;
+  - the audit-map download path costs about `0.112 s`, while the median/IQR
+    hardened kernel costs about `3.635 s`;
+  - the next substantive gate should implement a kernel-internal improvement,
+    preferably a scalable device-side selection/segmented reducer, instead of
+    chasing D2H map download or stream-count tuning.
+- Clean-room note:
+  - this gate uses GLASS-owned CUDA wrapper timing, GLASS-owned kernels,
+    GLASS tests, and user-owned real benchmark artifacts;
+  - no external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 609: Dual-Capacity Hardened Winsorized CUDA Kernel
 
 - Continued the Phase 2 integration mainline by removing the Gate608

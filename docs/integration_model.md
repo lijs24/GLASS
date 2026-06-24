@@ -166,6 +166,17 @@ against Gate608 while reducing native hardened integration from
 `3.8001173000084236 s` to `3.7481071000220254 s`. The 260-light synthetic
 validation uses `large_512` and stayed SHA256-identical to Gate608.
 
+S2-Gate 610 adds optional native timing decomposition for the hardened resident
+integration wrapper. When the native extension supports the `profile` argument,
+`hardened_winsorized_timing_s.native_profile` records allocation, weight upload,
+kernel+sync, D2H download, free time, downloaded array count, and downloaded
+bytes. The real 200-light profiled run preserved SHA256-identical outputs
+against Gate609 and measured `kernel_sync_s=3.6350664`,
+`download_s=0.1124195`, and `downloaded_bytes=863116800` inside a
+`3.752243599970825 s` hardened integration. This makes the next integration
+optimization target explicit: the median/IQR hardened kernel itself dominates;
+output-map download is not the main bottleneck on the current audit-map route.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted

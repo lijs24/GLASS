@@ -4559,20 +4559,52 @@ class ResidentCalibratedStack:
         count_map_dtype: str = "float32",
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
         count_map_dtype = str(count_map_dtype)
+        if int(min_samples) < 1:
+            raise ValueError("min_samples must be at least 1")
+        if not 0.0 <= float(max_reject_fraction) <= 1.0:
+            raise ValueError("max_reject_fraction must be between 0 and 1")
+        if count_map_dtype not in {"float32", "uint16"}:
+            raise ValueError("count_map_dtype must be float32 or uint16")
         start = perf_counter()
-        master, weight_map, coverage, low_reject, high_reject = (
-            self.integrate_hardened_winsorized_sigma(
-                weights,
-                low_sigma,
-                high_sigma,
-                min_samples=min_samples,
-                max_reject_fraction=max_reject_fraction,
-                count_map_dtype=count_map_dtype,
+        native_profile: dict[str, Any] = {}
+        try:
+            native_result = self._impl.integrate_hardened_winsorized_sigma(
+                None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
+                float(low_sigma),
+                float(high_sigma),
+                int(min_samples),
+                float(max_reject_fraction),
+                count_map_dtype,
+                True,
             )
-        )
+            if len(native_result) == 6:
+                master, weight_map, coverage, low_reject, high_reject, profile_info = native_result
+                native_profile = dict(profile_info)
+            else:
+                master, weight_map, coverage, low_reject, high_reject = native_result
+        except TypeError:
+            master, weight_map, coverage, low_reject, high_reject = (
+                self.integrate_hardened_winsorized_sigma(
+                    weights,
+                    low_sigma,
+                    high_sigma,
+                    min_samples=min_samples,
+                    max_reject_fraction=max_reject_fraction,
+                    count_map_dtype=count_map_dtype,
+                )
+            )
         total_s = perf_counter() - start
+        master = np.asarray(master, dtype=np.float32)
+        weight_map = np.asarray(weight_map, dtype=np.float32)
+        coverage = np.asarray(coverage)
+        low_reject = np.asarray(low_reject)
+        high_reject = np.asarray(high_reject)
         actual_count_map_dtype = str(np.asarray(coverage).dtype)
         native_kernel_frame_capacity = 256 if self.frame_count <= 256 else 512
+        native_profile = {
+            str(key): (float(value) if isinstance(value, float) else value)
+            for key, value in native_profile.items()
+        }
         return (
             master,
             weight_map,
@@ -4597,6 +4629,7 @@ class ResidentCalibratedStack:
                 "max_reject_fraction": float(max_reject_fraction),
                 "count_map_dtype_requested": count_map_dtype,
                 "count_map_dtype": actual_count_map_dtype,
+                "native_profile": native_profile,
                 "includes_device_sync_and_download": True,
                 "total_s": float(total_s),
             },
