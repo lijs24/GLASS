@@ -17,7 +17,11 @@ def _write_run(
     output_value: float = 1.0,
     pipeline_passed: bool = True,
     stack_engine_passed: bool = True,
+    resident_result_passed: bool = True,
+    frame_masks_passed: bool = True,
     dq_passed: bool = True,
+    source_dq_passed: bool = True,
+    master_cache_passed: bool = True,
     active_frame_count: int = 2,
     masked_frame_count: int = 0,
 ) -> None:
@@ -100,12 +104,40 @@ def _write_run(
         path / "stack_engine_contract.json",
         {"passed": stack_engine_passed, "status": "passed" if stack_engine_passed else "failed"},
     )
+    write_json(
+        path / "resident_result_contract.json",
+        {
+            "artifact_type": "resident_cuda_result_contract",
+            "passed": resident_result_passed,
+            "status": "passed" if resident_result_passed else "failed",
+        },
+    )
     write_json(path / "resident_dq_pixel_closure.json", {"passed": dq_passed, "status": "passed" if dq_passed else "failed"})
+    write_json(
+        path / "resident_source_dq_execution.json",
+        {
+            "artifact": "resident_source_dq_execution",
+            "summary": {
+                "passed": source_dq_passed,
+                "status": "passed" if source_dq_passed else "failed",
+            },
+        },
+    )
+    write_json(
+        path / "resident_master_cache.json",
+        {
+            "artifact": "resident_master_cache",
+            "summary": {
+                "passed": master_cache_passed,
+                "status": "passed" if master_cache_passed else "failed",
+            },
+        },
+    )
     write_json(
         path / "resident_frame_masks.json",
         {
             "summary": {
-                "passed": True,
+                "passed": frame_masks_passed,
                 "active_frame_count": active_frame_count,
                 "masked_frame_count": masked_frame_count,
             }
@@ -140,7 +172,11 @@ def test_resident_regression_gate_fails_runtime_contract_and_frame_mask(tmp_path
         candidate,
         elapsed_s=13.0,
         pipeline_passed=False,
+        resident_result_passed=False,
+        frame_masks_passed=False,
         dq_passed=False,
+        source_dq_passed=False,
+        master_cache_passed=False,
         active_frame_count=1,
         masked_frame_count=2,
     )
@@ -156,7 +192,11 @@ def test_resident_regression_gate_fails_runtime_contract_and_frame_mask(tmp_path
     assert payload["passed"] is False
     assert "runtime_within_threshold" in payload["failed_checks"]
     assert "candidate_pipeline_contract_passed" in payload["failed_checks"]
+    assert "candidate_resident_result_contract_passed" in payload["failed_checks"]
+    assert "candidate_resident_frame_masks_passed" in payload["failed_checks"]
     assert "candidate_dq_pixel_closure_passed" in payload["failed_checks"]
+    assert "candidate_resident_source_dq_execution_passed" in payload["failed_checks"]
+    assert "candidate_resident_master_cache_passed" in payload["failed_checks"]
     assert "candidate_active_frame_count_at_least_min" in payload["failed_checks"]
     assert "candidate_masked_frame_count_at_most_max" in payload["failed_checks"]
 

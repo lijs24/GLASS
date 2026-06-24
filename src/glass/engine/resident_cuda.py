@@ -124,6 +124,63 @@ _RESIDENT_WINSORIZED_MODES = {
     RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
 }
+_RESIDENT_RESULT_RUNTIME_NONFATAL_CHECKS = {
+    "active_frame_count_not_degenerate",
+}
+
+
+def _validate_resident_result_contract_payload(contract: dict[str, Any]) -> None:
+    """Keep resident integration from completing with fatal result-contract failures."""
+
+    if contract.get("passed") is True:
+        return
+    top_checks = contract.get("checks") if isinstance(contract.get("checks"), list) else []
+    failed_top_checks = [
+        str(check.get("name") or "unknown")
+        for check in top_checks
+        if isinstance(check, dict)
+        and check.get("passed") is not True
+        and check.get("name") != "resident_outputs_pass_contract"
+    ]
+    if failed_top_checks:
+        raise RuntimeError(
+            "resident CUDA result contract failed: top-level:"
+            + ",".join(failed_top_checks)
+        )
+    outputs = contract.get("outputs") if isinstance(contract.get("outputs"), list) else []
+    failed_outputs: list[dict[str, Any]] = []
+    for index, output in enumerate(outputs):
+        if not isinstance(output, dict) or output.get("passed") is True:
+            continue
+        checks = output.get("checks") if isinstance(output.get("checks"), list) else []
+        failed_checks = [
+            str(check.get("name") or "unknown")
+            for check in checks
+            if isinstance(check, dict) and check.get("passed") is not True
+        ]
+        fatal_failed_checks = [
+            name for name in failed_checks if name not in _RESIDENT_RESULT_RUNTIME_NONFATAL_CHECKS
+        ]
+        if not fatal_failed_checks:
+            continue
+        failed_outputs.append(
+            {
+                "index": output.get("index", index),
+                "filter": output.get("filter"),
+                "status": output.get("status"),
+                "failed_checks": fatal_failed_checks,
+            }
+        )
+    if not failed_outputs:
+        return
+    failed_text = "; ".join(
+        f"{item['filter'] or item['index']}:{','.join(item['failed_checks']) or item['status'] or 'failed'}"
+        for item in failed_outputs
+    )
+    raise RuntimeError(
+        "resident CUDA result contract failed"
+        + (f": {failed_text}" if failed_text else "")
+    )
 _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE = False
 _RESIDENT_MASTER_STACK_TILE_SIZE = 512
 _RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_resident_cuda_policy_master_cache_v2"
@@ -15373,6 +15430,7 @@ def run_resident_calibration_integration(
         resident_result_contract_path = run / "resident_result_contract.json"
         resident_result_contract = build_resident_result_contract(run)
         write_resident_result_contract(resident_result_contract_path, resident_result_contract)
+        _validate_resident_result_contract_payload(resident_result_contract)
         from glass.engine.frame_accounting import build_frame_accounting
 
         build_frame_accounting(run, compact_json=True)

@@ -401,6 +401,42 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 618: Resident Result Contract Runtime Gate
+
+Gate 618 turns fatal resident CUDA result-contract failures from passive
+evidence into a runtime gate on the default path. A resident run may only
+proceed to frame accounting and final `run_state.json` if the freshly generated
+`resident_result_contract.json` has no fatal structural, map, DQ, provenance, or
+sample-accounting failures. Science/admission failures such as a deliberately
+degenerate active-frame count remain visible in the contract and are blocked by
+the regression gate thresholds. The same gate also tightens
+`glass resident-regression-gate` so future 200-light candidates must carry the
+resident result contract, frame masks, pixel-DQ closure, source-DQ execution,
+and master-cache contract by default.
+
+Implementation:
+
+- `run_resident_calibration_integration` now validates the freshly written
+  `resident_result_contract.json` and raises a diagnostic error if a fatal
+  output contract check fails.
+- `glass resident-regression-gate` now requires, unless explicitly relaxed:
+  `pipeline_contract.json`, `stack_engine_contract.json`,
+  `resident_result_contract.json`, `resident_frame_masks.json`,
+  `resident_dq_pixel_closure.json`, `resident_source_dq_execution.json`, and
+  `resident_master_cache.json`.
+- The regression gate still compares output determinism and elapsed runtime,
+  so this is a default-path safety gate rather than a release/report handoff.
+- New `--allow-missing-*` flags exist only for old-run diagnostics and do not
+  weaken the default acceptance path.
+
+Validation plan:
+
+- Focused tests for resident result-contract runtime validation and resident
+  regression-gate default requirements.
+- Full `python -m pytest -q`.
+- Real 200-light same-build default A/B against the latest green resident run,
+  requiring at least `190` active frames and at most `10` masked frames.
+
 ### S2-Gate 581: Native Completion Runtime Preset
 
 Gate 581 returns the current work to a substantive resident CUDA runtime path

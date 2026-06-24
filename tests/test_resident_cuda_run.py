@@ -48,6 +48,7 @@ from glass.engine.resident_cuda import (
     _resident_triangle_translation_refine,
     _resident_similarity_frame_dispatch,
     _resident_winsorized_runtime_contract,
+    _validate_resident_result_contract_payload,
     _select_star_core_preselected_seed_indices,
     _select_star_guarded_seed,
     _tile_local_policy_application_arrays,
@@ -56,6 +57,51 @@ from glass.engine.resident_cuda import (
 )
 from glass.cpu.registration import translation_matrix
 from tests.conftest import cuda_module_or_skip
+
+
+def test_resident_result_contract_payload_validation_accepts_passed() -> None:
+    _validate_resident_result_contract_payload({"passed": True})
+
+
+def test_resident_result_contract_payload_validation_raises_failed_checks() -> None:
+    with pytest.raises(RuntimeError, match="H:required_maps_exist"):
+        _validate_resident_result_contract_payload(
+            {
+                "passed": False,
+                "outputs": [
+                    {
+                        "index": 0,
+                        "filter": "H",
+                        "status": "failed",
+                        "checks": [
+                            {"name": "required_maps_exist", "passed": False},
+                            {"name": "dq_summary_matches_provenance", "passed": True},
+                        ],
+                    }
+                ],
+            }
+        )
+
+
+def test_resident_result_contract_payload_validation_allows_admission_only_failure() -> None:
+    _validate_resident_result_contract_payload(
+        {
+            "passed": False,
+            "checks": [
+                {"name": "resident_outputs_pass_contract", "passed": False},
+            ],
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "status": "failed",
+                    "checks": [
+                        {"name": "active_frame_count_not_degenerate", "passed": False},
+                    ],
+                }
+            ],
+        }
+    )
 
 
 def test_light_prefetcher_counts_pinned_ring_inflight_slots(monkeypatch) -> None:

@@ -69,7 +69,11 @@ def build_resident_regression_gate(
     max_masked_frame_count: int | None = None,
     require_pipeline_contract: bool = True,
     require_stack_engine_contract: bool = True,
+    require_resident_result_contract: bool = True,
+    require_resident_frame_masks: bool = True,
     require_dq_pixel_closure: bool = True,
+    require_resident_source_dq_execution: bool = True,
+    require_resident_master_cache: bool = True,
 ) -> dict[str, Any]:
     baseline = Path(baseline_run)
     candidate = Path(candidate_run)
@@ -125,9 +129,33 @@ def build_resident_regression_gate(
         ),
         _contract_check(
             candidate,
+            "resident_result_contract.json",
+            "candidate_resident_result_contract_passed",
+            required=require_resident_result_contract,
+        ),
+        _contract_check(
+            candidate,
+            "resident_frame_masks.json",
+            "candidate_resident_frame_masks_passed",
+            required=require_resident_frame_masks,
+        ),
+        _contract_check(
+            candidate,
             "resident_dq_pixel_closure.json",
             "candidate_dq_pixel_closure_passed",
             required=require_dq_pixel_closure,
+        ),
+        _contract_check(
+            candidate,
+            "resident_source_dq_execution.json",
+            "candidate_resident_source_dq_execution_passed",
+            required=require_resident_source_dq_execution,
+        ),
+        _contract_check(
+            candidate,
+            "resident_master_cache.json",
+            "candidate_resident_master_cache_passed",
+            required=require_resident_master_cache,
         ),
     ]
     if min_active_frame_count is not None:
@@ -163,6 +191,13 @@ def build_resident_regression_gate(
             "max_elapsed_ratio": max_elapsed_ratio,
             "min_active_frame_count": min_active_frame_count,
             "max_masked_frame_count": max_masked_frame_count,
+            "require_pipeline_contract": require_pipeline_contract,
+            "require_stack_engine_contract": require_stack_engine_contract,
+            "require_resident_result_contract": require_resident_result_contract,
+            "require_resident_frame_masks": require_resident_frame_masks,
+            "require_dq_pixel_closure": require_dq_pixel_closure,
+            "require_resident_source_dq_execution": require_resident_source_dq_execution,
+            "require_resident_master_cache": require_resident_master_cache,
         },
         "determinism_summary": determinism.get("summary", {}),
         "runtime_summary": runtime.get("summary", {}),

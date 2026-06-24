@@ -4393,7 +4393,11 @@ def cmd_resident_regression_gate(args: argparse.Namespace) -> int:
         max_masked_frame_count=args.max_masked_frame_count,
         require_pipeline_contract=not args.allow_missing_pipeline_contract,
         require_stack_engine_contract=not args.allow_missing_stack_engine_contract,
+        require_resident_result_contract=not args.allow_missing_resident_result_contract,
+        require_resident_frame_masks=not args.allow_missing_resident_frame_masks,
         require_dq_pixel_closure=not args.allow_missing_dq_pixel_closure,
+        require_resident_source_dq_execution=not args.allow_missing_resident_source_dq_execution,
+        require_resident_master_cache=not args.allow_missing_resident_master_cache,
     )
     write_resident_regression_gate(args.out, payload, markdown=args.markdown)
     console.print(
@@ -9013,9 +9017,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="do not fail when candidate stack_engine_contract.json is absent",
     )
     resident_regression_gate.add_argument(
+        "--allow-missing-resident-result-contract",
+        action="store_true",
+        help="do not fail when candidate resident_result_contract.json is absent",
+    )
+    resident_regression_gate.add_argument(
+        "--allow-missing-resident-frame-masks",
+        action="store_true",
+        help="do not fail when candidate resident_frame_masks.json is absent",
+    )
+    resident_regression_gate.add_argument(
         "--allow-missing-dq-pixel-closure",
         action="store_true",
         help="do not fail when candidate resident_dq_pixel_closure.json is absent",
+    )
+    resident_regression_gate.add_argument(
+        "--allow-missing-resident-source-dq-execution",
+        action="store_true",
+        help="do not fail when candidate resident_source_dq_execution.json is absent",
+    )
+    resident_regression_gate.add_argument(
+        "--allow-missing-resident-master-cache",
+        action="store_true",
+        help="do not fail when candidate resident_master_cache.json is absent",
     )
     resident_regression_gate.add_argument(
         "--fail-on-failure",
