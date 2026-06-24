@@ -9,6 +9,7 @@ from glass.engine.contracts import DQFlag
 from glass.engine.pipeline import initialize_run
 from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+    RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
     resident_rejection_descriptor,
 )
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
@@ -943,6 +944,45 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert audit["resident_frame_masks"]["closure"]["active_frame_count"] == 3
     assert audit["resident_registration_quality"]["closure"]["active_decision_count"] == 3
     assert audit["resident_dq_pixel_closure"]["closure"]["active_frame_count"] == 3
+
+
+def test_pipeline_contract_passes_segmented_resident_hardened_winsorized_contract(
+    tmp_path: Path,
+):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    integration = read_json(run / "integration_results.json")
+    output = integration["outputs"][0]
+    output["frame_count"] = 260
+    output["integration_rejection"] = resident_rejection_descriptor(
+        "winsorized_sigma",
+        3.0,
+        3.0,
+        resident_winsorized_mode="hardened_cpu_parity",
+        requested_resident_winsorized_mode="auto",
+        resident_winsorized_resolution_reason=(
+            "auto_hardened_segmented_cpu_frame_count_exceeds_native_limit:260>256"
+        ),
+        hardened_execution_route=RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
+    )
+    write_json(run / "integration_results.json", integration)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    contract = audit["integration"]["outputs"][0]["resident_result_contract"]["contract"]
+    semantics = contract["rejection_semantics"]
+
+    assert audit["passed"] is True
+    assert checks["integration_resident_result_contract"]["passed"] is True
+    assert semantics["passed"] is True
+    assert semantics["matched_expected_index"] == 2
+    assert semantics["descriptor"]["algorithm"] == (
+        "median_iqr_winsorized_sigma_cpu_stack_engine_resident_tile_download"
+    )
+    assert semantics["descriptor"]["segmented_cpu_fallback"] is True
+    assert semantics["descriptor"]["hardened_execution_route"] == (
+        RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
+    )
 
 
 def test_pipeline_contract_requires_resident_frame_masks_for_resident_output(tmp_path: Path):

@@ -10,8 +10,10 @@ from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS,
+    RESIDENT_WINSORIZED_SIGMA_HARDENED_SEGMENTED_ALGORITHM,
     RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS,
     RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+    RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
     resident_rejection_descriptor,
 )
 from glass.io.json_io import read_json, write_json
@@ -228,6 +230,15 @@ def _complete_legacy_winsorized_descriptor(
             resident_winsorized_mode=RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
         )
         return {**canonical, **raw_descriptor}, True, "hardened_algorithm"
+    if algorithm == RESIDENT_WINSORIZED_SIGMA_HARDENED_SEGMENTED_ALGORITHM:
+        canonical = resident_rejection_descriptor(
+            "winsorized_sigma",
+            low_sigma,
+            high_sigma,
+            resident_winsorized_mode=RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+            hardened_execution_route=RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
+        )
+        return {**canonical, **raw_descriptor}, True, "segmented_hardened_algorithm"
     return dict(raw_descriptor), False, None
 
 
@@ -275,6 +286,18 @@ def _resident_rejection_semantics_state(
             "cpu_baseline_parity": True,
             "parity_status": RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS,
             "approximation": False,
+        },
+        {
+            "mode": "winsorized_sigma",
+            "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+            "algorithm": RESIDENT_WINSORIZED_SIGMA_HARDENED_SEGMENTED_ALGORITHM,
+            "hardened_execution_route": RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
+            "scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+            "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+            "cpu_baseline_parity": True,
+            "parity_status": RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS,
+            "approximation": False,
+            "segmented_cpu_fallback": True,
         },
     ]
     if not required:

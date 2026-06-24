@@ -12,6 +12,7 @@ RESIDENT_WINSORIZED_SIGMA_AUTO_MODE = "auto"
 RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE = "fast_approx"
 RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE = "hardened_cpu_parity"
 RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT = 256
+RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT = RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
 RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT = RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
 RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_FRAME_THRESHOLD = 64
 RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_MAX_FRACTION = 0.015
@@ -19,7 +20,12 @@ RESIDENT_WINSORIZED_SIGMA_ALGORITHM = "two_stage_winsorized_mean_std_rejection_a
 RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR = "mean_std_two_stage_winsorized"
 RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS = "known_non_parity_pending_cuda_update"
 RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM = "median_iqr_winsorized_sigma_cuda_resident_prototype"
+RESIDENT_WINSORIZED_SIGMA_HARDENED_SEGMENTED_ALGORITHM = (
+    "median_iqr_winsorized_sigma_cpu_stack_engine_resident_tile_download"
+)
 RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS = "cpu_baseline_parity_passed_gate_261"
+RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE = "native_cuda_resident_stack"
+RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE = "cpu_stack_engine_segmented_resident_download"
 
 
 def center_and_scale(
@@ -104,6 +110,7 @@ def resident_rejection_descriptor(
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     requested_resident_winsorized_mode: str | None = None,
     resident_winsorized_resolution_reason: str | None = None,
+    hardened_execution_route: str | None = None,
 ) -> dict[str, Any]:
     descriptor: dict[str, Any] = {
         "mode": str(method),
@@ -118,6 +125,12 @@ def resident_rejection_descriptor(
         descriptor["max_reject_fraction_resolution"] = max_reject_fraction_resolution
     if method == "winsorized_sigma":
         if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE:
+            route = hardened_execution_route or RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE
+            algorithm = (
+                RESIDENT_WINSORIZED_SIGMA_HARDENED_SEGMENTED_ALGORITHM
+                if route == RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
+                else RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM
+            )
             descriptor.update(
                 {
                     "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
@@ -125,13 +138,16 @@ def resident_rejection_descriptor(
                         requested_resident_winsorized_mode or resident_winsorized_mode
                     ),
                     "resident_winsorized_resolution_reason": resident_winsorized_resolution_reason,
-                    "algorithm": RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM,
+                    "algorithm": algorithm,
+                    "hardened_execution_route": route,
                     "scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
                     "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
                     "cpu_baseline_parity": True,
                     "parity_status": RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS,
                     "approximation": False,
                     "frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
+                    "native_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT,
+                    "segmented_cpu_fallback": route == RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
                 }
             )
             return descriptor

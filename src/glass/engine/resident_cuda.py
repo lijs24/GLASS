@@ -29,6 +29,9 @@ from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+    RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT,
+    RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE,
+    RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
     resident_rejection_descriptor,
     rejection_policy_provenance,
     rejection_scale_estimator,
@@ -3859,13 +3862,16 @@ def _resident_winsorized_runtime_contract(
     max_reject_fraction_resolution: dict[str, Any] | None = None,
     hardened_available: bool = True,
     hardened_unavailable_reason: str | None = None,
+    segmented_cpu_fallback_available: bool = True,
+    segmented_cpu_fallback_unavailable_reason: str | None = None,
     tile_local_policy_mode: str = "record",
     resident_output_maps: str = "audit",
 ) -> dict[str, Any]:
     requested_mode = str(resident_winsorized_mode)
     effective_mode = requested_mode
     resolution_reason = "explicit_not_winsorized"
-    frame_limit_ok = int(frame_count) <= RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
+    native_frame_limit_ok = int(frame_count) <= RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT
+    hardened_execution_route = "not_applicable"
     if rejection_mode == "winsorized_sigma":
         if requested_mode == RESIDENT_WINSORIZED_SIGMA_AUTO_MODE:
             if dispatch_mode != "stack":
@@ -3877,13 +3883,30 @@ def _resident_winsorized_runtime_contract(
             elif resident_output_maps == "minimal":
                 effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
                 resolution_reason = "auto_fast_minimal_output_maps_without_diagnostics"
+            elif native_frame_limit_ok and hardened_available:
+                effective_mode = RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                hardened_execution_route = RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE
+                resolution_reason = "auto_hardened_frame_count_within_limit"
+            elif segmented_cpu_fallback_available:
+                effective_mode = RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                hardened_execution_route = RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
+                if not native_frame_limit_ok:
+                    resolution_reason = (
+                        "auto_hardened_segmented_cpu_frame_count_exceeds_native_limit:"
+                        f"{int(frame_count)}>{RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT}"
+                    )
+                else:
+                    resolution_reason = (
+                        "auto_hardened_segmented_cpu_native_unavailable:"
+                        f"{hardened_unavailable_reason or 'unknown'}"
+                    )
             elif int(frame_count) > RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT:
                 effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
                 resolution_reason = (
                     "auto_fast_frame_count_exceeds_default_hardened_limit:"
                     f"{int(frame_count)}>{RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT}"
                 )
-            elif not frame_limit_ok:
+            elif not native_frame_limit_ok:
                 effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
                 resolution_reason = (
                     "auto_fast_frame_count_exceeds_hardened_limit:"
@@ -3895,26 +3918,44 @@ def _resident_winsorized_runtime_contract(
                     "auto_fast_hardened_winsorized_unavailable:"
                     f"{hardened_unavailable_reason or 'unknown'}"
                 )
-            else:
-                effective_mode = RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
-                resolution_reason = "auto_hardened_frame_count_within_limit"
         elif requested_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE:
             effective_mode = RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
-            resolution_reason = "explicit_hardened_cpu_parity"
+            if native_frame_limit_ok and hardened_available:
+                hardened_execution_route = RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE
+                resolution_reason = "explicit_hardened_cpu_parity"
+            elif segmented_cpu_fallback_available:
+                hardened_execution_route = RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
+                resolution_reason = (
+                    "explicit_hardened_cpu_parity_segmented_cpu"
+                    if not native_frame_limit_ok
+                    else "explicit_hardened_cpu_parity_segmented_cpu_native_unavailable"
+                )
+            else:
+                hardened_execution_route = RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE
+                resolution_reason = "explicit_hardened_cpu_parity"
         else:
             effective_mode = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE
             resolution_reason = "explicit_fast_approx"
+    if (
+        rejection_mode == "winsorized_sigma"
+        and effective_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+        and hardened_execution_route == "not_applicable"
+    ):
+        hardened_execution_route = RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE
 
     hardened_requested = (
         rejection_mode == "winsorized_sigma"
         and effective_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
     )
+    native_route = hardened_execution_route == RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE
+    segmented_route = hardened_execution_route == RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
     return {
         "schema_version": 1,
         "rejection": str(rejection_mode),
         "requested_resident_winsorized_mode": requested_mode,
         "resident_winsorized_mode": effective_mode,
         "resolution_reason": resolution_reason,
+        "hardened_execution_route": hardened_execution_route,
         "dispatch_mode": str(dispatch_mode),
         "resident_output_maps": resident_output_maps,
         "min_samples": int(min_samples),
@@ -3928,14 +3969,22 @@ def _resident_winsorized_runtime_contract(
         "hardened_available": bool(hardened_available),
         "hardened_unavailable_reason": hardened_unavailable_reason,
         "hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
+        "hardened_native_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT,
+        "segmented_cpu_fallback_available": bool(segmented_cpu_fallback_available),
+        "segmented_cpu_fallback_unavailable_reason": segmented_cpu_fallback_unavailable_reason,
         "frame_count": int(frame_count),
-        "frame_limit_applies": hardened_requested,
-        "frame_limit_ok": (not hardened_requested) or frame_limit_ok,
+        "frame_limit_applies": bool(hardened_requested and native_route),
+        "frame_limit_ok": (not hardened_requested) or segmented_route or native_frame_limit_ok,
+        "native_frame_limit_ok": native_frame_limit_ok,
+        "segmented_cpu_fallback_used": bool(hardened_requested and segmented_route),
         "requires_stack_dispatch": hardened_requested,
         "dispatch_ok": (not hardened_requested) or dispatch_mode == "stack",
+        "native_hardened_required": bool(hardened_requested and native_route),
         "implementation": (
             "median_iqr_hardened_cuda_resident_prototype"
-            if hardened_requested
+            if hardened_requested and native_route
+            else "median_iqr_hardened_cpu_stack_engine_resident_tile_download"
+            if hardened_requested and segmented_route
             else "two_stage_mean_std_fast_approximation"
             if rejection_mode == "winsorized_sigma"
             else "not_winsorized"
@@ -3946,10 +3995,19 @@ def _resident_winsorized_runtime_contract(
 def _validate_resident_winsorized_runtime_contract(contract: dict[str, Any]) -> None:
     if not contract.get("hardened_requested"):
         return
-    if not contract.get("hardened_available", True):
+    route = str(contract.get("hardened_execution_route") or RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE)
+    if route == RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE and not contract.get("hardened_available", True):
         raise ValueError(
             "resident_winsorized_mode=hardened_cpu_parity requires native hardened winsorized CUDA support: "
             f"{contract.get('hardened_unavailable_reason') or 'unknown'}"
+        )
+    if route == RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE and not contract.get(
+        "segmented_cpu_fallback_available", False
+    ):
+        raise ValueError(
+            "resident_winsorized_mode=hardened_cpu_parity requires segmented CPU StackEngine fallback "
+            "when native hardened winsorized CUDA cannot cover this group: "
+            f"{contract.get('segmented_cpu_fallback_unavailable_reason') or 'unknown'}"
         )
     if not contract.get("dispatch_ok"):
         raise ValueError(
@@ -3961,6 +4019,138 @@ def _validate_resident_winsorized_runtime_contract(contract: dict[str, Any]) -> 
             f"{contract['hardened_frame_limit']} resident frames per filter/shape group; "
             f"got {contract['frame_count']}"
         )
+
+
+class _ResidentStackFrameImageSource:
+    path: Path | None = None
+    channels = 1
+    dtype = "float32"
+
+    def __init__(self, stack: Any, frame_index: int, frame_id: str, width: int, height: int):
+        self._stack = stack
+        self._frame_index = int(frame_index)
+        self.frame_id = str(frame_id)
+        self.width = int(width)
+        self.height = int(height)
+        self.metadata = {
+            "frame_index": self._frame_index,
+            "frame_id": self.frame_id,
+            "source": "resident_calibrated_stack",
+            "mask_from_finite_only": True,
+        }
+
+    def read_tile(self, window: Any, dtype: Any = np.float32) -> np.ndarray:
+        if not hasattr(self._stack, "download_frame_tile"):
+            raise RuntimeError(
+                "segmented resident CPU StackEngine fallback requires "
+                "ResidentCalibratedStack.download_frame_tile"
+            )
+        tile = self._stack.download_frame_tile(
+            self._frame_index,
+            int(window.x0),
+            int(window.y0),
+            int(window.x1),
+            int(window.y1),
+        )
+        return np.asarray(tile, dtype=dtype)
+
+    def read_mask_tile(self, window: Any) -> DQMask:
+        return DQMask.empty(window.shape)
+
+
+def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
+    stack: Any,
+    frames: list[dict[str, Any]],
+    weights: np.ndarray,
+    *,
+    width: int,
+    height: int,
+    low_sigma: float,
+    high_sigma: float,
+    min_samples: int,
+    max_reject_fraction: float,
+    tile_size: int = 256,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+    frame_ids = tuple(str(frame["id"]) for frame in frames)
+    if not frame_ids:
+        raise ValueError("resident hardened CPU fallback requires at least one frame")
+    tile_size = max(1, int(tile_size))
+    sources = {
+        frame_id: _ResidentStackFrameImageSource(stack, index, frame_id, width, height)
+        for index, frame_id in enumerate(frame_ids)
+    }
+    frame_weights = np.asarray(weights, dtype=np.float32)
+    if frame_weights.size != len(frame_ids):
+        raise ValueError(
+            "resident hardened CPU fallback weight count does not match frame count: "
+            f"{frame_weights.size}!={len(frame_ids)}"
+        )
+    request = StackRequest(
+        frame_ids=frame_ids,
+        source_kind="light",
+        combine=CombinePolicy(method="weighted_mean", accumulator_dtype="float32"),
+        rejection=RejectionPolicy(
+            method="winsorized_sigma",
+            iterations=1,
+            low_sigma=float(low_sigma),
+            high_sigma=float(high_sigma),
+            min_samples=int(min_samples),
+            max_reject_fraction=float(max_reject_fraction),
+        ),
+        output_maps=OutputMapPolicy(
+            coverage=True,
+            weight=True,
+            low_rejection=True,
+            high_rejection=True,
+            dq=False,
+        ),
+        weights={frame_id: float(frame_weights[index]) for index, frame_id in enumerate(frame_ids)},
+        metadata={
+            "resident_hardened_cpu_stack_engine_fallback": True,
+            "resident_download_tile_source": "ResidentCalibratedStack.download_frame_tile",
+        },
+    )
+    start = perf_counter()
+    result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
+    total_s = perf_counter() - start
+    timing = {
+        "schema_version": 1,
+        "native_method": "CPUStackEngine.stack_from_resident_download_tiles",
+        "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+        "hardened_execution_route": RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
+        "execution_path": "resident_cpu_stack_engine_segmented_hardened_winsorized",
+        "frame_count": len(frame_ids),
+        "width": int(width),
+        "height": int(height),
+        "tile_size": int(tile_size),
+        "tile_count_estimate": int(((int(width) + tile_size - 1) // tile_size) * ((int(height) + tile_size - 1) // tile_size)),
+        "low_sigma": float(low_sigma),
+        "high_sigma": float(high_sigma),
+        "min_samples": int(min_samples),
+        "max_reject_fraction": float(max_reject_fraction),
+        "total_s": float(total_s),
+        "result_contract_passed": bool(result.metrics.get("result_contract_passed", False)),
+        "valid_samples": int(result.metrics.get("valid_samples", 0) or 0),
+        "low_rejected": int(result.metrics.get("low_rejected", 0) or 0),
+        "high_rejected": int(result.metrics.get("high_rejected", 0) or 0),
+        "segmented_cpu_fallback": True,
+        "limitations": [
+            "CPU StackEngine fallback preserves median/IQR winsorized parity but downloads resident tiles to host.",
+            "This route is a correctness fallback for groups outside the native 256-frame prototype limit.",
+        ],
+    }
+    return (
+        result.master,
+        np.zeros_like(result.master, dtype=np.float32) if result.weight_map is None else result.weight_map,
+        np.zeros_like(result.master, dtype=np.float32) if result.coverage_map is None else result.coverage_map,
+        np.zeros_like(result.master, dtype=np.float32)
+        if result.low_rejection_map is None
+        else result.low_rejection_map,
+        np.zeros_like(result.master, dtype=np.float32)
+        if result.high_rejection_map is None
+        else result.high_rejection_map,
+        timing,
+    )
 
 
 def _count_map_for_write(data: np.ndarray, dtype: Any) -> np.ndarray:
@@ -11878,6 +12068,13 @@ def run_resident_calibration_integration(
             elif (
                 rejection_mode == "winsorized_sigma"
                 and group_resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                and resident_winsorized_contract.get("hardened_execution_route")
+                == RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
+            ):
+                stack_integration_native_map_workspace_mode = "cpu_stack_engine_segmented_hardened_download_workspace"
+            elif (
+                rejection_mode == "winsorized_sigma"
+                and group_resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
             ):
                 stack_integration_native_map_workspace_mode = "standard_hardened_winsorized_workspace"
             elif stack_integration_download_mode == "master_only":
@@ -11998,6 +12195,31 @@ def run_resident_calibration_integration(
                 tile_local_policy_any_applied = True
             elif rejection_mode == "none":
                 master, weight_map = stack.integrate_mean(weights_arg)
+            elif (
+                rejection_mode == "winsorized_sigma"
+                and group_resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+                and resident_winsorized_contract.get("hardened_execution_route")
+                == RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
+            ):
+                (
+                    master,
+                    weight_map,
+                    coverage_map,
+                    low_rejection_map,
+                    high_rejection_map,
+                    hardened_winsorized_timing,
+                ) = _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
+                    stack,
+                    light_frames,
+                    weights_array,
+                    width=width,
+                    height=height,
+                    low_sigma=low_sigma,
+                    high_sigma=high_sigma,
+                    min_samples=rejection_min_samples,
+                    max_reject_fraction=group_rejection_max_fraction,
+                    tile_size=min(_RESIDENT_MASTER_STACK_TILE_SIZE, 256),
+                )
             elif (
                 rejection_mode == "winsorized_sigma"
                 and group_resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
@@ -12765,6 +12987,7 @@ def run_resident_calibration_integration(
                 resident_winsorized_resolution_reason=resident_winsorized_contract.get(
                     "resolution_reason"
                 ),
+                hardened_execution_route=resident_winsorized_contract.get("hardened_execution_route"),
             )
             resident_output_map_policy = {
                 "mode": resident_output_maps,

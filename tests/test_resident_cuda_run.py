@@ -9,7 +9,15 @@ from astropy.io import fits
 
 from glass.cli import _resident_source_dq_cache_preflight, main
 from glass.cpu.integration import weighted_integrate_stack
-from glass.engine.contracts import DQFlag
+from glass.engine.contracts import (
+    CombinePolicy,
+    DQFlag,
+    DQMask,
+    OutputMapPolicy,
+    RejectionPolicy,
+    StackRequest,
+)
+from glass.engine.stack_engine import CPUStackEngine
 from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.report.pipeline_contract import build_pipeline_contract_audit
@@ -27,6 +35,7 @@ from glass.engine.resident_cuda import (
     _resident_catalog_signature,
     _resident_descriptor_signature,
     _resident_fit_signature,
+    _integrate_resident_hardened_winsorized_with_cpu_stack_engine,
     _resident_output_map_selection,
     _resolve_resident_rejection_max_fraction,
     _resident_source_dq_calibration_artifact_candidates,
@@ -1456,7 +1465,7 @@ def test_resident_source_dq_calibration_artifact_candidates_keep_relative_run_pa
     assert candidates[1] == Path("runs/example_plan") / "calibration_artifacts.json"
 
 
-def test_resident_hardened_winsorized_contract_rejects_over_limit():
+def test_resident_hardened_winsorized_contract_uses_segmented_cpu_over_native_limit():
     contract = _resident_winsorized_runtime_contract(
         rejection_mode="winsorized_sigma",
         resident_winsorized_mode="hardened_cpu_parity",
@@ -1466,6 +1475,28 @@ def test_resident_hardened_winsorized_contract_rejects_over_limit():
 
     assert contract["hardened_requested"] is True
     assert contract["hardened_frame_limit"] == 256
+    assert contract["hardened_native_frame_limit"] == 256
+    assert contract["native_frame_limit_ok"] is False
+    assert contract["frame_limit_ok"] is True
+    assert contract["frame_limit_applies"] is False
+    assert contract["segmented_cpu_fallback_used"] is True
+    assert contract["hardened_execution_route"] == "cpu_stack_engine_segmented_resident_download"
+    assert contract["implementation"] == "median_iqr_hardened_cpu_stack_engine_resident_tile_download"
+    _validate_resident_winsorized_runtime_contract(contract)
+
+
+def test_resident_hardened_winsorized_contract_rejects_over_limit_without_segmented_fallback():
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="hardened_cpu_parity",
+        frame_count=257,
+        dispatch_mode="stack",
+        segmented_cpu_fallback_available=False,
+        segmented_cpu_fallback_unavailable_reason="test_disabled",
+    )
+
+    assert contract["hardened_requested"] is True
+    assert contract["hardened_execution_route"] == "native_cuda_resident_stack"
     assert contract["frame_limit_ok"] is False
     with pytest.raises(ValueError, match="at most 256 resident frames"):
         _validate_resident_winsorized_runtime_contract(contract)
@@ -1529,7 +1560,7 @@ def test_resident_auto_winsorized_contract_selects_hardened_for_200_frame_defaul
     assert contract["frame_limit_ok"] is True
 
 
-def test_resident_auto_winsorized_contract_falls_back_over_hardened_limit():
+def test_resident_auto_winsorized_contract_selects_segmented_cpu_over_native_limit():
     contract = _resident_winsorized_runtime_contract(
         rejection_mode="winsorized_sigma",
         resident_winsorized_mode="auto",
@@ -1540,11 +1571,111 @@ def test_resident_auto_winsorized_contract_falls_back_over_hardened_limit():
 
     _validate_resident_winsorized_runtime_contract(contract)
     assert contract["requested_resident_winsorized_mode"] == "auto"
-    assert contract["resident_winsorized_mode"] == "fast_approx"
-    assert contract["resolution_reason"] == "auto_fast_frame_count_exceeds_default_hardened_limit:257>256"
-    assert contract["hardened_requested"] is False
+    assert contract["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert (
+        contract["resolution_reason"]
+        == "auto_hardened_segmented_cpu_frame_count_exceeds_native_limit:257>256"
+    )
+    assert contract["hardened_requested"] is True
+    assert contract["hardened_execution_route"] == "cpu_stack_engine_segmented_resident_download"
+    assert contract["segmented_cpu_fallback_used"] is True
     assert contract["frame_limit_applies"] is False
     assert contract["frame_limit_ok"] is True
+
+
+def test_resident_segmented_cpu_hardened_fallback_matches_stack_engine_baseline():
+    rng = np.random.default_rng(606)
+    frames = [
+        (100.0 + rng.normal(0.0, 0.25, size=(5, 6))).astype(np.float32)
+        for _index in range(260)
+    ]
+    frames[17][2, 3] = np.float32(150.0)
+    frames[241][1, 4] = np.float32(40.0)
+    weights = np.ones((260,), dtype=np.float32)
+    weights[5] = 0.0
+
+    class FakeResidentStack:
+        width = 6
+        height = 5
+
+        def __init__(self, data: list[np.ndarray]):
+            self.data = data
+            self.download_calls: list[tuple[int, int, int, int, int]] = []
+
+        def download_frame_tile(self, frame_index: int, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
+            self.download_calls.append((frame_index, x0, y0, x1, y1))
+            return self.data[frame_index][y0:y1, x0:x1]
+
+    class ArraySource:
+        path = None
+        width = 6
+        height = 5
+        channels = 1
+        dtype = "float32"
+        metadata: dict[str, object] = {}
+
+        def __init__(self, data: np.ndarray):
+            self.data = data
+
+        def read_tile(self, window, dtype=np.float32):
+            y_slice, x_slice = window.as_slices()
+            return np.asarray(self.data[y_slice, x_slice], dtype=dtype)
+
+        def read_mask_tile(self, window) -> DQMask:
+            return DQMask.empty(window.shape)
+
+    frame_records = [{"id": f"f{index:03d}"} for index in range(len(frames))]
+    frame_ids = tuple(str(frame["id"]) for frame in frame_records)
+    request = StackRequest(
+        frame_ids=frame_ids,
+        source_kind="light",
+        combine=CombinePolicy(method="weighted_mean", accumulator_dtype="float32"),
+        rejection=RejectionPolicy(
+            method="winsorized_sigma",
+            low_sigma=3.0,
+            high_sigma=3.0,
+            min_samples=3,
+            max_reject_fraction=0.5,
+        ),
+        output_maps=OutputMapPolicy(
+            coverage=True,
+            weight=True,
+            low_rejection=True,
+            high_rejection=True,
+        ),
+        weights={frame_id: float(weights[index]) for index, frame_id in enumerate(frame_ids)},
+    )
+    expected = CPUStackEngine(tile_size=2).stack(
+        request,
+        {frame_id: ArraySource(frames[index]) for index, frame_id in enumerate(frame_ids)},
+    )
+
+    fake_stack = FakeResidentStack(frames)
+    master, weight, coverage, low, high, timing = (
+        _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
+            fake_stack,
+            frame_records,
+            weights,
+            width=6,
+            height=5,
+            low_sigma=3.0,
+            high_sigma=3.0,
+            min_samples=3,
+            max_reject_fraction=0.5,
+            tile_size=2,
+        )
+    )
+
+    assert np.allclose(master, expected.master, rtol=0.0, atol=0.0)
+    assert np.allclose(weight, expected.weight_map, rtol=0.0, atol=0.0)
+    assert np.allclose(coverage, expected.coverage_map, rtol=0.0, atol=0.0)
+    assert np.allclose(low, expected.low_rejection_map, rtol=0.0, atol=0.0)
+    assert np.allclose(high, expected.high_rejection_map, rtol=0.0, atol=0.0)
+    assert timing["hardened_execution_route"] == "cpu_stack_engine_segmented_resident_download"
+    assert timing["frame_count"] == 260
+    assert timing["tile_size"] == 2
+    assert timing["result_contract_passed"] is True
+    assert len(fake_stack.download_calls) > len(frames)
 
 
 def test_resident_auto_large_stack_default_rejection_guard_is_coverage_preserving():

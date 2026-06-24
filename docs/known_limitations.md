@@ -17,13 +17,17 @@ Current code is intentionally gated:
   median/IQR CUDA path that matches the GLASS CPU baseline. For large default
   auto groups above 64 frames, GLASS applies the Gate600/603
   coverage-preserving `rejection_max_fraction=0.015` guard unless the plan or
-  CLI explicitly supplies a guard. Minimal-output runs, unsupported dispatch,
-  groups above 256 frames, or older CUDA builds fall back to the faster
-  mean/std approximation and record the fallback reason.
+  CLI explicitly supplies a guard. Groups above the native 256-frame CUDA
+  prototype use a segmented CPUStackEngine parity fallback that downloads
+  resident calibrated tiles to host and records the route. Minimal-output runs,
+  unsupported dispatch, or builds missing the required resident tile-download
+  support can still fall back to the faster mean/std approximation and record
+  the fallback reason.
 - The resident CUDA hardened winsorized path is still a one-iteration,
-  256-frame prototype. Segmented reductions for larger groups, richer robust
-  rejection policies, cosmetic correction, and broader data-shape support
-  remain future work.
+  256-frame native prototype. The larger-frame segmented fallback is
+  correctness-first, not the final high-throughput CUDA segmented reduction.
+  Richer robust rejection policies, cosmetic correction, and broader
+  data-shape support remain future work.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must

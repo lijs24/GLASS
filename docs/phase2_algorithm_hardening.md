@@ -17964,3 +17964,77 @@ Phase 2 is complete when:
   - this gate changes GLASS-owned DQ/mask provenance and resident execution
     checks only;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 606: Segmented CPU-Parity Hardened Winsorized Fallback
+
+- Returned to the Phase 2 integration mainline by closing the resident
+  hardened winsorized `>256` frame gap.
+- Completed:
+  - added explicit resident hardened execution routes:
+    `native_cuda_resident_stack` and
+    `cpu_stack_engine_segmented_resident_download`;
+  - kept native CUDA hardened winsorized as the default route for groups at or
+    below the native 256-frame prototype limit;
+  - added a segmented CPUStackEngine fallback for `auto` and explicit
+    `hardened_cpu_parity` groups above that native limit;
+  - implemented a resident frame image-source adapter that downloads requested
+    calibrated tiles from `ResidentCalibratedStack.download_frame_tile`;
+  - routed the downloaded tiles through the existing GLASS CPUStackEngine
+    median/IQR winsorized implementation, preserving CPU-baseline parity;
+  - extended resident result contracts so this segmented fallback is accepted
+    only when it discloses `approximation=false`,
+    `cpu_baseline_parity=true`,
+    `hardened_execution_route=cpu_stack_engine_segmented_resident_download`,
+    and `segmented_cpu_fallback=true`.
+- Synthetic 260-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate606_segmented_hardened\resident_260_segmented_fixed`;
+  - dataset: 260 synthetic H lights, 65 bias, 65 dark, 65 flat, 32x32;
+  - command used resident CUDA calibration, no resident registration, no LN,
+    `--integration-rejection winsorized_sigma`, `--resident-winsorized-mode auto`;
+  - output route:
+    `cpu_stack_engine_segmented_resident_download`;
+  - rejection algorithm:
+    `median_iqr_winsorized_sigma_cpu_stack_engine_resident_tile_download`;
+  - `resident_winsorized_mode=hardened_cpu_parity`;
+  - `segmented_cpu_fallback=true`;
+  - `pipeline_contract.json`: passed;
+  - all six integration maps were written.
+- Real 200-light default regression:
+  - run:
+    `C:\glass_runs\phase2_s2_gate606_segmented_hardened\real_200_default_regression`;
+  - default runtime preset:
+    `throughput-v4-native-completion`;
+  - `total_elapsed_s=11.820206300122663`;
+  - resident hardened route stayed native:
+    `hardened_execution_route=native_cuda_resident_stack`;
+  - native hardened integration timing:
+    `3.729744700016454 s`;
+  - `pipeline_contract.json`: passed;
+  - six integration FITS outputs are SHA256-identical to Gate605:
+    `resident_master_H.fits`,
+    `resident_weight_map_H.fits`,
+    `resident_coverage_map_H.fits`,
+    `resident_low_rejection_map_H.fits`,
+    `resident_high_rejection_map_H.fits`,
+    `resident_dq_map_H.fits`.
+- Validation:
+  - focused resident winsorized/runtime tests:
+    `8 passed, 106 deselected`;
+  - focused pipeline-contract resident tests:
+    `4 passed, 43 deselected`;
+  - ruff:
+    `All checks passed`;
+  - full pytest:
+    `1286 passed in 52.52 s`.
+- Interpretation:
+  - this is a correctness and engineering-completeness gate, not a speed gate;
+  - it prevents larger resident hardened groups from silently dropping to the
+    non-parity fast approximation when a CPU-parity route exists;
+  - the fallback still downloads resident tiles to host, so the next
+    substantive performance work remains a true segmented CUDA hardened
+    reduction and further resident registration/warp batching.
+- Clean-room note:
+  - this gate uses GLASS-owned resident dispatch, GLASS CPUStackEngine
+    formulas, GLASS synthetic data, and GLASS runtime artifacts;
+  - no external or proprietary implementation source was inspected or used.

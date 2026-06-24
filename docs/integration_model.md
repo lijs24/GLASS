@@ -123,14 +123,28 @@ without explicit `--resident-winsorized-mode` or
 base guard (`0.5`) and the effective resident auto large-stack guard (`0.015`)
 so default scientific behavior remains auditable.
 
+S2-Gate 606 adds a correctness-first fallback for resident hardened
+`winsorized_sigma` groups above the native 256-frame CUDA prototype limit.
+When `auto` or explicit `hardened_cpu_parity` resolves to a group too large
+for the native resident kernel, GLASS records
+`hardened_execution_route=cpu_stack_engine_segmented_resident_download` and
+runs the CPUStackEngine median/IQR winsorized implementation on tiles
+downloaded from the resident calibrated stack. This preserves CPU-baseline
+parity for larger audit/science groups while leaving the high-throughput
+segmented CUDA reduction as future work. The existing 200-light route remains
+the native CUDA resident hardened implementation and is protected by hash
+regression tests.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted
 mean integration, resident mean/std sigma clipping, resident mean/std
-winsorized clipping, and a bounded resident median/IQR hardened winsorized path.
-The tile-streaming CPU path remains the portable scientific baseline, while the
-resident path is the high-VRAM performance path for the 200-light comparison
-dataset.
+winsorized clipping, and a bounded native resident median/IQR hardened
+winsorized path. The tile-streaming CPU path remains the portable scientific
+baseline, while the resident path is the high-VRAM performance path for the
+200-light comparison dataset. Groups above the native hardened limit may use
+the segmented CPUStackEngine resident-tile fallback until the dedicated CUDA
+segmented reduction is implemented.
 
 ## Variance Map
 
