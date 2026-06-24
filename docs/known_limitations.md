@@ -8,9 +8,12 @@ Current code is intentionally gated:
 - Local normalization has resident CUDA global/grid mean-std support and is part
   of the default high-VRAM path. S2-Gate 612 applies the per-frame LN transform
   in place in VRAM, and S2-Gate 613 batches resident grid-LN statistics across
-  all active non-reference source frames. The remaining LN throughput target is
-  to fuse or further batch coefficient generation/application and reduce
-  per-frame orchestration that still surrounds the in-VRAM apply calls.
+  all active non-reference source frames. S2-Gate 615 also batches resident
+  grid-LN apply across all active non-reference source frames with one
+  coefficient upload and one batch synchronization. The remaining LN throughput
+  target is to move coefficient construction closer to native/CUDA code and
+  reduce the Python result-row orchestration that still surrounds the in-VRAM
+  stats/apply calls.
 - HTML reports include required sections but many stage-specific tables remain
   pending until their gates produce artifacts.
 - The resident CUDA path keeps calibrated light frames in VRAM and is fast on

@@ -776,6 +776,7 @@ def _resident_local_norm_application_summary(
     temporary_output_bytes = 0
     coefficient_bytes = 0
     frame_bytes = 0
+    in_place_modes = {"in_place_device_update", "in_place_device_update_batch"}
     for profile in profiles:
         mode = str(profile.get("mode") or "unknown")
         mode_counts[mode] = mode_counts.get(mode, 0) + 1
@@ -809,13 +810,14 @@ def _resident_local_norm_application_summary(
         "schema_version": 1,
         "applied_frame_count": len(profiles),
         "mode_counts": dict(sorted(mode_counts.items())),
-        "in_place_device_update_count": int(mode_counts.get("in_place_device_update", 0)),
+        "in_place_device_update_count": int(sum(mode_counts.get(mode, 0) for mode in in_place_modes)),
+        "batch_apply_frame_count": int(mode_counts.get("in_place_device_update_batch", 0)),
         "temporary_output_bytes": int(temporary_output_bytes),
         "coefficient_bytes": int(coefficient_bytes),
         "frame_bytes": int(frame_bytes),
         "timing_s": timings,
         "peak_temporary_output_bytes_per_frame": 0
-        if int(mode_counts.get("in_place_device_update", 0)) == len(profiles)
+        if int(sum(mode_counts.get(mode, 0) for mode in in_place_modes)) == len(profiles)
         else None,
     }
 
@@ -12088,8 +12090,19 @@ def run_resident_calibration_integration(
             local_norm_frame_results: list[dict[str, Any]] = []
             local_norm_application_profiles: list[dict[str, Any]] = []
             local_norm_grid_stats_batch_profile: dict[str, Any] | None = None
+            local_norm_grid_apply_batch_profile: dict[str, Any] | None = None
             local_norm_grid_stats_by_index: dict[int, dict[str, Any]] = {}
+            pending_grid_apply: list[dict[str, Any]] = []
             local_norm_warnings: list[str] = []
+            resident_grid_ln_batch_apply_supported = hasattr(stack, "apply_grid_normalization_frames")
+            resident_grid_ln_batch_apply_enabled = os.environ.get(
+                "GLASS_RESIDENT_LN_BATCH_APPLY", "1"
+            ).strip().lower() not in {
+                "0",
+                "false",
+                "off",
+                "no",
+            }
             if local_norm_enabled:
                 if resident_local_normalization_mode == "global_mean_std":
                     if not hasattr(stack, "frame_global_stats") or not hasattr(stack, "apply_global_normalization_frame"):
@@ -12179,13 +12192,26 @@ def run_resident_calibration_integration(
                             frame_weights[frame["id"]] = 0.0
                             warnings.append("frame had no finite paired pixels for resident grid LN")
                         else:
-                            application_profile = stack.apply_grid_normalization_frame(
-                                index,
-                                coeffs["scales"],
-                                coeffs["offsets"],
-                                resident_local_normalization_tile_size,
-                                resident_local_normalization_tile_size,
-                            )
+                            if (
+                                resident_grid_ln_batch_apply_supported
+                                and resident_grid_ln_batch_apply_enabled
+                            ):
+                                pending_grid_apply.append(
+                                    {
+                                        "frame_index": index,
+                                        "result_index": len(local_norm_frame_results),
+                                        "scales": coeffs["scales"],
+                                        "offsets": coeffs["offsets"],
+                                    }
+                                )
+                            else:
+                                application_profile = stack.apply_grid_normalization_frame(
+                                    index,
+                                    coeffs["scales"],
+                                    coeffs["offsets"],
+                                    resident_local_normalization_tile_size,
+                                    resident_local_normalization_tile_size,
+                                )
                             if coeffs["empty_tiles"]:
                                 status = "partial"
                                 warnings.append(
@@ -12234,6 +12260,42 @@ def run_resident_calibration_integration(
                             "warnings": warnings,
                         }
                     )
+                if pending_grid_apply:
+                    batch_indices = np.asarray(
+                        [int(item["frame_index"]) for item in pending_grid_apply],
+                        dtype=np.int32,
+                    )
+                    batch_scales = np.stack(
+                        [np.asarray(item["scales"], dtype=np.float32) for item in pending_grid_apply]
+                    ).astype(np.float32, copy=False)
+                    batch_offsets = np.stack(
+                        [np.asarray(item["offsets"], dtype=np.float32) for item in pending_grid_apply]
+                    ).astype(np.float32, copy=False)
+                    batch_apply = stack.apply_grid_normalization_frames(
+                        batch_indices,
+                        batch_scales,
+                        batch_offsets,
+                        resident_local_normalization_tile_size,
+                        resident_local_normalization_tile_size,
+                    )
+                    local_norm_grid_apply_batch_profile = {
+                        key: value
+                        for key, value in batch_apply.items()
+                        if key not in {"frames", "frame_indices"}
+                    }
+                    frame_profiles = {
+                        int(profile["frame_index"]): profile for profile in batch_apply.get("frames", [])
+                    }
+                    for item in pending_grid_apply:
+                        result_index = int(item["result_index"])
+                        frame_index = int(item["frame_index"])
+                        application_profile = frame_profiles.get(frame_index)
+                        if application_profile is None:
+                            raise RuntimeError(
+                                "resident grid local normalization batch apply did not return a frame profile"
+                            )
+                        local_norm_frame_results[result_index]["application_profile"] = application_profile
+                        local_norm_application_profiles.append(application_profile)
             else:
                 local_norm_warnings.append(
                     "resident CUDA local normalization disabled; use --local-normalization on to enable it"
@@ -12255,6 +12317,14 @@ def run_resident_calibration_integration(
                     "frame_results": local_norm_frame_results,
                     "grid_stats": _resident_local_norm_grid_stats_summary(local_norm_grid_stats_batch_profile),
                     "application": _resident_local_norm_application_summary(local_norm_application_profiles),
+                    "grid_apply": {
+                        "schema_version": 1,
+                        "supported": bool(resident_grid_ln_batch_apply_supported),
+                        "enabled": bool(resident_grid_ln_batch_apply_enabled),
+                        "available": bool(local_norm_grid_apply_batch_profile),
+                        "batched": bool(local_norm_grid_apply_batch_profile),
+                        "profile": local_norm_grid_apply_batch_profile or {},
+                    },
                     "timing_s": local_norm_elapsed,
                     "warnings": local_norm_warnings,
                 }
@@ -14712,6 +14782,7 @@ def run_resident_calibration_integration(
                         "reference_frame_id": str(reference_frame["id"]),
                         "warning_count": len(local_norm_warnings),
                         "grid_stats": local_norm_groups[-1].get("grid_stats", {}),
+                        "grid_apply": local_norm_groups[-1].get("grid_apply", {}),
                         "application": local_norm_groups[-1].get("application", {}),
                     },
                     "resident_integration_weighting": {

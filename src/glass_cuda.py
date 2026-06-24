@@ -4028,6 +4028,74 @@ class ResidentCalibratedStack:
             "total_s": None,
         }
 
+    def apply_grid_normalization_frames(
+        self,
+        frame_indices: Any,
+        scales: Any,
+        offsets: Any,
+        tile_height: int,
+        tile_width: int,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "apply_grid_normalization_frames"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_grid_normalization_frames is not available")
+        indices = np.asarray(frame_indices, dtype=np.int32)
+        scale_grid = np.asarray(scales, dtype=np.float32)
+        offset_grid = np.asarray(offsets, dtype=np.float32)
+        result = dict(
+            self._impl.apply_grid_normalization_frames(
+                indices,
+                scale_grid,
+                offset_grid,
+                int(tile_height),
+                int(tile_width),
+            )
+        )
+        frames = []
+        for item in list(result.get("frames", [])):
+            frame = dict(item)
+            frames.append(
+                {
+                    "schema_version": int(frame.get("schema_version", 1)),
+                    "mode": str(frame.get("mode", "in_place_device_update_batch")),
+                    "model": str(frame.get("model", "resident_grid_mean_std")),
+                    "frame_index": int(frame.get("frame_index", 0)),
+                    "batch_position": int(frame.get("batch_position", 0)),
+                    "frame_bytes": int(frame.get("frame_bytes", 0)),
+                    "temporary_output_bytes": int(frame.get("temporary_output_bytes", 0)),
+                    "coefficient_count": int(frame.get("coefficient_count", 0)),
+                    "coefficient_bytes": int(frame.get("coefficient_bytes", 0)),
+                    "coefficient_alloc_s": float(frame.get("coefficient_alloc_s", 0.0)),
+                    "coefficient_upload_s": float(frame.get("coefficient_upload_s", 0.0)),
+                    "device_to_device_copy_s": float(frame.get("device_to_device_copy_s", 0.0)),
+                    "kernel_enqueue_s": float(frame.get("kernel_enqueue_s", 0.0)),
+                    "sync_s": float(frame.get("sync_s", 0.0)),
+                    "total_s": float(frame.get("total_s", 0.0)),
+                }
+            )
+        return {
+            "schema_version": int(result.get("schema_version", 1)),
+            "mode": str(result.get("mode", "in_place_device_update_batch")),
+            "model": str(result.get("model", "resident_grid_mean_std_batch_apply")),
+            "frame_count": int(result.get("frame_count", len(frames))),
+            "grid_rows": int(result.get("grid_rows", 0)),
+            "grid_cols": int(result.get("grid_cols", 0)),
+            "grid_count": int(result.get("grid_count", 0)),
+            "tile_height": int(result.get("tile_height", tile_height)),
+            "tile_width": int(result.get("tile_width", tile_width)),
+            "frame_indices": np.asarray(result.get("frame_indices", indices), dtype=np.int32),
+            "frame_bytes": int(result.get("frame_bytes", 0)),
+            "temporary_output_bytes": int(result.get("temporary_output_bytes", 0)),
+            "coefficient_count": int(result.get("coefficient_count", scale_grid.size)),
+            "coefficient_bytes": int(result.get("coefficient_bytes", scale_grid.nbytes + offset_grid.nbytes)),
+            "coefficient_alloc_s": float(result.get("coefficient_alloc_s", 0.0)),
+            "coefficient_upload_s": float(result.get("coefficient_upload_s", 0.0)),
+            "device_to_device_copy_s": float(result.get("device_to_device_copy_s", 0.0)),
+            "kernel_enqueue_s": float(result.get("kernel_enqueue_s", 0.0)),
+            "sync_s": float(result.get("sync_s", 0.0)),
+            "total_s": float(result.get("total_s", 0.0)),
+            "frames": frames,
+        }
+
     def star_local_max_mask(self, index: int, threshold: float) -> np.ndarray:
         if not hasattr(self._impl, "star_local_max_mask"):
             raise RuntimeError("native ResidentCalibratedStack.star_local_max_mask is not available")

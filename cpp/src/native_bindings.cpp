@@ -8766,6 +8766,180 @@ class ResidentCalibratedStack {
     return result;
   }
 
+  py::dict apply_grid_normalization_frames(
+      py::array_t<int, py::array::c_style | py::array::forcecast> frame_indices,
+      py::array_t<float, py::array::c_style | py::array::forcecast> scales,
+      py::array_t<float, py::array::c_style | py::array::forcecast> offsets,
+      int tile_height,
+      int tile_width) {
+    const py::buffer_info indices_info = frame_indices.request();
+    const py::buffer_info scales_info = scales.request();
+    const py::buffer_info offsets_info = offsets.request();
+    if (indices_info.ndim != 1) {
+      throw std::invalid_argument("frame_indices must be a one-dimensional array");
+    }
+    if (scales_info.ndim != 3 || offsets_info.ndim != 3) {
+      throw std::invalid_argument("scales and offsets must have shape (frame_count, grid_rows, grid_cols)");
+    }
+    if (scales_info.shape[0] != indices_info.shape[0] || offsets_info.shape[0] != indices_info.shape[0]) {
+      throw std::invalid_argument("coefficient frame count must match frame_indices length");
+    }
+    if (
+        scales_info.shape[1] != offsets_info.shape[1] ||
+        scales_info.shape[2] != offsets_info.shape[2]) {
+      throw std::invalid_argument("scales and offsets grid shapes must match");
+    }
+    if (tile_height <= 0 || tile_width <= 0) {
+      throw std::invalid_argument("tile dimensions must be positive");
+    }
+    const int frame_count = static_cast<int>(indices_info.shape[0]);
+    const int grid_rows = static_cast<int>(scales_info.shape[1]);
+    const int grid_cols = static_cast<int>(scales_info.shape[2]);
+    if (frame_count <= 0) {
+      py::dict result;
+      result["schema_version"] = 1;
+      result["mode"] = "in_place_device_update_batch";
+      result["model"] = "resident_grid_mean_std_batch_apply";
+      result["frame_count"] = 0;
+      result["grid_rows"] = grid_rows;
+      result["grid_cols"] = grid_cols;
+      result["grid_count"] = 0;
+      result["coefficient_count"] = 0;
+      result["coefficient_bytes"] = static_cast<unsigned long long>(0);
+      result["coefficient_alloc_s"] = 0.0;
+      result["coefficient_upload_s"] = 0.0;
+      result["kernel_enqueue_s"] = 0.0;
+      result["sync_s"] = 0.0;
+      result["total_s"] = 0.0;
+      result["frames"] = py::list();
+      return result;
+    }
+    if (grid_rows <= 0 || grid_cols <= 0) {
+      throw std::invalid_argument("coefficient grid must not be empty");
+    }
+    const int expected_rows =
+        (static_cast<int>(height_) + tile_height - 1) / tile_height;
+    const int expected_cols =
+        (static_cast<int>(width_) + tile_width - 1) / tile_width;
+    if (grid_rows != expected_rows || grid_cols != expected_cols) {
+      throw std::invalid_argument("coefficient grid shape does not match resident frame shape and tile dimensions");
+    }
+    const int* index_ptr = static_cast<const int*>(indices_info.ptr);
+    std::vector<int> host_indices(static_cast<std::size_t>(frame_count), 0);
+    for (int i = 0; i < frame_count; ++i) {
+      const int frame_index = index_ptr[i];
+      if (frame_index < 0 || static_cast<std::size_t>(frame_index) >= frame_count_) {
+        throw std::out_of_range("frame index is out of resident stack range");
+      }
+      require_loaded(static_cast<std::size_t>(frame_index), "batched grid local normalization");
+      host_indices[static_cast<std::size_t>(i)] = frame_index;
+    }
+    const std::size_t grid_count =
+        static_cast<std::size_t>(grid_rows) * static_cast<std::size_t>(grid_cols);
+    const std::size_t coefficient_count =
+        static_cast<std::size_t>(frame_count) * grid_count;
+    const auto total_start = Clock::now();
+    double coefficient_alloc_s = 0.0;
+    double coefficient_upload_s = 0.0;
+    double kernel_enqueue_s = 0.0;
+    double sync_s = 0.0;
+    float* d_scales = nullptr;
+    float* d_offsets = nullptr;
+    try {
+      const auto alloc_start = Clock::now();
+      check_cuda(
+          cudaMalloc(&d_scales, coefficient_count * sizeof(float)),
+          "cudaMalloc(resident batch grid normalization scales)");
+      check_cuda(
+          cudaMalloc(&d_offsets, coefficient_count * sizeof(float)),
+          "cudaMalloc(resident batch grid normalization offsets)");
+      coefficient_alloc_s = seconds_since(alloc_start);
+      const auto upload_start = Clock::now();
+      check_cuda(
+          cudaMemcpy(d_scales, scales_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident batch grid normalization scales)");
+      check_cuda(
+          cudaMemcpy(d_offsets, offsets_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident batch grid normalization offsets)");
+      coefficient_upload_s = seconds_since(upload_start);
+      const auto kernel_start = Clock::now();
+      for (int batch_position = 0; batch_position < frame_count; ++batch_position) {
+        const std::size_t coefficient_offset =
+            static_cast<std::size_t>(batch_position) * grid_count;
+        float* frame = d_stack_ + static_cast<std::size_t>(host_indices[static_cast<std::size_t>(batch_position)]) * pixels_per_frame_;
+        glass_local_norm_apply_grid_f32_launch(
+            frame,
+            frame,
+            d_scales + coefficient_offset,
+            d_offsets + coefficient_offset,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            tile_width,
+            tile_height,
+            grid_cols,
+            grid_rows);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_grid_normalization_frames kernel launch");
+      }
+      kernel_enqueue_s = seconds_since(kernel_start);
+      const auto sync_start = Clock::now();
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_grid_normalization_frames synchronize");
+      sync_s = seconds_since(sync_start);
+    } catch (...) {
+      cudaFree(d_scales);
+      cudaFree(d_offsets);
+      throw;
+    }
+    cudaFree(d_scales);
+    cudaFree(d_offsets);
+
+    py::list frame_profiles;
+    const double inv_frame_count = 1.0 / static_cast<double>(frame_count);
+    for (int batch_position = 0; batch_position < frame_count; ++batch_position) {
+      py::dict frame_profile;
+      frame_profile["schema_version"] = 1;
+      frame_profile["mode"] = "in_place_device_update_batch";
+      frame_profile["model"] = "resident_grid_mean_std";
+      frame_profile["frame_index"] = static_cast<unsigned long long>(
+          host_indices[static_cast<std::size_t>(batch_position)]);
+      frame_profile["batch_position"] = batch_position;
+      frame_profile["frame_bytes"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float));
+      frame_profile["temporary_output_bytes"] = static_cast<unsigned long long>(0);
+      frame_profile["coefficient_count"] = static_cast<unsigned long long>(grid_count);
+      frame_profile["coefficient_bytes"] = static_cast<unsigned long long>(grid_count * sizeof(float) * 2);
+      frame_profile["coefficient_alloc_s"] = coefficient_alloc_s * inv_frame_count;
+      frame_profile["coefficient_upload_s"] = coefficient_upload_s * inv_frame_count;
+      frame_profile["device_to_device_copy_s"] = 0.0;
+      frame_profile["kernel_enqueue_s"] = kernel_enqueue_s * inv_frame_count;
+      frame_profile["sync_s"] = sync_s * inv_frame_count;
+      frame_profile["total_s"] = seconds_since(total_start) * inv_frame_count;
+      frame_profiles.append(frame_profile);
+    }
+    py::dict result;
+    result["schema_version"] = 1;
+    result["mode"] = "in_place_device_update_batch";
+    result["model"] = "resident_grid_mean_std_batch_apply";
+    result["frame_count"] = frame_count;
+    result["grid_rows"] = grid_rows;
+    result["grid_cols"] = grid_cols;
+    result["grid_count"] = static_cast<unsigned long long>(grid_count);
+    result["tile_height"] = tile_height;
+    result["tile_width"] = tile_width;
+    result["frame_indices"] = frame_indices;
+    result["frame_bytes"] = static_cast<unsigned long long>(
+        static_cast<std::size_t>(frame_count) * pixels_per_frame_ * sizeof(float));
+    result["temporary_output_bytes"] = static_cast<unsigned long long>(0);
+    result["coefficient_count"] = static_cast<unsigned long long>(coefficient_count);
+    result["coefficient_bytes"] = static_cast<unsigned long long>(coefficient_count * sizeof(float) * 2);
+    result["coefficient_alloc_s"] = coefficient_alloc_s;
+    result["coefficient_upload_s"] = coefficient_upload_s;
+    result["device_to_device_copy_s"] = 0.0;
+    result["kernel_enqueue_s"] = kernel_enqueue_s;
+    result["sync_s"] = sync_s;
+    result["total_s"] = seconds_since(total_start);
+    result["frames"] = frame_profiles;
+    return result;
+  }
+
   py::array_t<unsigned char> star_local_max_mask(std::size_t index, float threshold) const {
     require_index(index);
     if (!loaded_[index]) {
@@ -17816,6 +17990,14 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           "apply_grid_normalization_frame",
           &ResidentCalibratedStack::apply_grid_normalization_frame,
           py::arg("index"),
+          py::arg("scales"),
+          py::arg("offsets"),
+          py::arg("tile_height"),
+          py::arg("tile_width"))
+      .def(
+          "apply_grid_normalization_frames",
+          &ResidentCalibratedStack::apply_grid_normalization_frames,
+          py::arg("frame_indices"),
           py::arg("scales"),
           py::arg("offsets"),
           py::arg("tile_height"),

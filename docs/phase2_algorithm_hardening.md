@@ -163,6 +163,80 @@ Validation commands:
   --max-masked-frame-count 10 --fail-on-failure`
 - `python -m pytest -q`
 
+### S2-Gate 615: Resident Grid-LN Batch Apply
+
+Gate 615 continues the Phase 2 mainline by reducing resident local
+normalization orchestration. Gate613 already batched the grid statistics phase;
+Gate615 batches the application phase so the default resident grid-LN route
+uploads all per-frame grid coefficients once, enqueues all active
+non-reference frame apply kernels, and synchronizes once for the whole batch.
+
+Implementation:
+
+- Adds native/Python `ResidentCalibratedStack.apply_grid_normalization_frames`.
+- Keeps the existing formula unchanged: each resident pixel still applies
+  `value * scale + offset` using the same per-tile coefficient grid.
+- Records `application_profile.mode = in_place_device_update_batch`,
+  `application.batch_apply_frame_count`, and group/resident `grid_apply`
+  supported/enabled/batched/profile metadata.
+- Keeps a diagnostic fallback switch:
+  `GLASS_RESIDENT_LN_BATCH_APPLY=0` disables only the batch apply dispatch and
+  retains the per-frame in-place apply path.
+
+Real 200-light evidence:
+
+- Batch candidate:
+  `C:\glass_runs\phase2_s2_gate615_ln_batch_apply\real_200_default_regression`
+- Same-build per-frame fallback:
+  `C:\glass_runs\phase2_s2_gate615_ln_batch_apply\real_200_per_frame_same_build`
+- Passing gate artifact:
+  `C:\glass_runs\phase2_s2_gate615_ln_batch_apply\resident_regression_gate_batch_vs_per_frame_same_build.json`
+- Gate Markdown:
+  `C:\glass_runs\phase2_s2_gate615_ln_batch_apply\resident_regression_gate_batch_vs_per_frame_same_build.md`
+- Candidate/per-frame elapsed ratio: `0.9886661545335146`.
+- Determinism differences: artifact `0`, frame signatures `0`,
+  registration `0`, frame accounting `0`, output pixels `0`, numerical drift
+  `0`.
+- Frame admission: `193 / 200` active and `7` masked in the default resident
+  route.
+- LN application profile improved from per-frame `0.11815519999999992 s` to
+  batch `0.066252 s` for `192` normalized frames and
+  `47,348,121,600` frame-bytes.
+- Whole LN timing measured `0.4328185999765992 s` for same-build per-frame
+  apply and `0.3605515999952331 s` for batch apply.
+
+The comparison against the older Gate614 run is recorded separately at
+`C:\glass_runs\phase2_s2_gate615_ln_batch_apply\resident_regression_gate_vs_gate614.json`.
+It fails only the determinism check with the same sparse output-map drift seen
+when comparing the same-build per-frame fallback against Gate614, so the drift
+is attributed to the intervening native rebuild/runtime environment rather than
+the Gate615 batch apply path. The blocking Gate615 acceptance evidence is the
+same-build batch-vs-per-frame regression gate above.
+
+Validation commands:
+
+- Native CUDA rebuild for `_glass_cuda_native`.
+- `python -m pytest -q tests\test_cuda_resident_stack.py -k "normalization or
+  grid_stats"`
+- `python -m pytest -q
+  tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_ncc_subpixel_registration_smoke
+  tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_grid_ln_batch_apply_can_be_disabled`
+- `python -m pytest -q tests\test_resident_cuda_run.py -k
+  "ncc_subpixel_registration_smoke or grid_ln_batch_apply_can_be_disabled or
+  resident_dq_map_count_maps_native or resident_dq_map_native"`
+- `python -m pytest -q tests\test_pipeline_contract.py
+  tests\test_local_norm_contract.py`
+- `python -m ruff check src\glass_cuda.py src\glass\engine\resident_cuda.py
+  tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py`
+- Real 200-light default resident CUDA run and same-build per-frame fallback.
+- `glass resident-regression-gate --baseline-run
+  C:\glass_runs\phase2_s2_gate615_ln_batch_apply\real_200_per_frame_same_build
+  --candidate-run
+  C:\glass_runs\phase2_s2_gate615_ln_batch_apply\real_200_default_regression
+  --max-elapsed-ratio 1.20 --min-active-frame-count 190
+  --max-masked-frame-count 10 --fail-on-failure`
+- `python -m pytest -q`
+
 ### S2-Gate 581: Native Completion Runtime Preset
 
 Gate 581 returns the current work to a substantive resident CUDA runtime path

@@ -1216,6 +1216,47 @@ def test_resident_stack_grid_normalization_matches_standalone_cuda():
     assert np.allclose(weight_map, np.ones_like(frame, dtype=np.float32))
 
 
+def test_resident_stack_batch_grid_normalization_matches_per_frame_apply():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_grid_normalization_frames"):
+        raise AssertionError("ResidentCalibratedStack.apply_grid_normalization_frames is missing from glass_cuda")
+
+    frame_a = np.arange(35, dtype=np.float32).reshape(5, 7)
+    frame_b = frame_a + np.float32(100.0)
+    scales_a = np.array([[1.0, 2.0], [0.5, 1.25]], dtype=np.float32)
+    offsets_a = np.array([[0.0, -3.0], [4.0, 10.0]], dtype=np.float32)
+    scales_b = np.array([[0.75, 1.5], [2.0, 0.25]], dtype=np.float32)
+    offsets_b = np.array([[5.0, -8.0], [2.0, 1.0]], dtype=np.float32)
+    expected_a = module.local_norm_apply_grid_f32(frame_a, scales_a, offsets_a, 3, 4)
+    expected_b = module.local_norm_apply_grid_f32(frame_b, scales_b, offsets_b, 3, 4)
+
+    stack = module.ResidentCalibratedStack(2, frame_a.shape[0], frame_a.shape[1])
+    stack.upload_calibrated_frame(0, frame_a)
+    stack.upload_calibrated_frame(1, frame_b)
+    profile = stack.apply_grid_normalization_frames(
+        np.array([0, 1], dtype=np.int32),
+        np.stack([scales_a, scales_b]).astype(np.float32),
+        np.stack([offsets_a, offsets_b]).astype(np.float32),
+        3,
+        4,
+    )
+    normalized, weight_map = stack.integrate_mean(np.array([1.0, 1.0], dtype=np.float32))
+
+    assert profile["mode"] == "in_place_device_update_batch"
+    assert profile["model"] == "resident_grid_mean_std_batch_apply"
+    assert profile["frame_count"] == 2
+    assert profile["temporary_output_bytes"] == 0
+    assert profile["coefficient_count"] == scales_a.size * 2
+    assert profile["coefficient_bytes"] == (scales_a.nbytes + offsets_a.nbytes) * 2
+    assert profile["sync_s"] >= 0.0
+    assert len(profile["frames"]) == 2
+    assert [item["frame_index"] for item in profile["frames"]] == [0, 1]
+    assert all(item["mode"] == "in_place_device_update_batch" for item in profile["frames"])
+    expected_mean = (expected_a + expected_b) / np.float32(2.0)
+    assert np.allclose(normalized, expected_mean, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, np.full_like(frame_a, 2.0, dtype=np.float32))
+
+
 def test_resident_stack_grid_stats_can_drive_in_vram_normalization():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "frame_pair_grid_stats"):

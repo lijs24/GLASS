@@ -329,7 +329,8 @@ coefficient cell; there is no cross-pixel dependency.
 
 Artifacts record the mode so the behavior is auditable:
 
-- per-applied frame: `application_profile.mode = in_place_device_update`;
+- per-applied frame: `application_profile.mode = in_place_device_update` or,
+  when Gate615 batch apply is active, `in_place_device_update_batch`;
 - group summary: `application.mode_counts`;
 - group summary: `application.temporary_output_bytes = 0`;
 - resident summary: `resident_local_normalization.application`.
@@ -375,3 +376,39 @@ to Gate612, with zero pixel differences. Local-normalization group timing
 improved from `0.5070594000862911 s` to `0.42897249991074204 s`; total run
 time changed from `11.157036500168033 s` to `11.212513899896294 s`, which is
 within the observed end-to-end run noise for the current default path.
+
+## S2-Gate 615 Resident Batched Grid Apply
+
+S2-Gate 615 changes the resident CUDA `grid_mean_std` apply phase from one
+Python/native call and one synchronization per normalized frame to a batch
+dispatch over all active non-reference frames. The coefficient model remains
+unchanged:
+
+- per-frame coefficients are still derived from the same paired grid
+  statistics;
+- each pixel still applies `value * scale + offset` using the selected tile;
+- reference, zero-weight, empty, and partial frame statuses are unchanged.
+
+The new native method is
+`ResidentCalibratedStack.apply_grid_normalization_frames(frame_indices, scales,
+offsets, tile_height, tile_width)`. It uploads the stacked coefficient arrays
+once, enqueues the existing in-place grid apply kernel for each resident frame,
+and performs one synchronization for the batch. The per-frame
+`apply_grid_normalization_frame(...)` route remains available and can be forced
+for diagnostics with `GLASS_RESIDENT_LN_BATCH_APPLY=0`.
+
+Artifacts expose the chosen route:
+
+- per-frame `application_profile.mode = in_place_device_update_batch`;
+- group `application.batch_apply_frame_count`;
+- group `grid_apply.supported`, `grid_apply.enabled`,
+  `grid_apply.batched`, and `grid_apply.profile`;
+- resident summary `resident_local_normalization.grid_apply`.
+
+The Gate615 real 200-light same-build regression compared the default batch
+route against the per-frame fallback. It normalized `192` non-reference frames,
+recorded `grid_count=988`, uploaded `1,517,568` bytes of coefficients, applied
+over `47,348,121,600` resident frame-bytes, and measured batch apply profile
+time `0.066252 s` versus per-frame apply profile time
+`0.11815519999999992 s`. The resident-regression gate reported zero artifact,
+frame-signature, registration, frame-accounting, output, or numerical drift.

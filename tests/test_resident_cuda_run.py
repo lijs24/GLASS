@@ -4827,9 +4827,16 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):
     assert local_norm["groups"][0]["frame_results"][1]["grid_coefficients"]["stats_source"] == "batch"
     assert local_norm["groups"][0]["grid_stats"]["batched"] is True
     assert local_norm["groups"][0]["grid_stats"]["source_count"] == 1
-    assert local_norm["groups"][0]["frame_results"][1]["application_profile"]["mode"] == "in_place_device_update"
-    assert local_norm["groups"][0]["application"]["mode_counts"] == {"in_place_device_update": 1}
+    assert local_norm["groups"][0]["frame_results"][1]["application_profile"]["mode"] == (
+        "in_place_device_update_batch"
+    )
+    assert local_norm["groups"][0]["application"]["mode_counts"] == {"in_place_device_update_batch": 1}
+    assert local_norm["groups"][0]["application"]["batch_apply_frame_count"] == 1
     assert local_norm["groups"][0]["application"]["temporary_output_bytes"] == 0
+    assert local_norm["groups"][0]["grid_apply"]["supported"] is True
+    assert local_norm["groups"][0]["grid_apply"]["enabled"] is True
+    assert local_norm["groups"][0]["grid_apply"]["batched"] is True
+    assert local_norm["groups"][0]["grid_apply"]["profile"]["frame_count"] == 1
     assert local_norm_contract["contract_surface"] == "resident_in_vram"
     assert local_norm_contract["enabled"] is True
     assert local_norm_contract["passed"] is True
@@ -4845,14 +4852,74 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):
     assert resident["artifacts"][0]["resident_local_normalization"]["grid_stats"]["batched"] is True
     assert resident["artifacts"][0]["resident_local_normalization"]["grid_stats"]["source_count"] == 1
     assert resident["artifacts"][0]["resident_local_normalization"]["application"]["mode_counts"] == {
-        "in_place_device_update": 1
+        "in_place_device_update_batch": 1
     }
+    assert resident["artifacts"][0]["resident_local_normalization"]["grid_apply"]["supported"] is True
+    assert resident["artifacts"][0]["resident_local_normalization"]["grid_apply"]["enabled"] is True
+    assert resident["artifacts"][0]["resident_local_normalization"]["grid_apply"]["batched"] is True
     assert resident_registration["max_shift"] == 4
     assert resident_registration["ncc_sample_stride"] == 2
     assert resident_registration["ncc_fallback_score_threshold"] == 1.0
     assert resident_registration["subpixel_radius_steps"] == 2
     assert resident_registration["subpixel_step"] == 0.5
     assert any("ncc_fallback_stride=1" == item for item in registration["results"][1]["warnings"])
+
+
+def test_cli_resident_cuda_run_grid_ln_batch_apply_can_be_disabled(monkeypatch, tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_grid_ln_no_batch_apply"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    monkeypatch.setenv("GLASS_RESIDENT_LN_BATCH_APPLY", "0")
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--local-normalization",
+            "on",
+            "--resident-local-normalization-mode",
+            "grid_mean_std",
+            "--resident-local-normalization-tile-size",
+            "8",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "translation_ncc_subpixel",
+            "--resident-registration-max-shift",
+            "4",
+            "--resident-ncc-sample-stride",
+            "2",
+            "--resident-ncc-fallback-score-threshold",
+            "1.0",
+        ]
+    ) == 0
+
+    local_norm = read_json(run / "local_norm_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    group = local_norm["groups"][0]
+    resident_group = resident["artifacts"][0]["resident_local_normalization"]
+    assert group["frame_results"][1]["application_profile"]["mode"] == "in_place_device_update"
+    assert group["application"]["mode_counts"] == {"in_place_device_update": 1}
+    assert group["application"]["batch_apply_frame_count"] == 0
+    assert group["grid_apply"]["supported"] is True
+    assert group["grid_apply"]["enabled"] is False
+    assert group["grid_apply"]["batched"] is False
+    assert resident_group["grid_apply"]["enabled"] is False
+    assert resident_group["application"]["mode_counts"] == {"in_place_device_update": 1}
 
 
 def test_cli_resident_cuda_run_star_catalog_registration_smoke(small_fits_dataset, tmp_path: Path):
