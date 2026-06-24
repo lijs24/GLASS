@@ -665,6 +665,10 @@ def apply_resident_source_invalid_mask(
         "frame_id": str(frame_id),
         "frame_index": int(frame_index),
         "source": str(source),
+        "application_order": "calibration_pre_registration",
+        "registration_catalog_visibility": "pre_registration_catalog_visible",
+        "registration_catalog_visible": True,
+        "registration_catalog_visibility_required": True,
         "supported": bool(mask_info.get("supported")),
         "reason": str(mask_info.get("reason") or ""),
         "invalid_samples": invalid_count,
@@ -762,6 +766,10 @@ def apply_resident_inline_cosmetic_thresholds(
         "frame_id": str(frame_id),
         "frame_index": int(frame_index),
         "source": str(source),
+        "application_order": "calibration_pre_registration",
+        "registration_catalog_visibility": "pre_registration_catalog_visible",
+        "registration_catalog_visible": True,
+        "registration_catalog_visibility_required": False,
         "supported": bool(threshold_info.get("supported")),
         "reason": str(threshold_info.get("reason") or ""),
         "invalid_samples": 0,
@@ -1292,6 +1300,30 @@ def apply_resident_inline_cosmetic_thresholds_batch(
     return rows
 
 
+def _source_dq_application_order(row: dict[str, Any]) -> str:
+    order = row.get("application_order")
+    if order is not None and str(order):
+        return str(order)
+    source = str(row.get("source") or "")
+    if source.startswith("resident_post_registration_pre_warp"):
+        return "post_registration_pre_warp"
+    if source.startswith("resident_calibrated"):
+        return "calibration_pre_registration"
+    return "unspecified"
+
+
+def _source_dq_registration_catalog_visible(row: dict[str, Any]) -> bool:
+    if row.get("registration_catalog_visible") is not None:
+        return bool(row.get("registration_catalog_visible"))
+    return _source_dq_application_order(row) == "calibration_pre_registration"
+
+
+def _source_dq_registration_catalog_visibility_required(row: dict[str, Any]) -> bool:
+    if row.get("registration_catalog_visibility_required") is not None:
+        return bool(row.get("registration_catalog_visibility_required"))
+    return not bool(row.get("inline_source_dq"))
+
+
 def build_resident_source_dq_summary(
     rows: list[dict[str, Any]],
     *,
@@ -1319,11 +1351,39 @@ def build_resident_source_dq_summary(
     sidecar_artifact_paths: set[str] = set()
     native_methods: set[str] = set()
     flag_counts = _empty_flag_counts()
+    application_order_counts: dict[str, int] = {}
+    registration_visibility_counts: dict[str, int] = {}
+    pre_registration_visible_invalid = 0
+    pre_registration_visible_rows = 0
+    post_registration_deferred_invalid = 0
+    post_registration_deferred_rows = 0
+    missing_application_order_rows = 0
+    required_invalid_not_visible = 0
     for row in rows:
         source = str(row.get("source") or "unknown")
         source_counts[source] = source_counts.get(source, 0) + 1
         status = str(row.get("status") or "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
+        application_order = _source_dq_application_order(row)
+        application_order_counts[application_order] = application_order_counts.get(application_order, 0) + 1
+        if row.get("application_order") is None:
+            missing_application_order_rows += 1
+        registration_visible = _source_dq_registration_catalog_visible(row)
+        visibility_key = "pre_registration_catalog_visible" if registration_visible else "not_catalog_visible"
+        registration_visibility_counts[visibility_key] = registration_visibility_counts.get(visibility_key, 0) + 1
+        row_invalid = int(row.get("invalid_samples") or 0)
+        if registration_visible:
+            pre_registration_visible_rows += 1
+            pre_registration_visible_invalid += row_invalid
+        else:
+            post_registration_deferred_rows += 1
+            post_registration_deferred_invalid += row_invalid
+        if (
+            row_invalid > 0
+            and _source_dq_registration_catalog_visibility_required(row)
+            and not registration_visible
+        ):
+            required_invalid_not_visible += row_invalid
         if row.get("native_method"):
             native_methods.add(str(row["native_method"]))
         for sidecar_source in list(row.get("sidecar_sources") or []):
@@ -1380,6 +1440,14 @@ def build_resident_source_dq_summary(
         "fast_skip_reason": fast_skip_reason if fast_skip_frame_count else None,
         "source_counts": dict(sorted(source_counts.items())),
         "status_counts": dict(sorted(status_counts.items())),
+        "application_order_counts": dict(sorted(application_order_counts.items())),
+        "registration_catalog_visibility_counts": dict(sorted(registration_visibility_counts.items())),
+        "pre_registration_catalog_visible_row_count": int(pre_registration_visible_rows),
+        "pre_registration_catalog_visible_invalid_samples": int(pre_registration_visible_invalid),
+        "post_registration_deferred_row_count": int(post_registration_deferred_rows),
+        "post_registration_deferred_invalid_samples": int(post_registration_deferred_invalid),
+        "rows_missing_application_order_count": int(missing_application_order_rows),
+        "required_invalid_samples_not_visible_to_registration_catalog": int(required_invalid_not_visible),
         "sidecar_source_counts": dict(sorted(sidecar_source_counts.items())),
         "sidecar_path_count": len(sidecar_paths),
         "sidecar_artifact_path_count": len(sidecar_artifact_paths),
@@ -1391,7 +1459,11 @@ def build_resident_source_dq_summary(
             "frame pixels to NaN before integration. Invalid samples may come from "
             "uploaded source-DQ masks or resident CUDA threshold detection; existing "
             "resident integration kernels then skip those samples before rejection, "
-            "matching the CPU StackEngine valid-sample contract."
+            "matching the CPU StackEngine valid-sample contract. Non-inline source-DQ "
+            "masks are applied before resident registration catalog detection so "
+            "bad pixels cannot become registration stars; inline cosmetic CUDA masks "
+            "may be explicitly deferred until after registration to avoid suppressing "
+            "real stellar cores."
         ),
     }
 
@@ -1417,6 +1489,10 @@ def build_resident_source_dq_execution_group(
     applied_invalid = int(source_dq_summary.get("applied_invalid_samples") or 0)
     unsupported = int(source_dq_summary.get("unsupported_frame_count") or 0)
     native_missing = int(source_dq_summary.get("native_missing_frame_count") or 0)
+    missing_application_order = int(source_dq_summary.get("rows_missing_application_order_count") or 0)
+    required_invalid_not_visible = int(
+        source_dq_summary.get("required_invalid_samples_not_visible_to_registration_catalog") or 0
+    )
     summary_passed = bool(source_dq_summary.get("passed"))
     checks = [
         _execution_check(
@@ -1438,6 +1514,26 @@ def build_resident_source_dq_execution_group(
             "native_method_available",
             native_missing == 0,
             {"native_missing_frame_count": native_missing},
+        ),
+        _execution_check(
+            "application_order_declared",
+            missing_application_order == 0,
+            {"rows_missing_application_order_count": missing_application_order},
+        ),
+        _execution_check(
+            "non_inline_source_dq_visible_to_registration_catalog",
+            required_invalid_not_visible == 0,
+            {
+                "required_invalid_samples_not_visible_to_registration_catalog": (
+                    required_invalid_not_visible
+                ),
+                "pre_registration_catalog_visible_invalid_samples": int(
+                    source_dq_summary.get("pre_registration_catalog_visible_invalid_samples") or 0
+                ),
+                "post_registration_deferred_invalid_samples": int(
+                    source_dq_summary.get("post_registration_deferred_invalid_samples") or 0
+                ),
+            },
         ),
         _execution_check(
             "no_calibrated_dq_disk_cache_required",
@@ -1471,6 +1567,23 @@ def build_resident_source_dq_execution_group(
         "source_dq_flag_counts": dict(source_dq_summary.get("source_dq_flag_counts") or {}),
         "source_counts": dict(source_dq_summary.get("source_counts") or {}),
         "status_counts": dict(source_dq_summary.get("status_counts") or {}),
+        "application_order_counts": dict(source_dq_summary.get("application_order_counts") or {}),
+        "registration_catalog_visibility_counts": dict(
+            source_dq_summary.get("registration_catalog_visibility_counts") or {}
+        ),
+        "pre_registration_catalog_visible_row_count": int(
+            source_dq_summary.get("pre_registration_catalog_visible_row_count") or 0
+        ),
+        "pre_registration_catalog_visible_invalid_samples": int(
+            source_dq_summary.get("pre_registration_catalog_visible_invalid_samples") or 0
+        ),
+        "post_registration_deferred_row_count": int(
+            source_dq_summary.get("post_registration_deferred_row_count") or 0
+        ),
+        "post_registration_deferred_invalid_samples": int(
+            source_dq_summary.get("post_registration_deferred_invalid_samples") or 0
+        ),
+        "required_invalid_samples_not_visible_to_registration_catalog": required_invalid_not_visible,
         "sidecar_source_counts": dict(source_dq_summary.get("sidecar_source_counts") or {}),
         "streaming_memory": {
             "invalid_mask_bytes_per_pixel": 1,
@@ -1483,7 +1596,9 @@ def build_resident_source_dq_execution_group(
         "semantics": (
             "Source-DQ invalid samples are applied to resident calibrated frames in memory "
             "with resident CUDA native methods, so resident integration skips those samples "
-            "without requiring a calibrated+DQ disk cache."
+            "without requiring a calibrated+DQ disk cache. Non-inline source-DQ masks are "
+            "required to be visible before resident registration catalog detection; inline "
+            "cosmetic CUDA masks may be deferred until after registration when configured."
         ),
     }
 

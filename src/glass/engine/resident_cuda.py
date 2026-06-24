@@ -6897,6 +6897,9 @@ def run_resident_calibration_integration(
                 )
                 for row in rows:
                     row["application_order"] = "post_registration_pre_warp"
+                    row["registration_catalog_visibility"] = "post_registration_deferred_not_catalog_visible"
+                    row["registration_catalog_visible"] = False
+                    row["registration_catalog_visibility_required"] = False
                     row["deferred_until_stage"] = "resident_registration_complete"
                     row["deferred_source"] = "resident_calibrated_input_cosmetic_cuda"
                 source_dq_rows.extend(rows)

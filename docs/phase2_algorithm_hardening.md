@@ -17882,3 +17882,85 @@ Phase 2 is complete when:
   - this gate changes GLASS-owned scheduling defaults and default-runtime guard
     expectations only;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 605: Source-DQ Registration Visibility Contract
+
+- Continued the Phase 2 DQ/mask pipeline mainline by making resident
+  source-DQ ordering visible to the registration/catalog stage, not only to
+  integration.
+- Completed:
+  - ordinary source-DQ invalid-mask rows now declare
+    `application_order=calibration_pre_registration`;
+  - those rows also declare `registration_catalog_visible=true` and
+    `registration_catalog_visibility_required=true`, which means sidecar and
+    non-finite source-DQ invalid samples must be applied before resident star
+    catalog detection;
+  - deferred inline `cosmetic_cuda` rows now declare
+    `application_order=post_registration_pre_warp`,
+    `registration_catalog_visible=false`, and
+    `registration_catalog_visibility_required=false`, preserving the existing
+    guard against masking real stellar cores before registration;
+  - resident source-DQ summary artifacts now record application-order counts,
+    registration-catalog visibility counts, pre-registration visible invalid
+    sample counts, post-registration deferred invalid sample counts, and any
+    required invalid samples that were not catalog-visible;
+  - `resident_source_dq_execution.json` now includes hard checks for declared
+    application order and required source-DQ visibility before registration
+    catalogs.
+- Why this matters:
+  - Gate590-593 made source-DQ sidecars scan/plan/run through resident
+    integration;
+  - this gate closes the registration-stage gap: a source-DQ hot pixel or bad
+    sample must not remain eligible as a resident star candidate and only be
+    removed later during integration;
+  - the contract keeps `cosmetic_cuda` deferment explicit because that mode can
+    otherwise erase real stars before registration.
+- Synthetic CUDA validation:
+  - dataset/run root:
+    `C:\glass_runs\phase2_s2_gate605_source_dq_registration_contract`;
+  - generated 6 synthetic H lights with a source-DQ sidecar and known shifts;
+  - scanned 15 science/calibration frames and skipped the source-DQ sidecar
+    directory as intended;
+  - planned with `--source-dq-manifest`;
+  - ran resident CUDA through integration with
+    `--resident-registration similarity_cuda_triangle`;
+  - registration results: `5` ok frames plus `1` reference frame;
+  - source-DQ summary:
+    - `input_invalid_samples_before_rejection=1`;
+    - `applied_invalid_samples=1`;
+    - `application_order_counts={"calibration_pre_registration": 6}`;
+    - `registration_catalog_visibility_counts={"pre_registration_catalog_visible": 6}`;
+    - `pre_registration_catalog_visible_invalid_samples=1`;
+    - `post_registration_deferred_invalid_samples=0`;
+    - `required_invalid_samples_not_visible_to_registration_catalog=0`;
+  - source-DQ execution contract:
+    - status: `passed`;
+    - new checks `application_order_declared` and
+      `non_inline_source_dq_visible_to_registration_catalog` passed.
+- Real 200-light default regression:
+  - run:
+    `C:\glass_runs\phase2_s2_gate605_source_dq_registration_contract\real_200_default_regression`;
+  - default runtime preset:
+    `throughput-v4-native-completion`;
+  - `total_elapsed_s=11.487467100145295`;
+  - no source-DQ sidecars were present, so the runtime used
+    `fast_skip_frame_count=200`;
+  - `required_invalid_samples_not_visible_to_registration_catalog=0`;
+  - all six integration FITS outputs were SHA256-identical to the Gate604
+    default v4 probe outputs.
+- Validation:
+  - focused tests:
+    `python -m pytest -q tests\test_resident_source_dq_contract.py tests\test_resident_source_dq.py tests\test_cuda_resident_stack.py -k "source_dq"`;
+  - ruff:
+    `python -m ruff check src\glass\engine\resident_source_dq.py src\glass\engine\resident_cuda.py tests\test_resident_source_dq_contract.py tests\test_resident_source_dq.py`;
+  - full pytest will be recorded in the checkpoint.
+- Interpretation:
+  - this is a pipeline-integrity gate, not a micro-optimization;
+  - it does not change registration math, warp interpolation, LN, rejection,
+    or final integration formulas;
+  - it makes a required DQ/mask invariant auditable and prevents future
+    regressions where source-DQ sidecars are only consumed after registration.
+- Clean-room note:
+  - this gate changes GLASS-owned DQ/mask provenance and resident execution
+    checks only;
+  - no external or proprietary implementation source was inspected or used.
