@@ -401,6 +401,39 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 620: Resident Hardened Quartile Quickselect Scheduler
+
+Gate 620 targets the remaining resident integration bottleneck identified by
+Gate619: the hardened winsorized kernel's native `kernel_sync_s`, not output
+download. The prior kernel selected q25, median, and q75 by running separate
+quickselect calls over the full local sample array for each lower/upper
+interpolated rank. Gate620 keeps the exact same percentile values, rejection
+guard, and frame-axis accumulation semantics, but selects the unique requested
+quartile ranks in ascending order and narrows the quickselect search range after
+each selected rank.
+
+Implementation:
+
+- Add a device-side ascending unique-rank quartile selector for the resident
+  hardened winsorized kernel.
+- Preserve the existing exact linear-interpolated q25/median/q75 definitions.
+- Preserve frame-axis rereads for winsorized mean/std and final weighted
+  accumulation, so output arithmetic order after percentile selection remains
+  the Gate611 CPU-parity order.
+- Record
+  `percentile_strategy=ascending_unique_quartile_quickselect_order_statistics`
+  in native timing profiles.
+
+Validation plan:
+
+- Focused CUDA parity tests for 4-frame, 260-frame, and small edge-count
+  groups where percentile ranks duplicate or land on exact integer positions.
+- Focused resident CLI hardened winsorized parity tests.
+- Native rebuild, ruff, full `python -m pytest -q`.
+- Real 200-light default A/B against Gate619 using
+  `glass resident-regression-gate`, requiring no output or numerical drift and
+  no material runtime regression.
+
 ### S2-Gate 619: Resident Hardened Master-Only Download Mode
 
 Gate 619 returns to the resident CUDA performance path while preserving the

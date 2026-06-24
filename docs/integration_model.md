@@ -203,6 +203,14 @@ changes were limited to 41 of 61,651,200 master pixels
 integer count-map boundary changes. The 260-light synthetic validation stayed
 bit-identical to Gate609.
 
+S2-Gate 620 keeps the Gate611 formula and frame-axis accumulation order but
+changes the native percentile scheduler from separate full-range q25/median/q75
+quickselect calls to an ascending unique-rank quartile selector. Duplicate ranks
+from small frame counts and integer percentile positions are selected once, and
+each later quickselect starts after the previously selected order statistic.
+Profiles record
+`percentile_strategy=ascending_unique_quartile_quickselect_order_statistics`.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted

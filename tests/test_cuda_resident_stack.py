@@ -2455,7 +2455,9 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     assert timing["native_kernel_frame_capacity"] == 256
     assert timing["native_kernel_capacity_selector"] == "small_256"
     assert timing["native_profile"]["schema_version"] == 1
-    assert timing["native_profile"]["percentile_strategy"] == "quickselect_order_statistics"
+    assert timing["native_profile"]["percentile_strategy"] == (
+        "ascending_unique_quartile_quickselect_order_statistics"
+    )
     assert timing["native_profile"]["winsorized_accumulation_order"] == "frame_axis_input_order"
     assert timing["native_profile"]["kernel_sync_s"] >= 0.0
     assert timing["native_profile"]["download_s"] >= 0.0
@@ -2518,7 +2520,9 @@ def test_resident_stack_hardened_winsorized_sigma_260_frames_matches_cpu_baselin
     assert timing["native_kernel_frame_capacity"] == 512
     assert timing["native_kernel_capacity_selector"] == "large_512"
     assert timing["native_profile"]["schema_version"] == 1
-    assert timing["native_profile"]["percentile_strategy"] == "quickselect_order_statistics"
+    assert timing["native_profile"]["percentile_strategy"] == (
+        "ascending_unique_quartile_quickselect_order_statistics"
+    )
     assert timing["native_profile"]["winsorized_accumulation_order"] == "frame_axis_input_order"
     assert timing["native_profile"]["kernel_sync_s"] >= 0.0
     assert timing["native_profile"]["download_s"] >= 0.0
@@ -2531,6 +2535,60 @@ def test_resident_stack_hardened_winsorized_sigma_260_frames_matches_cpu_baselin
     assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
     assert int(np.sum(low_reject)) > 0
     assert int(np.sum(high_reject)) > 0
+
+
+def test_resident_stack_hardened_winsorized_sigma_quartile_rank_edge_counts_match_cpu():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    for frame_count in (2, 3, 5, 7, 8):
+        stack_np = np.empty((frame_count, 2, 3), dtype=np.float32)
+        base = np.array([[10.0, 20.0, 30.0], [40.0, 50.0, 60.0]], dtype=np.float32)
+        for index in range(frame_count):
+            stack_np[index] = base + np.float32(index)
+        stack_np[0, 0, 0] -= np.float32(60.0)
+        stack_np[-1, 1, 2] += np.float32(80.0)
+        weights = np.linspace(0.75, 1.25, frame_count, dtype=np.float32)
+
+        resident_stack = module.ResidentCalibratedStack(frame_count, 2, 3)
+        for index, frame in enumerate(stack_np):
+            resident_stack.upload_calibrated_frame(index, frame)
+
+        master, weight_map, coverage, low_reject, high_reject, timing = (
+            resident_stack.integrate_hardened_winsorized_sigma_timed(
+                weights,
+                2.1,
+                2.1,
+                min_samples=1,
+                max_reject_fraction=1.0,
+                count_map_dtype="uint16",
+            )
+        )
+        expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+            weighted_integrate_stack(
+                stack_np,
+                weights=weights,
+                rejection="winsorized_sigma",
+                low_sigma=2.1,
+                high_sigma=2.1,
+                min_samples=1,
+                max_reject_fraction=1.0,
+            )
+        )
+
+        assert timing["native_profile"]["percentile_strategy"] == (
+            "ascending_unique_quartile_quickselect_order_statistics"
+        )
+        assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
+        assert np.allclose(weight_map, expected_weight, rtol=2e-5, atol=2e-5)
+        assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+        assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+        assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
 
 
 def test_resident_stack_hardened_winsorized_sigma_compact_count_maps_match_float_maps():

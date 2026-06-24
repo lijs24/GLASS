@@ -1379,9 +1379,7 @@ __device__ void glass_swap_f32(float& a, float& b) {
   b = tmp;
 }
 
-__device__ float glass_select_kth_f32(float* values, int count, int k) {
-  int left = 0;
-  int right = count - 1;
+__device__ float glass_select_kth_range_f32(float* values, int left, int right, int k) {
   while (left < right) {
     const float pivot = values[(left + right) >> 1];
     int lower = left;
@@ -1411,6 +1409,10 @@ __device__ float glass_select_kth_f32(float* values, int count, int k) {
   return values[left];
 }
 
+__device__ float glass_select_kth_f32(float* values, int count, int k) {
+  return glass_select_kth_range_f32(values, 0, count - 1, k);
+}
+
 __device__ float glass_percentile_select_f32(float* values, int count, float fraction) {
   if (count <= 0) {
     return 0.0f;
@@ -1431,6 +1433,128 @@ __device__ float glass_percentile_select_f32(float* values, int count, float fra
   }
   const float upper_value = glass_select_kth_f32(values, count, upper);
   return lower_value * (1.0f - t) + upper_value * t;
+}
+
+__device__ void glass_percentile_bounds_f32(
+    int count,
+    float fraction,
+    int* lower,
+    int* upper,
+    float* t) {
+  const float position = static_cast<float>(count - 1) * fraction;
+  *lower = static_cast<int>(floorf(position));
+  *upper = *lower + 1;
+  if (*upper >= count) {
+    *upper = count - 1;
+  }
+  *t = position - static_cast<float>(*lower);
+}
+
+__device__ void glass_add_unique_rank_sorted_f32(int rank, int* ranks, int* rank_count) {
+  int count = *rank_count;
+  int pos = 0;
+  while (pos < count && ranks[pos] < rank) {
+    ++pos;
+  }
+  if (pos < count && ranks[pos] == rank) {
+    return;
+  }
+  for (int i = count; i > pos; --i) {
+    ranks[i] = ranks[i - 1];
+  }
+  ranks[pos] = rank;
+  *rank_count = count + 1;
+}
+
+__device__ float glass_lookup_selected_rank_f32(
+    int rank,
+    const int* ranks,
+    const float* selected,
+    int rank_count) {
+  for (int i = 0; i < rank_count; ++i) {
+    if (ranks[i] == rank) {
+      return selected[i];
+    }
+  }
+  return 0.0f;
+}
+
+__device__ float glass_interpolate_selected_percentile_f32(
+    int lower,
+    int upper,
+    float t,
+    const int* ranks,
+    const float* selected,
+    int rank_count) {
+  const float lower_value = glass_lookup_selected_rank_f32(lower, ranks, selected, rank_count);
+  if (upper == lower || t <= 0.0f) {
+    return lower_value;
+  }
+  const float upper_value = glass_lookup_selected_rank_f32(upper, ranks, selected, rank_count);
+  return lower_value * (1.0f - t) + upper_value * t;
+}
+
+__device__ void glass_select_quartiles_f32(
+    float* values,
+    int count,
+    float* median,
+    float* q25,
+    float* q75) {
+  if (count <= 0) {
+    *median = 0.0f;
+    *q25 = 0.0f;
+    *q75 = 0.0f;
+    return;
+  }
+  if (count == 1) {
+    *median = values[0];
+    *q25 = values[0];
+    *q75 = values[0];
+    return;
+  }
+
+  int q25_lower = 0;
+  int q25_upper = 0;
+  float q25_t = 0.0f;
+  int median_lower = 0;
+  int median_upper = 0;
+  float median_t = 0.0f;
+  int q75_lower = 0;
+  int q75_upper = 0;
+  float q75_t = 0.0f;
+  glass_percentile_bounds_f32(count, 0.25f, &q25_lower, &q25_upper, &q25_t);
+  glass_percentile_bounds_f32(count, 0.5f, &median_lower, &median_upper, &median_t);
+  glass_percentile_bounds_f32(count, 0.75f, &q75_lower, &q75_upper, &q75_t);
+
+  int ranks[6];
+  float selected[6];
+  int rank_count = 0;
+  glass_add_unique_rank_sorted_f32(q25_lower, ranks, &rank_count);
+  if (q25_upper != q25_lower && q25_t > 0.0f) {
+    glass_add_unique_rank_sorted_f32(q25_upper, ranks, &rank_count);
+  }
+  glass_add_unique_rank_sorted_f32(median_lower, ranks, &rank_count);
+  if (median_upper != median_lower && median_t > 0.0f) {
+    glass_add_unique_rank_sorted_f32(median_upper, ranks, &rank_count);
+  }
+  glass_add_unique_rank_sorted_f32(q75_lower, ranks, &rank_count);
+  if (q75_upper != q75_lower && q75_t > 0.0f) {
+    glass_add_unique_rank_sorted_f32(q75_upper, ranks, &rank_count);
+  }
+
+  int search_left = 0;
+  for (int i = 0; i < rank_count; ++i) {
+    const int rank = ranks[i];
+    selected[i] = glass_select_kth_range_f32(values, search_left, count - 1, rank);
+    search_left = rank + 1;
+  }
+
+  *q25 = glass_interpolate_selected_percentile_f32(
+      q25_lower, q25_upper, q25_t, ranks, selected, rank_count);
+  *median = glass_interpolate_selected_percentile_f32(
+      median_lower, median_upper, median_t, ranks, selected, rank_count);
+  *q75 = glass_interpolate_selected_percentile_f32(
+      q75_lower, q75_upper, q75_t, ranks, selected, rank_count);
 }
 
 __device__ float glass_count_map_value_f32(float value, const float*) {
@@ -1510,9 +1634,10 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   }
   const float fallback_scale = sqrtf(variance / static_cast<float>(count));
 
-  const float center0 = glass_percentile_select_f32(values, count, 0.5f);
-  const float q25 = glass_percentile_select_f32(values, count, 0.25f);
-  const float q75 = glass_percentile_select_f32(values, count, 0.75f);
+  float center0 = 0.0f;
+  float q25 = 0.0f;
+  float q75 = 0.0f;
+  glass_select_quartiles_f32(values, count, &center0, &q25, &q75);
   float first_scale = (q75 - q25) / 1.349f;
   if (!(first_scale > 0.0f) || !isfinite(first_scale)) {
     first_scale = fallback_scale;

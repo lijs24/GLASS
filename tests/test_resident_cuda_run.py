@@ -2819,7 +2819,9 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert hardened_timing["native_kernel_frame_capacity"] == 256
     assert hardened_timing["native_kernel_capacity_selector"] == "small_256"
     assert hardened_timing["native_profile"]["schema_version"] == 1
-    assert hardened_timing["native_profile"]["percentile_strategy"] == "quickselect_order_statistics"
+    assert hardened_timing["native_profile"]["percentile_strategy"] == (
+        "ascending_unique_quartile_quickselect_order_statistics"
+    )
     assert hardened_timing["native_profile"]["winsorized_accumulation_order"] == "frame_axis_input_order"
     assert hardened_timing["native_profile"]["kernel_sync_s"] >= 0.0
     assert hardened_timing["native_profile"]["download_s"] >= 0.0

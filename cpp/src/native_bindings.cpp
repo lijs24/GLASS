@@ -11649,7 +11649,7 @@ class ResidentCalibratedStack {
         py::dict profile_info;
         profile_info["schema_version"] = 1;
         profile_info["native_profile_model"] = "chrono_allocation_upload_kernel_download_free";
-        profile_info["percentile_strategy"] = "quickselect_order_statistics";
+        profile_info["percentile_strategy"] = "ascending_unique_quartile_quickselect_order_statistics";
         profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
         profile_info["allocation_s"] = allocation_s;
         profile_info["weights_upload_s"] = weights_upload_s;
@@ -11808,7 +11808,7 @@ class ResidentCalibratedStack {
       py::dict profile_info;
       profile_info["schema_version"] = 1;
       profile_info["native_profile_model"] = "chrono_allocation_upload_kernel_download_free";
-      profile_info["percentile_strategy"] = "quickselect_order_statistics";
+      profile_info["percentile_strategy"] = "ascending_unique_quartile_quickselect_order_statistics";
       profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
       profile_info["allocation_s"] = allocation_s;
       profile_info["weights_upload_s"] = weights_upload_s;
