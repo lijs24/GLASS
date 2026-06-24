@@ -379,6 +379,8 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_streams": 4,
         "resident_calibration_wave_frames": 4,
         "resident_calibration_release_mode": "callback_queue",
+        "resident_native_queue_read": "on",
+        "resident_native_queue_drain_mode": "thread",
     },
     "throughput-v4-native-completion": {
         "resident_prefetch_frames": 32,
@@ -428,6 +430,9 @@ RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_calibration_release_mode": "--resident-calibration-release-mode",
     "resident_native_completion_calibration": "--resident-native-completion-calibration",
     "resident_native_completion_wave_fill_us": "--resident-native-completion-wave-fill-us",
+    "resident_native_batch_read": "--resident-native-batch-read",
+    "resident_native_queue_read": "--resident-native-queue-read",
+    "resident_native_queue_drain_mode": "--resident-native-queue-drain-mode",
     "resident_integration_dispatch": "--resident-integration-dispatch",
 }
 
@@ -932,6 +937,9 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     timing["resident_native_completion_wave_fill_us"] = getattr(
         args, "resident_native_completion_wave_fill_us", 0
     )
+    timing["resident_native_batch_read"] = getattr(args, "resident_native_batch_read", "off")
+    timing["resident_native_queue_read"] = getattr(args, "resident_native_queue_read", "off")
+    timing["resident_native_queue_drain_mode"] = getattr(args, "resident_native_queue_drain_mode", None)
     timing["resident_master_cache_policy"] = getattr(args, "resident_master_cache_policy", None)
     timing["resident_master_cache_dir"] = getattr(args, "resident_master_cache_dir", None)
     timing["resident_source_dq_cache"] = getattr(args, "resident_source_dq_cache", "off")
@@ -2472,6 +2480,9 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_native_completion_calibration=args.resident_native_completion_calibration,
                 resident_native_completion_wave_fill_us=args.resident_native_completion_wave_fill_us,
+                resident_native_batch_read=args.resident_native_batch_read,
+                resident_native_queue_read=args.resident_native_queue_read,
+                resident_native_queue_drain_mode=args.resident_native_queue_drain_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_master_cache_policy=args.resident_master_cache_policy,
                 resident_output_maps=args.resident_output_maps,
@@ -2748,6 +2759,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_native_completion_calibration=args.resident_native_completion_calibration,
                 resident_native_completion_wave_fill_us=args.resident_native_completion_wave_fill_us,
+                resident_native_batch_read=args.resident_native_batch_read,
+                resident_native_queue_read=args.resident_native_queue_read,
+                resident_native_queue_drain_mode=args.resident_native_queue_drain_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_master_cache_policy=args.resident_master_cache_policy,
                 resident_output_maps=args.resident_output_maps,
@@ -6078,6 +6092,30 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-native-batch-read",
+        choices=["off", "on"],
+        default="off",
+        help=(
+            "native raw-FITS batch read scheduler for resident native_u16_gpu mode; kept explicit because "
+            "native queue read is the preferred throughput-v3 path when available"
+        ),
+    )
+    run.add_argument(
+        "--resident-native-queue-read",
+        choices=["off", "on"],
+        default="off",
+        help=(
+            "native raw-FITS completion queue reader for resident native_u16_gpu mode; throughput-v3-io "
+            "enables this when compatible and falls back automatically when unavailable"
+        ),
+    )
+    run.add_argument(
+        "--resident-native-queue-drain-mode",
+        choices=["thread", "inline"],
+        default=None,
+        help="drain mode for --resident-native-queue-read; default keeps the native thread-drain route",
+    )
+    run.add_argument(
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across output directories",
     )
@@ -6712,6 +6750,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="microseconds to wait for extra completion-queue frames before draining an audit calibration wave",
     )
+    audit.add_argument("--resident-native-batch-read", choices=["off", "on"], default="off")
+    audit.add_argument("--resident-native-queue-read", choices=["off", "on"], default="off")
+    audit.add_argument("--resident-native-queue-drain-mode", choices=["thread", "inline"], default=None)
     audit.add_argument(
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across audit output directories",

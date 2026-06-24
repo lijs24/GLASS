@@ -969,6 +969,9 @@ class _LightPrefetcher:
         release_refill_mode: str = "immediate",
         fits_read_mode: str = "astropy",
         fits_specs_by_path: dict[str, SimpleFitsImageSpec] | None = None,
+        native_batch_read: str = "off",
+        native_queue_read: str = "off",
+        native_queue_drain_mode: str | None = None,
     ):
         self.light_frames = light_frames
         self.depth = max(0, int(depth))
@@ -976,31 +979,55 @@ class _LightPrefetcher:
         self.pinned_ring = bool(pinned_ring and self.depth > 0)
         self.native_batch_read_candidate = bool(self.pinned_ring and fits_read_mode == "native_u16_gpu")
         self.native_queue_read_candidate = bool(self.pinned_ring and fits_read_mode == "native_u16_gpu")
+        if native_batch_read not in {"off", "on"}:
+            raise ValueError("native_batch_read must be off or on")
+        if native_queue_read not in {"off", "on"}:
+            raise ValueError("native_queue_read must be off or on")
+        if native_queue_drain_mode is not None and native_queue_drain_mode not in {"thread", "inline"}:
+            raise ValueError("native_queue_drain_mode must be thread, inline, or None")
         native_queue_policy = str(os.environ.get("GLASS_RESIDENT_NATIVE_QUEUE_READ", "")).strip().lower()
         self.native_queue_read_policy = (
-            "env_enabled"
+            "cli_enabled"
+            if native_queue_read == "on" and self.native_queue_read_candidate
+            else "cli_requested_not_candidate"
+            if native_queue_read == "on"
+            else "env_enabled"
+            if native_queue_policy in {"1", "true", "yes", "on"} and self.native_queue_read_candidate
+            else "env_requested_not_candidate"
             if native_queue_policy in {"1", "true", "yes", "on"}
             else "env_disabled_default"
             if self.native_queue_read_candidate
             else "not_candidate"
         )
         self.native_queue_read_requested = bool(
-            self.native_queue_read_candidate and self.native_queue_read_policy == "env_enabled"
+            self.native_queue_read_candidate and self.native_queue_read_policy in {"cli_enabled", "env_enabled"}
         )
-        native_queue_drain_mode = str(
-            os.environ.get("GLASS_RESIDENT_NATIVE_QUEUE_DRAIN_MODE", "thread")
+        native_queue_drain_source = "cli" if native_queue_drain_mode is not None else "env_or_default"
+        native_queue_drain_value = str(
+            native_queue_drain_mode
+            if native_queue_drain_mode is not None
+            else os.environ.get("GLASS_RESIDENT_NATIVE_QUEUE_DRAIN_MODE", "thread")
         ).strip().lower()
         self.native_queue_read_drain_mode = (
             "inline"
-            if native_queue_drain_mode in {"inline", "main", "direct"}
+            if native_queue_drain_value in {"inline", "main", "direct"}
             else "thread"
         )
+        self.native_queue_read_drain_source = native_queue_drain_source
         native_batch_policy = str(os.environ.get("GLASS_RESIDENT_NATIVE_BATCH_READ", "")).strip().lower()
         native_batch_env_enabled = native_batch_policy in {"1", "true", "yes", "on"}
-        if self.native_queue_read_requested and native_batch_env_enabled:
+        if self.native_queue_read_requested and native_batch_read == "on":
+            self.native_batch_read_policy = "cli_ignored_native_queue_enabled"
+        elif self.native_queue_read_requested and native_batch_env_enabled:
             self.native_batch_read_policy = "env_ignored_native_queue_enabled"
-        elif native_batch_env_enabled:
+        elif native_batch_read == "on" and self.native_batch_read_candidate:
+            self.native_batch_read_policy = "cli_enabled"
+        elif native_batch_read == "on":
+            self.native_batch_read_policy = "cli_requested_not_candidate"
+        elif native_batch_env_enabled and self.native_batch_read_candidate:
             self.native_batch_read_policy = "env_enabled"
+        elif native_batch_env_enabled:
+            self.native_batch_read_policy = "env_requested_not_candidate"
         elif self.native_batch_read_candidate:
             self.native_batch_read_policy = "env_disabled_default"
         else:
@@ -1008,7 +1035,7 @@ class _LightPrefetcher:
         self.native_batch_read_requested = bool(
             self.native_batch_read_candidate
             and not self.native_queue_read_requested
-            and self.native_batch_read_policy == "env_enabled"
+            and self.native_batch_read_policy in {"cli_enabled", "env_enabled"}
         )
         self.native_batch_read_available = False
         self.native_batch_read_enabled = False
@@ -5603,6 +5630,9 @@ def run_resident_calibration_integration(
     resident_calibration_release_mode: str = "sync",
     resident_native_completion_calibration: str = "off",
     resident_native_completion_wave_fill_us: int = 0,
+    resident_native_batch_read: str = "off",
+    resident_native_queue_read: str = "off",
+    resident_native_queue_drain_mode: str | None = None,
     resident_master_cache_dir: str | Path | None = None,
     resident_master_cache_policy: str = "auto",
     resident_output_maps: str = "audit",
@@ -5777,6 +5807,12 @@ def run_resident_calibration_integration(
         raise ValueError("resident_native_completion_calibration must be off or on")
     if resident_native_completion_wave_fill_us < 0 or resident_native_completion_wave_fill_us > 10000:
         raise ValueError("resident_native_completion_wave_fill_us must be between 0 and 10000")
+    if resident_native_batch_read not in {"off", "on"}:
+        raise ValueError("resident_native_batch_read must be off or on")
+    if resident_native_queue_read not in {"off", "on"}:
+        raise ValueError("resident_native_queue_read must be off or on")
+    if resident_native_queue_drain_mode is not None and resident_native_queue_drain_mode not in {"thread", "inline"}:
+        raise ValueError("resident_native_queue_drain_mode must be thread, inline, or None")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -6453,6 +6489,9 @@ def run_resident_calibration_integration(
                 release_refill_mode=resident_prefetch_refill_mode,
                 fits_read_mode=resident_fits_read_mode_effective,
                 fits_specs_by_path=resident_fits_spec_cache,
+                native_batch_read=resident_native_batch_read,
+                native_queue_read=resident_native_queue_read,
+                native_queue_drain_mode=resident_native_queue_drain_mode,
             ) as light_prefetch:
                 prefetch_host_pinned_bytes = light_prefetch.host_pinned_bytes
                 calibration_remaining_index_model = "set_with_sequential_cursor"
@@ -11654,6 +11693,7 @@ def run_resident_calibration_integration(
                 "native_queue_read_available": bool(light_prefetch.native_queue_read_available),
                 "native_queue_read_enabled": bool(light_prefetch.native_queue_read_enabled),
                 "native_queue_read_drain_mode": str(light_prefetch.native_queue_read_drain_mode),
+                "native_queue_read_drain_source": str(light_prefetch.native_queue_read_drain_source),
                 "native_queue_read_submit_count": int(light_prefetch.native_queue_read_submit_count),
                 "native_queue_read_completion_count": int(
                     light_prefetch.native_queue_read_completion_count
@@ -12386,6 +12426,7 @@ def run_resident_calibration_integration(
                         "native_queue_read_available": bool(light_prefetch.native_queue_read_available),
                         "native_queue_read_enabled": bool(light_prefetch.native_queue_read_enabled),
                         "native_queue_read_drain_mode": str(light_prefetch.native_queue_read_drain_mode),
+                        "native_queue_read_drain_source": str(light_prefetch.native_queue_read_drain_source),
                         "native_queue_read_submit_count": int(light_prefetch.native_queue_read_submit_count),
                         "native_queue_read_completion_count": int(
                             light_prefetch.native_queue_read_completion_count

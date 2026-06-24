@@ -384,8 +384,11 @@ def test_resident_runtime_preset_throughput_v3_io_applies_probe_values() -> None
     assert args.resident_calibration_streams == 4
     assert args.resident_calibration_wave_frames == 4
     assert args.resident_calibration_release_mode == "callback_queue"
+    assert args.resident_native_queue_read == "on"
+    assert args.resident_native_queue_drain_mode == "thread"
     assert args.resident_integration_dispatch == "stack"
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
+    assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_read"] == "on"
 
 
 def test_resident_runtime_preset_throughput_v4_native_completion_is_explicit_ab_route() -> None:
@@ -434,6 +437,8 @@ def test_resident_runtime_preset_defaults_to_throughput_v3_io() -> None:
     assert args.resident_calibration_release_mode == "callback_queue"
     assert args.resident_native_completion_calibration == "off"
     assert args.resident_native_completion_wave_fill_us == 0
+    assert args.resident_native_queue_read == "on"
+    assert args.resident_native_queue_drain_mode == "thread"
     assert args.resident_integration_dispatch == "stack"
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
 
@@ -458,7 +463,33 @@ def test_resident_runtime_preset_manual_keeps_legacy_values() -> None:
     assert args.resident_prefetch_workers == 1
     assert args.resident_h2d_mode == "pageable"
     assert args.resident_calibration_release_mode == "sync"
+    assert args.resident_native_queue_read == "off"
+    assert args.resident_native_queue_drain_mode is None
     assert args._resident_runtime_preset_effective["applied"] == {}
+
+
+def test_resident_runtime_preset_respects_explicit_native_queue_override() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "throughput-v3-io",
+            "--resident-native-queue-read",
+            "off",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_native_queue_read == "off"
+    assert args.resident_native_queue_drain_mode == "thread"
+    explicit = args._resident_runtime_preset_effective["explicit_overrides"]
+    assert explicit["resident_native_queue_read"] == "off"
+    assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_drain_mode"] == "thread"
 
 
 def test_resident_runtime_preset_respects_explicit_overrides() -> None:

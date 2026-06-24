@@ -933,6 +933,111 @@ Interpretation:
   `unknown` FITS frames. That is harmless and auditable, but future work can
   add scanner-level ignore/include policies for DQ directories.
 
+### S2-Gate 591: Native Queue Read Default For Throughput-v3
+
+Gate 591 returns to the resident runtime performance path. The compatible
+native raw-FITS queue reader already existed as an environment-variable
+experiment, but the default `throughput-v3-io` preset still used the older
+thread-pool prefetch route. This gate promotes native queue read to a formal
+CLI/preset control and enables it in `throughput-v3-io` when the resident
+native_u16_gpu path is compatible.
+
+Implementation:
+
+- Added CLI controls:
+  - `--resident-native-batch-read off|on`;
+  - `--resident-native-queue-read off|on`;
+  - `--resident-native-queue-drain-mode thread|inline`.
+- `throughput-v3-io` now applies:
+  - `resident_native_queue_read=on`;
+  - `resident_native_queue_drain_mode=thread`.
+- `_LightPrefetcher` now accepts CLI/preset controls before falling back to the
+  legacy env controls:
+  - `GLASS_RESIDENT_NATIVE_BATCH_READ`;
+  - `GLASS_RESIDENT_NATIVE_QUEUE_READ`;
+  - `GLASS_RESIDENT_NATIVE_QUEUE_DRAIN_MODE`.
+- If the run is not a candidate for native_u16_gpu queue reading, the route
+  records `cli_requested_not_candidate` and falls back instead of failing.
+- `run_timing.json` and `resident_io_pipeline` now record the effective native
+  queue/batch settings and drain source.
+
+Real 200-light A/B probes before default promotion:
+
+- Probe summary:
+  `C:\glass_runs\phase2_s2_gate591_native_read_ab\native_read_probe_summary.json`
+- Gate590 default:
+  - total: `8.27696210006252 s`;
+  - light read/upload/calibrate: `2.697366200038232 s`;
+  - hash parity reference: true.
+- Env native batch read:
+  - total: `7.984438900370151 s`;
+  - light read/upload/calibrate: `2.5847186000319198 s`;
+  - enabled: true, `200` frames;
+  - hash parity versus Gate590: true.
+- Env native queue read, thread drain:
+  - total: `7.960773499915376 s`;
+  - light read/upload/calibrate: `2.532509900047444 s`;
+  - enabled: true, `200` completions;
+  - hash parity versus Gate590: true.
+
+Fresh default 200-light regression after code change:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate591_native_queue_default\default_resident_regression`
+- Summary:
+  `C:\glass_runs\phase2_s2_gate591_native_queue_default\gate591_validation_summary.json`
+- Compare:
+  `C:\glass_runs\phase2_s2_gate591_native_queue_default\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate591_native_queue_default\acceptance_audit.json`
+- Hash parity versus Gate590:
+  `C:\glass_runs\phase2_s2_gate591_native_queue_default\hash_parity_vs_gate590.json`
+- Effective route:
+  - `native_queue_read_policy=cli_enabled`;
+  - `native_queue_read_enabled=true`;
+  - `native_queue_read_drain_mode=thread`;
+  - `native_queue_read_completion_count=200`.
+- GLASS time: `8.165057000005618 s`.
+- Speedup versus Gate590: `1.0137053666688212x`.
+- WBPP black-box reference time: `1092.541 s`.
+- Speedup versus reference: `133.8069042260511x`.
+- Coverage190 fraction: `0.905523489118409`.
+- RMS difference: `0.005340835487175878`.
+- p99 absolute difference: `0.002133606873685496`.
+- Pipeline contract: passed.
+- StackEngine contract: passed.
+- Warp-quality contract: passed.
+- Acceptance audit: passed.
+- Six integration FITS outputs are SHA256-identical to Gate590.
+
+Validation commands:
+
+- `python -m pytest -q tests/test_cli_smoke.py::test_resident_runtime_preset_throughput_v3_io_applies_probe_values
+  tests/test_cli_smoke.py::test_resident_runtime_preset_defaults_to_throughput_v3_io
+  tests/test_cli_smoke.py::test_resident_runtime_preset_manual_keeps_legacy_values
+  tests/test_cli_smoke.py::test_resident_runtime_preset_respects_explicit_native_queue_override
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_queue_read_is_opt_in
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_queue_read_default_drain_is_thread
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_throughput_v3_uses_cli_native_queue_read
+  tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_batch_read_is_opt_in`
+- `python -m ruff check src\glass\cli.py src\glass\engine\resident_cuda.py
+  tests\test_cli_smoke.py tests\test_resident_cuda_run.py`
+- `python -m pytest -q`
+- Fresh 200-light resident `glass run`, `glass compare`, and
+  `glass acceptance-audit` listed above.
+
+Interpretation:
+
+- this is a runtime-path gate, not a report-only gate: the default resident
+  preset now uses the native completion queue reader when available;
+- the improvement is modest on the current machine (`~1.37%` on the fresh
+  default run, with a `~3.8%` best A/B probe), but it removes an env-only
+  scheduling path and preserves bitwise output equality;
+- this does not solve the larger resident registration/warp target. The next
+  substantive gate should continue reducing resident registration/LN/warp
+  orchestration or improve queue/read scheduling beyond this first default
+  promotion.
+
 ### S2-Gate 505: Unclamped Lanczos3 Warp Fast Path
 
 Gate 505 keeps the current conservative `stack` route for non-bilinear resident
