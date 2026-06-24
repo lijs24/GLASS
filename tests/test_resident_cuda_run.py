@@ -2845,6 +2845,99 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert float(np.max(low_reject)) > 0.0
 
 
+def test_cli_resident_cuda_hardened_winsorized_minimal_output_master_only(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _four_light_rejection_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_hardened_winsorized_minimal"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "winsorized_sigma",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-integration-dispatch",
+            "auto",
+            "--resident-winsorized-mode",
+            "hardened_cpu_parity",
+            "--resident-output-maps",
+            "minimal",
+        ]
+    ) == 0
+
+    light_frames = [
+        read_fits_data(path, dtype=np.float32)
+        for path in sorted((dataset / "light").glob("light_*.fits"))
+    ]
+    expected_master, *_ = weighted_integrate_stack(
+        np.stack(light_frames, axis=0),
+        rejection="winsorized_sigma",
+        low_sigma=3.0,
+        high_sigma=3.0,
+    )
+
+    integration = read_json(run / "integration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    contract = read_json(run / "resident_result_contract.json")
+    output = integration["outputs"][0]
+    artifact = resident["artifacts"][0]
+    dispatch = artifact["resident_integration_dispatch"]
+    hardened_timing = output["hardened_winsorized_timing_s"]
+    native_profile = hardened_timing["native_profile"]
+    master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
+
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
+    assert contract["passed"] is True
+    assert output["output_map_policy"]["mode"] == "minimal"
+    assert output["output_map_policy"]["available"] == ["master"]
+    assert output["weight_map_path"] is None
+    assert output["coverage_map_path"] is None
+    assert output["low_rejection_map_path"] is None
+    assert output["high_rejection_map_path"] is None
+    assert output["dq_map_path"] is None
+    assert output["dq_summary"] is None
+    assert artifact["weight_map_path"] is None
+    assert artifact["coverage_map_path"] is None
+    assert artifact["low_rejection_map_path"] is None
+    assert artifact["high_rejection_map_path"] is None
+    assert dispatch["effective_mode"] == "stack"
+    assert dispatch["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert dispatch["download_mode"] == "master_only"
+    assert (
+        dispatch["native_map_workspace_mode"]
+        == "master_only_no_weight_or_diagnostic_device_maps"
+    )
+    assert dispatch["diagnostic_maps_downloaded"] is False
+    assert dispatch["weight_map_downloaded"] is False
+    assert hardened_timing["download_mode"] == "master_only"
+    assert hardened_timing["count_map_dtype_requested"] == "uint16"
+    assert hardened_timing["count_map_dtype"] == "uint16"
+    assert native_profile["download_mode"] == "master_only"
+    assert native_profile["diagnostic_maps_downloaded"] is False
+    assert native_profile["weight_map_downloaded"] is False
+    assert native_profile["downloaded_arrays"] == 1
+    assert native_profile["downloaded_bytes"] == expected_master.size * 4
+
+
 def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     cuda_module_or_skip()
     manifest = tmp_path / "manifest.json"

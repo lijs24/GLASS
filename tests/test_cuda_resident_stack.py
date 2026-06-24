@@ -2582,6 +2582,67 @@ def test_resident_stack_hardened_winsorized_sigma_compact_count_maps_match_float
     assert np.allclose(compact_high.astype(np.float32), float_high, rtol=1e-5, atol=1e-5)
 
 
+def test_resident_stack_hardened_winsorized_sigma_master_only_matches_full_master():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    frames = [
+        np.array([[1, 1], [10, 4]], dtype=np.float32),
+        np.array([[1, 2], [10, 4]], dtype=np.float32),
+        np.array([[1, 3], [10, 4]], dtype=np.float32),
+        np.array([[12, 4], [10, 40]], dtype=np.float32),
+    ]
+    weights = np.array([1.0, 2.0, 1.0, 1.0], dtype=np.float32)
+    full_stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    master_only_stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        full_stack.upload_calibrated_frame(index, frame)
+        master_only_stack.upload_calibrated_frame(index, frame)
+
+    full_master, full_weight, full_coverage, full_low, full_high, full_timing = (
+        full_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.4,
+            2.4,
+            count_map_dtype="uint16",
+            download_mode="full",
+        )
+    )
+    master_only, weight_map, coverage, low_reject, high_reject, timing = (
+        master_only_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.4,
+            2.4,
+            count_map_dtype="uint16",
+            download_mode="master_only",
+        )
+    )
+
+    assert np.allclose(master_only, full_master, rtol=1e-5, atol=1e-5)
+    assert full_weight is not None
+    assert full_coverage is not None
+    assert full_low is not None
+    assert full_high is not None
+    assert full_timing["download_mode"] == "full"
+    assert full_timing["native_profile"]["downloaded_arrays"] == 5
+    assert weight_map is None
+    assert coverage is None
+    assert low_reject is None
+    assert high_reject is None
+    assert timing["download_mode"] == "master_only"
+    assert timing["count_map_dtype"] == "uint16"
+    assert timing["native_profile"]["download_mode"] == "master_only"
+    assert timing["native_profile"]["diagnostic_maps_downloaded"] is False
+    assert timing["native_profile"]["weight_map_downloaded"] is False
+    assert timing["native_profile"]["downloaded_arrays"] == 1
+    assert timing["native_profile"]["downloaded_bytes"] == 4 * 4
+
+
 def test_resident_stack_hardened_winsorized_sigma_honors_rejection_guard():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(

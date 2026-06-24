@@ -12502,15 +12502,15 @@ def run_resident_calibration_integration(
                 == RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
             ):
                 stack_integration_native_map_workspace_mode = "cpu_stack_engine_segmented_hardened_download_workspace"
+            elif stack_integration_download_mode == "master_only":
+                stack_integration_native_map_workspace_mode = (
+                    "master_only_no_weight_or_diagnostic_device_maps"
+                )
             elif (
                 rejection_mode == "winsorized_sigma"
                 and group_resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
             ):
                 stack_integration_native_map_workspace_mode = "standard_hardened_winsorized_workspace"
-            elif stack_integration_download_mode == "master_only":
-                stack_integration_native_map_workspace_mode = (
-                    "master_only_no_weight_or_diagnostic_device_maps"
-                )
             else:
                 stack_integration_native_map_workspace_mode = "full_weight_and_diagnostic_device_maps"
             if (
@@ -12672,6 +12672,7 @@ def run_resident_calibration_integration(
                     min_samples=rejection_min_samples,
                     max_reject_fraction=group_rejection_max_fraction,
                     count_map_dtype="uint16",
+                    download_mode=stack_integration_download_mode,
                 )
             else:
                 if not hasattr(stack, "integrate_sigma_clip"):

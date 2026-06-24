@@ -401,6 +401,43 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 619: Resident Hardened Master-Only Download Mode
+
+Gate 619 returns to the resident CUDA performance path while preserving the
+Gate618 result-contract guard. Gate618's latest 200-light hardened integration
+profile showed that default audit/science output still needs all maps, but
+minimal-output performance probes should not allocate and download weight,
+coverage, low-rejection, and high-rejection maps when only the final master is
+requested. This gate adds the missing `download_mode` contract to the native
+hardened winsorized stack path.
+
+Implementation:
+
+- `ResidentCalibratedStack.integrate_hardened_winsorized_sigma` accepts
+  `download_mode=full|master_weight|master_only`, matching the resident
+  sigma/fused-matrix integration contracts.
+- The hardened CUDA kernel now treats weight and diagnostic output pointers as
+  optional; omitted maps are not allocated on device, not copied to host, and
+  are returned to Python as `None`.
+- Resident runtime passes `download_mode=master_only` when
+  `--resident-output-maps minimal` is requested, including explicit
+  `resident_winsorized_mode=hardened_cpu_parity`.
+- Default audit/science output remains `download_mode=full`, so weight,
+  coverage, rejection maps, DQ construction, and regression-gate evidence are
+  unchanged.
+
+Validation plan:
+
+- Focused CUDA resident-stack parity tests for hardened full vs master-only
+  output.
+- Focused CLI resident run test for explicit hardened winsorized minimal output
+  with no weight/coverage/rejection/DQ artifacts.
+- Native rebuild, ruff, full `python -m pytest -q`.
+- Real 200-light default A/B against Gate618 to prove no audit/science
+  numerical or artifact drift.
+- Optional real 200-light minimal-output probe to estimate the master-only
+  compute-limit timing.
+
 ### S2-Gate 618: Resident Result Contract Runtime Gate
 
 Gate 618 turns fatal resident CUDA result-contract failures from passive

@@ -108,6 +108,14 @@ maps for 200-frame groups. The Python wrapper records
 payload. The float32 count-map path remains available for direct API callers
 and compatibility.
 
+S2-Gate 619 adds the same output download policy to the native hardened
+winsorized stack path that ordinary sigma and fused-matrix resident integration
+already use. `download_mode=full` returns master, weight, coverage, and
+rejection maps for audit/science output. `download_mode=master_only` returns
+only the master and skips device allocation plus host download for omitted maps.
+This is an output-transfer/workspace optimization only; the winsorized
+percentile, guard, rejection, and accumulation formulas are unchanged.
+
 S2-Gate 602 extends the resident DQ/count-map native consumer so it accepts
 `float32`, `int16`, and `uint16` count maps without forcing compact maps back
 to float32. Resident artifacts record `dq_map_count_input_dtypes`; in the
