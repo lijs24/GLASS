@@ -224,6 +224,18 @@ therefore disabled by default. Default profiles now record
 keep `unit_positive_weights_fast_path=false` unless the experiment is explicitly
 enabled.
 
+S2-Gate 622 adds a second guarded unit/zero-weight probe,
+`GLASS_CUDA_UNIT_WEIGHT_LOCAL_REUSE=1`, that stores an additional frame-order
+local sample copy per output pixel and reuses it for the winsorized
+mean/variance, rejection-count, and final-mean passes. The route preserves the
+same median/IQR formula and frame-axis accumulation order, and real 200-light
+regression passed correctness contracts, but it was slower than the default:
+native `kernel_sync_s` increased from `3.1234866` to `3.7804679`. This records a
+negative design result: duplicating per-thread sample arrays increases local
+memory pressure enough to outweigh fewer global stack rereads on the current
+200-light RTX PRO 6000 benchmark. The route remains opt-in only, and future
+hardened reducer work should avoid larger per-thread local arrays.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted

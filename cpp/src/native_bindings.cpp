@@ -656,7 +656,8 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     float high_sigma,
     int min_samples,
     float max_reject_fraction,
-    bool unit_positive_weights);
+    bool unit_positive_weights,
+    bool unit_positive_local_reuse);
 void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     const float* stack,
     const float* weights,
@@ -673,7 +674,8 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     float high_sigma,
     int min_samples,
     float max_reject_fraction,
-    bool unit_positive_weights);
+    bool unit_positive_weights,
+    bool unit_positive_local_reuse);
 void glass_integrate_resident_tile_local_sigma_clip_f32_launch(
     const float* stack,
     const float* weights,
@@ -11500,13 +11502,17 @@ class ResidentCalibratedStack {
       weights.assign(ptr, ptr + frame_count_);
     }
     bool unit_positive_weights = true;
+    std::size_t unit_positive_weight_frame_count = 0;
     for (const float weight : weights) {
+      if (std::isfinite(weight) && weight > 0.0f) {
+        ++unit_positive_weight_frame_count;
+      }
       if (std::isfinite(weight) && weight > 0.0f && weight != 1.0f) {
         unit_positive_weights = false;
-        break;
       }
     }
     std::string unit_active_index_env_value;
+    std::string unit_local_reuse_env_value;
 #ifdef _MSC_VER
     char* unit_active_index_env_buffer = nullptr;
     std::size_t unit_active_index_env_length = 0;
@@ -11518,15 +11524,34 @@ class ResidentCalibratedStack {
       unit_active_index_env_value = unit_active_index_env_buffer;
       std::free(unit_active_index_env_buffer);
     }
+    char* unit_local_reuse_env_buffer = nullptr;
+    std::size_t unit_local_reuse_env_length = 0;
+    if (_dupenv_s(
+            &unit_local_reuse_env_buffer,
+            &unit_local_reuse_env_length,
+            "GLASS_CUDA_UNIT_WEIGHT_LOCAL_REUSE") == 0 &&
+        unit_local_reuse_env_buffer != nullptr) {
+      unit_local_reuse_env_value = unit_local_reuse_env_buffer;
+      std::free(unit_local_reuse_env_buffer);
+    }
 #else
     const char* unit_active_index_env = std::getenv("GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX");
     if (unit_active_index_env != nullptr) {
       unit_active_index_env_value = unit_active_index_env;
     }
+    const char* unit_local_reuse_env = std::getenv("GLASS_CUDA_UNIT_WEIGHT_LOCAL_REUSE");
+    if (unit_local_reuse_env != nullptr) {
+      unit_local_reuse_env_value = unit_local_reuse_env;
+    }
 #endif
     const bool unit_positive_active_index_enabled =
         unit_positive_weights && !unit_active_index_env_value.empty() && unit_active_index_env_value != "0" &&
         unit_active_index_env_value != "false" && unit_active_index_env_value != "FALSE";
+    const bool unit_positive_local_reuse_requested =
+        unit_positive_weights && !unit_local_reuse_env_value.empty() && unit_local_reuse_env_value != "0" &&
+        unit_local_reuse_env_value != "false" && unit_local_reuse_env_value != "FALSE";
+    const bool unit_positive_local_reuse_enabled =
+        unit_positive_local_reuse_requested && !unit_positive_active_index_enabled;
     std::vector<unsigned int> unit_positive_frame_indices;
     if (unit_positive_active_index_enabled) {
       unit_positive_frame_indices.reserve(frame_count_);
@@ -11649,7 +11674,8 @@ class ResidentCalibratedStack {
             high_sigma,
             min_samples,
             max_reject_fraction,
-            unit_positive_active_index_enabled);
+            unit_positive_active_index_enabled,
+            unit_positive_local_reuse_enabled);
         check_cuda(
             cudaGetLastError(),
             "ResidentCalibratedStack.integrate_hardened_winsorized_sigma uint16 kernel launch");
@@ -11721,9 +11747,14 @@ class ResidentCalibratedStack {
         profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
         profile_info["sample_reuse_strategy"] = unit_positive_active_index_enabled
             ? "active_index_global_reread_unit_positive_weights"
-            : "global_reread_weighted_samples";
+            : (unit_positive_local_reuse_enabled ? "local_ordered_reuse_unit_positive_weights"
+                                                 : "global_reread_weighted_samples");
         profile_info["unit_positive_weights_detected"] = unit_positive_weights;
         profile_info["unit_positive_weights_fast_path"] = unit_positive_active_index_enabled;
+        profile_info["unit_positive_local_reuse_requested"] = unit_positive_local_reuse_requested;
+        profile_info["unit_positive_local_reuse_enabled"] = unit_positive_local_reuse_enabled;
+        profile_info["unit_positive_weight_frame_count"] =
+            static_cast<unsigned long long>(unit_positive_weight_frame_count);
         profile_info["unit_positive_active_frame_count"] =
             static_cast<unsigned long long>(unit_positive_active_frame_count);
         profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;
@@ -11834,10 +11865,11 @@ class ResidentCalibratedStack {
           unit_positive_active_frame_count,
           pixels_per_frame_,
           low_sigma,
-          high_sigma,
-          min_samples,
-          max_reject_fraction,
-          unit_positive_active_index_enabled);
+            high_sigma,
+            min_samples,
+            max_reject_fraction,
+            unit_positive_active_index_enabled,
+            unit_positive_local_reuse_enabled);
       check_cuda(
           cudaGetLastError(),
           "ResidentCalibratedStack.integrate_hardened_winsorized_sigma kernel launch");
@@ -11909,9 +11941,14 @@ class ResidentCalibratedStack {
       profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
       profile_info["sample_reuse_strategy"] = unit_positive_active_index_enabled
           ? "active_index_global_reread_unit_positive_weights"
-          : "global_reread_weighted_samples";
+          : (unit_positive_local_reuse_enabled ? "local_ordered_reuse_unit_positive_weights"
+                                               : "global_reread_weighted_samples");
       profile_info["unit_positive_weights_detected"] = unit_positive_weights;
       profile_info["unit_positive_weights_fast_path"] = unit_positive_active_index_enabled;
+      profile_info["unit_positive_local_reuse_requested"] = unit_positive_local_reuse_requested;
+      profile_info["unit_positive_local_reuse_enabled"] = unit_positive_local_reuse_enabled;
+      profile_info["unit_positive_weight_frame_count"] =
+          static_cast<unsigned long long>(unit_positive_weight_frame_count);
       profile_info["unit_positive_active_frame_count"] =
           static_cast<unsigned long long>(unit_positive_active_frame_count);
       profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;

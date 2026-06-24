@@ -401,6 +401,60 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 622: Guarded Unit-Weight Local-Reuse Integration Probe
+
+Gate 622 tested two high-impact possibilities against the current 200-light
+default bottlenecks instead of adding another report-only gate. First, it
+rechecked resident calibration/upload scheduling candidates on the current HEAD.
+Second, it added an opt-in native CUDA kernel route that keeps a frame-order
+local sample copy for unit/zero-weight hardened winsorized integration, avoiding
+later global stack rereads in that experimental branch.
+
+Implementation:
+
+- Add `GLASS_CUDA_UNIT_WEIGHT_LOCAL_REUSE=1` as an opt-in native hardened
+  winsorized route when all positive finite weights are exactly `1.0`.
+- Preserve the default Gate621 `global_reread_weighted_samples` path unless the
+  new environment variable is explicitly set.
+- Keep `GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX=1` and local reuse mutually
+  exclusive; active-index takes precedence if both experiments are requested.
+- Record `unit_positive_local_reuse_requested`,
+  `unit_positive_local_reuse_enabled`, `unit_positive_weight_frame_count`, and
+  `sample_reuse_strategy=local_ordered_reuse_unit_positive_weights` in native
+  profiles.
+- Add focused CUDA parity coverage for the opt-in local-reuse route and default
+  off behavior.
+
+Validation:
+
+- Native rebuild through the VS BuildTools environment with CUDA Toolkit 13.2.
+- Focused hardened resident-stack and resident CLI tests: `6 passed`.
+- Ruff over touched Python/CUDA/C++ surfaces: passed.
+- Real 200-light scheduling probes under
+  `C:\glass_runs\phase2_s2_gate622_resident_calibration_pipeline`:
+  `fill0` was slower than default (`10.639579100068659 s` versus
+  `10.49075440003071 s`), and `queue64_workers32` was much slower
+  (`11.797367000253871 s`).
+- Real 200-light local-reuse opt-in probe:
+  `C:\glass_runs\phase2_s2_gate622_resident_calibration_pipeline\real_200_local_reuse_optin_20260625_024449`.
+  It passed `resident-regression-gate` for contracts, frame masks, and numerical
+  correctness versus Gate621 default, but was slower with elapsed ratio
+  `1.0682110811673295`.
+- The local-reuse profile showed the failure mode clearly:
+  `resident_integration_s` increased from `3.2403203999856487` to
+  `3.9029811000218615`, and native `kernel_sync_s` increased from
+  `3.1234866` to `3.7804679`.
+
+Decision:
+
+- Do not promote either scheduling candidate or the local-reuse kernel route.
+- Keep local reuse guarded for diagnostic benchmarking only.
+- Treat per-thread duplicate sample arrays as a measured bad direction for the
+  200-light resident hardened reducer on this GPU. The next substantive
+  integration optimization should be a redesigned reducer, such as a segmented
+  or cooperative order-statistic strategy that reduces local-memory pressure,
+  rather than another per-thread local-array variant.
+
 ### S2-Gate 621: Guarded Unit-Weight Active-Index Integration Probe
 
 Gate 621 tests a resident hardened winsorized integration hypothesis without
