@@ -106,6 +106,13 @@ maps for 200-frame groups. The Python wrapper records
 payload. The float32 count-map path remains available for direct API callers
 and compatibility.
 
+S2-Gate 602 extends the resident DQ/count-map native consumer so it accepts
+`float32`, `int16`, and `uint16` count maps without forcing compact maps back
+to float32. Resident artifacts record `dq_map_count_input_dtypes`; in the
+200-light hardened path this proves coverage, low-rejection, and
+high-rejection maps remain `uint16` through DQ generation while geometric warp
+coverage remains `float32`.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted

@@ -16034,6 +16034,32 @@ struct HostFloat2D {
   bool present = false;
 };
 
+enum class HostCountDType {
+  Float32,
+  Int16,
+  UInt16,
+};
+
+struct HostCount2D {
+  py::array array;
+  const void* data = nullptr;
+  py::ssize_t height = 0;
+  py::ssize_t width = 0;
+  HostCountDType dtype = HostCountDType::Float32;
+  std::string dtype_name = "absent";
+  bool present = false;
+
+  float value(std::size_t index) const {
+    if (dtype == HostCountDType::Float32) {
+      return static_cast<const float*>(data)[index];
+    }
+    if (dtype == HostCountDType::UInt16) {
+      return static_cast<float>(static_cast<const std::uint16_t*>(data)[index]);
+    }
+    return static_cast<float>(static_cast<const std::int16_t*>(data)[index]);
+  }
+};
+
 struct HostCoverageStats {
   std::size_t total_pixels = 0;
   std::size_t finite_pixels = 0;
@@ -16097,7 +16123,57 @@ HostFloat2D optional_host_float2d(py::object object, const std::string& name) {
   return require_host_float2d(object, name);
 }
 
+HostCount2D require_host_count2d(py::object object, const std::string& name) {
+  py::array array = py::array::ensure(object);
+  if (!array) {
+    throw std::invalid_argument(name + " must be convertible to a C-contiguous count-map array");
+  }
+  const py::buffer_info info = array.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument(name + " must have shape (height, width)");
+  }
+  if (info.strides[1] != info.itemsize || info.strides[0] != info.itemsize * info.shape[1]) {
+    throw std::invalid_argument(name + " must be C-contiguous");
+  }
+  const std::string dtype_name = py::str(array.dtype()).cast<std::string>();
+  HostCountDType dtype = HostCountDType::Float32;
+  if (dtype_name == "float32") {
+    dtype = HostCountDType::Float32;
+  } else if (dtype_name == "uint16") {
+    dtype = HostCountDType::UInt16;
+  } else if (dtype_name == "int16") {
+    dtype = HostCountDType::Int16;
+  } else {
+    throw std::invalid_argument(name + " must have dtype float32, int16, or uint16");
+  }
+  HostCount2D result;
+  result.array = array;
+  result.data = info.ptr;
+  result.height = info.shape[0];
+  result.width = info.shape[1];
+  result.dtype = dtype;
+  result.dtype_name = dtype_name;
+  result.present = true;
+  return result;
+}
+
+HostCount2D optional_host_count2d(py::object object, const std::string& name) {
+  if (object.is_none()) {
+    return HostCount2D();
+  }
+  return require_host_count2d(object, name);
+}
+
 void require_same_shape(const HostFloat2D& candidate, const HostFloat2D& reference, const std::string& name) {
+  if (candidate.present && (candidate.height != reference.height || candidate.width != reference.width)) {
+    std::ostringstream stream;
+    stream << name << " shape " << candidate.height << "x" << candidate.width << " does not match master shape "
+           << reference.height << "x" << reference.width;
+    throw std::invalid_argument(stream.str());
+  }
+}
+
+void require_same_shape(const HostCount2D& candidate, const HostFloat2D& reference, const std::string& name) {
   if (candidate.present && (candidate.height != reference.height || candidate.width != reference.width)) {
     std::ostringstream stream;
     stream << name << " shape " << candidate.height << "x" << candidate.width << " does not match master shape "
@@ -16291,14 +16367,15 @@ void merge_dq_map_stats(HostDqMapStats& target, const HostDqMapStats& source) {
 py::dict finite_nonnegative_count_map_stats_to_dict(
     const HostCountMapStats& stats,
     py::ssize_t height,
-    py::ssize_t width) {
+    py::ssize_t width,
+    const std::string& dtype_name = "float32") {
   py::dict result;
   result["present"] = true;
   py::list shape;
   shape.append(height);
   shape.append(width);
   result["shape"] = shape;
-  result["dtype"] = "float32";
+  result["dtype"] = dtype_name;
   result["finite_pixels"] = stats.total_pixels;
   result["nonfinite_pixels"] = 0;
   if (stats.total_pixels == 0) {
@@ -16327,11 +16404,11 @@ py::tuple resident_dq_map_count_maps_i16(
     py::object geometric_warp_coverage_map_obj,
     int active_frame_count) {
   const HostFloat2D master = require_host_float2d(master_obj, "master");
-  const HostFloat2D coverage_map = optional_host_float2d(coverage_map_obj, "coverage_map");
-  const HostFloat2D low_rejection_map = optional_host_float2d(low_rejection_map_obj, "low_rejection_map");
-  const HostFloat2D high_rejection_map = optional_host_float2d(high_rejection_map_obj, "high_rejection_map");
-  const HostFloat2D geometric_warp_coverage_map =
-      optional_host_float2d(geometric_warp_coverage_map_obj, "geometric_warp_coverage_map");
+  const HostCount2D coverage_map = optional_host_count2d(coverage_map_obj, "coverage_map");
+  const HostCount2D low_rejection_map = optional_host_count2d(low_rejection_map_obj, "low_rejection_map");
+  const HostCount2D high_rejection_map = optional_host_count2d(high_rejection_map_obj, "high_rejection_map");
+  const HostCount2D geometric_warp_coverage_map =
+      optional_host_count2d(geometric_warp_coverage_map_obj, "geometric_warp_coverage_map");
   require_same_shape(coverage_map, master, "coverage_map");
   require_same_shape(low_rejection_map, master, "low_rejection_map");
   require_same_shape(high_rejection_map, master, "high_rejection_map");
@@ -16365,7 +16442,7 @@ py::tuple resident_dq_map_count_maps_i16(
         bool invalid = false;
 
         if (coverage_map.present) {
-          const float coverage = coverage_map.data[index];
+          const float coverage = coverage_map.value(index);
           update_finite_coverage_stats(stats.post_rejection_coverage, coverage);
           if (coverage <= 0.5f) {
             invalid = true;
@@ -16375,7 +16452,7 @@ py::tuple resident_dq_map_count_maps_i16(
         }
 
         if (geometric_warp_coverage_map.present) {
-          const float geometric = geometric_warp_coverage_map.data[index];
+          const float geometric = geometric_warp_coverage_map.value(index);
           update_finite_coverage_stats(stats.geometric_warp_coverage, geometric);
           if (geometric <= 0.5f) {
             invalid = true;
@@ -16398,7 +16475,7 @@ py::tuple resident_dq_map_count_maps_i16(
 
         bool low_rejected = false;
         if (low_rejection_map.present) {
-          const float low = low_rejection_map.data[index];
+          const float low = low_rejection_map.value(index);
           update_finite_nonnegative_count_stats(stats.low_rejection, low);
           low_rejected = low > 0.0f;
           if (low_rejected) {
@@ -16409,7 +16486,7 @@ py::tuple resident_dq_map_count_maps_i16(
 
         bool high_rejected = false;
         if (high_rejection_map.present) {
-          const float high = high_rejection_map.data[index];
+          const float high = high_rejection_map.value(index);
           update_finite_nonnegative_count_stats(stats.high_rejection, high);
           high_rejected = high > 0.0f;
           if (high_rejected) {
@@ -16475,6 +16552,18 @@ py::tuple resident_dq_map_count_maps_i16(
   stats["stats_profile"] = "resident_valid_master_nonnegative_count_map_native_i16";
   stats["native_method"] = "resident_dq_map_count_maps_i16";
   stats["native_thread_count"] = static_cast<int>(thread_count);
+  py::dict input_dtypes;
+  input_dtypes["coverage"] =
+      coverage_map.present ? py::object(py::str(coverage_map.dtype_name)) : py::none();
+  input_dtypes["low_rejection"] =
+      low_rejection_map.present ? py::object(py::str(low_rejection_map.dtype_name)) : py::none();
+  input_dtypes["high_rejection"] =
+      high_rejection_map.present ? py::object(py::str(high_rejection_map.dtype_name)) : py::none();
+  input_dtypes["geometric_warp_coverage"] =
+      geometric_warp_coverage_map.present
+          ? py::object(py::str(geometric_warp_coverage_map.dtype_name))
+          : py::none();
+  stats["count_map_input_dtypes"] = input_dtypes;
   stats["post_rejection_coverage"] =
       coverage_map.present ? py::object(coverage_stats_to_dict(loop_stats.post_rejection_coverage)) : py::none();
   stats["post_rejection_zero_pixels"] =
@@ -16492,12 +16581,20 @@ py::tuple resident_dq_map_count_maps_i16(
   stats["low_rejection"] =
       low_rejection_map.present
           ? py::object(
-                finite_nonnegative_count_map_stats_to_dict(loop_stats.low_rejection, master.height, master.width))
+                finite_nonnegative_count_map_stats_to_dict(
+                    loop_stats.low_rejection,
+                    master.height,
+                    master.width,
+                    low_rejection_map.dtype_name))
           : py::object(absent_count_map_stats());
   stats["high_rejection"] =
       high_rejection_map.present
           ? py::object(
-                finite_nonnegative_count_map_stats_to_dict(loop_stats.high_rejection, master.height, master.width))
+                finite_nonnegative_count_map_stats_to_dict(
+                    loop_stats.high_rejection,
+                    master.height,
+                    master.width,
+                    high_rejection_map.dtype_name))
           : py::object(absent_count_map_stats());
   if (low_rejection_map.present && high_rejection_map.present) {
     stats["rejection_reduced_pixels"] = loop_stats.rejection_reduced_pixels;

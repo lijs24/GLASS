@@ -943,6 +943,80 @@ def test_resident_dq_map_count_maps_native_matches_fast_python_when_available():
     assert stats["rejection_reduced_pixels_source"] == expected_stats["rejection_reduced_pixels_source"]
 
 
+def test_resident_dq_map_count_maps_native_accepts_compact_uint16_maps():
+    import glass_cuda
+
+    if not glass_cuda.resident_dq_map_count_maps_i16_available():
+        pytest.skip("native resident_dq_map_count_maps_i16 is not available")
+    master = np.ones((3, 4), dtype=np.float32)
+    weight = np.ones((3, 4), dtype=np.float32)
+    coverage = np.array(
+        [[3, 2, 1, 3], [0, 3, 3, 2], [3, 2, 3, 1]],
+        dtype=np.uint16,
+    )
+    low = np.array(
+        [[0, 1, 0, 0], [2, 0, 0, 0], [0, 1, 0, 0]],
+        dtype=np.uint16,
+    )
+    high = np.array(
+        [[0, 0, 1, 0], [0, 0, 0, 1], [3, 0, 0, 0]],
+        dtype=np.uint16,
+    )
+    geometric = np.array(
+        [[3, 2, 1, 3], [0, 3, 3, 2], [3, 2, 3, 3]],
+        dtype=np.uint16,
+    )
+
+    expected_dq, expected_summary, expected_stats = _resident_dq_map_python(
+        master,
+        weight,
+        coverage,
+        low,
+        high,
+        geometric_warp_coverage_map=geometric,
+        active_frame_count=3,
+        return_stats=True,
+        assume_finite_count_maps=True,
+        assume_nonnegative_count_maps=True,
+        assume_valid_master_weight=True,
+        dq_dtype=np.int16,
+    )
+    dq, summary, stats = glass_cuda.resident_dq_map_count_maps_i16(
+        master,
+        coverage,
+        low,
+        high,
+        geometric,
+        3,
+    )
+
+    assert dq.dtype == np.int16
+    assert np.array_equal(dq, expected_dq)
+    assert summary == expected_summary
+    assert stats["stats_backend"] == "native_host_fast_count_maps"
+    assert stats["native_method"] == "resident_dq_map_count_maps_i16"
+    assert stats["count_map_input_dtypes"] == {
+        "coverage": "uint16",
+        "low_rejection": "uint16",
+        "high_rejection": "uint16",
+        "geometric_warp_coverage": "uint16",
+    }
+    for key in ("post_rejection_coverage", "geometric_warp_coverage"):
+        for stat_key, expected_value in expected_stats[key].items():
+            assert stats[key][stat_key] == expected_value
+    for key in ("low_rejection", "high_rejection"):
+        expected = dict(expected_stats[key])
+        expected["dtype"] = "uint16"
+        for stat_key, expected_value in expected.items():
+            assert stats[key][stat_key] == expected_value
+    assert stats["post_rejection_zero_pixels"] == expected_stats["post_rejection_zero_pixels"]
+    assert stats["geometric_zero_pixels"] == expected_stats["geometric_zero_pixels"]
+    assert stats["geometric_partial_pixels"] == expected_stats["geometric_partial_pixels"]
+    assert stats["geometric_full_pixels"] == expected_stats["geometric_full_pixels"]
+    assert stats["rejection_reduced_pixels"] == expected_stats["rejection_reduced_pixels"]
+    assert stats["rejection_reduced_pixels_source"] == expected_stats["rejection_reduced_pixels_source"]
+
+
 def test_resident_dq_map_finite_count_map_fast_path_matches_strict_python(monkeypatch):
     import glass_cuda
 
@@ -2330,6 +2404,14 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert hardened_timing["frame_count"] == 4
     assert hardened_timing["pixel_count"] == expected_master.size
     assert hardened_timing["total_s"] >= 0.0
+    if output["dq_map_stats_native_method"] == "resident_dq_map_count_maps_i16":
+        assert output["dq_map_count_input_dtypes"] == {
+            "coverage": "uint16",
+            "low_rejection": "uint16",
+            "high_rejection": "uint16",
+            "geometric_warp_coverage": "float32",
+        }
+        assert artifact["dq_map_count_input_dtypes"] == output["dq_map_count_input_dtypes"]
     assert contract["passed"] is True
     assert any("auto-selected hardened median/IQR" in warning for warning in integration["warnings"])
     assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)

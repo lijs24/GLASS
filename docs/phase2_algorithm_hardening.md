@@ -17690,3 +17690,58 @@ Phase 2 is complete when:
   - this gate changes GLASS-owned CUDA output-map dtype plumbing and wrapper
     contracts only;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 602: Native DQ Compact Count-Map Consumption
+
+- Continued the DQ/mask and resident hardened-integration mainline by removing
+  the remaining float32 expansion at the native DQ/count-map consumer boundary.
+- Completed:
+  - added a native read-only count-map view accepting `float32`, `int16`, and
+    `uint16` C-contiguous arrays;
+  - changed `resident_dq_map_count_maps_i16` to consume that dtype-aware view
+    instead of `py::array_t<float, forcecast>`;
+  - changed the Python wrapper to preserve compact count-map dtypes while still
+    forcing master to `float32`;
+  - recorded `dq_map_count_input_dtypes` in resident outputs and artifacts;
+  - added a CUDA/native DQ test proving `uint16` count maps match the Python
+    DQ baseline.
+- Why this matters:
+  - Gate601 made hardened resident coverage/rejection maps compact at the
+    integration boundary;
+  - Gate602 keeps those maps compact through DQ generation, improving the
+    DQ/mask contract evidence and avoiding avoidable host expansion;
+  - geometric warp coverage remains `float32`, which is now explicitly recorded
+    beside the compact hardened maps.
+- Real 200-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate602_native_dq_compact_counts\real_200_hardened_native_dq_compact_final`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate602_native_dq_compact_counts\compare_native_dq_compact_vs_wbpp_fastintegration_scaled_coverage190.json`;
+  - acceptance:
+    `C:\glass_runs\phase2_s2_gate602_native_dq_compact_counts\acceptance_native_dq_compact_audit.json`.
+- Key result:
+
+  | Metric | Gate601 | Gate602 |
+  | --- | ---: | ---: |
+  | GLASS shell elapsed | `11.9914137 s` | `11.9861992 s` |
+  | GLASS run timing | `11.568675100104883 s` | `11.474401000072248 s` |
+  | Native hardened integration | `3.7782066999934614 s` | `3.7188648000592366 s` |
+  | DQ count-map input dtypes | not recorded | `coverage=uint16`, `low=uint16`, `high=uint16`, `geometric=float32` |
+  | Speedup vs WBPP black-box | `94.43959576581892x` | `95.21551495307867x` |
+  | RMS diff vs reference | `0.0055611675566298235` | `0.0055611675566298235` |
+  | abs diff p99 vs reference | `0.002161672392394391` | `0.002161672392394391` |
+  | coverage>=190 acceptance fraction | `1.0` | `1.0` |
+
+- Interpretation:
+  - the 200-light acceptance contract remains green with identical comparison
+    metrics;
+  - the measured runtime change is small but aligned with the Phase 2 resident
+    memory/DQ contract because compact count maps now survive into native DQ
+    generation and are auditable in artifacts;
+  - the next substantive gate should target a larger compute lever:
+    hardened median/IQR kernel cost, resident registration/warp orchestration,
+    or default-path quality/reference selection.
+- Clean-room note:
+  - this gate changes GLASS-owned native DQ/count-map ingestion and artifact
+    evidence only;
+  - no external or proprietary implementation source was inspected or used.

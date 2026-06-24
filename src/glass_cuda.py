@@ -280,12 +280,10 @@ def resident_dq_map_count_maps_i16(
         raise RuntimeError("native CUDA backend with resident_dq_map_count_maps_i16 is not available")
     dq, summary, stats = native.resident_dq_map_count_maps_i16(
         np.asarray(master, dtype=np.float32),
-        None if coverage_map is None else np.asarray(coverage_map, dtype=np.float32),
-        None if low_rejection_map is None else np.asarray(low_rejection_map, dtype=np.float32),
-        None if high_rejection_map is None else np.asarray(high_rejection_map, dtype=np.float32),
-        None
-        if geometric_warp_coverage_map is None
-        else np.asarray(geometric_warp_coverage_map, dtype=np.float32),
+        _as_native_count_map_c(coverage_map),
+        _as_native_count_map_c(low_rejection_map),
+        _as_native_count_map_c(high_rejection_map),
+        _as_native_count_map_c(geometric_warp_coverage_map),
         int(active_frame_count),
     )
     return np.asarray(dq, dtype=np.int16), dict(summary), dict(stats)
@@ -465,6 +463,15 @@ def _policy_payload(policy: Any | None) -> dict[str, Any] | None:
 
 def _as_f32_c(value: Any) -> np.ndarray:
     return np.ascontiguousarray(np.asarray(value, dtype=np.float32))
+
+
+def _as_native_count_map_c(value: Any | None) -> np.ndarray | None:
+    if value is None:
+        return None
+    array = np.asarray(value)
+    if array.dtype not in {np.dtype(np.float32), np.dtype(np.int16), np.dtype(np.uint16)}:
+        array = np.asarray(array, dtype=np.float32)
+    return np.ascontiguousarray(array)
 
 
 def calibrate_tile_f32(
