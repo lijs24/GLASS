@@ -75,15 +75,17 @@ resident CUDA path has two high-VRAM winsorized implementations:
   winsorized sigma path matching the GLASS CPU baseline for supported groups.
 
 The resident default is `--resident-winsorized-mode auto`. Auto selects
-`hardened_cpu_parity` for small resident stack-dispatch groups when diagnostic
+`hardened_cpu_parity` for resident stack-dispatch groups when diagnostic
 maps (`audit` or `science`) are written, the native hardened method is present,
-and the group has at most 64 frames. It falls back to `fast_approx` for
+and the group has at most 256 frames. It falls back to `fast_approx` for
 `minimal` output-map runs, unsupported dispatch, missing native methods, and
-larger groups. Explicit `hardened_cpu_parity` remains available up to the native
-prototype limit of 256 frames. The selected mode, requested mode, resolution
-reason, and runtime contract are written into integration artifacts. The fast
-approximation remains available as an explicit escape hatch and is still
-labeled non-parity.
+larger groups. For large resident auto groups above 64 frames, GLASS applies a
+coverage-preserving default `rejection_max_fraction=0.015` unless the plan or
+CLI explicitly supplies a rejection guard. Explicit `hardened_cpu_parity`
+remains available up to the same native prototype limit of 256 frames. The
+selected mode, requested mode, rejection-guard source, resolution reason, and
+runtime contract are written into integration artifacts. The fast approximation
+remains available as an explicit escape hatch and is still labeled non-parity.
 
 S2-Gate 600 adds a rejection coverage guard to the CPU baseline and resident
 CUDA hardened winsorized path. `rejection_min_samples` and
@@ -112,6 +114,14 @@ to float32. Resident artifacts record `dq_map_count_input_dtypes`; in the
 200-light hardened path this proves coverage, low-rejection, and
 high-rejection maps remain `uint16` through DQ generation while geometric warp
 coverage remains `float32`.
+
+S2-Gate 603 promotes the default resident `auto` path for supported 200-frame
+groups from `fast_approx` to `hardened_cpu_parity`. The same real 200-light
+M38 benchmark now reaches the CPU-baseline parity winsorized implementation
+without explicit `--resident-winsorized-mode` or
+`--integration-rejection-max-fraction` flags. Artifacts record the implicit
+base guard (`0.5`) and the effective resident auto large-stack guard (`0.015`)
+so default scientific behavior remains auditable.
 
 ## CUDA Scope
 

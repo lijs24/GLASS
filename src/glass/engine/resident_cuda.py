@@ -22,6 +22,8 @@ from glass.engine.dq import dq_provenance_summary_from_resident, dq_provenance_s
 from glass.engine.stack_contract import build_stack_engine_result_contract
 from glass.engine.stack_engine import CPUStackEngine, StackEngineResult
 from glass.engine.rejection import (
+    RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_FRAME_THRESHOLD,
+    RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_MAX_FRACTION,
     RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT,
     RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
     RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
@@ -3783,6 +3785,68 @@ def _resident_stack_hardened_winsorized_available(cuda_module: Any) -> tuple[boo
     return True, None
 
 
+def _resolve_resident_rejection_max_fraction(
+    *,
+    rejection_mode: str,
+    requested_resident_winsorized_mode: str,
+    frame_count: int,
+    dispatch_mode: str,
+    resident_output_maps: str,
+    tile_local_policy_mode: str,
+    base_max_reject_fraction: float,
+    base_source: str,
+) -> tuple[float, str, dict[str, Any]]:
+    base_value = float(base_max_reject_fraction)
+    source = str(base_source or "resolved_default")
+    details: dict[str, Any] = {
+        "schema_version": 1,
+        "base_max_reject_fraction": base_value,
+        "base_source": source,
+        "effective_max_reject_fraction": base_value,
+        "effective_source": source,
+        "resident_auto_coverage_guard_applied": False,
+        "resident_auto_coverage_guard_frame_threshold": (
+            RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_FRAME_THRESHOLD
+        ),
+        "resident_auto_coverage_guard_max_fraction": (
+            RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_MAX_FRACTION
+        ),
+    }
+    if source not in {"implicit_default", "plan_default", "legacy_default"}:
+        details["reason"] = "explicit_or_plan_rejection_guard_preserved"
+        return base_value, source, details
+    if rejection_mode != "winsorized_sigma":
+        details["reason"] = "not_winsorized_sigma"
+        return base_value, source, details
+    if requested_resident_winsorized_mode != RESIDENT_WINSORIZED_SIGMA_AUTO_MODE:
+        details["reason"] = "not_resident_winsorized_auto"
+        return base_value, source, details
+    if dispatch_mode != "stack":
+        details["reason"] = "not_stack_dispatch"
+        return base_value, source, details
+    if resident_output_maps == "minimal":
+        details["reason"] = "minimal_output_maps_keep_fast_approx_default"
+        return base_value, source, details
+    if tile_local_policy_mode in {"apply_mean", "apply"}:
+        details["reason"] = "tile_local_policy_apply_unsupported"
+        return base_value, source, details
+    if int(frame_count) <= RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_FRAME_THRESHOLD:
+        details["reason"] = "small_stack_keeps_cpu_parity_guard"
+        return base_value, source, details
+
+    effective = min(base_value, RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_MAX_FRACTION)
+    effective_source = "resident_auto_large_stack_coverage_guard"
+    details.update(
+        {
+            "effective_max_reject_fraction": float(effective),
+            "effective_source": effective_source,
+            "resident_auto_coverage_guard_applied": bool(effective != base_value),
+            "reason": "resident_auto_large_stack_coverage_guard",
+        }
+    )
+    return float(effective), effective_source, details
+
+
 def _resident_winsorized_runtime_contract(
     *,
     rejection_mode: str,
@@ -3791,6 +3855,8 @@ def _resident_winsorized_runtime_contract(
     dispatch_mode: str,
     min_samples: int = 3,
     max_reject_fraction: float = 0.5,
+    max_reject_fraction_source: str = "resolved_default",
+    max_reject_fraction_resolution: dict[str, Any] | None = None,
     hardened_available: bool = True,
     hardened_unavailable_reason: str | None = None,
     tile_local_policy_mode: str = "record",
@@ -3853,6 +3919,8 @@ def _resident_winsorized_runtime_contract(
         "resident_output_maps": resident_output_maps,
         "min_samples": int(min_samples),
         "max_reject_fraction": float(max_reject_fraction),
+        "max_reject_fraction_source": str(max_reject_fraction_source),
+        "max_reject_fraction_resolution": max_reject_fraction_resolution,
         "default_mode": RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
         "fast_approx_mode": RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
         "auto_hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT,
@@ -6516,14 +6584,18 @@ def run_resident_calibration_integration(
         if integration_rejection_min_samples is not None
         else integration_policy.get("rejection_min_samples", integration_policy.get("min_samples", 3))
     )
-    rejection_max_fraction = float(
-        integration_rejection_max_fraction
-        if integration_rejection_max_fraction is not None
-        else integration_policy.get(
-            "rejection_max_fraction",
-            integration_policy.get("max_reject_fraction", 0.5),
-        )
-    )
+    if integration_rejection_max_fraction is not None:
+        rejection_max_fraction = float(integration_rejection_max_fraction)
+        rejection_max_fraction_source = "cli_override"
+    elif "rejection_max_fraction" in integration_policy:
+        rejection_max_fraction = float(integration_policy["rejection_max_fraction"])
+        rejection_max_fraction_source = "plan_integration_policy"
+    elif "max_reject_fraction" in integration_policy:
+        rejection_max_fraction = float(integration_policy["max_reject_fraction"])
+        rejection_max_fraction_source = "plan_legacy_integration_policy"
+    else:
+        rejection_max_fraction = 0.5
+        rejection_max_fraction_source = "implicit_default"
     if rejection_min_samples < 1:
         raise ValueError("resolved integration rejection min_samples must be at least 1")
     if rejection_max_fraction < 0.0 or rejection_max_fraction > 1.0:
@@ -6649,13 +6721,29 @@ def run_resident_calibration_integration(
             hardened_winsorized_available, hardened_winsorized_unavailable_reason = (
                 _resident_stack_hardened_winsorized_available(cuda_module)
             )
+            (
+                group_rejection_max_fraction,
+                group_rejection_max_fraction_source,
+                group_rejection_max_fraction_resolution,
+            ) = _resolve_resident_rejection_max_fraction(
+                rejection_mode=rejection_mode,
+                requested_resident_winsorized_mode=resident_winsorized_mode,
+                frame_count=len(light_frames),
+                dispatch_mode=resident_integration_dispatch,
+                resident_output_maps=resident_output_maps,
+                tile_local_policy_mode=resident_tile_local_policy_mode,
+                base_max_reject_fraction=rejection_max_fraction,
+                base_source=rejection_max_fraction_source,
+            )
             resident_winsorized_contract = _resident_winsorized_runtime_contract(
                 rejection_mode=rejection_mode,
                 resident_winsorized_mode=resident_winsorized_mode,
                 frame_count=len(light_frames),
                 dispatch_mode=resident_integration_dispatch,
                 min_samples=rejection_min_samples,
-                max_reject_fraction=rejection_max_fraction,
+                max_reject_fraction=group_rejection_max_fraction,
+                max_reject_fraction_source=group_rejection_max_fraction_source,
+                max_reject_fraction_resolution=group_rejection_max_fraction_resolution,
                 hardened_available=hardened_winsorized_available,
                 hardened_unavailable_reason=hardened_winsorized_unavailable_reason,
                 tile_local_policy_mode=resident_tile_local_policy_mode,
@@ -11927,7 +12015,7 @@ def run_resident_calibration_integration(
                     low_sigma,
                     high_sigma,
                     min_samples=rejection_min_samples,
-                    max_reject_fraction=rejection_max_fraction,
+                    max_reject_fraction=group_rejection_max_fraction,
                     count_map_dtype="uint16",
                 )
             else:
@@ -12666,7 +12754,9 @@ def run_resident_calibration_integration(
                 low_sigma,
                 high_sigma,
                 min_samples=rejection_min_samples,
-                max_reject_fraction=rejection_max_fraction,
+                max_reject_fraction=group_rejection_max_fraction,
+                max_reject_fraction_source=group_rejection_max_fraction_source,
+                max_reject_fraction_resolution=group_rejection_max_fraction_resolution,
                 resident_winsorized_mode=group_resident_winsorized_mode,
                 requested_resident_winsorized_mode=resident_winsorized_mode,
                 resident_winsorized_resolution_reason=resident_winsorized_contract.get(
@@ -14112,6 +14202,9 @@ def run_resident_calibration_integration(
                         "requested_mode": resident_integration_dispatch_requested,
                         "effective_mode": resident_integration_dispatch,
                         "selection_reason": resident_integration_dispatch_reason,
+                        "rejection_max_fraction": group_rejection_max_fraction,
+                        "rejection_max_fraction_source": group_rejection_max_fraction_source,
+                        "rejection_max_fraction_resolution": group_rejection_max_fraction_resolution,
                         "auto_policy": {
                             "enabled": resident_integration_dispatch_requested == "auto",
                             "selected_mode": resident_integration_dispatch,
@@ -14256,6 +14349,8 @@ def run_resident_calibration_integration(
                     "resident_integration_dispatch_requested": resident_integration_dispatch_requested,
                     "resident_integration_dispatch_reason": resident_integration_dispatch_reason,
                     "resident_winsorized_contract": resident_winsorized_contract,
+                    "rejection_max_fraction_source": group_rejection_max_fraction_source,
+                    "rejection_max_fraction_resolution": group_rejection_max_fraction_resolution,
                     "resident_frame_mask_contract": {
                         "path": str(run / "resident_frame_masks.json"),
                         "summary": group_frame_mask_contract["summary"],
@@ -14549,6 +14644,18 @@ def run_resident_calibration_integration(
             json.dumps(descriptor, sort_keys=True)
             for descriptor in output_rejection_descriptors
         }
+        effective_rejection_max_fractions = sorted(
+            {
+                float(descriptor["max_reject_fraction"])
+                for descriptor in output_rejection_descriptors
+                if descriptor.get("max_reject_fraction") is not None
+            }
+        )
+        effective_rejection_max_fraction = (
+            effective_rejection_max_fractions[0]
+            if len(effective_rejection_max_fractions) == 1
+            else rejection_max_fraction
+        )
         if output_rejection_descriptors and len(unique_rejection_descriptor_keys) == 1:
             top_level_rejection_semantics = output_rejection_descriptors[0]
         elif output_rejection_descriptors:
@@ -14557,7 +14664,7 @@ def run_resident_calibration_integration(
                 "low_sigma": low_sigma,
                 "high_sigma": high_sigma,
                 "min_samples": rejection_min_samples,
-                "max_reject_fraction": rejection_max_fraction,
+                "max_reject_fraction": effective_rejection_max_fraction,
                 "resident_winsorized_mode": effective_resident_winsorized_mode,
                 "requested_resident_winsorized_mode": resident_winsorized_mode,
                 "mixed_output_descriptors": True,
@@ -14642,7 +14749,9 @@ def run_resident_calibration_integration(
                 "low_sigma": low_sigma,
                 "high_sigma": high_sigma,
                 "rejection_min_samples": rejection_min_samples,
-                "rejection_max_fraction": rejection_max_fraction,
+                "rejection_max_fraction": effective_rejection_max_fraction,
+                "rejection_max_fraction_requested": rejection_max_fraction,
+                "rejection_max_fraction_source": rejection_max_fraction_source,
                 "rejection_semantics": top_level_rejection_semantics,
                 "frame_weights": frame_weights,
                 "outputs": outputs,

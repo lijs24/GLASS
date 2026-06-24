@@ -12,7 +12,9 @@ RESIDENT_WINSORIZED_SIGMA_AUTO_MODE = "auto"
 RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE = "fast_approx"
 RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE = "hardened_cpu_parity"
 RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT = 256
-RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT = 64
+RESIDENT_WINSORIZED_SIGMA_AUTO_HARDENED_FRAME_LIMIT = RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
+RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_FRAME_THRESHOLD = 64
+RESIDENT_WINSORIZED_SIGMA_AUTO_COVERAGE_GUARD_MAX_FRACTION = 0.015
 RESIDENT_WINSORIZED_SIGMA_ALGORITHM = "two_stage_winsorized_mean_std_rejection_approximation"
 RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR = "mean_std_two_stage_winsorized"
 RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS = "known_non_parity_pending_cuda_update"
@@ -97,6 +99,8 @@ def resident_rejection_descriptor(
     *,
     min_samples: int = 3,
     max_reject_fraction: float = 0.5,
+    max_reject_fraction_source: str | None = None,
+    max_reject_fraction_resolution: dict[str, Any] | None = None,
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     requested_resident_winsorized_mode: str | None = None,
     resident_winsorized_resolution_reason: str | None = None,
@@ -108,6 +112,10 @@ def resident_rejection_descriptor(
         "min_samples": int(min_samples),
         "max_reject_fraction": float(max_reject_fraction),
     }
+    if max_reject_fraction_source is not None:
+        descriptor["max_reject_fraction_source"] = str(max_reject_fraction_source)
+    if max_reject_fraction_resolution is not None:
+        descriptor["max_reject_fraction_resolution"] = max_reject_fraction_resolution
     if method == "winsorized_sigma":
         if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE:
             descriptor.update(

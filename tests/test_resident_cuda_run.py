@@ -28,6 +28,7 @@ from glass.engine.resident_cuda import (
     _resident_descriptor_signature,
     _resident_fit_signature,
     _resident_output_map_selection,
+    _resolve_resident_rejection_max_fraction,
     _resident_source_dq_calibration_artifact_candidates,
     _resident_refine_catalog_centroids_from_stack,
     _resident_registration_motion_weighting,
@@ -1499,17 +1500,40 @@ def test_resident_auto_winsorized_contract_selects_hardened_within_limit():
     assert contract["resolution_reason"] == "auto_hardened_frame_count_within_limit"
     assert contract["default_mode"] == "auto"
     assert contract["fast_approx_mode"] == "fast_approx"
-    assert contract["auto_hardened_frame_limit"] == 64
+    assert contract["auto_hardened_frame_limit"] == 256
     assert contract["hardened_requested"] is True
     assert contract["frame_limit_ok"] is True
     assert contract["dispatch_ok"] is True
 
 
-def test_resident_auto_winsorized_contract_falls_back_over_default_limit():
+def test_resident_auto_winsorized_contract_selects_hardened_for_200_frame_default():
     contract = _resident_winsorized_runtime_contract(
         rejection_mode="winsorized_sigma",
         resident_winsorized_mode="auto",
         frame_count=200,
+        dispatch_mode="stack",
+        hardened_available=True,
+        max_reject_fraction=0.015,
+        max_reject_fraction_source="resident_auto_large_stack_coverage_guard",
+    )
+
+    _validate_resident_winsorized_runtime_contract(contract)
+    assert contract["requested_resident_winsorized_mode"] == "auto"
+    assert contract["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert contract["resolution_reason"] == "auto_hardened_frame_count_within_limit"
+    assert contract["auto_hardened_frame_limit"] == 256
+    assert contract["max_reject_fraction"] == pytest.approx(0.015)
+    assert contract["max_reject_fraction_source"] == "resident_auto_large_stack_coverage_guard"
+    assert contract["hardened_requested"] is True
+    assert contract["frame_limit_applies"] is True
+    assert contract["frame_limit_ok"] is True
+
+
+def test_resident_auto_winsorized_contract_falls_back_over_hardened_limit():
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="auto",
+        frame_count=257,
         dispatch_mode="stack",
         hardened_available=True,
     )
@@ -1517,10 +1541,48 @@ def test_resident_auto_winsorized_contract_falls_back_over_default_limit():
     _validate_resident_winsorized_runtime_contract(contract)
     assert contract["requested_resident_winsorized_mode"] == "auto"
     assert contract["resident_winsorized_mode"] == "fast_approx"
-    assert contract["resolution_reason"] == "auto_fast_frame_count_exceeds_default_hardened_limit:200>64"
+    assert contract["resolution_reason"] == "auto_fast_frame_count_exceeds_default_hardened_limit:257>256"
     assert contract["hardened_requested"] is False
     assert contract["frame_limit_applies"] is False
     assert contract["frame_limit_ok"] is True
+
+
+def test_resident_auto_large_stack_default_rejection_guard_is_coverage_preserving():
+    value, source, details = _resolve_resident_rejection_max_fraction(
+        rejection_mode="winsorized_sigma",
+        requested_resident_winsorized_mode="auto",
+        frame_count=200,
+        dispatch_mode="stack",
+        resident_output_maps="audit",
+        tile_local_policy_mode="record",
+        base_max_reject_fraction=0.5,
+        base_source="implicit_default",
+    )
+
+    assert value == pytest.approx(0.015)
+    assert source == "resident_auto_large_stack_coverage_guard"
+    assert details["resident_auto_coverage_guard_applied"] is True
+    assert details["base_max_reject_fraction"] == pytest.approx(0.5)
+    assert details["effective_max_reject_fraction"] == pytest.approx(0.015)
+    assert details["resident_auto_coverage_guard_frame_threshold"] == 64
+
+
+def test_resident_auto_large_stack_preserves_explicit_rejection_guard():
+    value, source, details = _resolve_resident_rejection_max_fraction(
+        rejection_mode="winsorized_sigma",
+        requested_resident_winsorized_mode="auto",
+        frame_count=200,
+        dispatch_mode="stack",
+        resident_output_maps="audit",
+        tile_local_policy_mode="record",
+        base_max_reject_fraction=0.05,
+        base_source="cli_override",
+    )
+
+    assert value == pytest.approx(0.05)
+    assert source == "cli_override"
+    assert details["resident_auto_coverage_guard_applied"] is False
+    assert details["reason"] == "explicit_or_plan_rejection_guard_preserved"
 
 
 def test_resident_auto_winsorized_contract_falls_back_for_minimal_maps():
@@ -2390,6 +2452,7 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert winsorized_contract["frame_count"] == 4
     assert winsorized_contract["min_samples"] == 3
     assert winsorized_contract["max_reject_fraction"] == 0.5
+    assert winsorized_contract["auto_hardened_frame_limit"] == 256
     assert winsorized_contract["hardened_frame_limit"] == 256
     assert winsorized_contract["frame_limit_ok"] is True
     assert winsorized_contract["dispatch_ok"] is True

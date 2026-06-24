@@ -17745,3 +17745,70 @@ Phase 2 is complete when:
   - this gate changes GLASS-owned native DQ/count-map ingestion and artifact
     evidence only;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 603: Default Auto Hardened 200-Frame Winsorized Integration
+
+- Returned to the Phase 2 default-path mainline by promoting the supported
+  200-light resident `winsorized_sigma` auto route from `fast_approx` to the
+  CPU-baseline parity `hardened_cpu_parity` implementation.
+- Completed:
+  - raised the resident auto hardened frame limit from the old guarded
+    64-frame window to the native hardened prototype limit of 256 frames;
+  - added a resident auto large-stack coverage guard resolver that uses
+    `rejection_max_fraction=0.015` only when the plan/CLI did not explicitly
+    supply a rejection guard;
+  - preserved small-stack CPU parity behavior and explicit CLI/plan guard
+    overrides;
+  - recorded rejection-guard source and resolution in the resident winsorized
+    runtime contract, resident integration dispatch, output rows, and
+    rejection descriptors;
+  - updated integration/limitations/algorithm-source documentation.
+- Why this matters:
+  - Gate599 introduced `auto` but left the 200-light default on the
+    non-parity fast approximation;
+  - Gates600-602 proved that the hardened path could preserve coverage and
+    compact DQ/count maps on the real 200-light dataset;
+  - Gate603 makes that tested path the actual default for supported 200-frame
+    resident audit/science runs, improving scientific consistency without
+    requiring hidden user flags.
+- Real 200-light default-auto validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate603_default_auto_hardened_200\real_200_default_auto_hardened`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate603_default_auto_hardened_200\compare_default_auto_hardened_vs_wbpp_fastintegration_scaled_coverage190.json`;
+  - acceptance:
+    `C:\glass_runs\phase2_s2_gate603_default_auto_hardened_200\acceptance_default_auto_hardened_audit.json`.
+- Key result:
+
+  | Metric | Gate602 explicit hardened | Gate603 default auto |
+  | --- | ---: | ---: |
+  | GLASS shell elapsed | `11.9861992 s` | `12.4060653 s` |
+  | GLASS run timing | `11.474401000072248 s` | `11.991980199934915 s` |
+  | Requested resident winsorized mode | `hardened_cpu_parity` | `auto` |
+  | Effective resident winsorized mode | `hardened_cpu_parity` | `hardened_cpu_parity` |
+  | Effective rejection max fraction | `0.015` | `0.015` |
+  | Gate603 guard source | explicit CLI override | `resident_auto_large_stack_coverage_guard` |
+  | Native hardened integration | `3.7188648000592366 s` | `3.7137935999780893 s` |
+  | Speedup vs WBPP black-box | `95.21551495307867x` | `91.10597097266134x` |
+  | RMS diff vs reference | `0.0055611675566298235` | `0.0055611675566298235` |
+  | abs diff p99 vs reference | `0.002161672392394391` | `0.002161672392394391` |
+  | coverage>=190 acceptance fraction | `1.0` | `1.0` |
+
+- Acceptance audit:
+  - status: `passed`;
+  - speedup: `91.10597097266134x`;
+  - required benchmark checks: all passing.
+- Interpretation:
+  - the 200-light default resident route now uses the CPU-baseline parity
+    median/IQR winsorized implementation by default while keeping the benchmark
+    comfortably above the 20x speed contract;
+  - the slight wall-clock increase versus Gate602 is expected because Gate603
+    intentionally removes explicit flags and records the default guard
+    resolution path;
+  - the next substantive gate should target larger-frame hardened reductions
+    beyond 256 frames, resident registration/warp orchestration, or broader DQ
+    propagation cases instead of adding report-only handoff gates.
+- Clean-room note:
+  - this gate changes GLASS-owned runtime policy, GLASS-owned rejection guard
+    resolution, and GLASS-owned artifact fields only;
+  - no external or proprietary implementation source was inspected or used.
