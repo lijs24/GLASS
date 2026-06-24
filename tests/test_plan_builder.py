@@ -24,6 +24,8 @@ def test_processing_plan_binds_source_dq_manifest_to_light_frame(tmp_path: Path)
     generate_synthetic_dataset(dataset, frames=4, width=32, height=24, filt="H", source_dq_sidecars=True)
     manifest = scan_tree(dataset)
     source_dq_manifest_path = dataset / "source_dq_manifest.json"
+    assert manifest["summary"]["skipped_count"] == 1
+    assert "unknown" not in manifest["summary"]["frame_type"]
 
     plan = build_processing_plan(
         manifest,
@@ -37,3 +39,4 @@ def test_processing_plan_binds_source_dq_manifest_to_light_frame(tmp_path: Path)
     assert bound[0].frame_type == "light"
     assert Path(bound[0].source_dq_mask_path).is_absolute()
     assert Path(bound[0].source_dq_mask_path).exists()
+    assert not any(frame.frame_type == "unknown" for frame in plan.frames)

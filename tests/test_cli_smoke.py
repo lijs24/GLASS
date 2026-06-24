@@ -1612,6 +1612,10 @@ def test_cli_synthetic_source_dq_manifest_binds_into_plan(tmp_path: Path):
         == 0
     )
     assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    manifest_payload = read_json(manifest)
+    assert manifest_payload["summary"]["skipped_count"] == 1
+    assert manifest_payload["skipped"][0]["reason"] == "source_dq_sidecar_directory"
+    assert "unknown" not in manifest_payload["summary"]["frame_type"]
     assert (
         main(
             [
@@ -1633,6 +1637,7 @@ def test_cli_synthetic_source_dq_manifest_binds_into_plan(tmp_path: Path):
     assert bound[0]["frame_type"] == "light"
     assert Path(bound[0]["source_dq_mask_path"]).exists()
     assert Path(bound[0]["path"]).name == "light_001.fits"
+    assert not any(frame["frame_type"] == "unknown" for frame in plan_payload["frames"])
 
 
 def test_cli_report_surfaces_quality_saturation_summary(tmp_path: Path):

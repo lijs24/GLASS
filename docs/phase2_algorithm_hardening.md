@@ -933,6 +933,82 @@ Interpretation:
   `unknown` FITS frames. That is harmless and auditable, but future work can
   add scanner-level ignore/include policies for DQ directories.
 
+### S2-Gate 593: Source-DQ Sidecar Scan Contract
+
+Gate 593 closes a DQ/mask input-contract gap left visible by Gate590. GLASS can
+bind explicit source-DQ sidecars into light frames during planning, but the
+default metadata scan still recursively treated sidecar FITS files under the
+scan root as ordinary unknown frames. That made source-DQ masks visible to the
+planner as non-science inputs. This gate makes the scanner skip explicit
+`source_dq` / `source-dq` sidecar directories by default and records the skip as
+manifest diagnostics.
+
+Implementation:
+
+- `scan_tree()` now checks each candidate image path before assigning a frame id.
+- Files under a path component named `source_dq` or `source-dq` are skipped with
+  reason `source_dq_sidecar_directory`.
+- The manifest now includes a top-level `skipped` list and
+  `summary.skipped_count`.
+- Frame ids remain contiguous across included science/calibration frames.
+- The rule is intentionally conservative: it does not skip every `*_dq.fits`
+  filename, avoiding accidental exclusion of user science frames outside an
+  explicit source-DQ sidecar directory.
+- Plan binding is unchanged: `glass plan --source-dq-manifest` still resolves
+  the sidecar path from the manifest and binds it onto the matching light frame.
+
+Synthetic CLI validation:
+
+- Artifact directory:
+  `C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract`
+- Synthetic dataset:
+  `C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\synthetic_data`
+- Manifest:
+  `C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\manifest.json`
+- Processing plan:
+  `C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\processing_plan.json`
+- Validation summary:
+  `C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\gate593_validation_summary.json`
+- Manifest frame count: `13` (`3` bias, `3` dark, `3` flat, `4` light).
+- Skipped sidecar count: `1`.
+- Skipped reason: `source_dq_sidecar_directory`.
+- Unknown manifest frame count: `0`.
+- Source-DQ bound light count: `1`.
+- Plan executable: `true`.
+
+Validation commands:
+
+- `python -m pytest -q tests/test_fits_metadata.py::test_scan_tree_skips_source_dq_sidecar_directory
+  tests/test_plan_builder.py::test_processing_plan_binds_source_dq_manifest_to_light_frame
+  tests/test_cli_smoke.py::test_cli_synthetic_source_dq_manifest_binds_into_plan`
+- `python -m ruff check src\glass\metadata\scanner.py
+  tests\test_fits_metadata.py tests\test_plan_builder.py tests\test_cli_smoke.py`
+- `python -m pytest -q`
+- `glass synthetic --out C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\synthetic_data
+  --frames 4 --width 32 --height 24 --filter H --source-dq-sidecars
+  --source-dq-light-index 1 --source-dq-y 5 --source-dq-x 7`
+- `glass scan --root
+  C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\synthetic_data
+  --out C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\manifest.json`
+- `glass plan --manifest
+  C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\manifest.json
+  --out
+  C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\processing_plan.json
+  --source-dq-manifest
+  C:\glass_runs\phase2_s2_gate593_source_dq_scan_contract\synthetic_data\source_dq_manifest.json`
+
+Interpretation:
+
+- this is an input-surface DQ contract gate, not a presentation-only report
+  gate;
+- the default DQ sidecar workflow now has a clean separation: sidecar masks are
+  skipped by metadata scan, but explicitly bound by the source-DQ manifest;
+- real 200-light runtime was not rerun because this gate does not alter resident
+  calibration, registration, LN, rejection, or integration execution when no
+  source-DQ sidecar directory is present;
+- future work can add explicit include/ignore CLI controls for nonstandard DQ
+  sidecar locations if needed.
+
 ### S2-Gate 592: Budgeted Resident Warp Chunk Capacity Default
 
 Gate 592 continues the real resident CUDA execution path work. Gate591 still
