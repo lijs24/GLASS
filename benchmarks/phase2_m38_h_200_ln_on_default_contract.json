@@ -149,7 +149,7 @@
   "required_command_tokens": [
     "--backend cuda",
     "--memory-mode resident",
-    "--resident-runtime-preset throughput-v3-io",
+    "--resident-runtime-preset throughput-v4-native-completion",
     "--resident-registration similarity_cuda_triangle",
     "--integration-weighting none",
     "--flat-floor 0.05",

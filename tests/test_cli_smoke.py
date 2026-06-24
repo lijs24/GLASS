@@ -393,7 +393,7 @@ def test_resident_runtime_preset_throughput_v3_io_applies_probe_values() -> None
     assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 32
 
 
-def test_resident_runtime_preset_throughput_v4_native_completion_is_explicit_ab_route() -> None:
+def test_resident_runtime_preset_throughput_v4_native_completion_applies_default_values() -> None:
     args = _parse_cli(
         [
             "run",
@@ -416,34 +416,43 @@ def test_resident_runtime_preset_throughput_v4_native_completion_is_explicit_ab_
     assert args.resident_calibration_streams == 4
     assert args.resident_calibration_wave_frames == 4
     assert args.resident_calibration_release_mode == "callback_queue"
+    assert args.resident_native_queue_read == "on"
+    assert args.resident_native_queue_drain_mode == "thread"
+    assert args.resident_warp_chunk_capacity_frames == 32
     assert args.resident_native_completion_calibration == "on"
     assert args.resident_native_completion_wave_fill_us == 25
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v4-native-completion"
+    assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_read"] == "on"
+    assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 32
     assert (
         args._resident_runtime_preset_effective["applied"]["resident_native_completion_calibration"]
         == "on"
     )
 
 
-def test_resident_runtime_preset_defaults_to_throughput_v3_io() -> None:
+def test_resident_runtime_preset_defaults_to_throughput_v4_native_completion() -> None:
     args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
 
     _apply_resident_runtime_preset(args)
 
-    assert args.resident_runtime_preset == "throughput-v3-io"
+    assert args.resident_runtime_preset == "throughput-v4-native-completion"
     assert args.resident_prefetch_frames == 32
     assert args.resident_prefetch_workers == 16
     assert args.resident_h2d_mode == "pinned_ring"
     assert args.resident_calibration_batch_frames == 16
     assert args.resident_calibration_wave_frames == 4
     assert args.resident_calibration_release_mode == "callback_queue"
-    assert args.resident_native_completion_calibration == "off"
-    assert args.resident_native_completion_wave_fill_us == 0
+    assert args.resident_native_completion_calibration == "on"
+    assert args.resident_native_completion_wave_fill_us == 25
     assert args.resident_native_queue_read == "on"
     assert args.resident_native_queue_drain_mode == "thread"
     assert args.resident_warp_chunk_capacity_frames == 32
     assert args.resident_integration_dispatch == "stack"
-    assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
+    assert args._resident_runtime_preset_effective["preset"] == "throughput-v4-native-completion"
+    assert (
+        args._resident_runtime_preset_effective["applied"]["resident_native_completion_calibration"]
+        == "on"
+    )
 
 
 def test_resident_runtime_preset_manual_keeps_legacy_values() -> None:

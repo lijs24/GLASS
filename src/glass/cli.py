@@ -392,11 +392,14 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_streams": 4,
         "resident_calibration_wave_frames": 4,
         "resident_calibration_release_mode": "callback_queue",
+        "resident_native_queue_read": "on",
+        "resident_native_queue_drain_mode": "thread",
+        "resident_warp_chunk_capacity_frames": 32,
         "resident_native_completion_calibration": "on",
         "resident_native_completion_wave_fill_us": 25,
     },
 }
-DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v3-io"
+DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v4-native-completion"
 DEFAULT_MEMORY_MODE = "resident"
 FALLBACK_MEMORY_MODE = "tile"
 DEFAULT_UNTIL_STAGE = "integration"
@@ -6008,9 +6011,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=sorted(RESIDENT_RUNTIME_PRESETS),
         default=DEFAULT_RESIDENT_RUNTIME_PRESET,
         help=(
-            "resident runtime scheduling preset; throughput-v3-io is the default high-throughput "
-            "I/O/upload/calibration schedule unless an individual option is explicitly provided; "
-            "throughput-v4-native-completion is an experimental completion-queue A/B route and is not default; "
+            "resident runtime scheduling preset; throughput-v4-native-completion is the default "
+            "high-throughput I/O/upload/calibration schedule unless an individual option is explicitly provided; "
+            "throughput-v3-io remains available as the previous queue-read/chunked-warp comparison route; "
             "throughput-v1 remains available as the lower-memory fallback schedule; "
             "throughput-v2-fused adds resident integration auto dispatch as a non-default A/B candidate; "
             "use manual for the legacy conservative schedule"
@@ -6106,7 +6109,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="off",
         help=(
             "native raw-FITS batch read scheduler for resident native_u16_gpu mode; kept explicit because "
-            "native queue read is the preferred throughput-v3 path when available"
+            "native queue/completion read is the preferred default path when available"
         ),
     )
     run.add_argument(
@@ -6114,8 +6117,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["off", "on"],
         default="off",
         help=(
-            "native raw-FITS completion queue reader for resident native_u16_gpu mode; throughput-v3-io "
-            "enables this when compatible and falls back automatically when unavailable"
+            "native raw-FITS completion queue reader for resident native_u16_gpu mode; default resident presets "
+            "enable this when compatible and fall back automatically when unavailable"
         ),
     )
     run.add_argument(
@@ -6705,9 +6708,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=sorted(RESIDENT_RUNTIME_PRESETS),
         default=DEFAULT_RESIDENT_RUNTIME_PRESET,
         help=(
-            "resident runtime scheduling preset for the audit run; throughput-v3-io is the default "
-            "high-throughput I/O/upload/calibration schedule unless an individual option is explicitly "
-            "provided; throughput-v4-native-completion is an experimental completion-queue A/B route; "
+            "resident runtime scheduling preset for the audit run; throughput-v4-native-completion is the "
+            "default high-throughput I/O/upload/calibration schedule unless an individual option is explicitly "
+            "provided; throughput-v3-io remains available as the previous queue-read/chunked-warp comparison route; "
             "throughput-v1 remains available as the lower-memory fallback schedule; "
             "throughput-v2-fused adds resident integration auto dispatch as a non-default A/B candidate; "
             "use manual for the legacy conservative schedule"

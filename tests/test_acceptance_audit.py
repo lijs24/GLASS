@@ -2932,7 +2932,7 @@ def test_acceptance_audit_accepts_default_route_evidence_for_resident_tokens(tmp
             "memory_mode": "resident",
             "memory_mode_requested": "resident",
             "resident_runtime_preset_effective": {
-                "preset": "throughput-v3-io",
+                "preset": "throughput-v4-native-completion",
                 "source": "resident_cuda_default",
             },
             "execution_default_resolution": {
@@ -2942,7 +2942,7 @@ def test_acceptance_audit_accepts_default_route_evidence_for_resident_tokens(tmp
                 "effective_backend": "cuda",
                 "effective_memory_mode": "resident",
                 "reason": "resident_cuda_default",
-                "default_runtime_preset": "throughput-v3-io",
+                "default_runtime_preset": "throughput-v4-native-completion",
             },
         },
         resident_timing={
@@ -2963,7 +2963,7 @@ def test_acceptance_audit_accepts_default_route_evidence_for_resident_tokens(tmp
             "name": "resident_h2d_or_runtime_preset",
             "any_of": [
                 "--resident-h2d-mode pinned_ring",
-                "--resident-runtime-preset throughput-v3-io",
+                "--resident-runtime-preset throughput-v4-native-completion",
             ],
         }
     ]
@@ -2996,7 +2996,9 @@ def test_acceptance_audit_accepts_default_route_evidence_for_resident_tokens(tmp
     assert registration_check["evidence"]["artifact_match"]["field"] == "resident_registration.mode"
     assert flat_floor_check["evidence"]["command_match"] is True
     assert runtime_group_check["passed"] is True
-    assert runtime_group_check["evidence"]["artifact_matches"][0]["actual"] == "throughput-v3-io"
+    assert runtime_group_check["evidence"]["artifact_matches"][0]["actual"] == (
+        "throughput-v4-native-completion"
+    )
 
 
 def test_acceptance_audit_applies_resident_registration_fastpath_contract(tmp_path: Path):

@@ -17812,3 +17812,73 @@ Phase 2 is complete when:
   - this gate changes GLASS-owned runtime policy, GLASS-owned rejection guard
     resolution, and GLASS-owned artifact fields only;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 604: Native-Completion Resident Runtime Default
+
+- Continued the resident default-path performance mainline by promoting the
+  `throughput-v4-native-completion` preset to the default resident runtime
+  schedule after revalidating it against the Gate603 hardened-default route.
+- Completed:
+  - changed `DEFAULT_RESIDENT_RUNTIME_PRESET` from `throughput-v3-io` to
+    `throughput-v4-native-completion`;
+  - made v4 explicitly inherit the v3 queue-read/thread-drain and
+    32-frame warp chunk-capacity defaults before enabling native completion
+    calibration;
+  - kept `throughput-v3-io` as an explicit previous-default comparison route;
+  - updated CLI help, benchmark-contract required runtime token,
+    default-promotion runtime guard, and Windows release-matrix runtime guard;
+  - added/updated focused tests for v4 default preset behavior and downstream
+    default-runtime guard expectations.
+- Why this matters:
+  - Gate581 kept native completion as an A/B route because it was slower on the
+    older fast resident benchmark;
+  - after Gate603, the default scientific path is hardened median/IQR
+    winsorized integration, and the same native-completion route is now
+    bitwise-identical while modestly faster on the real 200-light benchmark;
+  - this is a runtime scheduling default change over the real resident path,
+    not a report-only handoff.
+- Real 200-light validation:
+  - source Gate603 default run:
+    `C:\glass_runs\phase2_s2_gate603_default_auto_hardened_200\real_200_default_auto_hardened`;
+  - Gate604 v4 probe run:
+    `C:\glass_runs\phase2_s2_gate604_native_completion_default_probe\real_200_v4_completion_probe`;
+  - compare:
+    `C:\glass_runs\phase2_s2_gate604_native_completion_default_probe\compare_v4_completion_vs_wbpp_fastintegration_scaled_coverage190.json`;
+  - acceptance:
+    `C:\glass_runs\phase2_s2_gate604_native_completion_default_probe\acceptance_v4_completion_audit.json`.
+- Key result:
+
+  | Metric | Gate603 v3 default | Gate604 v4 default candidate |
+  | --- | ---: | ---: |
+  | Resident runtime preset | `throughput-v3-io` | `throughput-v4-native-completion` |
+  | GLASS shell elapsed | `12.4060653 s` | `11.956485 s` |
+  | GLASS run timing | `11.991980199934915 s` | `11.531422599917278 s` |
+  | Native completion calibration | `false` | `true` |
+  | Native completion frames | `0 / 0` | `200 / 200` |
+  | Effective winsorized mode | `hardened_cpu_parity` | `hardened_cpu_parity` |
+  | Effective rejection max fraction | `0.015` | `0.015` |
+  | Native hardened integration | `3.7137935999780893 s` | `3.724918400053866 s` |
+  | Speedup vs WBPP black-box | `91.10597097266134x` | `94.74468484121269x` |
+  | RMS diff vs reference | `0.0055611675566298235` | `0.0055611675566298235` |
+  | abs diff p99 vs reference | `0.002161672392394391` | `0.002161672392394391` |
+  | coverage>=190 acceptance fraction | `1.0` | `1.0` |
+  | Six integration FITS hashes vs Gate603 | baseline | identical |
+  | Pixel max abs vs Gate603 outputs | baseline | `0.0` |
+
+- Acceptance audit:
+  - status: `passed`;
+  - speedup: `94.74468484121269x`;
+  - required benchmark checks: all passing.
+- Interpretation:
+  - v4 improves current hardened-default total timing while preserving bitwise
+    output identity;
+  - the light calibration sub-timing is not uniformly faster, so this remains a
+    measured scheduling default for the current high-VRAM 200-light workload,
+    not a universal claim that completion queues always win;
+  - the next substantive gate should target larger compute levers: segmented
+    hardened reductions above 256 frames, resident registration/warp
+    orchestration, or broader DQ/mask propagation cases.
+- Clean-room note:
+  - this gate changes GLASS-owned scheduling defaults and default-runtime guard
+    expectations only;
+  - no external or proprietary implementation source was inspected or used.
