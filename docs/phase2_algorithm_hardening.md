@@ -18098,3 +18098,66 @@ Phase 2 is complete when:
   - this gate uses GLASS-owned native resident storage, GLASS CPUStackEngine
     formulas, GLASS synthetic data, and user-owned real benchmark artifacts;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 608: Native 512-Frame Hardened Winsorized Capacity
+
+- Continued the Phase 2 integration mainline by moving the 260-frame hardened
+  case from the segmented host fallback to exact native CUDA.
+- Completed:
+  - raised `RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT` and the native
+    hardened runtime limit from `256` to `512`;
+  - raised the native CUDA kernel's per-pixel exact sample buffer from `256`
+    to `512` finite positive-weight samples;
+  - kept the native wrapper guard explicit and now rejects groups above `512`;
+  - updated resident runtime contracts and pipeline-contract tests so fallback
+    starts at `513`, not `257`;
+  - added a 260-frame CUDA/CPU hardened winsorized parity test using the native
+    resident API.
+- Synthetic 260-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate608_native512_hardened\resident_260_native512`;
+  - route changed from Gate607's
+    `cpu_stack_engine_segmented_resident_download` to
+    `native_cuda_resident_stack`;
+  - resolution reason:
+    `auto_hardened_frame_count_within_limit`;
+  - `resident_winsorized_mode=hardened_cpu_parity`;
+  - native hardened timing:
+    `0.00396340002771467 s`;
+  - Gate607 fallback hardened timing:
+    `0.009082899894565344 s`;
+  - pixel comparison against Gate607 fallback:
+    `max_abs=0.0` and `rms=0.0` for master, weight, coverage, low rejection,
+    high rejection, and DQ maps;
+  - `pipeline_contract.json`: passed;
+  - `resident_result_contract.json`: passed.
+- Real 200-light default regression:
+  - run:
+    `C:\glass_runs\phase2_s2_gate608_native512_hardened\real_200_default_regression`;
+  - `total_elapsed_s=11.92688700009603`;
+  - resident hardened route stayed native:
+    `hardened_execution_route=native_cuda_resident_stack`;
+  - native hardened integration timing:
+    `3.8001173000084236 s`;
+  - `pipeline_contract.json`: passed;
+  - `resident_result_contract.json`: passed;
+  - six integration FITS outputs are SHA256-identical to Gate607.
+- Validation:
+  - focused native hardened CUDA tests:
+    `4 passed, 50 deselected`;
+  - focused resident winsorized/runtime tests:
+    `10 passed, 105 deselected`;
+  - focused pipeline segmented contract test:
+    `1 passed, 57 deselected`.
+- Interpretation:
+  - this is a bounded exact-capacity gate, not a final unlimited segmented
+    reducer;
+  - the 260-frame group now stays fully on the native hardened CUDA path for
+    rejection/integration;
+  - the next substantive gate should replace the local-array sort prototype
+    with a scalable device-side segmented/selection reducer for groups above
+    512 and for larger real datasets.
+- Clean-room note:
+  - this gate uses GLASS-owned CUDA kernels, GLASS CPUStackEngine formulas,
+    GLASS synthetic data, and user-owned real benchmark artifacts;
+  - no external or proprietary implementation source was inspected or used.

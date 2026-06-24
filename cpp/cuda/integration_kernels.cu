@@ -1370,7 +1370,7 @@ void glass_integrate_resident_sigma_clip_f32_launch(
       winsorize);
 }
 
-constexpr int kGlassHardenedWinsorizedMaxFrames = 256;
+constexpr int kGlassHardenedWinsorizedMaxFrames = 512;
 
 __device__ float glass_percentile_sorted_f32(const float* values, int count, float fraction) {
   if (count <= 0) {

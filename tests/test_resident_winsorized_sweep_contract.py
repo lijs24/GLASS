@@ -4,6 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from glass.cli import main
+from glass.engine.rejection import RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
 from glass.io.json_io import read_json, write_json
 from glass.report.resident_winsorized_sweep_contract import DEFAULT_CONTRACT_PATH
 from glass.report.resident_winsorized_sweep_contract import build_resident_winsorized_sweep_audit
@@ -62,7 +63,7 @@ def _sweep_payload() -> dict:
             "tolerance_rms": 5.0e-5,
             "tolerance_max_abs": 2.0e-4,
             "required_frame_count": 200,
-            "hardened_frame_limit": 256,
+            "hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
         },
         "runs": runs,
         "checks": [{"name": "all_runs_passed", "passed": True}],

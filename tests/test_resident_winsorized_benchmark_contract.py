@@ -4,6 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from glass.cli import main
+from glass.engine.rejection import RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
 from glass.io.json_io import read_json, write_json
 from glass.report.resident_winsorized_benchmark_contract import DEFAULT_CONTRACT_PATH
 from glass.report.resident_winsorized_benchmark_contract import build_resident_winsorized_benchmark_audit
@@ -23,7 +24,7 @@ def _benchmark_payload() -> dict:
             "seed": 265,
             "low_sigma": 3.0,
             "high_sigma": 3.0,
-            "hardened_frame_limit": 256,
+            "hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
             "tolerance_rms": 2e-5,
             "tolerance_max_abs": 2e-4,
         },

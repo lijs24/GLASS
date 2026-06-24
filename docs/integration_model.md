@@ -77,12 +77,12 @@ resident CUDA path has two high-VRAM winsorized implementations:
 The resident default is `--resident-winsorized-mode auto`. Auto selects
 `hardened_cpu_parity` for resident stack-dispatch groups when diagnostic
 maps (`audit` or `science`) are written, the native hardened method is present,
-and the group has at most 256 frames. It falls back to `fast_approx` for
+and the group has at most 512 frames. It falls back to `fast_approx` for
 `minimal` output-map runs, unsupported dispatch, missing native methods, and
 larger groups. For large resident auto groups above 64 frames, GLASS applies a
 coverage-preserving default `rejection_max_fraction=0.015` unless the plan or
 CLI explicitly supplies a rejection guard. Explicit `hardened_cpu_parity`
-remains available up to the same native prototype limit of 256 frames. The
+remains available up to the same native prototype limit of 512 frames. The
 selected mode, requested mode, rejection-guard source, resolution reason, and
 runtime contract are written into integration artifacts. The fast approximation
 remains available as an explicit escape hatch and is still labeled non-parity.
@@ -145,6 +145,16 @@ download method counts. This does not change the math or promote the fallback
 to a final CUDA segmented reduction; it reduces orchestration overhead and
 creates the replacement point for a future all-device segmented reducer.
 
+S2-Gate 608 raises the native exact hardened CUDA capacity from 256 to 512
+frames. The native kernel now stores and sorts up to 512 valid samples per
+pixel before applying the same median/IQR winsorized formula, so 260-frame
+groups run through `native_cuda_resident_stack` instead of the segmented host
+fallback. A 260-light synthetic validation produced zero pixel differences
+against the Gate607 CPUStackEngine fallback while reducing hardened integration
+time from `0.009082899894565344 s` to `0.00396340002771467 s`. Groups above
+512 frames still use the segmented CPUStackEngine fallback until a scalable
+device-side segmented/selection reducer is implemented.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted
@@ -152,10 +162,10 @@ mean integration, resident mean/std sigma clipping, resident mean/std
 winsorized clipping, and a bounded native resident median/IQR hardened
 winsorized path. The tile-streaming CPU path remains the portable scientific
 baseline, while the resident path is the high-VRAM performance path for the
-200-light comparison dataset. Groups above the native hardened limit may use
-the segmented CPUStackEngine resident-tile fallback, now preferably through
-the batch tile-download surface, until the dedicated CUDA segmented reduction
-is implemented.
+200-light comparison dataset. Groups above the 512-frame native hardened limit
+may use the segmented CPUStackEngine resident-tile fallback, now preferably
+through the batch tile-download surface, until the dedicated CUDA segmented
+reduction is implemented.
 
 ## Variance Map
 

@@ -9,6 +9,7 @@ from glass.engine.contracts import DQFlag
 from glass.engine.pipeline import initialize_run
 from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+    RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT,
     RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
     resident_rejection_descriptor,
 )
@@ -953,7 +954,8 @@ def test_pipeline_contract_passes_segmented_resident_hardened_winsorized_contrac
     _write_resident_pipeline_run(run)
     integration = read_json(run / "integration_results.json")
     output = integration["outputs"][0]
-    output["frame_count"] = 260
+    frame_count = RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 1
+    output["frame_count"] = frame_count
     output["integration_rejection"] = resident_rejection_descriptor(
         "winsorized_sigma",
         3.0,
@@ -961,7 +963,8 @@ def test_pipeline_contract_passes_segmented_resident_hardened_winsorized_contrac
         resident_winsorized_mode="hardened_cpu_parity",
         requested_resident_winsorized_mode="auto",
         resident_winsorized_resolution_reason=(
-            "auto_hardened_segmented_cpu_frame_count_exceeds_native_limit:260>256"
+            "auto_hardened_segmented_cpu_frame_count_exceeds_native_limit:"
+            f"{frame_count}>{RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT}"
         ),
         hardened_execution_route=RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE,
     )

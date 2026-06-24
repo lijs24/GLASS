@@ -2339,6 +2339,63 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     assert high_reject[1, 1] == 1
 
 
+def test_resident_stack_hardened_winsorized_sigma_260_frames_matches_cpu_baseline():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    rng = np.random.default_rng(608)
+    stack_np = rng.normal(1000.0, 4.0, size=(260, 4, 5)).astype(np.float32)
+    stack_np[0, :, 0] -= np.float32(80.0)
+    stack_np[1, :, 1] += np.float32(90.0)
+    stack_np[2, 2, 3] = np.nan
+    weights = rng.uniform(0.8, 1.2, size=(260,)).astype(np.float32)
+    weights[5] = np.float32(0.0)
+
+    resident_stack = module.ResidentCalibratedStack(
+        stack_np.shape[0],
+        stack_np.shape[1],
+        stack_np.shape[2],
+    )
+    for index, frame in enumerate(stack_np):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.6,
+            2.6,
+            max_reject_fraction=0.5,
+            count_map_dtype="uint16",
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            stack_np,
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.6,
+            high_sigma=2.6,
+            max_reject_fraction=0.5,
+        )
+    )
+
+    assert timing["native_method"] == "ResidentCalibratedStack.integrate_hardened_winsorized_sigma"
+    assert timing["frame_count"] == 260
+    assert timing["count_map_dtype"] == "uint16"
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=2e-5, atol=2e-5)
+    assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
+    assert int(np.sum(low_reject)) > 0
+    assert int(np.sum(high_reject)) > 0
+
+
 def test_resident_stack_hardened_winsorized_sigma_compact_count_maps_match_float_maps():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(

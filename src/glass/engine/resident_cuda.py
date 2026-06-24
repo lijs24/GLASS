@@ -4309,7 +4309,7 @@ def _integrate_resident_hardened_winsorized_with_cpu_stack_engine(
         "segmented_cpu_fallback": True,
         "limitations": [
             "CPU StackEngine fallback preserves median/IQR winsorized parity but downloads resident tiles to host.",
-            "This route is a correctness fallback for groups outside the native 256-frame prototype limit.",
+            "This route is a correctness fallback for groups outside the native 512-frame prototype limit.",
         ],
     }
     return (

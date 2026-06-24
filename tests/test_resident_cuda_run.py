@@ -17,6 +17,7 @@ from glass.engine.contracts import (
     RejectionPolicy,
     StackRequest,
 )
+from glass.engine.rejection import RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT
 from glass.engine.stack_engine import CPUStackEngine
 from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
@@ -1466,16 +1467,17 @@ def test_resident_source_dq_calibration_artifact_candidates_keep_relative_run_pa
 
 
 def test_resident_hardened_winsorized_contract_uses_segmented_cpu_over_native_limit():
+    frame_count = RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 1
     contract = _resident_winsorized_runtime_contract(
         rejection_mode="winsorized_sigma",
         resident_winsorized_mode="hardened_cpu_parity",
-        frame_count=257,
+        frame_count=frame_count,
         dispatch_mode="stack",
     )
 
     assert contract["hardened_requested"] is True
-    assert contract["hardened_frame_limit"] == 256
-    assert contract["hardened_native_frame_limit"] == 256
+    assert contract["hardened_frame_limit"] == RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT
+    assert contract["hardened_native_frame_limit"] == RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT
     assert contract["native_frame_limit_ok"] is False
     assert contract["frame_limit_ok"] is True
     assert contract["frame_limit_applies"] is False
@@ -1486,10 +1488,11 @@ def test_resident_hardened_winsorized_contract_uses_segmented_cpu_over_native_li
 
 
 def test_resident_hardened_winsorized_contract_rejects_over_limit_without_segmented_fallback():
+    frame_count = RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 1
     contract = _resident_winsorized_runtime_contract(
         rejection_mode="winsorized_sigma",
         resident_winsorized_mode="hardened_cpu_parity",
-        frame_count=257,
+        frame_count=frame_count,
         dispatch_mode="stack",
         segmented_cpu_fallback_available=False,
         segmented_cpu_fallback_unavailable_reason="test_disabled",
@@ -1498,7 +1501,10 @@ def test_resident_hardened_winsorized_contract_rejects_over_limit_without_segmen
     assert contract["hardened_requested"] is True
     assert contract["hardened_execution_route"] == "native_cuda_resident_stack"
     assert contract["frame_limit_ok"] is False
-    with pytest.raises(ValueError, match="at most 256 resident frames"):
+    with pytest.raises(
+        ValueError,
+        match=f"at most {RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT} resident frames",
+    ):
         _validate_resident_winsorized_runtime_contract(contract)
 
 
@@ -1531,7 +1537,7 @@ def test_resident_auto_winsorized_contract_selects_hardened_within_limit():
     assert contract["resolution_reason"] == "auto_hardened_frame_count_within_limit"
     assert contract["default_mode"] == "auto"
     assert contract["fast_approx_mode"] == "fast_approx"
-    assert contract["auto_hardened_frame_limit"] == 256
+    assert contract["auto_hardened_frame_limit"] == RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT
     assert contract["hardened_requested"] is True
     assert contract["frame_limit_ok"] is True
     assert contract["dispatch_ok"] is True
@@ -1552,7 +1558,7 @@ def test_resident_auto_winsorized_contract_selects_hardened_for_200_frame_defaul
     assert contract["requested_resident_winsorized_mode"] == "auto"
     assert contract["resident_winsorized_mode"] == "hardened_cpu_parity"
     assert contract["resolution_reason"] == "auto_hardened_frame_count_within_limit"
-    assert contract["auto_hardened_frame_limit"] == 256
+    assert contract["auto_hardened_frame_limit"] == RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT
     assert contract["max_reject_fraction"] == pytest.approx(0.015)
     assert contract["max_reject_fraction_source"] == "resident_auto_large_stack_coverage_guard"
     assert contract["hardened_requested"] is True
@@ -1561,10 +1567,11 @@ def test_resident_auto_winsorized_contract_selects_hardened_for_200_frame_defaul
 
 
 def test_resident_auto_winsorized_contract_selects_segmented_cpu_over_native_limit():
+    frame_count = RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 1
     contract = _resident_winsorized_runtime_contract(
         rejection_mode="winsorized_sigma",
         resident_winsorized_mode="auto",
-        frame_count=257,
+        frame_count=frame_count,
         dispatch_mode="stack",
         hardened_available=True,
     )
@@ -1574,7 +1581,8 @@ def test_resident_auto_winsorized_contract_selects_segmented_cpu_over_native_lim
     assert contract["resident_winsorized_mode"] == "hardened_cpu_parity"
     assert (
         contract["resolution_reason"]
-        == "auto_hardened_segmented_cpu_frame_count_exceeds_native_limit:257>256"
+        == "auto_hardened_segmented_cpu_frame_count_exceeds_native_limit:"
+        f"{frame_count}>{RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT}"
     )
     assert contract["hardened_requested"] is True
     assert contract["hardened_execution_route"] == "cpu_stack_engine_segmented_resident_download"
@@ -2646,8 +2654,12 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert winsorized_contract["frame_count"] == 4
     assert winsorized_contract["min_samples"] == 3
     assert winsorized_contract["max_reject_fraction"] == 0.5
-    assert winsorized_contract["auto_hardened_frame_limit"] == 256
-    assert winsorized_contract["hardened_frame_limit"] == 256
+    assert winsorized_contract["auto_hardened_frame_limit"] == (
+        RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT
+    )
+    assert winsorized_contract["hardened_frame_limit"] == (
+        RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT
+    )
     assert winsorized_contract["frame_limit_ok"] is True
     assert winsorized_contract["dispatch_ok"] is True
     assert winsorized_contract["requires_stack_dispatch"] is True

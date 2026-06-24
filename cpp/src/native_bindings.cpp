@@ -10568,9 +10568,9 @@ class ResidentCalibratedStack {
     if (count_map_dtype != "float32" && count_map_dtype != "uint16") {
       throw std::invalid_argument("count_map_dtype must be float32 or uint16");
     }
-    if (frame_count_ > 256) {
+    if (frame_count_ > 512) {
       throw std::invalid_argument(
-          "hardened resident winsorized sigma currently supports at most 256 resident frames");
+          "hardened resident winsorized sigma currently supports at most 512 resident frames");
     }
 
     std::vector<float> weights(frame_count_, 1.0f);
