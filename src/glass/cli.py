@@ -381,6 +381,7 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_release_mode": "callback_queue",
         "resident_native_queue_read": "on",
         "resident_native_queue_drain_mode": "thread",
+        "resident_warp_chunk_capacity_frames": 32,
     },
     "throughput-v4-native-completion": {
         "resident_prefetch_frames": 32,
@@ -433,6 +434,7 @@ RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_native_batch_read": "--resident-native-batch-read",
     "resident_native_queue_read": "--resident-native-queue-read",
     "resident_native_queue_drain_mode": "--resident-native-queue-drain-mode",
+    "resident_warp_chunk_capacity_frames": "--resident-warp-chunk-capacity-frames",
     "resident_integration_dispatch": "--resident-integration-dispatch",
 }
 
@@ -930,6 +932,11 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     if isinstance(warp_interpolation_resolution, dict):
         timing["resident_warp_interpolation_resolution"] = warp_interpolation_resolution
     timing["resident_warp_interpolation"] = getattr(args, "resident_warp_interpolation", None)
+    timing["resident_warp_chunk_capacity_frames"] = getattr(
+        args,
+        "_resident_warp_chunk_capacity_frames",
+        getattr(args, "resident_warp_chunk_capacity_frames", None),
+    )
     timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
     timing["resident_native_completion_calibration"] = getattr(
         args, "resident_native_completion_calibration", "off"
@@ -1372,10 +1379,7 @@ def _apply_resident_memory_admission_selection(
         if (
             selected_capacity is not None
             and selected_dispatch == "chunked"
-            and (
-                admission.get("recommended_action") == "resident_reduced_chunk_capacity"
-                or selected_capacity_source == "explicit"
-            )
+            and selected_capacity_source in {"explicit", "native_preferred", "reduced_for_budget"}
         ):
             parsed = int(selected_capacity)
             if parsed > 0:

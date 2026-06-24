@@ -4810,11 +4810,11 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_warp_batch"] is True
     assert resident_registration["triangle_warp_batch_mode"] == "native_matrix_lanczos3_frames"
     assert resident_registration["triangle_warp_batch_dispatch"] == "chunked"
-    assert resident_registration["triangle_warp_batch_requested_chunk_capacity_frames"] is None
-    assert resident_registration["triangle_warp_batch_effective_chunk_capacity_frames"] is None
-    assert resident_registration["triangle_warp_batch_capacity_source"] == "native_preferred"
-    assert resident_registration["triangle_warp_batch_native_capacity_source"] == "native_preferred"
-    assert resident_registration["triangle_warp_batch_native_max_chunk_capacity_frames"] == 0
+    assert resident_registration["triangle_warp_batch_requested_chunk_capacity_frames"] == 1
+    assert resident_registration["triangle_warp_batch_effective_chunk_capacity_frames"] == 1
+    assert resident_registration["triangle_warp_batch_capacity_source"] == "resident_memory_admission"
+    assert resident_registration["triangle_warp_batch_native_capacity_source"] == "explicit_max_chunk_capacity"
+    assert resident_registration["triangle_warp_batch_native_max_chunk_capacity_frames"] == 1
     assert resident_registration["triangle_warp_batch_timing_model"] == (
         "native_chunked_batch_warp_scatter_one_sync"
     )

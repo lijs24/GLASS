@@ -933,6 +933,103 @@ Interpretation:
   `unknown` FITS frames. That is harmless and auditable, but future work can
   add scanner-level ignore/include policies for DQ directories.
 
+### S2-Gate 592: Budgeted Resident Warp Chunk Capacity Default
+
+Gate 592 continues the real resident CUDA execution path work. Gate591 still
+left the matrix-warp chunk capacity on the native implicit default, even though
+memory admission had enough information to select a bounded capacity and this
+machine has enough VRAM headroom for larger warp batches. This gate makes the
+default resident preset request a budgeted 32-frame warp chunk and ensures the
+admission-selected capacity is actually passed into
+`run_resident_calibration_integration`.
+
+Implementation:
+
+- `throughput-v3-io` now applies
+  `resident_warp_chunk_capacity_frames=32`.
+- `resident_warp_chunk_capacity_frames` is now part of the runtime preset flag
+  map, so user-provided `--resident-warp-chunk-capacity-frames` still wins.
+- `_apply_resident_memory_admission_selection` now forwards the selected chunk
+  capacity for `explicit`, `native_preferred`, and `reduced_for_budget`
+  selections, instead of forwarding only reduced/explicit cases.
+- `run_timing.json` records the effective
+  `resident_warp_chunk_capacity_frames`.
+- CLI smoke tests cover preset default, user override, manual preset behavior,
+  and the run-level resident compute kwargs.
+- The CUDA triangle registration smoke expectation was updated because small
+  two-light resident runs now pass the admission-selected 1-frame chunk to the
+  native warp path instead of relying on an implicit native default.
+
+Real 200-light A/B probes:
+
+- Probe summary:
+  `C:\glass_runs\phase2_s2_gate592_warp_chunk_capacity_ab\chunk_capacity_probe_summary.json`
+- Existing explicit-capacity probes, all SHA256-identical to Gate591:
+  - chunk 16: total `8.168635300011374 s`, native capacity `16`, hash `6/6`;
+  - chunk 32: total `7.881816200213507 s`, native capacity `32`, hash `6/6`;
+  - chunk 64: total `8.174020099802874 s`, native capacity `64`, hash `6/6`.
+- The 64-frame probe increased registration/warp timing, so the promoted
+  default is 32 rather than a larger "use all headroom" value.
+
+Fresh default 200-light regression after code change:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate592_warp_chunk_capacity_default\default_resident_regression`
+- Summary:
+  `C:\glass_runs\phase2_s2_gate592_warp_chunk_capacity_default\gate592_validation_summary.json`
+- Compare:
+  `C:\glass_runs\phase2_s2_gate592_warp_chunk_capacity_default\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate592_warp_chunk_capacity_default\acceptance_audit.json`
+- Effective route:
+  - preset chunk capacity: `32`;
+  - admission selected chunk capacity: `32`;
+  - native effective chunk capacity: `32`;
+  - native capacity source: `resident_memory_admission`;
+  - selected estimated peak: `56.49848874285817 GiB`;
+  - selected headroom: `29.5341284442693 GiB`.
+- GLASS time: `8.134743199916557 s`.
+- Speedup versus Gate591: `1.0037264606078005x`.
+- WBPP black-box reference time: `1092.541 s`.
+- Speedup versus reference: `134.30553038370115x`.
+- Coverage190 fraction: `0.905523489118409`.
+- RMS difference: `0.005340835487175878`.
+- p99 absolute difference: `0.002133606873685496`.
+- Acceptance audit: passed.
+- Six integration FITS outputs are SHA256-identical to Gate591.
+
+Validation commands:
+
+- `python -m pytest -q tests/test_cli_smoke.py::test_resident_runtime_preset_throughput_v3_io_applies_probe_values
+  tests/test_cli_smoke.py::test_resident_runtime_preset_defaults_to_throughput_v3_io
+  tests/test_cli_smoke.py::test_resident_runtime_preset_manual_keeps_legacy_values
+  tests/test_cli_smoke.py::test_resident_runtime_preset_respects_explicit_native_queue_override
+  tests/test_cli_smoke.py::test_resident_runtime_preset_respects_explicit_warp_chunk_capacity_override
+  tests/test_cli_smoke.py::test_cli_resident_run_passes_reduced_chunk_capacity_from_admission
+  tests/test_cli_smoke.py::test_cli_resident_run_passes_preset_chunk_capacity_from_admission
+  tests/test_cli_smoke.py::test_cli_resident_run_passes_explicit_chunk_capacity_from_admission`
+- `python -m pytest -q tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair
+  tests/test_cli_smoke.py::test_cli_resident_run_passes_preset_chunk_capacity_from_admission
+  tests/test_cli_smoke.py::test_resident_runtime_preset_respects_explicit_warp_chunk_capacity_override`
+- `python -m ruff check src\glass\cli.py tests\test_cli_smoke.py
+  tests\test_resident_cuda_run.py`
+- `python -m pytest -q`
+- Fresh 200-light resident `glass run`, `glass compare`, `glass
+  acceptance-audit`, and `glass doctor` listed above.
+
+Interpretation:
+
+- this is a default execution-path gate: the resident CUDA warp batch capacity
+  now flows from preset/admission into the native warp dispatcher;
+- the runtime gain is intentionally treated as modest (`~0.37%` versus Gate591
+  on the fresh default run), but the real value is closing the VRAM admission
+  loop and proving that larger chunks preserve bitwise outputs;
+- chunk 64 is not promoted because it increased registration/warp work on this
+  dataset;
+- the next mainline gate should avoid further small preset tuning and instead
+  reduce resident registration/LN orchestration or tighten StackEngine/DQ
+  execution semantics.
+
 ### S2-Gate 591: Native Queue Read Default For Throughput-v3
 
 Gate 591 returns to the resident runtime performance path. The compatible

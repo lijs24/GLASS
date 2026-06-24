@@ -386,9 +386,11 @@ def test_resident_runtime_preset_throughput_v3_io_applies_probe_values() -> None
     assert args.resident_calibration_release_mode == "callback_queue"
     assert args.resident_native_queue_read == "on"
     assert args.resident_native_queue_drain_mode == "thread"
+    assert args.resident_warp_chunk_capacity_frames == 32
     assert args.resident_integration_dispatch == "stack"
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
     assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_read"] == "on"
+    assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 32
 
 
 def test_resident_runtime_preset_throughput_v4_native_completion_is_explicit_ab_route() -> None:
@@ -439,6 +441,7 @@ def test_resident_runtime_preset_defaults_to_throughput_v3_io() -> None:
     assert args.resident_native_completion_wave_fill_us == 0
     assert args.resident_native_queue_read == "on"
     assert args.resident_native_queue_drain_mode == "thread"
+    assert args.resident_warp_chunk_capacity_frames == 32
     assert args.resident_integration_dispatch == "stack"
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
 
@@ -465,6 +468,7 @@ def test_resident_runtime_preset_manual_keeps_legacy_values() -> None:
     assert args.resident_calibration_release_mode == "sync"
     assert args.resident_native_queue_read == "off"
     assert args.resident_native_queue_drain_mode is None
+    assert args.resident_warp_chunk_capacity_frames is None
     assert args._resident_runtime_preset_effective["applied"] == {}
 
 
@@ -487,9 +491,34 @@ def test_resident_runtime_preset_respects_explicit_native_queue_override() -> No
 
     assert args.resident_native_queue_read == "off"
     assert args.resident_native_queue_drain_mode == "thread"
+    assert args.resident_warp_chunk_capacity_frames == 32
     explicit = args._resident_runtime_preset_effective["explicit_overrides"]
     assert explicit["resident_native_queue_read"] == "off"
     assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_drain_mode"] == "thread"
+    assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 32
+
+
+def test_resident_runtime_preset_respects_explicit_warp_chunk_capacity_override() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "throughput-v3-io",
+            "--resident-warp-chunk-capacity-frames",
+            "16",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_warp_chunk_capacity_frames == 16
+    explicit = args._resident_runtime_preset_effective["explicit_overrides"]
+    assert explicit["resident_warp_chunk_capacity_frames"] == 16
+    assert "resident_warp_chunk_capacity_frames" not in args._resident_runtime_preset_effective["applied"]
 
 
 def test_resident_runtime_preset_respects_explicit_overrides() -> None:
@@ -2007,6 +2036,83 @@ def test_cli_resident_run_passes_reduced_chunk_capacity_from_admission(
     assert admission["selected_warp_batch_dispatch"] == "chunked"
     assert captured["kwargs"]["resident_warp_batch_dispatch"] == "chunked"
     assert captured["kwargs"]["resident_warp_chunk_capacity_frames"] == 4
+
+
+def test_cli_resident_run_passes_preset_chunk_capacity_from_admission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    frames = [
+        {
+            "id": f"L{index:03d}",
+            "path": str(tmp_path / f"light_{index:03d}.fits"),
+            "frame_type": "light",
+            "filter": "H",
+            "height": 72,
+            "width": 80,
+        }
+        for index in range(40)
+    ]
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_preset_chunk"
+    write_json(
+        plan,
+        {
+            "frames": frames,
+            "light_plans": [
+                {
+                    "filter": "H",
+                    "frames": [str(frame["id"]) for frame in frames],
+                    "calibration_status": "ready",
+                }
+            ],
+            "executable": True,
+        },
+    )
+    captured: dict[str, object] = {}
+
+    def fake_resident_compute(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        out_dir = Path(kwargs.get("out_dir") or args[1])
+        _write_resident_registration_quality(out_dir, frame_count=40, accepted_count=40)
+        return initialize_run(out_dir)
+
+    monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
+    monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fake_resident_compute)
+
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--backend",
+                "cuda",
+                "--memory-mode",
+                "resident",
+                "--resident-runtime-preset",
+                "throughput-v3-io",
+                "--resident-registration",
+                "similarity_cuda_triangle",
+                "--resident-warp-batch-dispatch",
+                "chunked",
+                "--vram-budget-gb",
+                "1.0",
+            ]
+        )
+        == 0
+    )
+
+    admission = read_json(run / "resident_memory_admission.json")
+    assert admission["blocking"] is False
+    assert admission["recommended_action"] == "resident_full_frame"
+    assert admission["selected_chunk_capacity_frames"] == 32
+    assert admission["selected_warp_batch_dispatch"] == "chunked"
+    assert captured["kwargs"]["resident_warp_batch_dispatch"] == "chunked"
+    assert captured["kwargs"]["resident_warp_chunk_capacity_frames"] == 32
 
 
 def test_cli_resident_run_passes_explicit_chunk_capacity_from_admission(
