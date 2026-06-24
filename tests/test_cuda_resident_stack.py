@@ -2334,6 +2334,8 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     assert timing["native_kernel_frame_capacity"] == 256
     assert timing["native_kernel_capacity_selector"] == "small_256"
     assert timing["native_profile"]["schema_version"] == 1
+    assert timing["native_profile"]["percentile_strategy"] == "quickselect_order_statistics"
+    assert timing["native_profile"]["winsorized_accumulation_order"] == "frame_axis_input_order"
     assert timing["native_profile"]["kernel_sync_s"] >= 0.0
     assert timing["native_profile"]["download_s"] >= 0.0
     assert timing["native_profile"]["downloaded_arrays"] == 5
@@ -2395,6 +2397,8 @@ def test_resident_stack_hardened_winsorized_sigma_260_frames_matches_cpu_baselin
     assert timing["native_kernel_frame_capacity"] == 512
     assert timing["native_kernel_capacity_selector"] == "large_512"
     assert timing["native_profile"]["schema_version"] == 1
+    assert timing["native_profile"]["percentile_strategy"] == "quickselect_order_statistics"
+    assert timing["native_profile"]["winsorized_accumulation_order"] == "frame_axis_input_order"
     assert timing["native_profile"]["kernel_sync_s"] >= 0.0
     assert timing["native_profile"]["download_s"] >= 0.0
     assert timing["native_profile"]["downloaded_arrays"] == 5

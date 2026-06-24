@@ -28,7 +28,9 @@ Current code is intentionally gated:
 - The resident CUDA hardened winsorized path is still a one-iteration,
   512-frame native prototype with separate 256-frame and 512-frame kernel
   variants. Gate609 ensures default 200-light groups use the smaller variant,
-  but this remains a bounded local-array implementation. The larger-frame
+  and Gate611 replaces the percentile full-sort prototype with quickselect
+  order statistics plus input-frame-order winsorized accumulation, but this
+  remains a bounded local-array implementation. The larger-frame
   segmented fallback is correctness-first, not the final high-throughput CUDA
   segmented reduction. Gate607 reduces Python/native round trips in that
   fallback and Gate608 covers 260-frame groups natively, but groups above 512

@@ -177,12 +177,31 @@ against Gate609 and measured `kernel_sync_s=3.6350664`,
 optimization target explicit: the median/IQR hardened kernel itself dominates;
 output-map download is not the main bottleneck on the current audit-map route.
 
+S2-Gate 611 replaces the per-pixel full insertion sort used only for native
+hardened percentiles with device-side quickselect order statistics. The CUDA
+kernel still computes exact linear-interpolated median, q25, and q75 for the
+bounded 256/512-frame resident groups, but it no longer relies on the local
+sample array being sorted for later statistics. After the percentile pass,
+winsorized mean/std are computed by rereading resident samples in input frame
+axis order, matching the GLASS CPU baseline's `np.clip(data, ...).mean(axis=0)`
+semantics. Timing profiles record
+`percentile_strategy=quickselect_order_statistics` and
+`winsorized_accumulation_order=frame_axis_input_order`. The real 200-light
+default run reduced hardened native integration to `3.4022495999233797 s`
+with `kernel_sync_s=3.2809923`, while passing pipeline and resident result
+contracts. Compared with the Gate610 sorted-local-array profile, output
+changes were limited to 41 of 61,651,200 master pixels
+(`6.650316619952247e-07`, RMS `0.0006160635903431593`) and similarly sparse
+integer count-map boundary changes. The 260-light synthetic validation stayed
+bit-identical to Gate609.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted
 mean integration, resident mean/std sigma clipping, resident mean/std
 winsorized clipping, and a bounded native resident median/IQR hardened
-winsorized path with 256-frame and 512-frame native kernel variants. The
+winsorized path with 256-frame and 512-frame native kernel variants using
+quickselect percentiles plus input-frame-order winsorized statistics. The
 tile-streaming CPU path remains the portable scientific baseline, while the
 resident path is the high-VRAM performance path for the 200-light comparison
 dataset. Groups above the 512-frame native hardened limit may use the segmented

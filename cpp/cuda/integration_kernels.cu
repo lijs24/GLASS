@@ -1373,7 +1373,45 @@ void glass_integrate_resident_sigma_clip_f32_launch(
 constexpr int kGlassHardenedWinsorizedSmallMaxFrames = 256;
 constexpr int kGlassHardenedWinsorizedLargeMaxFrames = 512;
 
-__device__ float glass_percentile_sorted_f32(const float* values, int count, float fraction) {
+__device__ void glass_swap_f32(float& a, float& b) {
+  const float tmp = a;
+  a = b;
+  b = tmp;
+}
+
+__device__ float glass_select_kth_f32(float* values, int count, int k) {
+  int left = 0;
+  int right = count - 1;
+  while (left < right) {
+    const float pivot = values[(left + right) >> 1];
+    int lower = left;
+    int scan = left;
+    int upper = right;
+    while (scan <= upper) {
+      const float value = values[scan];
+      if (value < pivot) {
+        glass_swap_f32(values[lower], values[scan]);
+        ++lower;
+        ++scan;
+      } else if (value > pivot) {
+        glass_swap_f32(values[scan], values[upper]);
+        --upper;
+      } else {
+        ++scan;
+      }
+    }
+    if (k < lower) {
+      right = lower - 1;
+    } else if (k > upper) {
+      left = upper + 1;
+    } else {
+      return values[k];
+    }
+  }
+  return values[left];
+}
+
+__device__ float glass_percentile_select_f32(float* values, int count, float fraction) {
   if (count <= 0) {
     return 0.0f;
   }
@@ -1387,7 +1425,12 @@ __device__ float glass_percentile_sorted_f32(const float* values, int count, flo
     upper = count - 1;
   }
   const float t = position - static_cast<float>(lower);
-  return values[lower] * (1.0f - t) + values[upper] * t;
+  const float lower_value = glass_select_kth_f32(values, count, lower);
+  if (upper == lower) {
+    return lower_value;
+  }
+  const float upper_value = glass_select_kth_f32(values, count, upper);
+  return lower_value * (1.0f - t) + upper_value * t;
 }
 
 __device__ float glass_count_map_value_f32(float value, const float*) {
@@ -1459,19 +1502,9 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   }
   const float fallback_scale = sqrtf(variance / static_cast<float>(count));
 
-  for (int i = 1; i < count; ++i) {
-    const float item = values[i];
-    int j = i - 1;
-    while (j >= 0 && values[j] > item) {
-      values[j + 1] = values[j];
-      --j;
-    }
-    values[j + 1] = item;
-  }
-
-  const float center0 = glass_percentile_sorted_f32(values, count, 0.5f);
-  const float q25 = glass_percentile_sorted_f32(values, count, 0.25f);
-  const float q75 = glass_percentile_sorted_f32(values, count, 0.75f);
+  const float center0 = glass_percentile_select_f32(values, count, 0.5f);
+  const float q25 = glass_percentile_select_f32(values, count, 0.25f);
+  const float q75 = glass_percentile_select_f32(values, count, 0.75f);
   float first_scale = (q75 - q25) / 1.349f;
   if (!(first_scale > 0.0f) || !isfinite(first_scale)) {
     first_scale = fallback_scale;
@@ -1480,8 +1513,15 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   const float first_high = center0 + high_sigma * first_scale;
 
   float winsor_mean = 0.0f;
-  for (int i = 0; i < count; ++i) {
-    float value = values[i];
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    float value = stack[frame * pixels_per_frame + pixel];
+    if (!isfinite(value)) {
+      continue;
+    }
     if (value < first_low) {
       value = first_low;
     } else if (value > first_high) {
@@ -1492,8 +1532,15 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   winsor_mean /= static_cast<float>(count);
 
   float winsor_variance = 0.0f;
-  for (int i = 0; i < count; ++i) {
-    float value = values[i];
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    float value = stack[frame * pixels_per_frame + pixel];
+    if (!isfinite(value)) {
+      continue;
+    }
     if (value < first_low) {
       value = first_low;
     } else if (value > first_high) {

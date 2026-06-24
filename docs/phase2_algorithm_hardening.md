@@ -18162,6 +18162,94 @@ Phase 2 is complete when:
     GLASS synthetic data, and user-owned real benchmark artifacts;
   - no external or proprietary implementation source was inspected or used.
 
+### S2-Gate 611: Native Hardened Quickselect Percentiles
+
+- Continued the Phase 2 integration mainline by optimizing the Gate610-identified
+  hardened median/IQR resident CUDA bottleneck.
+- Completed:
+  - replaced the per-pixel full insertion sort used for native hardened
+    median/q25/q75 with quickselect order statistics;
+  - retained bounded `small_256` and `large_512` kernel dispatch;
+  - changed winsorized mean/std accumulation to reread resident samples in
+    input frame-axis order after percentile selection, matching the CPU
+    baseline's `np.clip(data, ...).mean(axis=0)` semantics rather than relying
+    on the incidental order of a sorted or partitioned local sample buffer;
+  - recorded `percentile_strategy=quickselect_order_statistics` and
+    `winsorized_accumulation_order=frame_axis_input_order` in native profiles;
+  - updated CUDA/API and CLI tests to require both profile fields.
+- Synthetic 260-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate611_quickselect_frame_order\resident_260_quickselect_frame_order`;
+  - timing selector:
+    `native_kernel_capacity_selector=large_512`;
+  - native hardened timing:
+    `0.008832699968479574 s`;
+  - native profile:
+    `kernel_sync_s=0.0087259`,
+    `percentile_strategy=quickselect_order_statistics`,
+    `winsorized_accumulation_order=frame_axis_input_order`;
+  - pixel comparison against Gate609 native 260 output:
+    `max_abs=0.0` and `rms=0.0` for master, weight, coverage, low rejection,
+    high rejection, and DQ maps;
+  - `pipeline_contract.json`: passed;
+  - `resident_result_contract.json`: passed.
+- Real 200-light default regression:
+  - run:
+    `C:\glass_runs\phase2_s2_gate611_quickselect_frame_order\real_200_default_regression`;
+  - `total_elapsed_s=11.453746799845248`;
+  - resident hardened route stayed native:
+    `hardened_execution_route=native_cuda_resident_stack`;
+  - timing selector:
+    `native_kernel_capacity_selector=small_256`;
+  - native hardened integration timing:
+    `3.4022495999233797 s`;
+  - native profile:
+    - `allocation_s=0.0015426`;
+    - `weights_upload_s` recorded in the run artifact;
+    - `kernel_sync_s=3.2809923`;
+    - `download_s=0.1150331`;
+    - `free_s=0.0044863`;
+    - `downloaded_arrays=5`;
+    - `percentile_strategy=quickselect_order_statistics`;
+    - `winsorized_accumulation_order=frame_axis_input_order`;
+  - compared with Gate610's sorted-local-array profile:
+    - hardened native total improved from `3.752243599970825 s` to
+      `3.4022495999233797 s`;
+    - kernel+sync improved from `3.6350664 s` to `3.2809923 s`;
+    - master changed in `41 / 61651200` pixels
+      (`6.650316619952247e-07`), with `max_abs=1.8656654357910156` and
+      `rms=0.0006160635903431593`;
+    - weight and coverage maps changed in the same `41` boundary pixels with
+      `max_abs=2.0`;
+    - low rejection changed in `19` pixels, high rejection in `32` pixels, and
+      DQ in `29` pixels;
+  - `pipeline_contract.json`: passed;
+  - `resident_result_contract.json`: passed.
+- Validation:
+  - native rebuild:
+    `cmake --build build --config Release --target _glass_cuda_native`;
+  - focused hardened CUDA tests:
+    `4 passed, 50 deselected`;
+  - focused resident CLI hardened parity test:
+    `1 passed, 114 deselected`.
+  - ruff:
+    `All checks passed`;
+  - full pytest:
+    `1289 passed in 52.92 s`.
+- Interpretation:
+  - this is a substantive kernel-internal optimization, not a report-only gate;
+  - the few real-data output differences are sparse threshold-boundary effects
+    caused by moving away from the old CUDA kernel's incidental sorted-buffer
+    accumulation order toward the CPU baseline's frame-axis order;
+  - the next integration optimization should either move the bounded local
+    arrays to a scalable segmented/device reducer for groups above 512 or
+    batch more of registration/warp orchestration to reduce remaining 200-light
+    time.
+- Clean-room note:
+  - this gate uses GLASS-owned CUDA kernels, GLASS CPU baseline formulas,
+    GLASS synthetic data, and user-owned real benchmark artifacts;
+  - no external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 610: Native Hardened Integration Timing Profile
 
 - Continued the Phase 2 integration mainline by isolating the largest current
