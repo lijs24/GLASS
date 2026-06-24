@@ -155,17 +155,29 @@ time from `0.009082899894565344 s` to `0.00396340002771467 s`. Groups above
 512 frames still use the segmented CPUStackEngine fallback until a scalable
 device-side segmented/selection reducer is implemented.
 
+S2-Gate 609 keeps that 512-frame capacity but avoids forcing smaller default
+groups through the larger local-array kernel. The native launcher now selects a
+`small_256` hardened kernel for frame counts at or below 256 and a `large_512`
+kernel for frame counts from 257 through 512. The formula, rejection guard, and
+output maps are unchanged; timing payloads record
+`native_kernel_frame_capacity` and `native_kernel_capacity_selector`. The real
+200-light default route uses `small_256` and preserved SHA256-identical outputs
+against Gate608 while reducing native hardened integration from
+`3.8001173000084236 s` to `3.7481071000220254 s`. The 260-light synthetic
+validation uses `large_512` and stayed SHA256-identical to Gate608.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted
 mean integration, resident mean/std sigma clipping, resident mean/std
 winsorized clipping, and a bounded native resident median/IQR hardened
-winsorized path. The tile-streaming CPU path remains the portable scientific
-baseline, while the resident path is the high-VRAM performance path for the
-200-light comparison dataset. Groups above the 512-frame native hardened limit
-may use the segmented CPUStackEngine resident-tile fallback, now preferably
-through the batch tile-download surface, until the dedicated CUDA segmented
-reduction is implemented.
+winsorized path with 256-frame and 512-frame native kernel variants. The
+tile-streaming CPU path remains the portable scientific baseline, while the
+resident path is the high-VRAM performance path for the 200-light comparison
+dataset. Groups above the 512-frame native hardened limit may use the segmented
+CPUStackEngine resident-tile fallback, now preferably through the batch
+tile-download surface, until the dedicated CUDA segmented reduction is
+implemented.
 
 ## Variance Map
 

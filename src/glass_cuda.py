@@ -4572,6 +4572,7 @@ class ResidentCalibratedStack:
         )
         total_s = perf_counter() - start
         actual_count_map_dtype = str(np.asarray(coverage).dtype)
+        native_kernel_frame_capacity = 256 if self.frame_count <= 256 else 512
         return (
             master,
             weight_map,
@@ -4585,6 +4586,8 @@ class ResidentCalibratedStack:
                 "rejection": "winsorized_sigma",
                 "resident_winsorized_mode": "hardened_cpu_parity",
                 "frame_count": self.frame_count,
+                "native_kernel_frame_capacity": native_kernel_frame_capacity,
+                "native_kernel_capacity_selector": "small_256" if native_kernel_frame_capacity == 256 else "large_512",
                 "height": self.height,
                 "width": self.width,
                 "pixel_count": self.height * self.width,

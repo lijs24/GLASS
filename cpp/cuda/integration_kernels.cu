@@ -1370,7 +1370,8 @@ void glass_integrate_resident_sigma_clip_f32_launch(
       winsorize);
 }
 
-constexpr int kGlassHardenedWinsorizedMaxFrames = 512;
+constexpr int kGlassHardenedWinsorizedSmallMaxFrames = 256;
+constexpr int kGlassHardenedWinsorizedLargeMaxFrames = 512;
 
 __device__ float glass_percentile_sorted_f32(const float* values, int count, float fraction) {
   if (count <= 0) {
@@ -1401,7 +1402,7 @@ __device__ unsigned short glass_count_map_value_f32(float value, const unsigned 
   return static_cast<unsigned short>(clamped + 0.5f);
 }
 
-template <typename CountT>
+template <typename CountT, int MaxFrames>
 __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
     const float* stack,
     const float* weights,
@@ -1421,7 +1422,7 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
     return;
   }
 
-  float values[kGlassHardenedWinsorizedMaxFrames];
+  float values[MaxFrames];
   int count = 0;
   for (std::size_t frame = 0; frame < frame_count; ++frame) {
     const float weight = weights[frame];
@@ -1432,7 +1433,7 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
     if (!isfinite(value)) {
       continue;
     }
-    if (count < kGlassHardenedWinsorizedMaxFrames) {
+    if (count < MaxFrames) {
       values[count] = value;
       ++count;
     }
@@ -1570,6 +1571,60 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   high_rejection_map[pixel] = glass_count_map_value_f32(high_reject, high_rejection_map);
 }
 
+template <typename CountT>
+void glass_integrate_resident_hardened_winsorized_sigma_f32_launch_typed(
+    const float* stack,
+    const float* weights,
+    float* master,
+    float* weight_map,
+    CountT* coverage_map,
+    CountT* low_rejection_map,
+    CountT* high_rejection_map,
+    std::size_t frame_count,
+    std::size_t pixels_per_frame,
+    float low_sigma,
+    float high_sigma,
+    int min_samples,
+    float max_reject_fraction) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  if (frame_count <= static_cast<std::size_t>(kGlassHardenedWinsorizedSmallMaxFrames)) {
+    glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<
+        CountT,
+        kGlassHardenedWinsorizedSmallMaxFrames><<<blocks, threads>>>(
+        stack,
+        weights,
+        master,
+        weight_map,
+        coverage_map,
+        low_rejection_map,
+        high_rejection_map,
+        frame_count,
+        pixels_per_frame,
+        low_sigma,
+        high_sigma,
+        min_samples,
+        max_reject_fraction);
+    return;
+  }
+  glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<
+      CountT,
+      kGlassHardenedWinsorizedLargeMaxFrames><<<blocks, threads>>>(
+      stack,
+      weights,
+      master,
+      weight_map,
+      coverage_map,
+      low_rejection_map,
+      high_rejection_map,
+      frame_count,
+      pixels_per_frame,
+      low_sigma,
+      high_sigma,
+      min_samples,
+      max_reject_fraction);
+}
+
 void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     const float* stack,
     const float* weights,
@@ -1584,9 +1639,7 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     float high_sigma,
     int min_samples,
     float max_reject_fraction) {
-  constexpr int threads = 256;
-  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
-  glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<<<blocks, threads>>>(
+  glass_integrate_resident_hardened_winsorized_sigma_f32_launch_typed<float>(
       stack,
       weights,
       master,
@@ -1616,9 +1669,7 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     float high_sigma,
     int min_samples,
     float max_reject_fraction) {
-  constexpr int threads = 256;
-  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
-  glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<<<blocks, threads>>>(
+  glass_integrate_resident_hardened_winsorized_sigma_f32_launch_typed<unsigned short>(
       stack,
       weights,
       master,

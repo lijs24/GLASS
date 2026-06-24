@@ -2331,6 +2331,8 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     assert timing["native_method"] == "ResidentCalibratedStack.integrate_hardened_winsorized_sigma"
     assert timing["resident_winsorized_mode"] == "hardened_cpu_parity"
     assert timing["frame_count"] == len(frames)
+    assert timing["native_kernel_frame_capacity"] == 256
+    assert timing["native_kernel_capacity_selector"] == "small_256"
     assert timing["pixel_count"] == 4
     assert timing["count_map_dtype_requested"] == "float32"
     assert timing["count_map_dtype"] == "float32"
@@ -2386,6 +2388,8 @@ def test_resident_stack_hardened_winsorized_sigma_260_frames_matches_cpu_baselin
 
     assert timing["native_method"] == "ResidentCalibratedStack.integrate_hardened_winsorized_sigma"
     assert timing["frame_count"] == 260
+    assert timing["native_kernel_frame_capacity"] == 512
+    assert timing["native_kernel_capacity_selector"] == "large_512"
     assert timing["count_map_dtype"] == "uint16"
     assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
     assert np.allclose(weight_map, expected_weight, rtol=2e-5, atol=2e-5)

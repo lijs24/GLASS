@@ -18161,3 +18161,72 @@ Phase 2 is complete when:
   - this gate uses GLASS-owned CUDA kernels, GLASS CPUStackEngine formulas,
     GLASS synthetic data, and user-owned real benchmark artifacts;
   - no external or proprietary implementation source was inspected or used.
+
+### S2-Gate 609: Dual-Capacity Hardened Winsorized CUDA Kernel
+
+- Continued the Phase 2 integration mainline by removing the Gate608
+  performance penalty on the 200-light default route while preserving the new
+  512-frame native capacity.
+- Completed:
+  - templated the resident hardened winsorized CUDA kernel on its local sample
+    capacity;
+  - added a `small_256` kernel instance for groups with at most 256 frames;
+  - retained a `large_512` kernel instance for groups with 257-512 frames;
+  - changed the native launcher to select the kernel instance by `frame_count`;
+  - added `native_kernel_frame_capacity` and
+    `native_kernel_capacity_selector` to hardened native timing artifacts;
+  - added CUDA/API and CLI tests proving the selected capacity is recorded.
+- Synthetic 260-light validation:
+  - run:
+    `C:\glass_runs\phase2_s2_gate609_dual_capacity_hardened\resident_260_dual_capacity`;
+  - resident hardened route:
+    `hardened_execution_route=native_cuda_resident_stack`;
+  - timing selector:
+    `native_kernel_capacity_selector=large_512`;
+  - native hardened timing:
+    `0.011102600023150444 s`;
+  - pixel comparison against Gate608 native 260 output:
+    `max_abs=0.0` and `rms=0.0` for master, weight, coverage, low rejection,
+    high rejection, and DQ maps;
+  - `pipeline_contract.json`: passed;
+  - `resident_result_contract.json`: passed.
+- Real 200-light default regression:
+  - run:
+    `C:\glass_runs\phase2_s2_gate609_dual_capacity_hardened\real_200_default_regression`;
+  - `total_elapsed_s=11.787260199896991`;
+  - `resident_calibration_integration=10.944278200040571 s`;
+  - resident hardened route stayed native:
+    `hardened_execution_route=native_cuda_resident_stack`;
+  - timing selector:
+    `native_kernel_capacity_selector=small_256`;
+  - native hardened integration timing:
+    `3.7481071000220254 s`;
+  - Gate608 native hardened integration timing:
+    `3.8001173000084236 s`;
+  - six integration FITS outputs are SHA256-identical to Gate608;
+  - `pipeline_contract.json`: passed;
+  - `resident_result_contract.json`: passed.
+- Validation:
+  - native rebuild:
+    `cmake --build build --config Release --target _glass_cuda_native`;
+  - focused hardened CUDA tests:
+    `4 passed, 50 deselected`;
+  - focused resident CLI hardened parity test:
+    `1 passed, 114 deselected`;
+  - ruff:
+    `All checks passed`;
+  - full pytest:
+    `1289 passed in 53.38 s`.
+- Interpretation:
+  - this is a substantive performance-preservation gate on the default
+    200-light scientific path, not a report-only handoff;
+  - the scientific formula, rejection guard, output maps, accepted frames, and
+    output pixels are unchanged;
+  - the next substantive gate should move beyond bounded local arrays by
+    implementing a scalable device-side segmented/selection hardened reducer
+    for groups above 512, or return to the resident registration/warp
+    orchestration bottleneck.
+- Clean-room note:
+  - this gate uses GLASS-owned CUDA kernels, GLASS CPUStackEngine formulas,
+    GLASS synthetic data, and user-owned real benchmark artifacts;
+  - no external or proprietary implementation source was inspected or used.
