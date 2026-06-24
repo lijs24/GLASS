@@ -18250,6 +18250,69 @@ Phase 2 is complete when:
     GLASS synthetic data, and user-owned real benchmark artifacts;
   - no external or proprietary implementation source was inspected or used.
 
+### S2-Gate 613: Resident Grid-LN Batched Statistics
+
+- Continued the Phase 2 default resident CUDA mainline by reducing the
+  grid local-normalization statistics orchestration that remained after
+  Gate612's in-place apply change.
+- Completed:
+  - added a native CUDA batch kernel over `(source frame, grid tile)` for
+    resident source/reference paired grid statistics;
+  - exposed
+    `ResidentCalibratedStack.frame_pair_grid_stats_batch(reference_index,
+    source_indices, tile_height, tile_width)`;
+  - normalized the batched result in `glass_cuda.py` while keeping the existing
+    per-frame `frame_pair_grid_stats` fallback;
+  - changed resident `grid_mean_std` LN setup to compute all active
+    non-reference frame-pair stats in one batch before per-frame coefficient
+    construction and in-place application;
+  - recorded per-frame `grid_coefficients.stats_source`, group
+    `grid_stats`, and resident summary
+    `resident_local_normalization.grid_stats`;
+  - added CUDA/API and CLI tests proving batch stats match per-frame stats and
+    that resident CLI runs use the batch path when available.
+- Focused validation:
+  - native rebuild:
+    `cmake --build build --config Release --target _glass_cuda_native`;
+  - resident stack grid-LN tests:
+    `5 passed, 50 deselected`;
+  - resident CLI grid-LN smoke:
+    `1 passed, 114 deselected`.
+- Real 200-light default regression:
+  - run:
+    `C:\glass_runs\phase2_s2_gate613_ln_batch_stats\real_200_default_regression`;
+  - comparison:
+    `C:\glass_runs\phase2_s2_gate613_ln_batch_stats\real_200_vs_gate612_compare.json`;
+  - all six tracked integration FITS outputs are SHA256-identical to Gate612:
+    master, weight map, coverage map, low rejection map, high rejection map,
+    and DQ map;
+  - pixel comparison also reports zero different pixels for all six outputs;
+  - batch grid stats covered all `192` normalized non-reference frames with
+    `grid_rows=26`, `grid_cols=38`, `grid_count=988`,
+    `download_bytes=7587840`, and batch stats `total_s=0.080022`;
+  - local-normalization group timing improved from Gate612
+    `0.5070594000862911 s` to `0.42897249991074204 s`;
+  - total internal run timing changed from Gate612
+    `11.157036500168033 s` to `11.212513899896294 s`, a small end-to-end
+    run-noise regression while the targeted LN substage improved;
+  - `pipeline_contract.json`, `resident_result_contract.json`,
+    `local_norm_contract.json`, `stack_engine_contract.json`, and
+    `warp_quality_contract.json` passed.
+- Interpretation:
+  - this is a default-path CUDA scheduling and transfer improvement, not a
+    presentation-only gate;
+  - the LN coefficient formula, in-place apply formula, reference selection,
+    frame admission, registration, warp, rejection, DQ bits, and output pixels
+    are unchanged;
+  - the next substantive optimization should either fuse more of LN
+    coefficient/apply orchestration or return to the larger current bottlenecks:
+    resident registration/warp orchestration and the bounded hardened
+    winsorized integration reducer.
+- Clean-room note:
+  - this gate uses GLASS-owned CUDA kernels/wrappers, GLASS resident artifact
+    contracts, GLASS tests, and user-owned real benchmark artifacts;
+  - no external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 612: Resident Local-Normalization In-Place Apply
 
 - Continued the Phase 2 default resident CUDA mainline by reducing the

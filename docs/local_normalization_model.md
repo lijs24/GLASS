@@ -338,3 +338,40 @@ The real 200-light Gate612 default regression preserved bit-identical master,
 weight, coverage, low-rejection, high-rejection, and DQ FITS outputs versus
 Gate611 while reducing resident LN wall time from about `1.066 s` to
 `0.507 s`.
+
+## S2-Gate 613 Resident Batched Grid Statistics
+
+S2-Gate 613 changes the resident CUDA `grid_mean_std` statistics phase from
+one source/reference frame-pair kernel call per normalized frame to a batched
+frame-pair grid statistics kernel. The coefficient model is unchanged:
+
+- each normalized non-reference frame still estimates per-tile paired
+  source/reference mean and standard deviation;
+- empty, offset-only, and ok tile statuses are still derived from the same
+  valid-pixel counts and standard-deviation checks;
+- grid LN still applies `value * scale + offset` in place in VRAM.
+
+The new native method is
+`ResidentCalibratedStack.frame_pair_grid_stats_batch(reference_index,
+source_indices, tile_height, tile_width)`. It launches a 2-D kernel over
+`source frame x grid tile`, performs one device synchronization for the whole
+LN statistics batch, and downloads the per-frame coefficient inputs as one
+contiguous statistics payload. Per-frame fallbacks remain available when the
+native batch method is absent.
+
+Artifacts expose the chosen route:
+
+- per-frame `grid_coefficients.stats_source = batch` or `per_frame`;
+- group `grid_stats.batched`;
+- group `grid_stats.source_count`, grid shape, index/download bytes, and
+  timing;
+- resident summary `resident_local_normalization.grid_stats`.
+
+The Gate613 real 200-light default regression used batch stats for all `192`
+normalized non-reference frames, recorded `grid_count=988`, downloaded
+`7,587,840` bytes of grid statistics, and measured batch stats total time
+`0.080022 s`. The six tracked integration FITS outputs were SHA256-identical
+to Gate612, with zero pixel differences. Local-normalization group timing
+improved from `0.5070594000862911 s` to `0.42897249991074204 s`; total run
+time changed from `11.157036500168033 s` to `11.212513899896294 s`, which is
+within the observed end-to-end run noise for the current default path.

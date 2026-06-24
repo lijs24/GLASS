@@ -432,6 +432,23 @@ void glass_pair_grid_sum_stats_f32_launch(
     int tile_height,
     int grid_cols,
     int grid_rows);
+void glass_pair_grid_sum_stats_batch_f32_launch(
+    const float* stack,
+    const int* source_indices,
+    int source_count,
+    int reference_index,
+    double* source_sum,
+    double* source_sum2,
+    double* reference_sum,
+    double* reference_sum2,
+    unsigned long long* count,
+    std::size_t pixels_per_frame,
+    int width,
+    int height,
+    int tile_width,
+    int tile_height,
+    int grid_cols,
+    int grid_rows);
 void glass_integrate_accumulate_mean_tile_f32_launch(
     const float* frame, const float* weight, float* sum, float* weight_sum, std::size_t n);
 void glass_apply_invalid_mask_f32_launch(
@@ -8379,6 +8396,243 @@ class ResidentCalibratedStack {
     result["tile_width"] = tile_width;
     result["valid_pixel_total"] = total_count;
     result["model"] = "resident_grid_pair_mean_std";
+    return result;
+  }
+
+  py::dict frame_pair_grid_stats_batch(
+      std::size_t reference_index,
+      py::array_t<int, py::array::c_style | py::array::forcecast> source_indices,
+      int tile_height,
+      int tile_width) const {
+    require_loaded(reference_index, "batched grid local normalization reference statistics");
+    const py::buffer_info source_info = source_indices.request();
+    if (source_info.ndim != 1) {
+      throw std::invalid_argument("source_indices must be a one-dimensional array");
+    }
+    const int source_count = static_cast<int>(source_info.shape[0]);
+    if (tile_height <= 0 || tile_width <= 0) {
+      throw std::invalid_argument("tile dimensions must be positive");
+    }
+    const int grid_rows =
+        (static_cast<int>(height_) + tile_height - 1) / tile_height;
+    const int grid_cols =
+        (static_cast<int>(width_) + tile_width - 1) / tile_width;
+    if (grid_rows <= 0 || grid_cols <= 0) {
+      throw std::runtime_error("resident frame shape produced an empty local-normalization grid");
+    }
+    const std::size_t grid_count =
+        static_cast<std::size_t>(grid_rows) * static_cast<std::size_t>(grid_cols);
+    const auto* source_ptr = static_cast<const int*>(source_info.ptr);
+    std::vector<int> host_source_indices(static_cast<std::size_t>(source_count), 0);
+    for (int i = 0; i < source_count; ++i) {
+      const int source_index = source_ptr[i];
+      if (source_index < 0 || static_cast<std::size_t>(source_index) >= frame_count_) {
+        throw std::out_of_range("source index is out of resident stack range");
+      }
+      require_loaded(static_cast<std::size_t>(source_index), "batched grid local normalization source statistics");
+      host_source_indices[static_cast<std::size_t>(i)] = source_index;
+    }
+
+    const std::size_t total_grid_count = grid_count * static_cast<std::size_t>(source_count);
+    std::vector<double> source_sum(total_grid_count, 0.0);
+    std::vector<double> source_sum2(total_grid_count, 0.0);
+    std::vector<double> reference_sum(total_grid_count, 0.0);
+    std::vector<double> reference_sum2(total_grid_count, 0.0);
+    std::vector<unsigned long long> count(total_grid_count, 0);
+    int* d_source_indices = nullptr;
+    double* d_source_sum = nullptr;
+    double* d_source_sum2 = nullptr;
+    double* d_reference_sum = nullptr;
+    double* d_reference_sum2 = nullptr;
+    unsigned long long* d_count = nullptr;
+    double index_upload_s = 0.0;
+    double allocation_s = 0.0;
+    double kernel_enqueue_s = 0.0;
+    double sync_s = 0.0;
+    double download_s = 0.0;
+    const auto total_start = Clock::now();
+    try {
+      if (source_count > 0) {
+        const auto alloc_start = Clock::now();
+        check_cuda(
+            cudaMalloc(&d_source_indices, host_source_indices.size() * sizeof(int)),
+            "cudaMalloc(resident batch grid source indices)");
+        check_cuda(
+            cudaMalloc(&d_source_sum, total_grid_count * sizeof(double)),
+            "cudaMalloc(resident batch grid source sum)");
+        check_cuda(
+            cudaMalloc(&d_source_sum2, total_grid_count * sizeof(double)),
+            "cudaMalloc(resident batch grid source sum2)");
+        check_cuda(
+            cudaMalloc(&d_reference_sum, total_grid_count * sizeof(double)),
+            "cudaMalloc(resident batch grid reference sum)");
+        check_cuda(
+            cudaMalloc(&d_reference_sum2, total_grid_count * sizeof(double)),
+            "cudaMalloc(resident batch grid reference sum2)");
+        check_cuda(
+            cudaMalloc(&d_count, total_grid_count * sizeof(unsigned long long)),
+            "cudaMalloc(resident batch grid valid count)");
+        allocation_s = seconds_since(alloc_start);
+
+        const auto upload_start = Clock::now();
+        check_cuda(
+            cudaMemcpy(
+                d_source_indices,
+                host_source_indices.data(),
+                host_source_indices.size() * sizeof(int),
+                cudaMemcpyHostToDevice),
+            "cudaMemcpy(resident batch grid source indices)");
+        index_upload_s = seconds_since(upload_start);
+
+        const auto kernel_start = Clock::now();
+        glass_pair_grid_sum_stats_batch_f32_launch(
+            d_stack_,
+            d_source_indices,
+            source_count,
+            static_cast<int>(reference_index),
+            d_source_sum,
+            d_source_sum2,
+            d_reference_sum,
+            d_reference_sum2,
+            d_count,
+            pixels_per_frame_,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            tile_width,
+            tile_height,
+            grid_cols,
+            grid_rows);
+        kernel_enqueue_s = seconds_since(kernel_start);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.frame_pair_grid_stats_batch kernel launch");
+        const auto sync_start = Clock::now();
+        check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.frame_pair_grid_stats_batch synchronize");
+        sync_s = seconds_since(sync_start);
+
+        const auto download_start = Clock::now();
+        check_cuda(
+            cudaMemcpy(source_sum.data(), d_source_sum, total_grid_count * sizeof(double), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid source sum)");
+        check_cuda(
+            cudaMemcpy(source_sum2.data(), d_source_sum2, total_grid_count * sizeof(double), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid source sum2)");
+        check_cuda(
+            cudaMemcpy(
+                reference_sum.data(),
+                d_reference_sum,
+                total_grid_count * sizeof(double),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid reference sum)");
+        check_cuda(
+            cudaMemcpy(
+                reference_sum2.data(),
+                d_reference_sum2,
+                total_grid_count * sizeof(double),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid reference sum2)");
+        check_cuda(
+            cudaMemcpy(count.data(), d_count, total_grid_count * sizeof(unsigned long long), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid valid count)");
+        download_s = seconds_since(download_start);
+      }
+    } catch (...) {
+      cudaFree(d_source_indices);
+      cudaFree(d_source_sum);
+      cudaFree(d_source_sum2);
+      cudaFree(d_reference_sum);
+      cudaFree(d_reference_sum2);
+      cudaFree(d_count);
+      throw;
+    }
+    cudaFree(d_source_indices);
+    cudaFree(d_source_sum);
+    cudaFree(d_source_sum2);
+    cudaFree(d_reference_sum);
+    cudaFree(d_reference_sum2);
+    cudaFree(d_count);
+
+    py::list frames;
+    for (int source_position = 0; source_position < source_count; ++source_position) {
+      py::array_t<float> source_mean({static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+      py::array_t<float> source_std({static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+      py::array_t<float> reference_mean({static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+      py::array_t<float> reference_std({static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+      py::array_t<unsigned long long> valid_pixels(
+          {static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+      float* source_mean_ptr = static_cast<float*>(source_mean.request().ptr);
+      float* source_std_ptr = static_cast<float*>(source_std.request().ptr);
+      float* reference_mean_ptr = static_cast<float*>(reference_mean.request().ptr);
+      float* reference_std_ptr = static_cast<float*>(reference_std.request().ptr);
+      auto* valid_ptr = static_cast<unsigned long long*>(valid_pixels.request().ptr);
+      unsigned long long total_count = 0;
+      const std::size_t source_offset = static_cast<std::size_t>(source_position) * grid_count;
+      for (std::size_t tile_index = 0; tile_index < grid_count; ++tile_index) {
+        const std::size_t i = source_offset + tile_index;
+        const unsigned long long c = count[i];
+        total_count += c;
+        valid_ptr[tile_index] = c;
+        if (c == 0) {
+          source_mean_ptr[tile_index] = 0.0f;
+          source_std_ptr[tile_index] = 0.0f;
+          reference_mean_ptr[tile_index] = 0.0f;
+          reference_std_ptr[tile_index] = 0.0f;
+          continue;
+        }
+        const double inv_count = 1.0 / static_cast<double>(c);
+        const double s_mean = source_sum[i] * inv_count;
+        const double r_mean = reference_sum[i] * inv_count;
+        double s_var = source_sum2[i] * inv_count - s_mean * s_mean;
+        double r_var = reference_sum2[i] * inv_count - r_mean * r_mean;
+        if (s_var < 0.0) {
+          s_var = 0.0;
+        }
+        if (r_var < 0.0) {
+          r_var = 0.0;
+        }
+        source_mean_ptr[tile_index] = static_cast<float>(s_mean);
+        source_std_ptr[tile_index] = static_cast<float>(std::sqrt(s_var));
+        reference_mean_ptr[tile_index] = static_cast<float>(r_mean);
+        reference_std_ptr[tile_index] = static_cast<float>(std::sqrt(r_var));
+      }
+      py::dict frame;
+      frame["source_mean"] = source_mean;
+      frame["source_std"] = source_std;
+      frame["reference_mean"] = reference_mean;
+      frame["reference_std"] = reference_std;
+      frame["valid_pixels"] = valid_pixels;
+      frame["grid_rows"] = grid_rows;
+      frame["grid_cols"] = grid_cols;
+      frame["tile_height"] = tile_height;
+      frame["tile_width"] = tile_width;
+      frame["valid_pixel_total"] = total_count;
+      frame["model"] = "resident_grid_pair_mean_std";
+      frame["source_index"] = host_source_indices[static_cast<std::size_t>(source_position)];
+      frame["reference_index"] = static_cast<unsigned long long>(reference_index);
+      frame["batch_position"] = source_position;
+      frames.append(frame);
+    }
+
+    py::dict result;
+    result["schema_version"] = 1;
+    result["model"] = "resident_grid_pair_mean_std_batch";
+    result["batch_model"] = "single_kernel_source_frame_tile_grid";
+    result["reference_index"] = static_cast<unsigned long long>(reference_index);
+    result["source_count"] = source_count;
+    result["grid_rows"] = grid_rows;
+    result["grid_cols"] = grid_cols;
+    result["grid_count"] = static_cast<unsigned long long>(grid_count);
+    result["tile_height"] = tile_height;
+    result["tile_width"] = tile_width;
+    result["source_indices"] = source_indices;
+    result["allocation_s"] = allocation_s;
+    result["index_upload_s"] = index_upload_s;
+    result["kernel_enqueue_s"] = kernel_enqueue_s;
+    result["sync_s"] = sync_s;
+    result["download_s"] = download_s;
+    result["total_s"] = seconds_since(total_start);
+    result["download_bytes"] = static_cast<unsigned long long>(
+        total_grid_count * (4 * sizeof(double) + sizeof(unsigned long long)));
+    result["index_bytes"] = static_cast<unsigned long long>(host_source_indices.size() * sizeof(int));
+    result["frames"] = frames;
     return result;
   }
 
@@ -17543,6 +17797,13 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           &ResidentCalibratedStack::frame_pair_grid_stats,
           py::arg("reference_index"),
           py::arg("source_index"),
+          py::arg("tile_height"),
+          py::arg("tile_width"))
+      .def(
+          "frame_pair_grid_stats_batch",
+          &ResidentCalibratedStack::frame_pair_grid_stats_batch,
+          py::arg("reference_index"),
+          py::arg("source_indices"),
           py::arg("tile_height"),
           py::arg("tile_width"))
       .def(

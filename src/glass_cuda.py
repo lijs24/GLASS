@@ -3891,6 +3891,68 @@ class ResidentCalibratedStack:
             "model": str(result["model"]),
         }
 
+    def frame_pair_grid_stats_batch(
+        self,
+        reference_index: int,
+        source_indices: Any,
+        tile_height: int,
+        tile_width: int,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "frame_pair_grid_stats_batch"):
+            raise RuntimeError("native ResidentCalibratedStack.frame_pair_grid_stats_batch is not available")
+        indices = np.asarray(source_indices, dtype=np.int32)
+        result = dict(
+            self._impl.frame_pair_grid_stats_batch(
+                int(reference_index),
+                indices,
+                int(tile_height),
+                int(tile_width),
+            )
+        )
+        frames = []
+        for item in list(result.get("frames", [])):
+            frame = dict(item)
+            frames.append(
+                {
+                    "source_mean": np.asarray(frame["source_mean"], dtype=np.float32),
+                    "source_std": np.asarray(frame["source_std"], dtype=np.float32),
+                    "reference_mean": np.asarray(frame["reference_mean"], dtype=np.float32),
+                    "reference_std": np.asarray(frame["reference_std"], dtype=np.float32),
+                    "valid_pixels": np.asarray(frame["valid_pixels"], dtype=np.uint64),
+                    "grid_rows": int(frame["grid_rows"]),
+                    "grid_cols": int(frame["grid_cols"]),
+                    "tile_height": int(frame["tile_height"]),
+                    "tile_width": int(frame["tile_width"]),
+                    "valid_pixel_total": int(frame["valid_pixel_total"]),
+                    "model": str(frame["model"]),
+                    "source_index": int(frame["source_index"]),
+                    "reference_index": int(frame["reference_index"]),
+                    "batch_position": int(frame["batch_position"]),
+                }
+            )
+        return {
+            "schema_version": int(result.get("schema_version", 1)),
+            "model": str(result.get("model", "resident_grid_pair_mean_std_batch")),
+            "batch_model": str(result.get("batch_model", "single_kernel_source_frame_tile_grid")),
+            "reference_index": int(result.get("reference_index", reference_index)),
+            "source_count": int(result.get("source_count", len(frames))),
+            "grid_rows": int(result.get("grid_rows", 0)),
+            "grid_cols": int(result.get("grid_cols", 0)),
+            "grid_count": int(result.get("grid_count", 0)),
+            "tile_height": int(result.get("tile_height", tile_height)),
+            "tile_width": int(result.get("tile_width", tile_width)),
+            "source_indices": np.asarray(result.get("source_indices", indices), dtype=np.int32),
+            "allocation_s": float(result.get("allocation_s", 0.0)),
+            "index_upload_s": float(result.get("index_upload_s", 0.0)),
+            "kernel_enqueue_s": float(result.get("kernel_enqueue_s", 0.0)),
+            "sync_s": float(result.get("sync_s", 0.0)),
+            "download_s": float(result.get("download_s", 0.0)),
+            "total_s": float(result.get("total_s", 0.0)),
+            "download_bytes": int(result.get("download_bytes", 0)),
+            "index_bytes": int(result.get("index_bytes", 0)),
+            "frames": frames,
+        }
+
     def apply_global_normalization_frame(self, index: int, scale: float, offset: float) -> dict[str, Any]:
         if not hasattr(self._impl, "apply_global_normalization_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_global_normalization_frame is not available")

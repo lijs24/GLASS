@@ -4824,6 +4824,9 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):
     assert local_norm["groups"][0]["frame_results"][0]["status"] == "reference"
     assert local_norm["groups"][0]["frame_results"][1]["grid_coefficients"]["tile_size"] == 8
     assert local_norm["groups"][0]["frame_results"][1]["grid_coefficients"]["valid_pixel_total"] > 0
+    assert local_norm["groups"][0]["frame_results"][1]["grid_coefficients"]["stats_source"] == "batch"
+    assert local_norm["groups"][0]["grid_stats"]["batched"] is True
+    assert local_norm["groups"][0]["grid_stats"]["source_count"] == 1
     assert local_norm["groups"][0]["frame_results"][1]["application_profile"]["mode"] == "in_place_device_update"
     assert local_norm["groups"][0]["application"]["mode_counts"] == {"in_place_device_update": 1}
     assert local_norm["groups"][0]["application"]["temporary_output_bytes"] == 0
@@ -4839,6 +4842,8 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):
     assert resident["artifacts"][0]["resident_local_normalization"]["enabled"] is True
     assert resident["artifacts"][0]["resident_local_normalization"]["mode"] == "resident_grid_mean_std"
     assert resident["artifacts"][0]["resident_local_normalization"]["tile_size"] == 8
+    assert resident["artifacts"][0]["resident_local_normalization"]["grid_stats"]["batched"] is True
+    assert resident["artifacts"][0]["resident_local_normalization"]["grid_stats"]["source_count"] == 1
     assert resident["artifacts"][0]["resident_local_normalization"]["application"]["mode_counts"] == {
         "in_place_device_update": 1
     }

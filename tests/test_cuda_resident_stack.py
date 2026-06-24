@@ -1254,6 +1254,45 @@ def test_resident_stack_grid_stats_can_drive_in_vram_normalization():
     assert np.allclose(weight_map, np.ones_like(reference, dtype=np.float32))
 
 
+def test_resident_stack_batch_grid_stats_matches_per_frame_stats():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "frame_pair_grid_stats_batch"):
+        raise AssertionError("ResidentCalibratedStack.frame_pair_grid_stats_batch is missing from glass_cuda")
+
+    reference = (np.arange(36, dtype=np.float32).reshape(6, 6) + np.float32(25.0)) / np.float32(3.0)
+    moving_a = reference * np.float32(1.5) + np.float32(4.0)
+    moving_b = reference * np.float32(0.75) - np.float32(2.0)
+    moving_b[0, 0] = np.nan
+    moving_b[5, 5] = np.nan
+
+    stack = module.ResidentCalibratedStack(3, 6, 6)
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving_a)
+    stack.upload_calibrated_frame(2, moving_b)
+
+    batch = stack.frame_pair_grid_stats_batch(0, np.array([1, 2], dtype=np.int32), 3, 2)
+
+    assert batch["model"] == "resident_grid_pair_mean_std_batch"
+    assert batch["batch_model"] == "single_kernel_source_frame_tile_grid"
+    assert batch["source_count"] == 2
+    assert batch["grid_rows"] == 2
+    assert batch["grid_cols"] == 3
+    assert batch["grid_count"] == 6
+    assert batch["download_bytes"] > 0
+    assert batch["index_bytes"] == 8
+    assert batch["frames"][0]["source_index"] == 1
+    assert batch["frames"][1]["source_index"] == 2
+
+    for frame_stats in batch["frames"]:
+        single = stack.frame_pair_grid_stats(0, frame_stats["source_index"], 3, 2)
+        assert np.allclose(frame_stats["source_mean"], single["source_mean"], rtol=0, atol=0)
+        assert np.allclose(frame_stats["source_std"], single["source_std"], rtol=0, atol=0)
+        assert np.allclose(frame_stats["reference_mean"], single["reference_mean"], rtol=0, atol=0)
+        assert np.allclose(frame_stats["reference_std"], single["reference_std"], rtol=0, atol=0)
+        assert np.array_equal(frame_stats["valid_pixels"], single["valid_pixels"])
+        assert frame_stats["valid_pixel_total"] == single["valid_pixel_total"]
+
+
 def test_resident_stack_translation_warp_uses_nan_coverage():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_translation_frame"):
