@@ -386,11 +386,11 @@ def test_resident_runtime_preset_throughput_v3_io_applies_probe_values() -> None
     assert args.resident_calibration_release_mode == "callback_queue"
     assert args.resident_native_queue_read == "on"
     assert args.resident_native_queue_drain_mode == "thread"
-    assert args.resident_warp_chunk_capacity_frames == 32
+    assert args.resident_warp_chunk_capacity_frames == 8
     assert args.resident_integration_dispatch == "stack"
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v3-io"
     assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_read"] == "on"
-    assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 32
+    assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 8
 
 
 def test_resident_runtime_preset_throughput_v4_native_completion_applies_default_values() -> None:
@@ -418,12 +418,12 @@ def test_resident_runtime_preset_throughput_v4_native_completion_applies_default
     assert args.resident_calibration_release_mode == "callback_queue"
     assert args.resident_native_queue_read == "on"
     assert args.resident_native_queue_drain_mode == "thread"
-    assert args.resident_warp_chunk_capacity_frames == 32
+    assert args.resident_warp_chunk_capacity_frames == 8
     assert args.resident_native_completion_calibration == "on"
     assert args.resident_native_completion_wave_fill_us == 25
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v4-native-completion"
     assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_read"] == "on"
-    assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 32
+    assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 8
     assert (
         args._resident_runtime_preset_effective["applied"]["resident_native_completion_calibration"]
         == "on"
@@ -446,7 +446,7 @@ def test_resident_runtime_preset_defaults_to_throughput_v4_native_completion() -
     assert args.resident_native_completion_wave_fill_us == 25
     assert args.resident_native_queue_read == "on"
     assert args.resident_native_queue_drain_mode == "thread"
-    assert args.resident_warp_chunk_capacity_frames == 32
+    assert args.resident_warp_chunk_capacity_frames == 8
     assert args.resident_integration_dispatch == "stack"
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v4-native-completion"
     assert (
@@ -500,11 +500,11 @@ def test_resident_runtime_preset_respects_explicit_native_queue_override() -> No
 
     assert args.resident_native_queue_read == "off"
     assert args.resident_native_queue_drain_mode == "thread"
-    assert args.resident_warp_chunk_capacity_frames == 32
+    assert args.resident_warp_chunk_capacity_frames == 8
     explicit = args._resident_runtime_preset_effective["explicit_overrides"]
     assert explicit["resident_native_queue_read"] == "off"
     assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_drain_mode"] == "thread"
-    assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 32
+    assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 8
 
 
 def test_resident_runtime_preset_respects_explicit_warp_chunk_capacity_override() -> None:
@@ -2142,10 +2142,10 @@ def test_cli_resident_run_passes_preset_chunk_capacity_from_admission(
     admission = read_json(run / "resident_memory_admission.json")
     assert admission["blocking"] is False
     assert admission["recommended_action"] == "resident_full_frame"
-    assert admission["selected_chunk_capacity_frames"] == 32
+    assert admission["selected_chunk_capacity_frames"] == 8
     assert admission["selected_warp_batch_dispatch"] == "chunked"
     assert captured["kwargs"]["resident_warp_batch_dispatch"] == "chunked"
-    assert captured["kwargs"]["resident_warp_chunk_capacity_frames"] == 32
+    assert captured["kwargs"]["resident_warp_chunk_capacity_frames"] == 8
 
 
 def test_cli_resident_run_passes_explicit_chunk_capacity_from_admission(

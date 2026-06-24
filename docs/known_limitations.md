@@ -20,6 +20,10 @@ Current code is intentionally gated:
   large same-shape mono datasets. It currently performs calibration, resident
   similarity-triangle registration, Lanczos3 matrix warp, local normalization,
   and mean/sigma/winsorized integration for the default high-VRAM path.
+  S2-Gate 616 sets the default resident matrix-warp chunk capacity to `8`
+  frames after real 200-light probes showed larger chunks used much more VRAM
+  and slowed the current Lanczos3 batch kernel; explicit chunk-capacity
+  overrides remain available for profiling.
   Resident `winsorized_sigma` defaults to an `auto` resolver: supported
   stack-dispatch audit/science groups with at most 512 frames use the hardened
   median/IQR CUDA path that matches the GLASS CPU baseline. For large default

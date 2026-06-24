@@ -385,7 +385,7 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_release_mode": "callback_queue",
         "resident_native_queue_read": "on",
         "resident_native_queue_drain_mode": "thread",
-        "resident_warp_chunk_capacity_frames": 32,
+        "resident_warp_chunk_capacity_frames": 8,
     },
     "throughput-v4-native-completion": {
         "resident_prefetch_frames": 32,
@@ -398,7 +398,7 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_release_mode": "callback_queue",
         "resident_native_queue_read": "on",
         "resident_native_queue_drain_mode": "thread",
-        "resident_warp_chunk_capacity_frames": 32,
+        "resident_warp_chunk_capacity_frames": 8,
         "resident_native_completion_calibration": "on",
         "resident_native_completion_wave_fill_us": 25,
     },

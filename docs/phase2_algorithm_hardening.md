@@ -237,6 +237,82 @@ Validation commands:
   --max-masked-frame-count 10 --fail-on-failure`
 - `python -m pytest -q`
 
+### S2-Gate 616: Resident Warp Chunk Capacity Retune
+
+Gate 616 returns to the resident registration/warp bottleneck without changing
+registration math, warp interpolation, DQ semantics, frame admission, local
+normalization, or integration. The default runtime presets now request an
+8-frame resident matrix-warp chunk instead of 32 frames. The larger chunk had
+looked attractive for a high-VRAM GPU, but the current Lanczos3 batch kernel is
+faster and much lighter at the smaller chunk size.
+
+Implementation:
+
+- `throughput-v3-io` and `throughput-v4-native-completion` now set
+  `resident_warp_chunk_capacity_frames=8`.
+- Explicit `--resident-warp-chunk-capacity-frames` still overrides the preset.
+- Memory admission still reduces or disables chunked warp under tight explicit
+  VRAM budgets.
+- The underlying resident CUDA warp kernels and matrices are unchanged.
+
+Real 200-light probe matrix:
+
+| Chunk capacity | Chunk count | Native warp total | Native warp sync | Kernel enqueue | Observed workspace | Estimated peak |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `8` | `24` | `0.4869027 s` | `0.4660586 s` | `0.0178497 s` | `2.2967 GiB` | `49.6084 GiB` |
+| `16` | `12` | `0.5034751 s` | `0.4630237 s` | `0.0347686 s` | `4.5934 GiB` | `51.9051 GiB` |
+| `32` | `6` | `0.5400121 s` | `0.4606894 s` | `0.0698597 s` | `9.1868 GiB` | `56.4985 GiB` |
+| `64` | `3` | `0.6176782 s` | `0.4617681 s` | `0.1377537 s` | `18.3735 GiB` | `65.6852 GiB` |
+| `96` | `2` | `0.7057142 s` | `0.4711825 s` | `0.2082498 s` | `27.5602 GiB` | `74.8720 GiB` |
+| `128` | `2` | `0.7888434 s` | `0.4706606 s` | `0.2782146 s` | `36.7470 GiB` | `84.0587 GiB` |
+
+Default-path evidence:
+
+- Baseline:
+  `C:\glass_runs\phase2_s2_gate615_ln_batch_apply\real_200_default_regression`
+- Postpatch default:
+  `C:\glass_runs\phase2_s2_gate616_warp_chunk_capacity\real_200_default_chunk8_postpatch`
+- Passing gate artifact:
+  `C:\glass_runs\phase2_s2_gate616_warp_chunk_capacity\resident_regression_gate_default_chunk8_vs_gate615.json`
+- Gate Markdown:
+  `C:\glass_runs\phase2_s2_gate616_warp_chunk_capacity\resident_regression_gate_default_chunk8_vs_gate615.md`
+- Candidate/baseline elapsed ratio: `0.9934991826007156`.
+- Determinism differences: artifact `0`, frame signatures `0`,
+  registration `0`, frame accounting `0`, output pixels `0`, numerical drift
+  `0`.
+- Frame admission: `193 / 200` active and `7` masked.
+- Native warp total improved from `0.5400121 s` to `0.4868301 s`.
+- Observed chunked-warp workspace dropped from `9.186752557754517 GiB` to
+  `2.296694040298462 GiB`.
+- Estimated peak memory dropped from `56.49848845601082 GiB` to
+  `49.608429938554764 GiB`.
+
+Decision:
+
+- Gate616 promotes 8-frame chunks as the default because they improve the
+  native warp profile, reduce peak resident memory, and pass the 200-light
+  resident-regression gate with zero output drift.
+- Larger chunks are retained as explicit user/profiling overrides only. The
+  64/96/128 probes show that "use more VRAM" is not automatically faster for
+  the current Lanczos3 resident batch warp.
+
+Validation commands:
+
+- Real 200-light capacity probes with explicit
+  `--resident-warp-chunk-capacity-frames 8/16/64/96/128`.
+- `glass resident-regression-gate --baseline-run
+  C:\glass_runs\phase2_s2_gate615_ln_batch_apply\real_200_default_regression
+  --candidate-run
+  C:\glass_runs\phase2_s2_gate616_warp_chunk_capacity\real_200_default_chunk8_postpatch
+  --max-elapsed-ratio 1.15 --min-active-frame-count 190
+  --max-masked-frame-count 10 --fail-on-failure`
+- `python -m pytest -q tests\test_cli_smoke.py -k
+  "resident_runtime_preset or chunk_capacity_from_admission"`
+- `python -m pytest -q tests\test_resident_cuda_run.py -k
+  "memory_admission or matrix_batch"`
+- `python -m ruff check src\glass\cli.py tests\test_cli_smoke.py`
+- `python -m pytest -q`
+
 ### S2-Gate 581: Native Completion Runtime Preset
 
 Gate 581 returns the current work to a substantive resident CUDA runtime path
