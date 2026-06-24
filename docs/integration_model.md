@@ -211,6 +211,19 @@ each later quickselect starts after the previously selected order statistic.
 Profiles record
 `percentile_strategy=ascending_unique_quartile_quickselect_order_statistics`.
 
+S2-Gate 621 adds a guarded unit/zero-weight active-index probe for the native
+resident hardened winsorized kernel. When
+`GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX=1` is set and all positive finite weights
+are exactly `1.0`, the wrapper uploads the active frame indices and the kernel
+can traverse only those frames. The path preserves the same median/IQR
+winsorized formula and frame-axis accumulation semantics, but the real 200-light
+benchmark showed it slower than the Gate620 default on the current GPU. It is
+therefore disabled by default. Default profiles now record
+`unit_positive_weights_detected`, `unit_positive_weights_fast_path`,
+`unit_positive_active_frame_count`, and `sample_reuse_strategy`; normal runs
+keep `unit_positive_weights_fast_path=false` unless the experiment is explicitly
+enabled.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted

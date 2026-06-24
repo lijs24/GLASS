@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstring>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <memory>
 #include <thread>
@@ -642,31 +643,37 @@ void glass_integrate_resident_sigma_clip_f32_launch(
 void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     const float* stack,
     const float* weights,
+    const unsigned int* active_indices,
     float* master,
     float* weight_map,
     float* coverage_map,
     float* low_rejection_map,
     float* high_rejection_map,
     std::size_t frame_count,
+    std::size_t active_frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
     float high_sigma,
     int min_samples,
-    float max_reject_fraction);
+    float max_reject_fraction,
+    bool unit_positive_weights);
 void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     const float* stack,
     const float* weights,
+    const unsigned int* active_indices,
     float* master,
     float* weight_map,
     unsigned short* coverage_map,
     unsigned short* low_rejection_map,
     unsigned short* high_rejection_map,
     std::size_t frame_count,
+    std::size_t active_frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
     float high_sigma,
     int min_samples,
-    float max_reject_fraction);
+    float max_reject_fraction,
+    bool unit_positive_weights);
 void glass_integrate_resident_tile_local_sigma_clip_f32_launch(
     const float* stack,
     const float* weights,
@@ -11492,6 +11499,45 @@ class ResidentCalibratedStack {
       const auto* ptr = static_cast<const float*>(weights_info.ptr);
       weights.assign(ptr, ptr + frame_count_);
     }
+    bool unit_positive_weights = true;
+    for (const float weight : weights) {
+      if (std::isfinite(weight) && weight > 0.0f && weight != 1.0f) {
+        unit_positive_weights = false;
+        break;
+      }
+    }
+    std::string unit_active_index_env_value;
+#ifdef _MSC_VER
+    char* unit_active_index_env_buffer = nullptr;
+    std::size_t unit_active_index_env_length = 0;
+    if (_dupenv_s(
+            &unit_active_index_env_buffer,
+            &unit_active_index_env_length,
+            "GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX") == 0 &&
+        unit_active_index_env_buffer != nullptr) {
+      unit_active_index_env_value = unit_active_index_env_buffer;
+      std::free(unit_active_index_env_buffer);
+    }
+#else
+    const char* unit_active_index_env = std::getenv("GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX");
+    if (unit_active_index_env != nullptr) {
+      unit_active_index_env_value = unit_active_index_env;
+    }
+#endif
+    const bool unit_positive_active_index_enabled =
+        unit_positive_weights && !unit_active_index_env_value.empty() && unit_active_index_env_value != "0" &&
+        unit_active_index_env_value != "false" && unit_active_index_env_value != "FALSE";
+    std::vector<unsigned int> unit_positive_frame_indices;
+    if (unit_positive_active_index_enabled) {
+      unit_positive_frame_indices.reserve(frame_count_);
+      for (std::size_t index = 0; index < frame_count_; ++index) {
+        const float weight = weights[index];
+        if (std::isfinite(weight) && weight > 0.0f) {
+          unit_positive_frame_indices.push_back(static_cast<unsigned int>(index));
+        }
+      }
+    }
+    const std::size_t unit_positive_active_frame_count = unit_positive_frame_indices.size();
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     const py::buffer_info master_info = master.request();
@@ -11506,6 +11552,7 @@ class ResidentCalibratedStack {
     }
 
     float* d_weights = nullptr;
+    unsigned int* d_unit_positive_frame_indices = nullptr;
     float* d_master = nullptr;
     float* d_weight_map = nullptr;
     if (count_map_dtype == "uint16") {
@@ -11546,6 +11593,13 @@ class ResidentCalibratedStack {
       try {
         const auto allocation_start = Clock::now();
         check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(resident hardened winsor weights)");
+        if (unit_positive_active_index_enabled && unit_positive_active_frame_count > 0) {
+          check_cuda(
+              cudaMalloc(
+                  &d_unit_positive_frame_indices,
+                  unit_positive_active_frame_count * sizeof(unsigned int)),
+              "cudaMalloc(resident hardened winsor unit positive frame indices)");
+        }
         check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident hardened winsor master)");
         if (download_weight_map) {
           check_cuda(
@@ -11568,22 +11622,34 @@ class ResidentCalibratedStack {
         check_cuda(
             cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
             "cudaMemcpy(resident hardened winsor weights)");
+        if (d_unit_positive_frame_indices != nullptr) {
+          check_cuda(
+              cudaMemcpy(
+                  d_unit_positive_frame_indices,
+                  unit_positive_frame_indices.data(),
+                  unit_positive_active_frame_count * sizeof(unsigned int),
+                  cudaMemcpyHostToDevice),
+              "cudaMemcpy(resident hardened winsor unit positive frame indices)");
+        }
         weights_upload_s = seconds_since(weights_upload_start);
         const auto kernel_start = Clock::now();
         glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
             d_stack_,
             d_weights,
+            d_unit_positive_frame_indices,
             d_master,
             d_weight_map,
             d_coverage_map,
             d_low_rejection_map,
             d_high_rejection_map,
             frame_count_,
+            unit_positive_active_frame_count,
             pixels_per_frame_,
             low_sigma,
             high_sigma,
             min_samples,
-            max_reject_fraction);
+            max_reject_fraction,
+            unit_positive_active_index_enabled);
         check_cuda(
             cudaGetLastError(),
             "ResidentCalibratedStack.integrate_hardened_winsorized_sigma uint16 kernel launch");
@@ -11630,6 +11696,7 @@ class ResidentCalibratedStack {
         download_s = seconds_since(download_start);
       } catch (...) {
         cudaFree(d_weights);
+        cudaFree(d_unit_positive_frame_indices);
         cudaFree(d_master);
         cudaFree(d_weight_map);
         cudaFree(d_coverage_map);
@@ -11639,6 +11706,7 @@ class ResidentCalibratedStack {
       }
       const auto free_start = Clock::now();
       cudaFree(d_weights);
+      cudaFree(d_unit_positive_frame_indices);
       cudaFree(d_master);
       cudaFree(d_weight_map);
       cudaFree(d_coverage_map);
@@ -11651,6 +11719,14 @@ class ResidentCalibratedStack {
         profile_info["native_profile_model"] = "chrono_allocation_upload_kernel_download_free";
         profile_info["percentile_strategy"] = "ascending_unique_quartile_quickselect_order_statistics";
         profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
+        profile_info["sample_reuse_strategy"] = unit_positive_active_index_enabled
+            ? "active_index_global_reread_unit_positive_weights"
+            : "global_reread_weighted_samples";
+        profile_info["unit_positive_weights_detected"] = unit_positive_weights;
+        profile_info["unit_positive_weights_fast_path"] = unit_positive_active_index_enabled;
+        profile_info["unit_positive_active_frame_count"] =
+            static_cast<unsigned long long>(unit_positive_active_frame_count);
+        profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;
         profile_info["allocation_s"] = allocation_s;
         profile_info["weights_upload_s"] = weights_upload_s;
         profile_info["kernel_sync_s"] = kernel_sync_s;
@@ -11705,6 +11781,13 @@ class ResidentCalibratedStack {
     try {
       const auto allocation_start = Clock::now();
       check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(resident hardened winsor weights)");
+      if (unit_positive_active_index_enabled && unit_positive_active_frame_count > 0) {
+        check_cuda(
+            cudaMalloc(
+                &d_unit_positive_frame_indices,
+                unit_positive_active_frame_count * sizeof(unsigned int)),
+            "cudaMalloc(resident hardened winsor unit positive frame indices)");
+      }
       check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident hardened winsor master)");
       if (download_weight_map) {
         check_cuda(
@@ -11727,22 +11810,34 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident hardened winsor weights)");
+      if (d_unit_positive_frame_indices != nullptr) {
+        check_cuda(
+            cudaMemcpy(
+                d_unit_positive_frame_indices,
+                unit_positive_frame_indices.data(),
+                unit_positive_active_frame_count * sizeof(unsigned int),
+                cudaMemcpyHostToDevice),
+            "cudaMemcpy(resident hardened winsor unit positive frame indices)");
+      }
       weights_upload_s = seconds_since(weights_upload_start);
       const auto kernel_start = Clock::now();
       glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
           d_stack_,
           d_weights,
+          d_unit_positive_frame_indices,
           d_master,
           d_weight_map,
           d_coverage_map,
           d_low_rejection_map,
           d_high_rejection_map,
           frame_count_,
+          unit_positive_active_frame_count,
           pixels_per_frame_,
           low_sigma,
           high_sigma,
           min_samples,
-          max_reject_fraction);
+          max_reject_fraction,
+          unit_positive_active_index_enabled);
       check_cuda(
           cudaGetLastError(),
           "ResidentCalibratedStack.integrate_hardened_winsorized_sigma kernel launch");
@@ -11789,6 +11884,7 @@ class ResidentCalibratedStack {
       download_s = seconds_since(download_start);
     } catch (...) {
       cudaFree(d_weights);
+      cudaFree(d_unit_positive_frame_indices);
       cudaFree(d_master);
       cudaFree(d_weight_map);
       cudaFree(d_coverage_map);
@@ -11798,6 +11894,7 @@ class ResidentCalibratedStack {
     }
     const auto free_start = Clock::now();
     cudaFree(d_weights);
+    cudaFree(d_unit_positive_frame_indices);
     cudaFree(d_master);
     cudaFree(d_weight_map);
     cudaFree(d_coverage_map);
@@ -11810,6 +11907,14 @@ class ResidentCalibratedStack {
       profile_info["native_profile_model"] = "chrono_allocation_upload_kernel_download_free";
       profile_info["percentile_strategy"] = "ascending_unique_quartile_quickselect_order_statistics";
       profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
+      profile_info["sample_reuse_strategy"] = unit_positive_active_index_enabled
+          ? "active_index_global_reread_unit_positive_weights"
+          : "global_reread_weighted_samples";
+      profile_info["unit_positive_weights_detected"] = unit_positive_weights;
+      profile_info["unit_positive_weights_fast_path"] = unit_positive_active_index_enabled;
+      profile_info["unit_positive_active_frame_count"] =
+          static_cast<unsigned long long>(unit_positive_active_frame_count);
+      profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;
       profile_info["allocation_s"] = allocation_s;
       profile_info["weights_upload_s"] = weights_upload_s;
       profile_info["kernel_sync_s"] = kernel_sync_s;

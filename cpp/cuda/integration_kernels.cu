@@ -1569,16 +1569,18 @@ __device__ unsigned short glass_count_map_value_f32(float value, const unsigned 
   return static_cast<unsigned short>(clamped + 0.5f);
 }
 
-template <typename CountT, int MaxFrames>
+template <typename CountT, int MaxFrames, bool UnitPositiveWeights>
 __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
     const float* stack,
     const float* weights,
+    const unsigned int* active_indices,
     float* master,
     float* weight_map,
     CountT* coverage_map,
     CountT* low_rejection_map,
     CountT* high_rejection_map,
     std::size_t frame_count,
+    std::size_t active_frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
     float high_sigma,
@@ -1591,10 +1593,15 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
 
   float values[MaxFrames];
   int count = 0;
-  for (std::size_t frame = 0; frame < frame_count; ++frame) {
-    const float weight = weights[frame];
-    if (weight <= 0.0f || !isfinite(weight)) {
-      continue;
+  const std::size_t sample_frame_count = UnitPositiveWeights ? active_frame_count : frame_count;
+  for (std::size_t sample_pos = 0; sample_pos < sample_frame_count; ++sample_pos) {
+    const std::size_t frame =
+        UnitPositiveWeights ? static_cast<std::size_t>(active_indices[sample_pos]) : sample_pos;
+    if (!UnitPositiveWeights) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
     }
     const float value = stack[frame * pixels_per_frame + pixel];
     if (!isfinite(value)) {
@@ -1646,41 +1653,74 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   const float first_high = center0 + high_sigma * first_scale;
 
   float winsor_mean = 0.0f;
-  for (std::size_t frame = 0; frame < frame_count; ++frame) {
-    const float weight = weights[frame];
-    if (weight <= 0.0f || !isfinite(weight)) {
-      continue;
+  if (UnitPositiveWeights) {
+    for (std::size_t active_pos = 0; active_pos < active_frame_count; ++active_pos) {
+      const std::size_t frame = static_cast<std::size_t>(active_indices[active_pos]);
+      float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < first_low) {
+        value = first_low;
+      } else if (value > first_high) {
+        value = first_high;
+      }
+      winsor_mean += value;
     }
-    float value = stack[frame * pixels_per_frame + pixel];
-    if (!isfinite(value)) {
-      continue;
+  } else {
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < first_low) {
+        value = first_low;
+      } else if (value > first_high) {
+        value = first_high;
+      }
+      winsor_mean += value;
     }
-    if (value < first_low) {
-      value = first_low;
-    } else if (value > first_high) {
-      value = first_high;
-    }
-    winsor_mean += value;
   }
   winsor_mean /= static_cast<float>(count);
 
   float winsor_variance = 0.0f;
-  for (std::size_t frame = 0; frame < frame_count; ++frame) {
-    const float weight = weights[frame];
-    if (weight <= 0.0f || !isfinite(weight)) {
-      continue;
+  if (UnitPositiveWeights) {
+    for (std::size_t active_pos = 0; active_pos < active_frame_count; ++active_pos) {
+      const std::size_t frame = static_cast<std::size_t>(active_indices[active_pos]);
+      float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < first_low) {
+        value = first_low;
+      } else if (value > first_high) {
+        value = first_high;
+      }
+      const float delta = value - winsor_mean;
+      winsor_variance += delta * delta;
     }
-    float value = stack[frame * pixels_per_frame + pixel];
-    if (!isfinite(value)) {
-      continue;
+  } else {
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < first_low) {
+        value = first_low;
+      } else if (value > first_high) {
+        value = first_high;
+      }
+      const float delta = value - winsor_mean;
+      winsor_variance += delta * delta;
     }
-    if (value < first_low) {
-      value = first_low;
-    } else if (value > first_high) {
-      value = first_high;
-    }
-    const float delta = value - winsor_mean;
-    winsor_variance += delta * delta;
   }
   float scale = sqrtf(winsor_variance / static_cast<float>(count));
   if (!(scale > 0.0f) || !isfinite(scale)) {
@@ -1692,19 +1732,34 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   int low_reject_count = 0;
   int high_reject_count = 0;
   if (scale > 0.0f) {
-    for (std::size_t frame = 0; frame < frame_count; ++frame) {
-      const float weight = weights[frame];
-      if (weight <= 0.0f || !isfinite(weight)) {
-        continue;
+    if (UnitPositiveWeights) {
+      for (std::size_t active_pos = 0; active_pos < active_frame_count; ++active_pos) {
+        const std::size_t frame = static_cast<std::size_t>(active_indices[active_pos]);
+        const float value = stack[frame * pixels_per_frame + pixel];
+        if (!isfinite(value)) {
+          continue;
+        }
+        if (value < low_threshold) {
+          ++low_reject_count;
+        } else if (value > high_threshold) {
+          ++high_reject_count;
+        }
       }
-      const float value = stack[frame * pixels_per_frame + pixel];
-      if (!isfinite(value)) {
-        continue;
-      }
-      if (value < low_threshold) {
-        ++low_reject_count;
-      } else if (value > high_threshold) {
-        ++high_reject_count;
+    } else {
+      for (std::size_t frame = 0; frame < frame_count; ++frame) {
+        const float weight = weights[frame];
+        if (weight <= 0.0f || !isfinite(weight)) {
+          continue;
+        }
+        const float value = stack[frame * pixels_per_frame + pixel];
+        if (!isfinite(value)) {
+          continue;
+        }
+        if (value < low_threshold) {
+          ++low_reject_count;
+        } else if (value > high_threshold) {
+          ++high_reject_count;
+        }
       }
     }
   }
@@ -1722,26 +1777,47 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   float coverage = 0.0f;
   float low_reject = 0.0f;
   float high_reject = 0.0f;
-  for (std::size_t frame = 0; frame < frame_count; ++frame) {
-    const float weight = weights[frame];
-    if (weight <= 0.0f || !isfinite(weight)) {
-      continue;
+  if (UnitPositiveWeights) {
+    for (std::size_t active_pos = 0; active_pos < active_frame_count; ++active_pos) {
+      const std::size_t frame = static_cast<std::size_t>(active_indices[active_pos]);
+      const float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (allow_rejection && value < low_threshold) {
+        low_reject += 1.0f;
+        continue;
+      }
+      if (allow_rejection && value > high_threshold) {
+        high_reject += 1.0f;
+        continue;
+      }
+      sum += value;
+      weight_sum += 1.0f;
+      coverage += 1.0f;
     }
-    const float value = stack[frame * pixels_per_frame + pixel];
-    if (!isfinite(value)) {
-      continue;
+  } else {
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      const float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (allow_rejection && value < low_threshold) {
+        low_reject += 1.0f;
+        continue;
+      }
+      if (allow_rejection && value > high_threshold) {
+        high_reject += 1.0f;
+        continue;
+      }
+      sum += value * weight;
+      weight_sum += weight;
+      coverage += 1.0f;
     }
-    if (allow_rejection && value < low_threshold) {
-      low_reject += 1.0f;
-      continue;
-    }
-    if (allow_rejection && value > high_threshold) {
-      high_reject += 1.0f;
-      continue;
-    }
-    sum += value * weight;
-    weight_sum += weight;
-    coverage += 1.0f;
   }
 
   master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
@@ -1763,114 +1839,179 @@ template <typename CountT>
 void glass_integrate_resident_hardened_winsorized_sigma_f32_launch_typed(
     const float* stack,
     const float* weights,
+    const unsigned int* active_indices,
     float* master,
     float* weight_map,
     CountT* coverage_map,
     CountT* low_rejection_map,
     CountT* high_rejection_map,
     std::size_t frame_count,
+    std::size_t active_frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
     float high_sigma,
     int min_samples,
-    float max_reject_fraction) {
+    float max_reject_fraction,
+    bool unit_positive_weights) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
   if (frame_count <= static_cast<std::size_t>(kGlassHardenedWinsorizedSmallMaxFrames)) {
+    if (unit_positive_weights) {
+      glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<
+          CountT,
+          kGlassHardenedWinsorizedSmallMaxFrames,
+          true><<<blocks, threads>>>(
+          stack,
+          weights,
+          active_indices,
+          master,
+          weight_map,
+          coverage_map,
+          low_rejection_map,
+          high_rejection_map,
+          frame_count,
+          active_frame_count,
+          pixels_per_frame,
+          low_sigma,
+          high_sigma,
+          min_samples,
+          max_reject_fraction);
+    } else {
+      glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<
+          CountT,
+          kGlassHardenedWinsorizedSmallMaxFrames,
+          false><<<blocks, threads>>>(
+          stack,
+          weights,
+          active_indices,
+          master,
+          weight_map,
+          coverage_map,
+          low_rejection_map,
+          high_rejection_map,
+          frame_count,
+          active_frame_count,
+          pixels_per_frame,
+          low_sigma,
+          high_sigma,
+          min_samples,
+          max_reject_fraction);
+    }
+    return;
+  }
+  if (unit_positive_weights) {
     glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<
         CountT,
-        kGlassHardenedWinsorizedSmallMaxFrames><<<blocks, threads>>>(
+        kGlassHardenedWinsorizedLargeMaxFrames,
+        true><<<blocks, threads>>>(
         stack,
         weights,
+        active_indices,
         master,
         weight_map,
         coverage_map,
         low_rejection_map,
         high_rejection_map,
         frame_count,
+        active_frame_count,
         pixels_per_frame,
         low_sigma,
         high_sigma,
         min_samples,
         max_reject_fraction);
-    return;
+  } else {
+    glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<
+        CountT,
+        kGlassHardenedWinsorizedLargeMaxFrames,
+        false><<<blocks, threads>>>(
+        stack,
+        weights,
+        active_indices,
+        master,
+        weight_map,
+        coverage_map,
+        low_rejection_map,
+        high_rejection_map,
+        frame_count,
+        active_frame_count,
+        pixels_per_frame,
+        low_sigma,
+        high_sigma,
+        min_samples,
+        max_reject_fraction);
   }
-  glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<
-      CountT,
-      kGlassHardenedWinsorizedLargeMaxFrames><<<blocks, threads>>>(
-      stack,
-      weights,
-      master,
-      weight_map,
-      coverage_map,
-      low_rejection_map,
-      high_rejection_map,
-      frame_count,
-      pixels_per_frame,
-      low_sigma,
-      high_sigma,
-      min_samples,
-      max_reject_fraction);
 }
 
 void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     const float* stack,
     const float* weights,
+    const unsigned int* active_indices,
     float* master,
     float* weight_map,
     float* coverage_map,
     float* low_rejection_map,
     float* high_rejection_map,
     std::size_t frame_count,
+    std::size_t active_frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
     float high_sigma,
     int min_samples,
-    float max_reject_fraction) {
+    float max_reject_fraction,
+    bool unit_positive_weights) {
   glass_integrate_resident_hardened_winsorized_sigma_f32_launch_typed<float>(
       stack,
       weights,
+      active_indices,
       master,
       weight_map,
       coverage_map,
       low_rejection_map,
       high_rejection_map,
       frame_count,
+      active_frame_count,
       pixels_per_frame,
       low_sigma,
       high_sigma,
       min_samples,
-      max_reject_fraction);
+      max_reject_fraction,
+      unit_positive_weights);
 }
 
 void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     const float* stack,
     const float* weights,
+    const unsigned int* active_indices,
     float* master,
     float* weight_map,
     unsigned short* coverage_map,
     unsigned short* low_rejection_map,
     unsigned short* high_rejection_map,
     std::size_t frame_count,
+    std::size_t active_frame_count,
     std::size_t pixels_per_frame,
     float low_sigma,
     float high_sigma,
     int min_samples,
-    float max_reject_fraction) {
+    float max_reject_fraction,
+    bool unit_positive_weights) {
   glass_integrate_resident_hardened_winsorized_sigma_f32_launch_typed<unsigned short>(
       stack,
       weights,
+      active_indices,
       master,
       weight_map,
       coverage_map,
       low_rejection_map,
       high_rejection_map,
       frame_count,
+      active_frame_count,
       pixels_per_frame,
       low_sigma,
       high_sigma,
       min_samples,
-      max_reject_fraction);
+      max_reject_fraction,
+      unit_positive_weights);
 }
 
 __global__ void glass_integrate_resident_tile_local_sigma_clip_f32_kernel(

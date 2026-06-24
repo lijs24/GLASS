@@ -401,6 +401,60 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 621: Guarded Unit-Weight Active-Index Integration Probe
+
+Gate 621 tests a resident hardened winsorized integration hypothesis without
+promoting a slower path into the default pipeline. The default 200-light run has
+unit/zero integration weights: `193` active frames and `7` zero-weight masked
+frames. An active-index CUDA path was added so an opt-in kernel can iterate only
+the active frame indices and skip positive-weight checks/multiplication. Real
+200-light evidence showed that this does not beat the Gate620 global reread
+kernel on the current RTX PRO 6000 setup, so the path is guarded behind
+`GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX=1` and the default route remains the
+Gate620 frame-axis global reread implementation.
+
+Implementation:
+
+- Add active-frame-index arguments to the native hardened winsorized launch ABI.
+- Detect unit/zero positive weights in the Python/C++ wrapper and expose the
+  detection in `native_profile`.
+- Keep the active-index path opt-in through
+  `GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX=1`; default runs record
+  `unit_positive_weights_detected=true`,
+  `unit_positive_weights_fast_path=false`, and
+  `sample_reuse_strategy=global_reread_weighted_samples`.
+- Add CUDA parity tests for the opt-in active-index path and for the default-off
+  unit-weight path.
+
+Validation:
+
+- Native rebuild through the VS developer environment.
+- Focused hardened resident-stack tests: `8 passed`.
+- Focused resident CLI hardened tests: `2 passed`.
+- Ruff on the touched Python tests: passed.
+- Default 200-light A/B versus Gate620:
+  `C:\glass_runs\phase2_s2_gate621_ordered_sample_reuse\resident_regression_gate_vs_gate620_default.json`,
+  passed with elapsed ratio `0.9906823627742244`, zero determinism drift,
+  `193 / 200` active frames, and `7` masked frames.
+- Default guarded profile:
+  `resident_integration_s=3.2403203999856487`,
+  `kernel_sync_s=3.1234866`, `unit_positive_weights_fast_path=false`.
+- Opt-in active-index probe:
+  `C:\glass_runs\phase2_s2_gate621_ordered_sample_reuse\resident_regression_gate_optin_vs_default.json`,
+  passed numerical/contract checks but was slower than default with elapsed
+  ratio `1.0140944010581754`,
+  `resident_integration_s=3.447554200072773`, and
+  `unit_positive_active_frame_count=193`.
+
+Conclusion:
+
+- The active-index idea is implemented, tested, and auditable, but it is not a
+  default optimization.
+- The next substantive resident performance gate should target the measured
+  bottlenecks with higher leverage: resident registration/warp orchestration or
+  a redesigned hardened reducer that reduces per-pixel order-statistic cost
+  without increasing local-memory pressure or disrupting frame-axis arithmetic.
+
 ### S2-Gate 620: Resident Hardened Quartile Quickselect Scheduler
 
 Gate 620 targets the remaining resident integration bottleneck identified by
