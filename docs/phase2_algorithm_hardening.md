@@ -98,6 +98,71 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 614: Resident Regression Gate
+
+Gate 614 deliberately returns from a failed native integration micro-optimization
+to the Phase 2 mainline. A candidate CUDA winsorized-pass fusion experiment was
+rejected because it either slowed the 200-light run or changed output pixels.
+Instead of promoting that experiment, this gate adds a hard reusable
+`glass resident-regression-gate` command that must pass before future resident
+CUDA default-path changes are accepted.
+
+Implementation:
+
+- `glass resident-regression-gate` compares a baseline run and candidate run.
+- The gate wraps resident determinism, resident runtime comparison, candidate
+  `pipeline_contract.json`, candidate `stack_engine_contract.json`, candidate
+  `resident_dq_pixel_closure.json`, and optional resident frame-mask thresholds.
+- `--fail-on-failure` exits non-zero when any check fails, making the command
+  suitable for local CI-style 200-light A/B validation.
+- The first real use compares Gate614 against Gate613, with minimum active
+  frames set to `190`, maximum masked frames set to `10`, and maximum elapsed
+  ratio set to `1.15`.
+
+Real 200-light evidence:
+
+- Baseline run:
+  `C:\glass_runs\phase2_s2_gate613_ln_batch_stats\real_200_default_regression`
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate614_regression_gate\real_200_default_regression`
+- Gate artifact:
+  `C:\glass_runs\phase2_s2_gate614_regression_gate\resident_regression_gate_vs_gate613.json`
+- Gate Markdown:
+  `C:\glass_runs\phase2_s2_gate614_regression_gate\resident_regression_gate_vs_gate613.md`
+- Candidate runtime: `10.9278315998381 s`.
+- Gate613 baseline runtime: `11.212513899896294 s`.
+- Candidate/baseline elapsed ratio: `0.9746103057173622`.
+- Determinism differences: artifact `0`, frame signatures `0`,
+  registration `0`, frame accounting `0`, output pixels `0`.
+- Frame admission: `193 / 200` active, `7` masked, matching the accepted
+  default resident route.
+
+Decision:
+
+- Gate614 is not an optimization claim. It is a blocking safety rail for the
+  next optimization gates.
+- Future StackEngine default-path, DQ/mask, resident registration/warp, LN, and
+  integration changes should run this command against the latest green
+  200-light baseline before replacing the default path.
+- Runtime regressions above the configured threshold, output drift, contract
+  failures, or unexplained frame-mask changes are considered gate failures.
+
+Validation commands:
+
+- `python -m pytest -q tests/test_resident_regression_gate.py
+  tests/test_resident_determinism.py tests/test_resident_runtime_compare.py`
+- `python -m ruff check src\glass\report\resident_regression_gate.py
+  tests\test_resident_regression_gate.py src\glass\cli.py`
+- Real 200-light `glass run` with the resident CUDA default route and shared
+  master cache.
+- `glass resident-regression-gate --baseline-run
+  C:\glass_runs\phase2_s2_gate613_ln_batch_stats\real_200_default_regression
+  --candidate-run
+  C:\glass_runs\phase2_s2_gate614_regression_gate\real_200_default_regression
+  --max-elapsed-ratio 1.15 --min-active-frame-count 190
+  --max-masked-frame-count 10 --fail-on-failure`
+- `python -m pytest -q`
+
 ### S2-Gate 581: Native Completion Runtime Preset
 
 Gate 581 returns the current work to a substantive resident CUDA runtime path

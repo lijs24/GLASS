@@ -103,6 +103,10 @@ from glass.report.resident_runtime_compare import (
     build_resident_runtime_compare,
     write_resident_runtime_compare,
 )
+from glass.report.resident_regression_gate import (
+    build_resident_regression_gate,
+    write_resident_regression_gate,
+)
 from glass.report.resident_fits_auto_regression import (
     build_resident_fits_auto_regression,
     write_resident_fits_auto_regression,
@@ -4378,6 +4382,32 @@ def cmd_resident_runtime_compare(args: argparse.Namespace) -> int:
         }
     )
     return 0
+
+
+def cmd_resident_regression_gate(args: argparse.Namespace) -> int:
+    payload = build_resident_regression_gate(
+        args.baseline_run,
+        args.candidate_run,
+        max_elapsed_ratio=args.max_elapsed_ratio,
+        min_active_frame_count=args.min_active_frame_count,
+        max_masked_frame_count=args.max_masked_frame_count,
+        require_pipeline_contract=not args.allow_missing_pipeline_contract,
+        require_stack_engine_contract=not args.allow_missing_stack_engine_contract,
+        require_dq_pixel_closure=not args.allow_missing_dq_pixel_closure,
+    )
+    write_resident_regression_gate(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload["artifact_type"],
+            "status": payload["status"],
+            "passed": payload["passed"],
+            "failed_checks": payload["failed_checks"],
+            "elapsed_ratio": payload.get("runtime_comparison", {}).get("elapsed_ratio"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failure and not payload["passed"] else 0
 
 
 def cmd_resident_fits_auto_regression(args: argparse.Namespace) -> int:
@@ -8945,6 +8975,54 @@ def build_parser() -> argparse.ArgumentParser:
     resident_runtime_compare.add_argument("--out", required=True, help="output runtime comparison JSON")
     resident_runtime_compare.add_argument("--markdown", help="optional output Markdown summary")
     resident_runtime_compare.set_defaults(func=cmd_resident_runtime_compare)
+
+    resident_regression_gate = sub.add_parser(
+        "resident-regression-gate",
+        help="hard gate for resident CUDA output determinism, contracts, frame masks, and runtime regression",
+    )
+    resident_regression_gate.add_argument("--baseline-run", required=True, help="baseline GLASS run directory")
+    resident_regression_gate.add_argument("--candidate-run", required=True, help="candidate GLASS run directory")
+    resident_regression_gate.add_argument("--out", required=True, help="output regression gate JSON")
+    resident_regression_gate.add_argument("--markdown", help="optional output Markdown summary")
+    resident_regression_gate.add_argument(
+        "--max-elapsed-ratio",
+        type=float,
+        default=1.15,
+        help="maximum allowed candidate/baseline elapsed runtime ratio",
+    )
+    resident_regression_gate.add_argument(
+        "--min-active-frame-count",
+        type=int,
+        default=None,
+        help="optional minimum active frame count required from resident_frame_masks.json",
+    )
+    resident_regression_gate.add_argument(
+        "--max-masked-frame-count",
+        type=int,
+        default=None,
+        help="optional maximum masked frame count allowed from resident_frame_masks.json",
+    )
+    resident_regression_gate.add_argument(
+        "--allow-missing-pipeline-contract",
+        action="store_true",
+        help="do not fail when candidate pipeline_contract.json is absent",
+    )
+    resident_regression_gate.add_argument(
+        "--allow-missing-stack-engine-contract",
+        action="store_true",
+        help="do not fail when candidate stack_engine_contract.json is absent",
+    )
+    resident_regression_gate.add_argument(
+        "--allow-missing-dq-pixel-closure",
+        action="store_true",
+        help="do not fail when candidate resident_dq_pixel_closure.json is absent",
+    )
+    resident_regression_gate.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless every regression gate check passes",
+    )
+    resident_regression_gate.set_defaults(func=cmd_resident_regression_gate)
 
     resident_fits_auto_regression = sub.add_parser(
         "resident-fits-auto-regression",
