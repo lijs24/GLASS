@@ -2530,6 +2530,65 @@ Interpretation:
   overlap or resident integration reducer work with a stronger frame-index
   invariant in place.
 
+### S2-Gate 692: Mainline A/B Requires Frame-Index Alignment
+
+Gate692 connects the Gate691 runtime invariant to the reusable Phase 2 A/B
+gate. Future resident CUDA performance candidates now have to preserve the
+resident frame-index alignment contract before `glass phase2-mainline-ab` can
+pass. This keeps read/upload/calibration and resident integration experiments
+from proving speed while silently dropping the frame/weight coordinate-system
+guarantee.
+
+Implementation:
+
+- `glass phase2-mainline-ab` now reads the candidate
+  `resident_frame_masks.json`.
+- The new check `candidate_frame_index_alignment_contract_pass` requires:
+  - `resident_frame_masks.json` to exist;
+  - `summary.frame_index_alignment_contract` to exist;
+  - `checked=true`;
+  - `passed=true`.
+- The A/B JSON summary now reports `frame_index_alignment_passed` and
+  `frame_index_alignment_status`.
+- Focused tests now cover both a passing candidate and a missing-alignment
+  failure.
+
+Validation:
+
+- Focused A/B tests passed: `4 passed in 0.28 s`.
+- Ruff on touched files passed.
+- Full pytest passed: `1436 passed in 72.71 s`.
+- Real 200-light current-default candidate:
+  `C:\glass_runs\phase2_s2_gate692_probe_read_calibrate\runs_20260627_034000\default_repeat`.
+- Phase 2 mainline A/B versus Gate691 passed:
+  `C:\glass_runs\phase2_s2_gate692_probe_read_calibrate\gate692_default_repeat_phase2_mainline_ab.json`;
+  failed checks `[]`, active/masked frames `193 / 7`, tracked map count `6`,
+  hash mismatches `0`, frame-index alignment `passed`.
+
+Timing and probe outcome:
+
+- Current-default repeat total elapsed: `11.509678000002168 s`.
+- Baseline-to-candidate elapsed ratio versus Gate691: `0.9312209070964549`.
+- Current-default repeat components:
+  - light read/upload/calibrate `3.0809543000068516 s`;
+  - integration `3.266167899942957 s`.
+- A sequential `--resident-native-completion-wave-fill-us 0` probe also passed
+  A/B but was not promoted: same-session current default was slightly faster
+  than the wave0 candidate (`11.509678000002168 s` versus
+  `11.582931699580513 s`). Earlier parallel queue/wave probes were discarded as
+  timing evidence because concurrent resident runs contended for the same disk
+  and GPU and inflated light-stage time.
+
+Interpretation:
+
+- This is a hard validation gate for future performance work, not a release
+  handoff.
+- The default `throughput-v4-native-completion` wave-fill policy remains
+  unchanged.
+- The next substantive gate should now change the read/upload/calibration
+  implementation or resident integration reducer itself, while using Gate692's
+  A/B contract to enforce frame-index correctness and output-map stability.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

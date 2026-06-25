@@ -733,6 +733,17 @@ Current Phase 2 latest mainline acceptance:
   registration/warp `0.2609440995147452 s`, local normalization
   `0.3568277000449598 s`, integration `3.2981458000140265 s`, and output
   write `0.2789147000294179 s`.
+- Gate692 connects the frame-index invariant to `glass phase2-mainline-ab`.
+  The real 200-light current-default repeat at
+  `C:\glass_runs\phase2_s2_gate692_probe_read_calibrate\runs_20260627_034000\default_repeat`
+  passed A/B versus Gate691 with failed checks `[]`, active/masked frames
+  `193 / 7`, six tracked maps, zero hash mismatches, and
+  `frame_index_alignment_status=passed`. The candidate elapsed ratio was
+  `0.9312209070964549`, total elapsed `11.509678000002168 s`, light
+  read/upload/calibrate `3.0809543000068516 s`, and integration
+  `3.266167899942957 s`. A sequential wave-fill `0 us` probe also passed but
+  was not promoted because the same-session current default was slightly faster
+  than the wave0 candidate.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

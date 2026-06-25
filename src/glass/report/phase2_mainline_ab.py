@@ -136,6 +136,41 @@ def _contract_status(run: Path) -> dict[str, Any]:
     return contracts
 
 
+def _frame_index_alignment_status(run: Path) -> dict[str, Any]:
+    payload = _read_json_if_exists(run / "resident_frame_masks.json")
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    alignment = summary.get("frame_index_alignment_contract")
+    if not payload:
+        return {
+            "present": False,
+            "checked": False,
+            "passed": False,
+            "status": "missing_resident_frame_masks",
+            "path": str(run / "resident_frame_masks.json"),
+        }
+    if not isinstance(alignment, dict):
+        return {
+            "present": True,
+            "checked": False,
+            "passed": False,
+            "status": "missing_frame_index_alignment_contract",
+            "path": str(run / "resident_frame_masks.json"),
+        }
+    checked = bool(alignment.get("checked"))
+    passed = bool(alignment.get("passed"))
+    return {
+        "present": True,
+        "checked": checked,
+        "passed": checked and passed,
+        "status": "passed" if checked and passed else "failed",
+        "path": str(run / "resident_frame_masks.json"),
+        "weight_mismatch_frame_count": int(alignment.get("weight_mismatch_frame_count") or 0),
+        "weight_missing_frame_count": int(alignment.get("weight_missing_frame_count") or 0),
+        "weight_mismatch_frame_ids": alignment.get("weight_mismatch_frame_ids") or [],
+        "weight_missing_frame_ids": alignment.get("weight_missing_frame_ids") or [],
+    }
+
+
 def _active_frame_summary(run: Path) -> dict[str, Any]:
     contract_summary = _frame_summary_from_contracts(run)
     artifact = _first_resident_artifact(run)
@@ -281,6 +316,7 @@ def build_phase2_mainline_ab(
     active_summary = _active_frame_summary(candidate)
     candidate_contracts = _contract_status(candidate)
     candidate_components = _component_summary(_component_rows(candidate))
+    candidate_frame_index_alignment = _frame_index_alignment_status(candidate)
 
     required_contract_names = ("pipeline_contract", "resident_result_contract")
     required_contracts_pass = all(
@@ -320,6 +356,11 @@ def build_phase2_mainline_ab(
                 "missing_patterns": map_comparison["candidate_missing_patterns"],
             },
         ),
+        _check(
+            "candidate_frame_index_alignment_contract_pass",
+            bool(candidate_frame_index_alignment.get("passed")),
+            candidate_frame_index_alignment,
+        ),
     ]
     if require_hash_match:
         checks.append(
@@ -347,6 +388,7 @@ def build_phase2_mainline_ab(
         "runtime_delta": runtime_delta,
         "candidate_components": candidate_components,
         "candidate_contracts": candidate_contracts,
+        "candidate_frame_index_alignment": candidate_frame_index_alignment,
         "candidate_active_frames": active_summary,
         "map_comparison": map_comparison,
         "checks": checks,
@@ -360,6 +402,8 @@ def build_phase2_mainline_ab(
             "candidate_active_frame_count": active_count,
             "candidate_masked_frame_count": active_summary.get("masked_frame_count"),
             "largest_component": candidate_components.get("largest_component"),
+            "frame_index_alignment_passed": candidate_frame_index_alignment.get("passed"),
+            "frame_index_alignment_status": candidate_frame_index_alignment.get("status"),
             "hash_mismatch_count": map_comparison["mismatch_count"],
             "hash_missing_map_count": map_comparison["missing_map_count"],
         },
