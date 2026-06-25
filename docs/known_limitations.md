@@ -69,8 +69,13 @@ Current code is intentionally gated:
   `resident-winsorized-overlimit-benchmark` command and benchmark script so
   over-512 radix-select parity/performance can be measured against tiled
   CPUStackEngine, but this is still an evidence surface rather than a
-  default-path promotion. Richer robust rejection policies, cosmetic
-  correction, and broader data-shape support remain future work.
+  default-path promotion. Gate629 adds an opt-in
+  `GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN=1` path for the default 0/1-weight case; it
+  preserves output determinism on the real 200-light A/B and improves the
+  measured run, but the integration-only gain is modest in a single run, so it
+  remains a guarded probe until repeated-run evidence justifies default
+  promotion. Richer robust rejection policies, cosmetic correction, and broader
+  data-shape support remain future work.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must

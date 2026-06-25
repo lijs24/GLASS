@@ -289,6 +289,25 @@ memory pressure enough to outweigh fewer global stack rereads on the current
 200-light RTX PRO 6000 benchmark. The route remains opt-in only, and future
 hardened reducer work should avoid larger per-thread local arrays.
 
+S2-Gate 629 adds a third guarded unit/zero-weight probe,
+`GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN=1`. When all positive finite integration
+weights are exactly `1.0`, the wrapper uploads a one-byte-per-frame positive
+weight mask and the hardened kernel keeps the original frame-axis scan order
+while skipping inactive frames through that mask. Unlike the active-index probe,
+this keeps frame numbering and accumulation order identical to the generic
+weighted scan; unlike local reuse, it does not add another per-thread sample
+array. The route preserves the same median/IQR winsorized formula, count-map
+semantics, and DQ inputs. On the real 200-light Gate629 A/B run, the path
+recorded `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`,
+`unit_positive_weight_mask_bytes=200`, and `unit_positive_weight_frame_count=193`.
+It passed resident determinism and contract checks against Gate628 default
+output with zero artifact or numerical drift, reduced total run timing from
+`11.385932999895886 s` to `10.765879800193943 s`, and reduced the resident
+hardened integration substage from `3.386920899967663 s` to
+`3.3294103000080213 s`. Because the integration-only gain is modest and a
+single real run still contains I/O and warp timing variation, this path remains
+explicitly opt-in pending repeated-run promotion evidence.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted

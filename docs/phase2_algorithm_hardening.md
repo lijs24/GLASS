@@ -98,6 +98,82 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 629: Unit-Positive Weight Mask-Scan Probe
+
+Gate 629 returns to the resident integration hot path and adds a guarded native
+CUDA execution branch for the common default case where frame weights are 0/1:
+accepted frames have weight `1.0` and rejected/failed frames have weight `0.0`.
+
+Implementation:
+
+- Added `GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN=1` as an opt-in native integration
+  path.
+- The native wrapper builds and uploads a one-byte-per-frame positive-weight
+  mask when all positive finite weights are exactly `1.0`.
+- The hardened winsorized kernel keeps the original frame-axis scan order but
+  skips zero-weight frames by reading the byte mask instead of reloading and
+  checking the float weight for every pixel pass.
+- The branch is separate from the earlier active-index and local-reuse probes,
+  so default behavior remains unchanged unless the environment variable is set.
+- Native profiles record `unit_positive_weight_mask_requested`,
+  `unit_positive_weight_mask_enabled`, `unit_positive_weight_mask_bytes`, and
+  `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`.
+
+Focused validation:
+
+- Native rebuild:
+  `cmake --build build --config Release --target _glass_cuda_native`.
+- CUDA/CPU focused tests:
+  `4 passed`.
+- The new unit-weight mask-scan test includes zero-weight frames and a NaN
+  pixel and matches the deterministic CPU winsorized baseline for master,
+  weight, coverage, low-rejection, and high-rejection maps.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate629_unit_mask_scan\real_200_mask_scan_20260625_134256`.
+- Baseline:
+  `C:\glass_runs\phase2_s2_gate628_real200_default_ab\real_200_default_gate628_20260625_133115`.
+- Regression gate:
+  `C:\glass_runs\phase2_s2_gate629_unit_mask_scan\resident_regression_gate_gate629_mask_vs_gate628_default.json`.
+- Status: `passed`.
+- Active/masked frames: `193 / 7`.
+- Determinism summary: zero artifact differences, zero frame-accounting
+  differences, zero output differences, and zero numerical drift.
+- Total internal runtime improved from `11.385932999895886 s` to
+  `10.765879800193943 s` (`0.9455421703511155x` candidate/baseline ratio).
+- Resident hardened integration improved from `3.386920899967663 s` to
+  `3.3294103000080213 s` (`0.9830197983188238x` ratio).
+- Native profile:
+  `unit_positive_weight_mask_enabled=true`,
+  `unit_positive_weight_mask_bytes=200`,
+  `unit_positive_weight_frame_count=193`,
+  `kernel_sync_s=3.2001566`.
+- WBPP black-box speed summary:
+  `C:\glass_runs\phase2_s2_gate629_unit_mask_scan\gate629_wbpp_speedup_summary.json`.
+- GLASS/WBPP timing:
+  `10.765879800193943 s` versus `1092.541 s`, or `101.48181293834604x`.
+- WBPP comparison metrics with coverage >= 190:
+  shape match `true`, compared pixels `60105814`, RMS difference
+  `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`.
+
+Interpretation:
+
+- This is a substantive CUDA kernel path and real-data A/B gate, not a
+  report-only handoff.
+- The result is scientifically conservative: the candidate kept the same
+  output artifacts and frame accounting as Gate628.
+- The integration-only gain is real but modest in a single run; most total
+  runtime movement still comes from the surrounding read/upload/calibration and
+  registration/warp stages.
+- The branch remains opt-in until a repeated-run matrix proves the gain is
+  stable enough to promote as the default.
+- The next substantive gate should either run that repeat matrix or move to the
+  larger current bottleneck: reducing resident registration/warp orchestration
+  and host/device coordination without changing the accepted frame set.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization

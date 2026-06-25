@@ -644,6 +644,7 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     const float* stack,
     const float* weights,
     const unsigned int* active_indices,
+    const unsigned char* unit_positive_weight_mask,
     float* master,
     float* weight_map,
     float* coverage_map,
@@ -657,11 +658,13 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     int min_samples,
     float max_reject_fraction,
     bool unit_positive_weights,
+    bool unit_positive_weight_mask_enabled,
     bool unit_positive_local_reuse);
 void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     const float* stack,
     const float* weights,
     const unsigned int* active_indices,
+    const unsigned char* unit_positive_weight_mask,
     float* master,
     float* weight_map,
     unsigned short* coverage_map,
@@ -675,6 +678,7 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     int min_samples,
     float max_reject_fraction,
     bool unit_positive_weights,
+    bool unit_positive_weight_mask_enabled,
     bool unit_positive_local_reuse);
 void glass_integrate_resident_hardened_winsorized_sigma_f32_radix_select_launch(
     const float* stack,
@@ -11611,6 +11615,14 @@ class ResidentCalibratedStack {
         unit_local_reuse_env_value != "false" && unit_local_reuse_env_value != "FALSE";
     const bool unit_positive_local_reuse_enabled =
         unit_positive_local_reuse_requested && !unit_positive_active_index_enabled;
+    const char* unit_mask_scan_env = std::getenv("GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN");
+    const std::string unit_mask_scan_env_value = unit_mask_scan_env == nullptr ? "" : std::string(unit_mask_scan_env);
+    const bool unit_positive_weight_mask_requested =
+        !radix_select_enabled && unit_positive_weights &&
+        !unit_positive_active_index_enabled && !unit_positive_local_reuse_enabled &&
+        !unit_mask_scan_env_value.empty() && unit_mask_scan_env_value != "0" &&
+        unit_mask_scan_env_value != "false" && unit_mask_scan_env_value != "FALSE";
+    const bool unit_positive_weight_mask_enabled = unit_positive_weight_mask_requested;
     std::vector<unsigned int> unit_positive_frame_indices;
     if (unit_positive_active_index_enabled) {
       unit_positive_frame_indices.reserve(frame_count_);
@@ -11621,6 +11633,15 @@ class ResidentCalibratedStack {
         }
       }
     }
+    std::vector<unsigned char> unit_positive_frame_mask;
+    if (unit_positive_weight_mask_enabled) {
+      unit_positive_frame_mask.reserve(frame_count_);
+      for (std::size_t index = 0; index < frame_count_; ++index) {
+        const float weight = weights[index];
+        unit_positive_frame_mask.push_back(
+            (std::isfinite(weight) && weight > 0.0f) ? static_cast<unsigned char>(1) : static_cast<unsigned char>(0));
+      }
+    }
     const std::size_t unit_positive_active_frame_count = unit_positive_frame_indices.size();
     const std::string percentile_strategy = radix_select_enabled
         ? "radix_select_order_statistics_scan"
@@ -11629,8 +11650,10 @@ class ResidentCalibratedStack {
         ? "radix_select_global_rescan_weighted_samples"
         : (unit_positive_active_index_enabled
                ? "active_index_global_reread_unit_positive_weights"
-               : (unit_positive_local_reuse_enabled ? "local_ordered_reuse_unit_positive_weights"
-                                                     : "global_reread_weighted_samples"));
+               : (unit_positive_weight_mask_enabled
+                      ? "frame_mask_global_reread_unit_positive_weights"
+                      : (unit_positive_local_reuse_enabled ? "local_ordered_reuse_unit_positive_weights"
+                                                            : "global_reread_weighted_samples")));
     const unsigned long long native_admission_frame_limit =
         radix_select_enabled ? 0ull : static_cast<unsigned long long>(512);
     const unsigned long long native_kernel_frame_capacity =
@@ -11656,6 +11679,7 @@ class ResidentCalibratedStack {
 
     float* d_weights = nullptr;
     unsigned int* d_unit_positive_frame_indices = nullptr;
+    unsigned char* d_unit_positive_frame_mask = nullptr;
     float* d_master = nullptr;
     float* d_weight_map = nullptr;
     if (count_map_dtype == "uint16") {
@@ -11703,6 +11727,13 @@ class ResidentCalibratedStack {
                   unit_positive_active_frame_count * sizeof(unsigned int)),
               "cudaMalloc(resident hardened winsor unit positive frame indices)");
         }
+        if (unit_positive_weight_mask_enabled && !unit_positive_frame_mask.empty()) {
+          check_cuda(
+              cudaMalloc(
+                  &d_unit_positive_frame_mask,
+                  unit_positive_frame_mask.size() * sizeof(unsigned char)),
+              "cudaMalloc(resident hardened winsor unit positive frame mask)");
+        }
         check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident hardened winsor master)");
         if (download_weight_map) {
           check_cuda(
@@ -11734,6 +11765,15 @@ class ResidentCalibratedStack {
                   cudaMemcpyHostToDevice),
               "cudaMemcpy(resident hardened winsor unit positive frame indices)");
         }
+        if (d_unit_positive_frame_mask != nullptr) {
+          check_cuda(
+              cudaMemcpy(
+                  d_unit_positive_frame_mask,
+                  unit_positive_frame_mask.data(),
+                  unit_positive_frame_mask.size() * sizeof(unsigned char),
+                  cudaMemcpyHostToDevice),
+              "cudaMemcpy(resident hardened winsor unit positive frame mask)");
+        }
         weights_upload_s = seconds_since(weights_upload_start);
         const auto kernel_start = Clock::now();
         if (radix_select_enabled) {
@@ -11756,6 +11796,7 @@ class ResidentCalibratedStack {
               d_stack_,
               d_weights,
               d_unit_positive_frame_indices,
+              d_unit_positive_frame_mask,
               d_master,
               d_weight_map,
               d_coverage_map,
@@ -11769,6 +11810,7 @@ class ResidentCalibratedStack {
               min_samples,
               max_reject_fraction,
               unit_positive_active_index_enabled,
+              unit_positive_weight_mask_enabled,
               unit_positive_local_reuse_enabled);
         }
         check_cuda(
@@ -11818,6 +11860,7 @@ class ResidentCalibratedStack {
       } catch (...) {
         cudaFree(d_weights);
         cudaFree(d_unit_positive_frame_indices);
+        cudaFree(d_unit_positive_frame_mask);
         cudaFree(d_master);
         cudaFree(d_weight_map);
         cudaFree(d_coverage_map);
@@ -11828,6 +11871,7 @@ class ResidentCalibratedStack {
       const auto free_start = Clock::now();
       cudaFree(d_weights);
       cudaFree(d_unit_positive_frame_indices);
+      cudaFree(d_unit_positive_frame_mask);
       cudaFree(d_master);
       cudaFree(d_weight_map);
       cudaFree(d_coverage_map);
@@ -11862,11 +11906,18 @@ class ResidentCalibratedStack {
             ? (unit_positive_active_count_admission ? "native_active_count_admission_over_frame_limit"
                                                     : "environment_enabled")
             : "disabled";
+        profile_info["unit_positive_weight_mask_requested"] = unit_positive_weight_mask_requested;
+        profile_info["unit_positive_weight_mask_enabled"] = unit_positive_weight_mask_enabled;
+        profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_enabled
+            ? "environment_enabled"
+            : (unit_positive_weight_mask_requested ? "disabled_by_precedence" : "disabled");
         profile_info["unit_positive_weight_frame_count"] =
             static_cast<unsigned long long>(unit_positive_weight_frame_count);
         profile_info["unit_positive_active_frame_count"] =
             static_cast<unsigned long long>(unit_positive_active_frame_count);
         profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;
+        profile_info["unit_positive_weight_mask_bytes"] =
+            static_cast<unsigned long long>(unit_positive_frame_mask.size());
         profile_info["allocation_s"] = allocation_s;
         profile_info["weights_upload_s"] = weights_upload_s;
         profile_info["kernel_sync_s"] = kernel_sync_s;
@@ -11928,6 +11979,13 @@ class ResidentCalibratedStack {
                 unit_positive_active_frame_count * sizeof(unsigned int)),
             "cudaMalloc(resident hardened winsor unit positive frame indices)");
       }
+      if (unit_positive_weight_mask_enabled && !unit_positive_frame_mask.empty()) {
+        check_cuda(
+            cudaMalloc(
+                &d_unit_positive_frame_mask,
+                unit_positive_frame_mask.size() * sizeof(unsigned char)),
+            "cudaMalloc(resident hardened winsor unit positive frame mask)");
+      }
       check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident hardened winsor master)");
       if (download_weight_map) {
         check_cuda(
@@ -11959,6 +12017,15 @@ class ResidentCalibratedStack {
                 cudaMemcpyHostToDevice),
             "cudaMemcpy(resident hardened winsor unit positive frame indices)");
       }
+      if (d_unit_positive_frame_mask != nullptr) {
+        check_cuda(
+            cudaMemcpy(
+                d_unit_positive_frame_mask,
+                unit_positive_frame_mask.data(),
+                unit_positive_frame_mask.size() * sizeof(unsigned char),
+                cudaMemcpyHostToDevice),
+            "cudaMemcpy(resident hardened winsor unit positive frame mask)");
+      }
       weights_upload_s = seconds_since(weights_upload_start);
       const auto kernel_start = Clock::now();
       if (radix_select_enabled) {
@@ -11981,6 +12048,7 @@ class ResidentCalibratedStack {
             d_stack_,
             d_weights,
             d_unit_positive_frame_indices,
+            d_unit_positive_frame_mask,
             d_master,
             d_weight_map,
             d_coverage_map,
@@ -11994,6 +12062,7 @@ class ResidentCalibratedStack {
             min_samples,
             max_reject_fraction,
             unit_positive_active_index_enabled,
+            unit_positive_weight_mask_enabled,
             unit_positive_local_reuse_enabled);
       }
       check_cuda(
@@ -12043,6 +12112,7 @@ class ResidentCalibratedStack {
     } catch (...) {
       cudaFree(d_weights);
       cudaFree(d_unit_positive_frame_indices);
+      cudaFree(d_unit_positive_frame_mask);
       cudaFree(d_master);
       cudaFree(d_weight_map);
       cudaFree(d_coverage_map);
@@ -12053,6 +12123,7 @@ class ResidentCalibratedStack {
     const auto free_start = Clock::now();
     cudaFree(d_weights);
     cudaFree(d_unit_positive_frame_indices);
+    cudaFree(d_unit_positive_frame_mask);
     cudaFree(d_master);
     cudaFree(d_weight_map);
     cudaFree(d_coverage_map);
@@ -12087,11 +12158,18 @@ class ResidentCalibratedStack {
           ? (unit_positive_active_count_admission ? "native_active_count_admission_over_frame_limit"
                                                   : "environment_enabled")
           : "disabled";
+      profile_info["unit_positive_weight_mask_requested"] = unit_positive_weight_mask_requested;
+      profile_info["unit_positive_weight_mask_enabled"] = unit_positive_weight_mask_enabled;
+      profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_enabled
+          ? "environment_enabled"
+          : (unit_positive_weight_mask_requested ? "disabled_by_precedence" : "disabled");
       profile_info["unit_positive_weight_frame_count"] =
           static_cast<unsigned long long>(unit_positive_weight_frame_count);
       profile_info["unit_positive_active_frame_count"] =
           static_cast<unsigned long long>(unit_positive_active_frame_count);
       profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;
+      profile_info["unit_positive_weight_mask_bytes"] =
+          static_cast<unsigned long long>(unit_positive_frame_mask.size());
       profile_info["allocation_s"] = allocation_s;
       profile_info["weights_upload_s"] = weights_upload_s;
       profile_info["kernel_sync_s"] = kernel_sync_s;
