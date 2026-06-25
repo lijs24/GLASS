@@ -169,6 +169,17 @@ Current Phase 2 latest mainline acceptance:
   with final `resume_action=noop_complete`. Latest ledger evidence again records
   `15` started stages, `15` complete stages, `23` expected artifact rows, `0`
   missing artifact rows, and `can_noop_resume=true`.
+- Gate648 adds the next resident reentry boundary inside the calibration/cache
+  surface. A real 200-light run now writes `resident_reentry_boundary.json`,
+  records a timed `resident_reentry_boundary` stage, and exposes
+  `pre_integration`, `resident_master_cache`, and `resident_calibration`
+  boundary readiness to `glass resume`. The latest completed-run resume returned
+  `resume_action=noop_complete`, while the preflight summary recorded
+  `strongest_ready_boundary=resident_calibration`,
+  `calibration_boundary_ready=true`, and
+  `calibration_boundary_resume_supported=false`. The ledger now records `16`
+  started stages, `16` complete stages, `24` expected artifact rows, `0`
+  missing artifact rows, and `can_noop_resume=true`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
@@ -177,12 +188,12 @@ Current Phase 2 latest mainline acceptance:
   `frame_accounting_resident_dq_lifecycle_contract`.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate646: passed with candidate/baseline
-  elapsed ratio `0.8885626915461112` and no failed checks.
+- Resident regression gate versus Gate647: passed with candidate/baseline
+  elapsed ratio `1.0335357209723688` and no failed checks.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate647_resident_reentry\runs_20260625_190000\gate647_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate648_reentry_boundary\runs_20260625_200000\gate648_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate647_resident_reentry\runs_20260625_190000\gate647_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate648_reentry_boundary\runs_20260625_200000\gate648_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

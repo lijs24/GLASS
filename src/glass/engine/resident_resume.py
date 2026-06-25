@@ -8,6 +8,10 @@ from glass.engine.resident_stage_ledger import (
     build_resident_stage_ledger,
     write_resident_stage_ledger,
 )
+from glass.engine.resident_reentry_boundary import (
+    build_resident_reentry_boundary,
+    write_resident_reentry_boundary,
+)
 from glass.models import now_iso
 
 
@@ -136,6 +140,10 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
     run = Path(run_dir)
     state = _read_json_if_exists(run / "run_state.json")
     ledger = build_resident_stage_ledger(run)
+    boundary = build_resident_reentry_boundary(run)
+    boundary_summary = (
+        boundary.get("summary") if isinstance(boundary.get("summary"), dict) else {}
+    )
     summary = ledger.get("summary") if isinstance(ledger.get("summary"), dict) else {}
     resident = is_resident_run(run)
     expected_rows = (
@@ -163,6 +171,28 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
         action = "reenter_from_run_invocation"
         passed = True
         reason = "resident CUDA run can re-enter from stored run invocation before calibration/integration started"
+    elif (
+        not integration_complete
+        and _resident_stage_started(ledger, "resident_calibration_integration")
+        and bool(boundary_summary.get("calibration_boundary_ready"))
+    ):
+        action = "blocked_calibration_boundary_reentry_not_implemented"
+        passed = False
+        reason = (
+            "resident CUDA calibration/master-cache boundary is ready, but "
+            "calibration-boundary reentry is not implemented yet"
+        )
+    elif (
+        not integration_complete
+        and _resident_stage_started(ledger, "resident_calibration_integration")
+        and bool(boundary_summary.get("master_cache_boundary_ready"))
+    ):
+        action = "blocked_master_cache_reentry_not_implemented"
+        passed = False
+        reason = (
+            "resident CUDA master-cache boundary is ready, but master-cache "
+            "reentry is not implemented yet"
+        )
     elif not integration_complete:
         action = "blocked_incomplete_resident_run"
         passed = False
@@ -194,8 +224,19 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
             "memory_mode": summary.get("memory_mode"),
             "stage_ledger_can_noop_resume": bool(summary.get("can_noop_resume")),
             "reentry_eligible": bool(reentry.get("eligible")),
+            "strongest_ready_boundary": boundary_summary.get("strongest_ready_boundary"),
+            "calibration_boundary_ready": bool(
+                boundary_summary.get("calibration_boundary_ready")
+            ),
+            "calibration_boundary_resume_supported": bool(
+                boundary_summary.get("calibration_boundary_resume_supported")
+            ),
         },
         "reentry": reentry,
+        "resident_reentry_boundary": {
+            "path": str(run / "resident_reentry_boundary.json"),
+            "summary": boundary_summary,
+        },
         "stage_ledger": {
             "path": str(run / "resident_stage_ledger.json"),
             "summary": summary,
@@ -212,6 +253,7 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
 
 def write_resident_resume_preflight(run_dir: str | Path) -> Path:
     run = Path(run_dir)
+    write_resident_reentry_boundary(run)
     write_resident_stage_ledger(run)
     path = run / "resident_resume_preflight.json"
     write_json(path, build_resident_resume_preflight(run))

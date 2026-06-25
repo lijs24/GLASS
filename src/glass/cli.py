@@ -57,6 +57,10 @@ from glass.engine.resident_resume import (
     is_resident_run,
     write_resident_resume_preflight,
 )
+from glass.engine.resident_reentry_boundary import (
+    build_resident_reentry_boundary,
+    write_resident_reentry_boundary,
+)
 from glass.engine.resident_stage_ledger import write_resident_stage_ledger
 from glass.engine.resident_source_dq_strategy import build_resident_source_dq_strategy
 from glass.engine.warp import warp_registered_frames
@@ -1915,6 +1919,26 @@ def _write_default_local_norm_contract_artifact(run: Path, state) -> Path | None
     return local_norm_contract_path
 
 
+def _write_resident_reentry_boundary_artifact(run: Path, state) -> Path | None:
+    if not (
+        (run / "resident_master_cache.json").exists()
+        or (run / "calibration_artifacts.json").exists()
+        or (run / "resident_calibration_contract.json").exists()
+    ):
+        return None
+    boundary_path = write_resident_reentry_boundary(run)
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_reentry_boundary",
+            path=str(boundary_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    return boundary_path
+
+
 def _pipeline_contract_failure_blocks_default_run(audit: dict[str, Any]) -> bool:
     failed_checks = {
         str(item.get("name"))
@@ -2034,7 +2058,19 @@ def _write_resident_postcondition_artifacts(
         "stack_engine_contract": None,
         "warp_quality_contract": None,
         "resident_mainline_framework": None,
+        "resident_reentry_boundary": None,
     }
+    if (
+        (run / "resident_master_cache.json").exists()
+        or (run / "calibration_artifacts.json").exists()
+        or (run / "resident_calibration_contract.json").exists()
+    ):
+        paths["resident_reentry_boundary"] = _timed_stage(
+            run,
+            timing,
+            "resident_reentry_boundary",
+            lambda: _write_resident_reentry_boundary_artifact(run, state),
+        )
     if (run / "local_norm_results.json").exists():
         paths["local_norm_contract"] = _timed_stage(
             run,
@@ -2165,6 +2201,7 @@ def _write_resident_resume_failed_state(run: Path, preflight: dict[str, Any]) ->
     if isinstance(artifacts, list):
         artifact_specs = [
             ("resident_stage_ledger", str(run / "resident_stage_ledger.json")),
+            ("resident_reentry_boundary", str(run / "resident_reentry_boundary.json")),
             ("resident_resume", str(run / "resident_resume_preflight.json")),
         ]
         for stage, path in artifact_specs:
@@ -2209,6 +2246,7 @@ def _write_resident_resume_success_state(run: Path) -> None:
     if isinstance(artifacts, list):
         artifact_specs = [
             ("resident_stage_ledger", str(run / "resident_stage_ledger.json")),
+            ("resident_reentry_boundary", str(run / "resident_reentry_boundary.json")),
             ("resident_resume", str(run / "resident_resume_preflight.json")),
         ]
         for stage, path in artifact_specs:
@@ -5247,6 +5285,25 @@ def cmd_resident_calibration_artifacts(args: argparse.Namespace) -> int:
         }
     )
     return 0
+
+
+def cmd_resident_reentry_boundary(args: argparse.Namespace) -> int:
+    payload = build_resident_reentry_boundary(args.run)
+    out = Path(args.out) if args.out else Path(args.run) / "resident_reentry_boundary.json"
+    write_json(out, payload)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "strongest_ready_boundary": summary.get("strongest_ready_boundary"),
+            "calibration_boundary_ready": summary.get("calibration_boundary_ready"),
+            "calibration_boundary_resume_supported": summary.get(
+                "calibration_boundary_resume_supported"
+            ),
+            "out": str(out),
+        }
+    )
+    return 0 if summary.get("ready_boundary_count") or not args.fail_on_missing else 2
 
 
 def cmd_resident_registration_triage(args: argparse.Namespace) -> int:
@@ -10094,6 +10151,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="output calibration_artifacts JSON; defaults to RUN/calibration_artifacts.json",
     )
     resident_calibration_artifacts.set_defaults(func=cmd_resident_calibration_artifacts)
+
+    resident_reentry_boundary = sub.add_parser(
+        "resident-reentry-boundary",
+        help="write resident CUDA resume-boundary readiness from cached run artifacts",
+    )
+    resident_reentry_boundary.add_argument(
+        "--run",
+        required=True,
+        help="GLASS resident run directory",
+    )
+    resident_reentry_boundary.add_argument(
+        "--out",
+        help="output boundary JSON; defaults to RUN/resident_reentry_boundary.json",
+    )
+    resident_reentry_boundary.add_argument(
+        "--fail-on-missing",
+        action="store_true",
+        help="return exit code 2 when no reentry boundary is ready",
+    )
+    resident_reentry_boundary.set_defaults(func=cmd_resident_reentry_boundary)
 
     resident_result_contract = sub.add_parser(
         "resident-result-contract",

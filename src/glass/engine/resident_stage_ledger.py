@@ -29,6 +29,7 @@ RESIDENT_STAGE_ARTIFACTS: dict[str, tuple[str, ...]] = {
         "calibration_artifacts.json",
         "resident_calibration_contract.json",
     ),
+    "resident_reentry_boundary": ("resident_reentry_boundary.json",),
     "resident_registration": (
         "registration_results.json",
         "resident_registration_quality.json",

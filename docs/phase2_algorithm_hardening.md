@@ -801,6 +801,99 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 648: Resident Calibration Reentry Boundary
+
+Gate648 keeps the Phase 2 work on the substantive resident CUDA resume path.
+Gate647 could re-enter only before `resident_calibration_integration` started.
+Gate648 moves the internal boundary one step deeper by making resident
+master-cache and calibration evidence a machine-readable runtime decision
+surface.
+
+Implementation:
+
+- Added `src/glass/engine/resident_reentry_boundary.py`.
+- New artifact: `resident_reentry_boundary.json`.
+- The artifact records three ordered boundaries:
+  - `pre_integration_invocation`, which is already resume-supported through
+    the stored `run_invocation.json`;
+  - `resident_master_cache`, which proves required master-cache files and
+    cache summary are complete;
+  - `resident_calibration`, which joins `calibration_artifacts.json`,
+    `resident_calibration_contract.json`, and `resident_master_cache.json`.
+- `glass run --memory-mode resident` writes the boundary as a postcondition
+  artifact and records a timed `resident_reentry_boundary` stage.
+- `glass resume` now writes and consumes the boundary before building the
+  resident stage ledger and preflight.
+- Complete resident runs still resume with `resume_action=noop_complete`.
+- Partial resident runs that have entered `resident_calibration_integration`
+  and have a complete calibration boundary now get the explicit action
+  `blocked_calibration_boundary_reentry_not_implemented` instead of a generic
+  incomplete-run block. This is intentional: the evidence boundary is now
+  available, but actual mid-stage reentry/reuse remains the next engineering
+  step.
+- Added CLI:
+  `glass resident-reentry-boundary --run RUN [--out OUT] [--fail-on-missing]`.
+
+Focused validation:
+
+- Boundary-focused tests:
+  `tests/test_resident_reentry_boundary.py`,
+  `tests/test_resident_resume.py`,
+  `tests/test_resident_stage_ledger.py`,
+  `tests/test_resident_master_cache.py`, and
+  `tests/test_resident_calibration_contract.py`: `14 passed`.
+- Existing resident source-DQ cache route test updated for the new
+  postcondition stage: passed.
+- Invocation-boundary guard test confirms a `run_invocation.json` with a
+  mismatched `--out` is not marked as resume-supported.
+- Full pytest: `1359 passed in 60.11 s`.
+- Tests cover boundary construction, CLI writing, completed-run no-op resume,
+  and a partial resident run whose calibration boundary is ready but whose
+  mid-stage reentry is still deliberately blocked.
+
+Real 200-light validation:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate648_reentry_boundary\runs_20260625_200000\candidate_boundary_strict`.
+- Total elapsed: `11.602077399846166 s`.
+- Resident calibration/integration stage: `9.60765929997433 s`.
+- New boundary stage: `0.01057750009931624 s`.
+- `resident_reentry_boundary.json` summary:
+  `pre_integration_ready=true`,
+  `master_cache_boundary_ready=true`,
+  `calibration_boundary_ready=true`,
+  `strongest_ready_boundary=resident_calibration`,
+  `strongest_supported_boundary=pre_integration_invocation`.
+- Ledger summary:
+  `16` started stages, `16` complete stages, `24` expected artifact rows,
+  `0` missing artifact rows, `can_noop_resume=true`.
+- `glass resume` on the completed run returned exit code `0` with
+  `resume_action=noop_complete` and recorded `resident_reentry_boundary` in
+  `run_state.json`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames.
+- Resident regression gate versus Gate647: passed, elapsed ratio
+  `1.0335357209723688`.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed with speedup `94.16770482969594x`.
+- Phase 2 mainline audit: passed.
+
+Interpretation:
+
+- This gate is not a report-only handoff. It changes the runtime resume
+  decision model and introduces a stable resident calibration boundary that
+  future code can use for safe master-cache/calibration reuse.
+- Pixel math, frame admission, registration, warp, LN, and rejection are
+  unchanged; the real 200-light comparison metrics remain inside the accepted
+  envelope.
+- The next substantive gate should implement actual reentry from the ready
+  `resident_calibration` boundary, or split resident calibration from
+  registration/warp/integration so completed calibrated resident/cache state
+  can be reused without rerunning the whole heavy stage.
+
 ### S2-Gate 647: Resident Pre-Integration Reentry
 
 Gate647 makes the resident resume framework take its first real partial reentry
