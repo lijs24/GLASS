@@ -86,6 +86,18 @@ def _write_green_run(run: Path) -> None:
     )
     write_json(run / "resident_frame_masks.json", {"summary": {"passed": True, "active_frame_count": 193, "masked_frame_count": 7}})
     write_json(
+        run / "resident_reference_health.json",
+        {
+            "passed": True,
+            "status": "passed",
+            "summary": {
+                "cpu_crosscheck_reused": True,
+                "calibrated_available": True,
+                "cuda_calibrated_available": True,
+            },
+        },
+    )
+    write_json(
         run / "resident_dq_lifecycle.json",
         {
             "summary": {
@@ -176,6 +188,8 @@ def test_phase2_mainline_audit_passes_green_resident_run(tmp_path: Path) -> None
     assert audit["summary"]["active_frames"] == 193
     assert audit["summary"]["speedup_vs_wbpp"] == 87.0
     assert audit["next_priorities"][0]["area"] == "resident calibration/integration execution"
+    assert audit["next_priorities"][1]["area"] == "reference calibrated-health resident reuse"
+    assert audit["next_priorities"][1]["evidence"]["cpu_crosscheck_reused"] is True
 
 
 def test_phase2_mainline_audit_fails_missing_output_map(tmp_path: Path) -> None:

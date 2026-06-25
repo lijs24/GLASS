@@ -106,20 +106,23 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 639.
+- Gate: S2-Gate 640.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056`.
+  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056\candidate_mainline_audit`.
-- GLASS elapsed time: `12.191199900000356 s`.
+  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859\candidate_reference_health_reuse`.
+- GLASS elapsed time: `11.895640000118874 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `89.61718362111084x`.
+- Speedup: `91.8438184064987x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
 - Reference scout and health preserve the Gate636 default behavior:
   `auto` attempts CUDA, the official reference remains CPU-selected after the
   guard, and reference-health evidence is persisted for the CUDA-attempt path.
+- Reference health now reuses the CPU fallback scout rows when the guarded
+  scout has already fallen back to CPU. Latest evidence records
+  `cpu_crosscheck.reuse.used=true` with `64` reused scout rows.
 - Resident DQ lifecycle: passed. Source-DQ execution, resident frame masks, and
   pixel closure agree on `193` active frames, `7` masked frames, and
   `11898681600` active-frame input samples.
@@ -137,12 +140,12 @@ Current Phase 2 latest mainline acceptance:
   `frame_accounting_resident_dq_lifecycle_contract`.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate638: passed with candidate/baseline
-  elapsed ratio `0.9706228158749438` and no failed checks.
+- Resident regression gate versus Gate639: passed with candidate/baseline
+  elapsed ratio `0.9757562912341817` and no failed checks.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056\gate639_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859\gate640_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056\gate639_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859\gate640_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

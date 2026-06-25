@@ -801,6 +801,82 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 640: Reference Health CPU Scout Reuse
+
+Gate640 returns to the default resident CUDA execution path. Gate639's
+mainline audit showed that reference scout plus reference health were still a
+whole-run correctness overhead. On the current default path, the CUDA reference
+scout is attempted and then guarded by a CPU scout; when that guard falls back
+to CPU, `resident_reference_scout.json` already contains the exact CPU
+`frame_quality` rows that `resident_reference_health` recomputed. Gate640
+reuses those rows instead of rereading the sampled FITS crops and rerunning CPU
+star detection.
+
+Implementation:
+
+- Added a CPU-scout reuse discriminator in
+  `src/glass/engine/resident_reference_health.py`.
+- Reuse is enabled only when the existing scout artifact has
+  `catalog_backend=cpu`, a recorded `reference_frame_id`, and nonempty CPU
+  `frame_quality` rows.
+- CUDA scout artifacts, incomplete scout artifacts, and missing rows keep the
+  previous measured CPU crosscheck fallback.
+- Reference health now records `summary.cpu_crosscheck_reused` and
+  `cpu_crosscheck.reuse` evidence.
+- The calibrated and CUDA-calibrated crosschecks are unchanged; this gate
+  removes duplicated raw CPU scout work only.
+- Phase 2 mainline audit now distinguishes the remaining reference-health work:
+  once CPU scout rows are reused, P2 becomes calibrated-health resident reuse
+  rather than generic scout/health reuse.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Reference scout/health and mainline-audit focused tests:
+  `10 passed, 74 deselected`.
+- The auto-CUDA-fallback health test now fails if
+  `build_resident_reference_health()` attempts to recompute the CPU scout after
+  the official scout has already fallen back to CPU.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859\candidate_reference_health_reuse`.
+- Evidence root:
+  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859`.
+- `resident_reference_health.json` recorded
+  `cpu_crosscheck.reuse.used=true`,
+  reason `scout_cpu_frame_quality_reused`, and `row_count=64`.
+- GLASS total elapsed: `11.895640000118874 s`.
+- Reference scout: `0.7367958000395447 s`.
+- Reference health: `1.11221730010584 s`.
+- Resident calibration/integration: `9.585057299933396 s`.
+- Resident integration component: `3.2838364000199363 s`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames, and `11898681600` lifecycle source input samples.
+- Resident regression gate versus Gate639: passed, elapsed ratio
+  `0.9757562912341817`, no failed checks.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed with speedup `91.8438184064987x` versus the
+  `1092.541 s` black-box reference.
+- Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859\gate640_mainline_audit.json`,
+  status passed with no failed checks.
+
+Interpretation:
+
+- This is an execution-path improvement, not a report-only gate: a repeated
+  FITS crop read and CPU star-detection pass is removed from the default
+  CUDA-attempt fallback path.
+- Scientific outputs are unchanged: regression and compare gates preserve the
+  Gate639 result.
+- The largest remaining stage is still resident calibration/integration, so
+  the next substantive gate should target that execution path, or the remaining
+  calibrated-reference-health overhead, under `phase2-mainline-audit`.
+
 ### S2-Gate 639: Phase 2 Mainline Audit
 
 Gate639 is a self-audit and framework-completeness gate. It deliberately avoids

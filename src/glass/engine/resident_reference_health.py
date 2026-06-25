@@ -63,6 +63,52 @@ def _frame_quality_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
+def _cpu_crosscheck_from_scout_if_reusable(
+    scout: dict[str, Any],
+    *,
+    scout_path: Path,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    rows = _frame_quality_rows(scout)
+    backend = str(scout.get("catalog_backend") or "").lower()
+    reference_frame_id = str(scout.get("reference_frame_id") or "")
+    if backend != "cpu":
+        return None, {
+            "used": False,
+            "reason": "scout_backend_not_cpu",
+            "scout_backend": backend,
+            "source_artifact": str(scout_path),
+        }
+    if not rows:
+        return None, {
+            "used": False,
+            "reason": "scout_has_no_frame_quality_rows",
+            "scout_backend": backend,
+            "source_artifact": str(scout_path),
+        }
+    if not reference_frame_id:
+        return None, {
+            "used": False,
+            "reason": "scout_missing_reference_frame_id",
+            "scout_backend": backend,
+            "source_artifact": str(scout_path),
+            "row_count": len(rows),
+        }
+    reusable = dict(scout)
+    reusable["artifact_type"] = "resident_reference_health_reused_cpu_crosscheck"
+    reusable["reuse_source_artifact_type"] = scout.get("artifact_type")
+    reusable["reuse_source_path"] = str(scout_path)
+    return reusable, {
+        "used": True,
+        "reason": "scout_cpu_frame_quality_reused",
+        "scout_backend": backend,
+        "source_artifact": str(scout_path),
+        "row_count": len(rows),
+        "reference_frame_id": reference_frame_id,
+        "catalog_backend_requested": scout.get("catalog_backend_requested"),
+        "catalog_backend_resolution": scout.get("catalog_backend_resolution"),
+    }
+
+
 def _plan_frames_by_id(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
     frames = plan.get("frames") if isinstance(plan.get("frames"), list) else []
     return {
@@ -744,16 +790,24 @@ def build_resident_reference_health(
     action = resolve_resident_reference_health_action(requested_action, scout_backend=health_action_backend)
     enabled = action in {"warn", "fail"}
     reference_frame_id = str(scout.get("reference_frame_id") or "")
-    cpu_crosscheck = build_resident_reference_scout(
-        plan_path,
-        run,
-        sample_stride=int(scout.get("sample_stride") or 1),
-        sample_side=int(scout.get("sample_side") or 1),
-        max_frames=int(scout.get("max_frames") or 0),
-        threshold_sigma=float(scout.get("threshold_sigma") or 5.0),
-        max_stars=int(scout.get("max_stars") or 300),
-        catalog_backend="cpu",
-    )
+    cpu_crosscheck, cpu_crosscheck_reuse = _cpu_crosscheck_from_scout_if_reusable(scout, scout_path=scout_path)
+    if cpu_crosscheck is None:
+        cpu_crosscheck = build_resident_reference_scout(
+            plan_path,
+            run,
+            sample_stride=int(scout.get("sample_stride") or 1),
+            sample_side=int(scout.get("sample_side") or 1),
+            max_frames=int(scout.get("max_frames") or 0),
+            threshold_sigma=float(scout.get("threshold_sigma") or 5.0),
+            max_stars=int(scout.get("max_stars") or 300),
+            catalog_backend="cpu",
+        )
+        cpu_crosscheck_reuse = {
+            **cpu_crosscheck_reuse,
+            "fallback_measured": True,
+            "fallback_artifact_type": cpu_crosscheck.get("artifact_type"),
+            "fallback_measured_frame_count": len(_frame_quality_rows(cpu_crosscheck)),
+        }
     cpu_rows = _frame_quality_rows(cpu_crosscheck)
     ranked = sorted(cpu_rows, key=_selection_key, reverse=True)
     cpu_reference_frame_id = str(cpu_crosscheck.get("reference_frame_id") or "")
@@ -873,6 +927,7 @@ def build_resident_reference_health(
             "cpu_reference_star_count": cpu_reference_star_count,
             "selected_cpu_star_ratio": star_ratio,
             "selected_cpu_rank_fraction": rank_fraction,
+            "cpu_crosscheck_reused": bool(cpu_crosscheck_reuse.get("used")),
             "calibrated_available": bool(calibrated.get("available")),
             "calibrated_reference_frame_id": (
                 calibrated.get("summary", {}).get("calibrated_reference_frame_id")
@@ -913,6 +968,7 @@ def build_resident_reference_health(
             "dominant_orientation_key": cpu_crosscheck.get("dominant_orientation_key"),
             "orientation_constraint_applied": cpu_crosscheck.get("orientation_constraint_applied"),
             "measured_frame_count": len(cpu_rows),
+            "reuse": cpu_crosscheck_reuse,
             "top_reference_candidates": [
                 {
                     "frame_id": row.get("frame_id"),

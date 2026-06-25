@@ -1492,6 +1492,14 @@ def test_resident_reference_health_enforces_auto_cuda_attempt_after_cpu_fallback
     _write_reference_health_master_cache(cache_dir)
     monkeypatch.setattr(glass_cuda, "cuda_available", lambda: False)
 
+    def fail_if_cpu_scout_recomputed(*_args, **_kwargs):
+        raise AssertionError("reference health should reuse the CPU fallback scout rows")
+
+    monkeypatch.setattr(
+        "glass.engine.resident_reference_health.build_resident_reference_scout",
+        fail_if_cpu_scout_recomputed,
+    )
+
     health = build_resident_reference_health(plan, run, master_cache_dir=cache_dir, flat_floor=0.05)
 
     assert health["effective_action"] == "fail"
@@ -1501,6 +1509,9 @@ def test_resident_reference_health_enforces_auto_cuda_attempt_after_cpu_fallback
     assert health["blocking"] is False
     assert health["summary"]["reference_frame_id"] == strong_id
     assert health["summary"]["cpu_reference_frame_id"] == strong_id
+    assert health["summary"]["cpu_crosscheck_reused"] is True
+    assert health["cpu_crosscheck"]["reuse"]["used"] is True
+    assert health["cpu_crosscheck"]["reuse"]["reason"] == "scout_cpu_frame_quality_reused"
     assert health["calibrated_crosscheck"]["available"] is True
     assert health["calibrated_crosscheck"]["status"] == "passed"
 
@@ -1638,6 +1649,8 @@ def test_cli_resident_run_writes_reference_health_for_auto_cuda_attempt_fallback
     assert health["effective_action"] == "fail"
     assert health["health_action_backend"] == "cuda"
     assert health["passed"] is True
+    assert health["summary"]["cpu_crosscheck_reused"] is True
+    assert health["cpu_crosscheck"]["reuse"]["used"] is True
     assert "resident_reference_health" in [item["stage"] for item in timing["stages"]]
     assert [item["stage"] for item in timing["stages"][:3]] == [
         "resident_reference_scout",

@@ -200,6 +200,10 @@ def build_phase2_mainline_audit(
     frame_mask_summary = (
         frame_masks.get("summary") if isinstance(frame_masks.get("summary"), dict) else {}
     )
+    reference_health = _json_if_exists(run_root / "resident_reference_health.json")
+    reference_health_summary = (
+        reference_health.get("summary") if isinstance(reference_health.get("summary"), dict) else {}
+    )
     lifecycle = _json_if_exists(run_root / "resident_dq_lifecycle.json")
     lifecycle_summary = (
         lifecycle.get("summary") if isinstance(lifecycle.get("summary"), dict) else {}
@@ -433,6 +437,14 @@ def build_phase2_mainline_audit(
     ]
     failed_checks = [item["name"] for item in checks if not item["passed"]]
 
+    reference_scout_s = timing_state["stages"].get("resident_reference_scout") or 0.0
+    reference_health_s = timing_state["stages"].get("resident_reference_health") or 0.0
+    cpu_crosscheck_reused = reference_health_summary.get("cpu_crosscheck_reused") is True
+    reference_reuse_reason = (
+        "CPU scout rows are reused; calibrated and CUDA-calibrated health still add wall time"
+        if cpu_crosscheck_reused
+        else "reference scout plus calibrated health are correctness gates but add wall time"
+    )
     next_priorities = [
         {
             "priority": 1,
@@ -442,12 +454,20 @@ def build_phase2_mainline_audit(
         },
         {
             "priority": 2,
-            "area": "reference scout/health resident reuse",
-            "reason": "reference scout plus calibrated health are correctness gates but add wall time",
-            "evidence_s": (
-                (timing_state["stages"].get("resident_reference_scout") or 0.0)
-                + (timing_state["stages"].get("resident_reference_health") or 0.0)
+            "area": (
+                "reference calibrated-health resident reuse"
+                if cpu_crosscheck_reused
+                else "reference scout/health resident reuse"
             ),
+            "reason": reference_reuse_reason,
+            "evidence_s": reference_scout_s + reference_health_s,
+            "evidence": {
+                "resident_reference_scout_s": reference_scout_s,
+                "resident_reference_health_s": reference_health_s,
+                "cpu_crosscheck_reused": cpu_crosscheck_reused,
+                "calibrated_available": reference_health_summary.get("calibrated_available"),
+                "cuda_calibrated_available": reference_health_summary.get("cuda_calibrated_available"),
+            },
         },
         {
             "priority": 3,
