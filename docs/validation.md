@@ -527,6 +527,22 @@ Current Phase 2 latest mainline acceptance:
   `3.4165546000003815 s` to `3.0986569999950007 s`; and regression against
   Gate675 passed with elapsed ratio `0.9725103078340935` and failed checks
   `[]`.
+- Gate677 removes the unused device float32 weight-buffer allocation/upload from
+  default unit-positive resident hardened integration routes. The real
+  200-light default run at
+  `C:\glass_runs\phase2_s2_gate677_skip_unused_weights\runs_20260626_120000\default_skip_weights`
+  passed Phase 2 mainline audit with `200` input lights and `193` active
+  frames. The native profile recorded
+  `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`,
+  `native_weight_buffer_required=false`,
+  `native_weight_buffer_device_materialized=false`,
+  `native_weight_buffer_upload_skipped=true`,
+  `native_weight_buffer_uploaded_bytes=0`, and
+  `unit_positive_weight_mask_bytes=200`. Regression against Gate676 passed with
+  no output/artifact/frame-accounting/registration drift and elapsed ratio
+  `1.0394643023337526`; the slowdown was in surrounding
+  `light_read_upload_calibrate` variance, while resident integration stayed
+  essentially flat at `3.3727147999452427 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

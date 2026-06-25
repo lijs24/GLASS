@@ -1409,6 +1409,66 @@ Interpretation:
   redesigned resident order-statistic reducer. Gate676 does not solve the
   remaining native H2D/calibrate and integration costs.
 
+### S2-Gate 677: Skip Unused Unit-Weight Device Buffer
+
+Gate677 returns to the resident hardened winsorized integration wrapper. In the
+default 200-light route, frame weights are unit-positive `0/1` values and the
+Gate668 mask-scan kernel reads the one-byte active-frame mask rather than the
+float32 weight array. Before this gate, the native wrapper still allocated and
+uploaded a device `float32` weight buffer that the selected kernel did not read.
+
+Implementation:
+
+- The native hardened winsorized wrapper now computes
+  `native_weight_buffer_required` before allocation.
+- The device float32 weight buffer is allocated and uploaded only for routes
+  that actually read it: radix-select, local-reuse, or the generic weighted
+  frame-axis scan.
+- Unit-positive active-index and unit-positive mask-scan routes pass a null
+  weight pointer to their template-specialized kernels, which do not dereference
+  it.
+- Native profiles now record
+  `native_weight_buffer_required`,
+  `native_weight_buffer_device_materialized`,
+  `native_weight_buffer_upload_skipped`, and
+  `native_weight_buffer_uploaded_bytes`.
+
+Validation:
+
+- Native CUDA rebuild passed under VS BuildTools/CUDA 13.2.
+- Focused resident hardened CUDA tests passed:
+  `5 passed`, covering active-index, default mask-scan, explicit mask-scan,
+  disabled mask/generic weighted scan, and local-reuse branches.
+- Real 200-light default run:
+  `C:\glass_runs\phase2_s2_gate677_skip_unused_weights\runs_20260626_120000\default_skip_weights`.
+  The native profile recorded `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`,
+  `native_weight_buffer_required=false`,
+  `native_weight_buffer_device_materialized=false`,
+  `native_weight_buffer_upload_skipped=true`,
+  `native_weight_buffer_uploaded_bytes=0`, and
+  `unit_positive_weight_mask_bytes=200`.
+- Final Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate677_skip_unused_weights\runs_20260626_120000\gate677_phase2_mainline_audit.json`.
+  Status passed, failed checks `[]`, input lights `200`, active frames `193`.
+- Regression against Gate676:
+  `C:\glass_runs\phase2_s2_gate677_skip_unused_weights\runs_20260626_120000\gate677_vs_gate676_regression.json`.
+  Status passed with failed checks `[]`, output/artifact/frame-accounting/
+  registration differences `0`, and elapsed ratio `1.0394643023337526`.
+
+Interpretation:
+
+- This is a narrow execution-path cleanup, not a new scientific algorithm and
+  not a claimed major speed gate. It removes an unused device allocation/upload
+  from the current default unit-positive resident integration path.
+- The real run's total time was dominated by normal light read/upload/calibrate
+  variance: `light_read_upload_calibrate` rose from Gate676
+  `3.0986569999950007 s` to `3.6955355999525636 s`, while resident integration
+  was effectively unchanged at `3.3727147999452427 s` versus
+  `3.371088800020516 s`.
+- The next substantive work remains a larger reducer redesign or deeper
+  H2D/calibration overlap. Gate677 just removes a verified no-op transfer from
+  the default route so future profiles are cleaner.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

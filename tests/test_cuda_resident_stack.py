@@ -3337,6 +3337,10 @@ def test_resident_stack_hardened_winsorized_sigma_unit_weight_active_index_match
         timing["native_profile"]["sample_reuse_strategy"]
         == "active_index_global_reread_unit_positive_weights"
     )
+    assert timing["native_profile"]["native_weight_buffer_required"] is False
+    assert timing["native_profile"]["native_weight_buffer_device_materialized"] is False
+    assert timing["native_profile"]["native_weight_buffer_upload_skipped"] is True
+    assert timing["native_profile"]["native_weight_buffer_uploaded_bytes"] == 0
     assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5)
     assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
@@ -3411,6 +3415,10 @@ def test_resident_stack_hardened_winsorized_sigma_unit_weight_default_uses_mask_
         timing["native_profile"]["sample_reuse_strategy"]
         == "frame_mask_global_reread_unit_positive_weights"
     )
+    assert timing["native_profile"]["native_weight_buffer_required"] is False
+    assert timing["native_profile"]["native_weight_buffer_device_materialized"] is False
+    assert timing["native_profile"]["native_weight_buffer_upload_skipped"] is True
+    assert timing["native_profile"]["native_weight_buffer_uploaded_bytes"] == 0
     assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5)
     assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
@@ -3540,6 +3548,10 @@ def test_resident_stack_hardened_winsorized_sigma_unit_weight_mask_scan_auto_is_
     assert profile["unit_positive_weight_mask_default_enabled"] is False
     assert profile["unit_positive_weight_mask_bytes"] == 0
     assert profile["sample_reuse_strategy"] == "global_reread_weighted_samples"
+    assert profile["native_weight_buffer_required"] is True
+    assert profile["native_weight_buffer_device_materialized"] is True
+    assert profile["native_weight_buffer_upload_skipped"] is False
+    assert profile["native_weight_buffer_uploaded_bytes"] == len(frames) * 4
     assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5)
     assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
@@ -3665,6 +3677,10 @@ def test_resident_stack_hardened_winsorized_sigma_unit_weight_local_reuse_matche
         timing["native_profile"]["sample_reuse_strategy"]
         == "local_ordered_reuse_unit_positive_weights"
     )
+    assert timing["native_profile"]["native_weight_buffer_required"] is True
+    assert timing["native_profile"]["native_weight_buffer_device_materialized"] is True
+    assert timing["native_profile"]["native_weight_buffer_upload_skipped"] is False
+    assert timing["native_profile"]["native_weight_buffer_uploaded_bytes"] == len(frames) * 4
     assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5)
     assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)

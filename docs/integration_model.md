@@ -351,6 +351,17 @@ Python result surface, and downloaded arrays/bytes count true D2H traffic.
 Non-unit weights, `float32` count maps, and reduced download modes retain the
 device weight-map route.
 
+S2-Gate 677 removes the matching unused input-weight upload for the same
+default unit-positive resident integration family. When the selected native
+kernel is the unit-positive active-index or unit-positive mask-scan
+specialization, it does not read the float32 `weights` array, so the wrapper now
+skips allocating and uploading that device buffer. Profiles record
+`native_weight_buffer_required`, `native_weight_buffer_device_materialized`,
+`native_weight_buffer_upload_skipped`, and
+`native_weight_buffer_uploaded_bytes`. Radix-select, local-reuse, generic
+weighted scans, non-unit weights, and explicitly disabled mask-scan routes keep
+the device weight buffer because those kernels do read per-frame weights.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

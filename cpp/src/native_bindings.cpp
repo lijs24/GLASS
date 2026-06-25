@@ -12656,6 +12656,13 @@ class ResidentCalibratedStack {
     const std::string native_kernel_capacity_selector = radix_select_enabled
         ? "radix_select_unbounded_positive_samples"
         : (unit_positive_weight_frame_count <= 256 ? "small_256" : "large_512");
+    const bool native_weight_buffer_required =
+        radix_select_enabled || unit_positive_local_reuse_enabled ||
+        (!unit_positive_active_index_enabled && !unit_positive_weight_mask_enabled);
+    const unsigned long long native_weight_buffer_uploaded_bytes =
+        native_weight_buffer_required
+            ? static_cast<unsigned long long>(frame_count_ * sizeof(float))
+            : 0ull;
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     const py::buffer_info master_info = master.request();
@@ -12718,7 +12725,11 @@ class ResidentCalibratedStack {
       unsigned short* d_high_rejection_map = nullptr;
       try {
         const auto allocation_start = Clock::now();
-        check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(resident hardened winsor weights)");
+        if (native_weight_buffer_required) {
+          check_cuda(
+              cudaMalloc(&d_weights, frame_count_ * sizeof(float)),
+              "cudaMalloc(resident hardened winsor weights)");
+        }
         if (unit_positive_active_index_enabled && unit_positive_active_frame_count > 0) {
           check_cuda(
               cudaMalloc(
@@ -12752,9 +12763,11 @@ class ResidentCalibratedStack {
         }
         allocation_s = seconds_since(allocation_start);
         const auto weights_upload_start = Clock::now();
-        check_cuda(
-            cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
-            "cudaMemcpy(resident hardened winsor weights)");
+        if (d_weights != nullptr) {
+          check_cuda(
+              cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
+              "cudaMemcpy(resident hardened winsor weights)");
+        }
         if (d_unit_positive_frame_indices != nullptr) {
           check_cuda(
               cudaMemcpy(
@@ -12929,6 +12942,10 @@ class ResidentCalibratedStack {
         profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;
         profile_info["unit_positive_weight_mask_bytes"] =
             static_cast<unsigned long long>(unit_positive_frame_mask.size());
+        profile_info["native_weight_buffer_required"] = native_weight_buffer_required;
+        profile_info["native_weight_buffer_device_materialized"] = d_weights != nullptr;
+        profile_info["native_weight_buffer_upload_skipped"] = !native_weight_buffer_required;
+        profile_info["native_weight_buffer_uploaded_bytes"] = native_weight_buffer_uploaded_bytes;
         profile_info["allocation_s"] = allocation_s;
         profile_info["weights_upload_s"] = weights_upload_s;
         profile_info["kernel_sync_s"] = kernel_sync_s;
@@ -12999,7 +13016,11 @@ class ResidentCalibratedStack {
     float* d_high_rejection_map = nullptr;
     try {
       const auto allocation_start = Clock::now();
-      check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(resident hardened winsor weights)");
+      if (native_weight_buffer_required) {
+        check_cuda(
+            cudaMalloc(&d_weights, frame_count_ * sizeof(float)),
+            "cudaMalloc(resident hardened winsor weights)");
+      }
       if (unit_positive_active_index_enabled && unit_positive_active_frame_count > 0) {
         check_cuda(
             cudaMalloc(
@@ -13033,9 +13054,11 @@ class ResidentCalibratedStack {
       }
       allocation_s = seconds_since(allocation_start);
       const auto weights_upload_start = Clock::now();
-      check_cuda(
-          cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
-          "cudaMemcpy(resident hardened winsor weights)");
+      if (d_weights != nullptr) {
+        check_cuda(
+            cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
+            "cudaMemcpy(resident hardened winsor weights)");
+      }
       if (d_unit_positive_frame_indices != nullptr) {
         check_cuda(
             cudaMemcpy(
@@ -13202,6 +13225,10 @@ class ResidentCalibratedStack {
       profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;
       profile_info["unit_positive_weight_mask_bytes"] =
           static_cast<unsigned long long>(unit_positive_frame_mask.size());
+      profile_info["native_weight_buffer_required"] = native_weight_buffer_required;
+      profile_info["native_weight_buffer_device_materialized"] = d_weights != nullptr;
+      profile_info["native_weight_buffer_upload_skipped"] = !native_weight_buffer_required;
+      profile_info["native_weight_buffer_uploaded_bytes"] = native_weight_buffer_uploaded_bytes;
       profile_info["allocation_s"] = allocation_s;
       profile_info["weights_upload_s"] = weights_upload_s;
       profile_info["kernel_sync_s"] = kernel_sync_s;
