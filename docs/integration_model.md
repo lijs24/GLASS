@@ -482,6 +482,19 @@ byte-identical master, weight, coverage, low-rejection, high-rejection, and DQ
 maps versus Gate684; this is telemetry hardening only, not a change to
 calibration or integration math.
 
+S2-Gate 686 adds an exact early-disallow optimization to the resident hardened
+winsorized CUDA rejection-counting pass. The existing coverage guard allows
+rejection only when remaining samples stay above `rejection_min_samples` and
+the rejected fraction stays at or below `rejection_max_fraction`. The CUDA
+kernel now stops counting candidate low/high rejections as soon as the partial
+count has already violated one of those conditions; final accumulation then
+uses the same no-rejection path that a full count would have selected. Native
+profiles record `rejection_guard_early_disallow_enabled=true` and the guard
+model. The real 200-light Gate686 run produced byte-identical master, weight,
+coverage, low-rejection, high-rejection, and DQ maps versus Gate685 while
+reducing resident integration from `3.3138477000175044 s` to
+`3.2561724999686703 s` in the recorded run.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

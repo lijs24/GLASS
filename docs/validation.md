@@ -663,6 +663,17 @@ Current Phase 2 latest mainline acceptance:
   `1.0662535290171555` versus Gate684. Direct SHA256 and array comparisons
   showed byte-identical and array-identical master, weight, coverage,
   low-rejection, high-rejection, and DQ maps.
+- Gate686 adds exact early-disallow logic to the resident hardened winsorized
+  CUDA rejection-counting pass. The real 200-light run at
+  `C:\glass_runs\phase2_s2_gate686_rejection_guard_early_disallow\runs_20260626_231500\default_early_disallow`
+  recorded `rejection_guard_early_disallow_enabled=true`, native kernel sync
+  `3.1232872 s`, resident integration `3.2561724999686703 s`, and total
+  elapsed `12.344183000386693 s`. Runtime compare selected Gate686 over
+  Gate685 (`12.43947100022342 s`), elapsed ratio `0.9923398671989334`.
+  Phase 2 mainline and regression gates passed with failed checks `[]`, input
+  lights `200`, and active/masked frames `193 / 7`. Direct SHA256 and array
+  comparisons showed byte-identical and array-identical master, weight,
+  coverage, low-rejection, high-rejection, and DQ maps.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

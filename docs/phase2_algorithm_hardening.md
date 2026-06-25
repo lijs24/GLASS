@@ -2094,6 +2094,90 @@ Interpretation:
   integration kernel time, or moving more registration/warp orchestration into
   batched resident CUDA.
 
+### S2-Gate 686: Hardened Rejection Guard Early-Disallow
+
+Gate686 returns to the resident hardened winsorized integration kernel. The
+default real 200-light route uses `winsorized_sigma` with
+`max_reject_fraction=0.015`; with `193` active frames, any pixel with more than
+two candidate low/high rejections is guaranteed to have rejection disabled by
+the existing coverage guard. Before this gate, the CUDA kernel still scanned
+the rest of the frame axis to count rejections that would be discarded. Gate686
+adds an exact early-disallow break in that rejection-counting loop.
+
+Implementation:
+
+- Added a device helper that checks the same two conditions used by the final
+  rejection guard:
+  - remaining samples must stay at or above `min_samples`;
+  - rejected fraction must stay at or below `max_reject_fraction`.
+- During the low/high rejection-count pass, the kernel now breaks as soon as
+  the partial candidate count already violates either condition.
+- If the early guard trips, `allow_rejection` is forced false and the final
+  accumulation includes all finite valid samples, exactly as the full count
+  would have done after the guard rejected the proposal.
+- The optimization applies to the existing resident hardened CUDA branches,
+  including unit-positive mask-scan, active-index, local-reuse, selected-reuse,
+  and weighted fallbacks.
+- Native profiles now record:
+  - `rejection_guard_early_disallow_enabled=true`;
+  - `rejection_guard_early_disallow_model=
+    break_reject_count_when_fraction_or_min_samples_already_fails`.
+
+Validation:
+
+- Native CUDA extension build:
+  `cmake --build build --target _glass_cuda_native --config Release` under the
+  Visual Studio 2022 developer environment.
+- Focused CUDA hardened winsorized tests:
+  `20 passed, 57 deselected in 4.04 s`.
+- Focused resident CLI hardened tests:
+  `2 passed in 4.42 s`.
+- Ruff on touched Python tests passed.
+- Full pytest passed:
+  `1426 passed in 66.19 s`.
+- Real 200-light default candidate:
+  `C:\glass_runs\phase2_s2_gate686_rejection_guard_early_disallow\runs_20260626_231500\default_early_disallow`.
+- Runtime compare:
+  `C:\glass_runs\phase2_s2_gate686_rejection_guard_early_disallow\gate686_runtime_compare.json`.
+  Gate686 was best observed at `12.344183000386693 s` versus Gate685
+  `12.43947100022342 s`.
+- Regression gate versus Gate685 passed:
+  `C:\glass_runs\phase2_s2_gate686_rejection_guard_early_disallow\gate686_regression_gate.json`.
+  Failed checks `[]`, elapsed ratio `0.9923398671989334`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate686_rejection_guard_early_disallow\gate686_mainline_audit.json`.
+  Failed checks `[]`, input lights `200`, active frames `193`.
+- Direct FITS SHA256 and array comparisons against Gate685 passed:
+  `C:\glass_runs\phase2_s2_gate686_rejection_guard_early_disallow\gate686_output_hash_compare.json`;
+  `C:\glass_runs\phase2_s2_gate686_rejection_guard_early_disallow\gate686_output_array_compare.json`.
+  Master, weight, coverage, low-rejection, high-rejection, and DQ maps were
+  byte-identical and array-identical.
+
+Timing and telemetry:
+
+- Gate685 baseline:
+  - total elapsed `12.43947100022342 s`;
+  - resident integration `3.3138477000175044 s`;
+  - native hardened total `3.3137761999387294 s`;
+  - native kernel sync `3.1937153 s`.
+- Gate686 candidate:
+  - total elapsed `12.344183000386693 s`;
+  - resident integration `3.2561724999686703 s`;
+  - native hardened total `3.256090199924074 s`;
+  - native kernel sync `3.1232872 s`;
+  - `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`;
+  - `rejection_guard_early_disallow_enabled=true`.
+
+Interpretation:
+
+- This is a small but real default-path CUDA kernel optimization with exact
+  output parity on the 200-light benchmark.
+- The gain is modest because the dominant kernel still performs per-pixel
+  median/IQR selection and several frame-axis passes.
+- The next larger integration target remains a deterministic cooperative or
+  segmented order-statistic reducer that reduces per-thread local-memory
+  pressure and global frame-axis rescans without changing CPU-baseline parity.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

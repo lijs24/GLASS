@@ -2143,6 +2143,22 @@ struct GlassOrderedSampleStore<CountT, MaxFrames, true> {
   __device__ float get(int index) const { return values[index]; }
 };
 
+__device__ bool glass_hardened_rejection_guard_disallowed(
+    int reject_count,
+    int sample_count,
+    int minimum_samples,
+    float max_reject_fraction) {
+  if (reject_count <= 0 || sample_count <= 0) {
+    return false;
+  }
+  if ((sample_count - reject_count) < minimum_samples) {
+    return true;
+  }
+  const float reject_fraction =
+      static_cast<float>(reject_count) / static_cast<float>(sample_count);
+  return reject_fraction > max_reject_fraction;
+}
+
 template <
     typename CountT,
     int MaxFrames,
@@ -2403,8 +2419,10 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   const float low_threshold = winsor_mean - low_sigma * scale;
   const float high_threshold = winsor_mean + high_sigma * scale;
 
+  const int minimum_samples = min_samples < 1 ? 1 : min_samples;
   int low_reject_count = 0;
   int high_reject_count = 0;
+  bool rejection_guard_disallowed = false;
   if (scale > 0.0f) {
     if (ReuseLocalUnitSamples || ReuseSelectedUnitSamples) {
       for (int i = 0; i < count; ++i) {
@@ -2413,6 +2431,14 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
           ++low_reject_count;
         } else if (value > high_threshold) {
           ++high_reject_count;
+        }
+        if (glass_hardened_rejection_guard_disallowed(
+                low_reject_count + high_reject_count,
+                count,
+                minimum_samples,
+                max_reject_fraction)) {
+          rejection_guard_disallowed = true;
+          break;
         }
       }
     } else if (UnitPositiveWeights || UnitPositiveWeightMask) {
@@ -2432,6 +2458,14 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
         } else if (value > high_threshold) {
           ++high_reject_count;
         }
+        if (glass_hardened_rejection_guard_disallowed(
+                low_reject_count + high_reject_count,
+                count,
+                minimum_samples,
+                max_reject_fraction)) {
+          rejection_guard_disallowed = true;
+          break;
+        }
       }
     } else {
       for (std::size_t frame = 0; frame < frame_count; ++frame) {
@@ -2448,14 +2482,22 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
         } else if (value > high_threshold) {
           ++high_reject_count;
         }
+        if (glass_hardened_rejection_guard_disallowed(
+                low_reject_count + high_reject_count,
+                count,
+                minimum_samples,
+                max_reject_fraction)) {
+          rejection_guard_disallowed = true;
+          break;
+        }
       }
     }
   }
   const int reject_count = low_reject_count + high_reject_count;
-  const int minimum_samples = min_samples < 1 ? 1 : min_samples;
   const float reject_fraction =
       count > 0 ? static_cast<float>(reject_count) / static_cast<float>(count) : 0.0f;
   const bool allow_rejection =
+      !rejection_guard_disallowed &&
       reject_count > 0 &&
       (count - reject_count) >= minimum_samples &&
       reject_fraction <= max_reject_fraction;
