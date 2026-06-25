@@ -149,6 +149,14 @@ Current Phase 2 latest mainline acceptance:
   Latest evidence records `sample_input_cache_hits=64`,
   `sample_input_cache_misses=64`, `sample_input_cache_stored_bytes=9437184`,
   and a resident reference-health stage time of `0.4174907000269741 s`.
+- Gate645 adds resident-specific resume preflight for the same real 200-light
+  run. `glass resume --run
+  C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\candidate_sample_reuse_strict`
+  returned exit code `0` with `resume_action=noop_complete`, wrote
+  `resident_resume_preflight.json`, checked `16` expected resident artifacts,
+  found `0` missing artifacts, and did not repeat pipeline stages. Incomplete
+  resident runs are now blocked from silently falling through to the legacy
+  CPU/tile resume path.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared

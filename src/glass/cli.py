@@ -53,6 +53,10 @@ from glass.engine.resident_registration_health import (
     build_resident_registration_health,
     resolve_resident_registration_health_action,
 )
+from glass.engine.resident_resume import (
+    is_resident_run,
+    write_resident_resume_preflight,
+)
 from glass.engine.resident_source_dq_strategy import build_resident_source_dq_strategy
 from glass.engine.warp import warp_registered_frames
 from glass.engine.resume import resume_summary
@@ -2120,6 +2124,90 @@ def _write_failed_run_state(run: Path, state, stage: str, exc: Exception) -> Non
     write_run_state(run, state)
 
 
+def _write_resident_resume_failed_state(run: Path, preflight: dict[str, Any]) -> None:
+    state_path = run / "run_state.json"
+    if state_path.exists():
+        state = read_json(state_path)
+        if not isinstance(state, dict):
+            state = {}
+    else:
+        state = {
+            "run_id": run.name or "glass-run",
+            "created_at": now_iso(),
+            "completed_stages": [],
+            "artifacts": [],
+            "checksums": {},
+            "warnings": [],
+            "errors": [],
+        }
+    state["current_stage"] = "resident_resume"
+    state["failed_stage"] = "resident_resume"
+    state["resume_supported"] = False
+    errors = state.setdefault("errors", [])
+    if isinstance(errors, list):
+        reason = str(preflight.get("reason") or "resident resume preflight failed")
+        if reason not in errors:
+            errors.append(reason)
+    artifacts = state.setdefault("artifacts", [])
+    if isinstance(artifacts, list):
+        preflight_path = str(run / "resident_resume_preflight.json")
+        if not any(
+            isinstance(item, dict) and item.get("path") == preflight_path for item in artifacts
+        ):
+            artifacts.append(
+                {
+                    "stage": "resident_resume",
+                    "path": preflight_path,
+                    "format": "json",
+                    "created_at": now_iso(),
+                    "source_frames": [],
+                    "checksum_optional": None,
+                }
+            )
+    write_json(state_path, state)
+
+
+def _write_resident_resume_success_state(run: Path) -> None:
+    state_path = run / "run_state.json"
+    if state_path.exists():
+        state = read_json(state_path)
+        if not isinstance(state, dict):
+            state = {}
+    else:
+        state = {
+            "run_id": run.name or "glass-run",
+            "created_at": now_iso(),
+            "current_stage": "resident_resume",
+            "completed_stages": [],
+            "failed_stage": None,
+            "artifacts": [],
+            "checksums": {},
+            "warnings": [],
+            "errors": [],
+        }
+    state["resume_supported"] = True
+    completed = state.setdefault("completed_stages", [])
+    if isinstance(completed, list) and "resident_resume" not in completed:
+        completed.append("resident_resume")
+    artifacts = state.setdefault("artifacts", [])
+    if isinstance(artifacts, list):
+        preflight_path = str(run / "resident_resume_preflight.json")
+        if not any(
+            isinstance(item, dict) and item.get("path") == preflight_path for item in artifacts
+        ):
+            artifacts.append(
+                {
+                    "stage": "resident_resume",
+                    "path": preflight_path,
+                    "format": "json",
+                    "created_at": now_iso(),
+                    "source_frames": [],
+                    "checksum_optional": None,
+                }
+            )
+    write_json(state_path, state)
+
+
 def _write_run_report(
     run: Path,
     report_path: Path,
@@ -3110,6 +3198,33 @@ def cmd_resume(args: argparse.Namespace) -> int:
     run = Path(args.run)
     plan_path = run / "processing_plan.json"
     manifest_path = run / "manifest.json"
+    if is_resident_run(run):
+        preflight_path = write_resident_resume_preflight(run)
+        preflight = read_json(preflight_path)
+        if preflight.get("passed") is True:
+            _write_resident_resume_success_state(run)
+            console.print(resume_summary(args.run))
+            console.print(
+                {
+                    "status": "ok",
+                    "stage": "resident_resume",
+                    "action": preflight.get("resume_action"),
+                    "preflight": str(preflight_path),
+                }
+            )
+            console.print("Resident CUDA run already has complete artifacts; no stages repeated.")
+            return 0
+        _write_resident_resume_failed_state(run, preflight)
+        console.print(
+            {
+                "status": "failed",
+                "stage": "resident_resume",
+                "action": preflight.get("resume_action"),
+                "reason": preflight.get("reason"),
+                "preflight": str(preflight_path),
+            }
+        )
+        return 2
     if (run / "integration_results.json").exists():
         console.print(resume_summary(args.run))
         console.print("Run already has integration_results.json; no stages repeated.")

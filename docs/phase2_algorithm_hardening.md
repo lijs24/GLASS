@@ -801,6 +801,63 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 645: Resident Resume Preflight
+
+Gate645 is a mainline framework hardening gate. The resident CUDA path already
+produced strong 200-light results, but `glass resume` still had a dangerous
+framework gap: an interrupted resident run could fall through to the older
+CPU/tile resume path. That would be the wrong execution model for the Phase 2
+mainline. Gate645 adds a resident-specific resume preflight so completed
+resident runs are safely treated as no-op resumes, while incomplete or damaged
+resident runs are blocked with an auditable diagnostic instead of silently
+switching engines.
+
+Implementation:
+
+- Added `src/glass/engine/resident_resume.py`.
+- Resident runs are detected from `run_timing.json` memory mode/stages and, as a
+  fallback, resident stages recorded in `run_state.json`.
+- `resident_resume_preflight.json` records completed resident timing stages,
+  expected artifacts for those stages, missing artifacts, integration-complete
+  status, failed-stage status, and the selected resume action.
+- `glass resume` now routes resident runs through the resident preflight before
+  the legacy CPU/tile resume path.
+- Complete resident runs return success with `resume_action=noop_complete`, do
+  not repeat stages, and append the resume preflight artifact to `run_state.json`.
+- Incomplete, failed, or artifact-incomplete resident runs return exit code `2`,
+  write `run_state.json` with `failed_stage=resident_resume`, and preserve the
+  diagnostic artifact.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Resident resume focused tests: `2 passed`.
+
+Real 200-light validation:
+
+- Run reused for real validation:
+  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\candidate_sample_reuse_strict`.
+- Command:
+  `glass resume --run C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\candidate_sample_reuse_strict`.
+- Result: exit code `0`, `resume_action=noop_complete`, no stages repeated.
+- Preflight artifact:
+  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\candidate_sample_reuse_strict\resident_resume_preflight.json`.
+- Preflight summary: resident run true, completed timing stages `11`, expected
+  artifacts `16`, missing artifacts `0`, integration complete true,
+  memory mode `resident`.
+- `run_state.json` now records `resident_resume` in completed stages and includes
+  the `resident_resume_preflight.json` artifact.
+
+Interpretation:
+
+- This gate advances the whole-pipeline engineering model rather than local
+  algorithm tuning.
+- Resident CUDA resume now has a clear safety boundary: no silent CPU/tile
+  fallback for interrupted resident runs.
+- The next substantive gate should continue along this axis by making resident
+  partial-stage resume/re-entry explicit, or by moving the dominant
+  resident_calibration_integration stage behind the same stage-ledger semantics.
+
 ### S2-Gate 644: Reference Health Sample Input Reuse
 
 Gate644 moves back from postcondition hardening into execution work. The
