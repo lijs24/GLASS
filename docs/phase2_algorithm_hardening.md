@@ -801,6 +801,83 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 659: Conservative Cosmetic CUDA Source-DQ Policy Profile
+
+Gate659 takes the Gate658 inline cosmetic CUDA source-DQ path from a manually
+chosen diagnostic threshold to an explicit policy profile. Gate658 proved that
+the resident CUDA detector can generate and apply real source-DQ samples on the
+200-light M38 run, but the `0.02` guard invalidated millions of samples and
+produced a visible master drift. Gate659 adds a conservative profile that still
+produces positive source-DQ evidence while reducing policy drift substantially.
+
+Implementation:
+
+- Added `--resident-inline-source-dq-policy` to `glass run` and `glass audit`.
+- Profiles:
+  - `default`: `0.0001`, preserving the previous safest guard behavior;
+  - `conservative`: `0.0003`, selected from the real 200-light guard sweep;
+  - `diagnostic`: `0.02`, matching the high-coverage Gate658 impact study.
+- `--resident-inline-source-dq-max-invalid-fraction` remains an explicit
+  override and records `source=explicit_fraction`.
+- `run_timing.json`, `resident_source_dq_strategy.json`, and
+  `resident_artifacts.json` now record the selected policy and effective guard.
+- Added focused CLI tests for policy resolution and explicit override behavior.
+
+Real 200-light policy sweep:
+
+- `0.001`: passed strict inline cosmetic CUDA scope, applied `140 / 200`
+  frames, invalidated `5118176` all-frame samples, RMS versus Gate656 default
+  `2.761208205607273`, p99 absolute difference `8.372343616485594`.
+- `0.0005`: passed strict inline cosmetic CUDA scope, applied `47 / 200`
+  frames, invalidated `1142686` all-frame samples, RMS `0.8960583565176917`,
+  p99 absolute difference `2.4001502990722656`.
+- `0.0003`: passed strict inline cosmetic CUDA scope, applied `10 / 200`
+  frames, invalidated `147179` all-frame samples, RMS `0.5331775153760971`,
+  p99 absolute difference `1.2427406311035156`.
+
+Green conservative profile validation:
+
+- Green run:
+  `C:\glass_runs\phase2_s2_gate659_conservative_cosmetic_cuda\runs_20260625_220000\inline_cosmetic_cuda_conservative_policy_strict`.
+- Command used `--resident-inline-source-dq cosmetic_cuda` and
+  `--resident-inline-source-dq-policy conservative` without a manual
+  `--resident-inline-source-dq-max-invalid-fraction`.
+- Effective policy evidence:
+  `policy=conservative`, `source=policy_default`, and
+  `max_invalid_fraction=0.0003` in timing, strategy, and resident artifacts.
+- `resident_mainline_framework.json`: passed with
+  `framework_scope=inline_cosmetic_cuda_positive`.
+- `phase2-mainline-audit --fail-on-not-green`: passed with `200` lights,
+  `193` active frames, and `7` masked frames.
+- GLASS elapsed time: `18.47093429986853 s`, about `59.15x` faster than the
+  `1092.541 s` black-box timing.
+- Source-DQ counts:
+  `input_invalid_samples_before_rejection=147180`,
+  `all_frame_input_invalid_samples_before_frame_mask=147180`,
+  `applied_frame_count=10`, and `skipped_high_invalid_fraction=190`.
+
+Result comparison:
+
+- Compared Gate659 conservative profile master against Gate656 default master
+  with coverage >= `190`.
+- Shape match: true.
+- Compared pixels: `60105945`.
+- Coverage fraction: `0.9749355243693554`.
+- Absolute difference p50/p90/p99:
+  `0.0345001220703125` / `0.17724990844726562` /
+  `1.2427406311035156`.
+- RMS difference: `0.5331775153760971`.
+- Relative RMS difference: `0.0016775947037267229`.
+
+Interpretation:
+
+- Gate659 does not promote cosmetic CUDA source-DQ to the default science route.
+- It provides a named, auditable, real-data-validated profile that keeps
+  positive source-DQ execution while reducing Gate658 policy drift by about
+  `88%` by RMS.
+- The next substantive algorithm gate should protect stars directly, rather
+  than relying only on a per-frame high-fraction guard.
+
 ### S2-Gate 658: Real Inline Cosmetic CUDA Source-DQ Mainline Scope
 
 Gate658 turns the opt-in `cosmetic_cuda` resident source-DQ route into a real

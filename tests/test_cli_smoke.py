@@ -10,6 +10,7 @@ from glass.cli import _apply_resident_runtime_preset
 from glass.cli import _resolve_execution_defaults
 from glass.cli import _resolve_resident_integration_rejection_default
 from glass.cli import _resolve_resident_fits_read_mode_default
+from glass.cli import _resolve_resident_inline_source_dq_policy
 from glass.cli import _resolve_resident_local_normalization_default
 from glass.cli import _resolve_resident_registration_default
 from glass.cli import _resolve_resident_warp_interpolation_default
@@ -641,6 +642,54 @@ def test_run_resident_registration_explicit_off_is_preserved() -> None:
     assert resolution["requested"] == "off"
     assert resolution["effective"] == "off"
     assert resolution["explicit"] is True
+
+
+def test_run_resident_inline_source_dq_policy_conservative_sets_guard() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-inline-source-dq",
+            "cosmetic_cuda",
+            "--resident-inline-source-dq-policy",
+            "conservative",
+        ]
+    )
+
+    resolution = _resolve_resident_inline_source_dq_policy(args)
+
+    assert args.resident_inline_source_dq_max_invalid_fraction == pytest.approx(0.0003)
+    assert resolution["policy"] == "conservative"
+    assert resolution["source"] == "policy_default"
+    assert resolution["policy_default_max_invalid_fraction"] == pytest.approx(0.0003)
+
+
+def test_run_resident_inline_source_dq_explicit_fraction_overrides_policy() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-inline-source-dq",
+            "cosmetic_cuda",
+            "--resident-inline-source-dq-policy",
+            "conservative",
+            "--resident-inline-source-dq-max-invalid-fraction",
+            "0.001",
+        ]
+    )
+
+    resolution = _resolve_resident_inline_source_dq_policy(args)
+
+    assert args.resident_inline_source_dq_max_invalid_fraction == pytest.approx(0.001)
+    assert resolution["policy"] == "conservative"
+    assert resolution["source"] == "explicit_fraction"
+    assert resolution["policy_default_max_invalid_fraction"] == pytest.approx(0.0003)
 
 
 def test_run_resident_registration_auto_keeps_tile_path_off() -> None:

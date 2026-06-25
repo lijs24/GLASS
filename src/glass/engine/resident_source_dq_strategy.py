@@ -58,6 +58,7 @@ def build_resident_source_dq_strategy(
     resident_mask_batch_frames: int = 1,
     resident_memory_budget_bytes: int | None = None,
     resident_inline_source_dq: str = "off",
+    resident_inline_source_dq_policy: str = "default",
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
@@ -151,6 +152,7 @@ def build_resident_source_dq_strategy(
     inline_source_dq = {
         "mode": str(resident_inline_source_dq),
         "enabled": str(resident_inline_source_dq) != "off",
+        "policy": str(resident_inline_source_dq_policy),
         "detector": (
             "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
             if str(resident_inline_source_dq) == "cosmetic_cuda"

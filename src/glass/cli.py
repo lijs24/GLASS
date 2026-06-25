@@ -343,6 +343,13 @@ from glass.models import PipelineArtifact, now_iso
 
 console = Console()
 
+DEFAULT_RESIDENT_INLINE_SOURCE_DQ_POLICY = "default"
+RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS = {
+    "default": 0.0001,
+    "conservative": 0.0003,
+    "diagnostic": 0.02,
+}
+
 
 class RegistrationAdmissionBlocked(RuntimeError):
     """Raised when registration policy blocks the selected reference frame."""
@@ -949,6 +956,39 @@ def _resolve_execution_defaults(
     return resolution
 
 
+def _resolve_resident_inline_source_dq_policy(args: argparse.Namespace) -> dict[str, object]:
+    policy = str(
+        getattr(args, "resident_inline_source_dq_policy", DEFAULT_RESIDENT_INLINE_SOURCE_DQ_POLICY)
+        or DEFAULT_RESIDENT_INLINE_SOURCE_DQ_POLICY
+    )
+    if policy not in RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS:
+        choices = ", ".join(sorted(RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS))
+        raise ValueError(f"resident_inline_source_dq_policy must be one of: {choices}")
+    explicit_fraction = getattr(args, "resident_inline_source_dq_max_invalid_fraction", None)
+    if explicit_fraction is None:
+        fraction = RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS[policy]
+        source = "policy_default"
+    else:
+        fraction = float(explicit_fraction)
+        source = "explicit_fraction"
+    if fraction < 0.0:
+        raise ValueError("resident_inline_source_dq_max_invalid_fraction must be non-negative")
+    args.resident_inline_source_dq_policy = policy
+    args.resident_inline_source_dq_max_invalid_fraction = float(fraction)
+    resolution = {
+        "schema_version": 1,
+        "policy": policy,
+        "source": source,
+        "max_invalid_fraction": float(fraction),
+        "policy_default_max_invalid_fraction": float(
+            RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS[policy]
+        ),
+        "available_policies": dict(RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS),
+    }
+    args._resident_inline_source_dq_policy_effective = resolution
+    return resolution
+
+
 def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) -> None:
     resolution = getattr(args, "_execution_default_resolution", None)
     if isinstance(resolution, dict):
@@ -997,9 +1037,15 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     timing["resident_master_cache_dir"] = getattr(args, "resident_master_cache_dir", None)
     timing["resident_source_dq_cache"] = getattr(args, "resident_source_dq_cache", "off")
     timing["resident_inline_source_dq"] = getattr(args, "resident_inline_source_dq", "off")
+    timing["resident_inline_source_dq_policy"] = getattr(
+        args, "resident_inline_source_dq_policy", DEFAULT_RESIDENT_INLINE_SOURCE_DQ_POLICY
+    )
     timing["resident_inline_source_dq_max_invalid_fraction"] = getattr(
         args, "resident_inline_source_dq_max_invalid_fraction", None
     )
+    policy_resolution = getattr(args, "_resident_inline_source_dq_policy_effective", None)
+    if isinstance(policy_resolution, dict):
+        timing["resident_inline_source_dq_policy_effective"] = policy_resolution
     preset = getattr(args, "_resident_runtime_preset_effective", None)
     if isinstance(preset, dict):
         timing["resident_runtime_preset_effective"] = preset
@@ -1680,6 +1726,11 @@ def _write_resident_source_dq_strategy(
         resident_mask_batch_frames=max(1, int(getattr(args, "resident_calibration_batch_frames", 1) or 1)),
         resident_memory_budget_bytes=memory_budget_bytes,
         resident_inline_source_dq=getattr(args, "resident_inline_source_dq", "off"),
+        resident_inline_source_dq_policy=getattr(
+            args,
+            "resident_inline_source_dq_policy",
+            DEFAULT_RESIDENT_INLINE_SOURCE_DQ_POLICY,
+        ),
         resident_inline_source_dq_hot_sigma=getattr(args, "resident_inline_source_dq_hot_sigma", 8.0),
         resident_inline_source_dq_cold_sigma=getattr(args, "resident_inline_source_dq_cold_sigma", 8.0),
         resident_inline_source_dq_max_invalid_fraction=getattr(
@@ -2931,6 +2982,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     _resolve_resident_integration_rejection_default(args, command="audit")
     _resolve_resident_local_normalization_default(args, command="audit")
     _resolve_resident_warp_interpolation_default(args, command="audit")
+    _resolve_resident_inline_source_dq_policy(args)
     _write_run_command(out, args)
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
@@ -3075,6 +3127,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_master_cache_policy=args.resident_master_cache_policy,
                 resident_output_maps=args.resident_output_maps,
                 resident_inline_source_dq=args.resident_inline_source_dq,
+                resident_inline_source_dq_policy=args.resident_inline_source_dq_policy,
                 resident_inline_source_dq_hot_sigma=args.resident_inline_source_dq_hot_sigma,
                 resident_inline_source_dq_cold_sigma=args.resident_inline_source_dq_cold_sigma,
                 resident_inline_source_dq_max_invalid_fraction=(
@@ -3195,6 +3248,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     _resolve_resident_integration_rejection_default(args, command="run")
     _resolve_resident_local_normalization_default(args, command="run")
     _resolve_resident_warp_interpolation_default(args, command="run")
+    _resolve_resident_inline_source_dq_policy(args)
     _seed_run_inputs(Path(args.out), args.plan)
     _write_run_command(Path(args.out), args)
     if args.memory_mode == "resident":
@@ -3368,6 +3422,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_master_cache_policy=args.resident_master_cache_policy,
                 resident_output_maps=args.resident_output_maps,
                 resident_inline_source_dq=args.resident_inline_source_dq,
+                resident_inline_source_dq_policy=args.resident_inline_source_dq_policy,
                 resident_inline_source_dq_hot_sigma=args.resident_inline_source_dq_hot_sigma,
                 resident_inline_source_dq_cold_sigma=args.resident_inline_source_dq_cold_sigma,
                 resident_inline_source_dq_max_invalid_fraction=(
@@ -7024,12 +7079,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="cold-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_cuda",
     )
     run.add_argument(
+        "--resident-inline-source-dq-policy",
+        choices=sorted(RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS),
+        default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_POLICY,
+        help=(
+            "cosmetic_cuda high-fraction guard profile: default is safest, conservative "
+            "allows a small positive real-data DQ signal, diagnostic is for impact studies"
+        ),
+    )
+    run.add_argument(
         "--resident-inline-source-dq-max-invalid-fraction",
         type=float,
-        default=0.0001,
+        default=None,
         help=(
             "for cosmetic_cuda, skip applying a threshold mask to any frame when the count-only "
-            "preflight would invalidate more than this fraction of samples; set 0 to disable"
+            "preflight would invalidate more than this fraction of samples; overrides "
+            "--resident-inline-source-dq-policy; set 0 to disable"
         ),
     )
     run.add_argument(
@@ -7711,12 +7776,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="cold-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_cuda mode",
     )
     audit.add_argument(
+        "--resident-inline-source-dq-policy",
+        choices=sorted(RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS),
+        default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_POLICY,
+        help=(
+            "cosmetic_cuda high-fraction guard profile for audit: default is safest, conservative "
+            "allows a small positive real-data DQ signal, diagnostic is for impact studies"
+        ),
+    )
+    audit.add_argument(
         "--resident-inline-source-dq-max-invalid-fraction",
         type=float,
-        default=0.0001,
+        default=None,
         help=(
             "for cosmetic_cuda audit runs, skip applying a threshold mask to any frame when the "
-            "count-only preflight would invalidate more than this fraction of samples; set 0 to disable"
+            "count-only preflight would invalidate more than this fraction of samples; overrides "
+            "--resident-inline-source-dq-policy; set 0 to disable"
         ),
     )
     audit.add_argument(

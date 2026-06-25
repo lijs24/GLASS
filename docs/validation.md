@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 658.
+- Gate: S2-Gate 659.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate658_inline_cosmetic_cuda_real\runs_20260625_214737`.
+  `C:\glass_runs\phase2_s2_gate659_conservative_cosmetic_cuda\runs_20260625_220000`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate658_inline_cosmetic_cuda_real\runs_20260625_214737\inline_cosmetic_cuda_positive_strict_green`.
-- GLASS elapsed time: `18.911628100206144 s`.
+  `C:\glass_runs\phase2_s2_gate659_conservative_cosmetic_cuda\runs_20260625_220000\inline_cosmetic_cuda_conservative_policy_strict`.
+- GLASS elapsed time: `18.47093429986853 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: about `57.78x`.
+- Speedup: about `59.15x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -292,6 +292,21 @@ Current Phase 2 latest mainline acceptance:
   because the detector invalidated millions of hot/cold/cosmetic samples; the
   default science route remains unchanged until a star-aware source-DQ policy is
   validated.
+- Gate659 adds `--resident-inline-source-dq-policy` and validates the
+  conservative profile on the real 200-light M38 route. The conservative
+  profile resolves to `max_invalid_fraction=0.0003` from policy defaults and is
+  recorded in `run_timing.json`, `resident_source_dq_strategy.json`, and
+  `resident_artifacts.json`. The green strict run applied source-DQ to `10`
+  frames, skipped `190` high-fraction frames, recorded
+  `input_invalid_samples_before_rejection=147180`, passed
+  `framework_scope=inline_cosmetic_cuda_positive`, and passed
+  `phase2-mainline-audit --fail-on-not-green`. Compared with Gate656 default at
+  coverage >= `190`, shape match is true, coverage fraction is
+  `0.9749355243693554`, p50/p90/p99 absolute differences are
+  `0.0345001220703125` / `0.17724990844726562` /
+  `1.2427406311035156`, and RMS is `0.5331775153760971`. This keeps positive
+  real-data source-DQ execution while reducing Gate658 policy drift
+  substantially; it is still opt-in pending a star-aware detector.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

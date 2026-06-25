@@ -7125,6 +7125,7 @@ def run_resident_calibration_integration(
     resident_master_cache_policy: str = "auto",
     resident_output_maps: str = "audit",
     resident_inline_source_dq: str = "off",
+    resident_inline_source_dq_policy: str = "default",
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
@@ -13996,6 +13997,7 @@ def run_resident_calibration_integration(
                         "fits_header_spec_cache_frame_count": int(len(resident_fits_spec_cache)),
                         "fits_header_spec_cache_hit_count": int(per_frame_fits_header_cache_hits),
                         "resident_inline_source_dq": resident_inline_source_dq,
+                        "resident_inline_source_dq_policy": str(resident_inline_source_dq_policy),
                         "resident_inline_source_dq_detector": (
                             "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
                             if resident_inline_source_dq == "cosmetic_cuda"
