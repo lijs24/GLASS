@@ -52,16 +52,12 @@ def center_and_scale(
         deviation = np.abs(masked - center[None, :, :])
         scale = np.float32(1.4826) * np.nanmedian(deviation, axis=0)
     elif method == "winsorized_sigma":
-        first_center = np.nanmedian(masked, axis=0)
-        first_scale = _iqr_scale(masked)
-        fallback_scale = np.nanstd(masked, axis=0)
-        first_scale = np.where(first_scale > 0, first_scale, fallback_scale)
-        low = first_center - np.float32(low_sigma) * first_scale
-        high = first_center + np.float32(high_sigma) * first_scale
-        winsorized = np.where(valid, np.clip(stack, low[None, :, :], high[None, :, :]), np.nan)
-        center = np.nanmean(winsorized, axis=0)
-        scale = np.nanstd(winsorized, axis=0)
-        scale = np.where(scale > 0, scale, first_scale)
+        center, scale = _winsorized_sigma_valid_deterministic(
+            stack,
+            valid,
+            low_sigma=low_sigma,
+            high_sigma=high_sigma,
+        )
     else:
         raise ValueError(f"unsupported rejection statistics method: {method}")
     return np.nan_to_num(center, nan=0.0).astype(np.float32), np.nan_to_num(
@@ -207,17 +203,13 @@ def rejection_policy_provenance(policy: RejectionPolicy) -> dict[str, Any]:
     }
     if policy.method == "winsorized_sigma":
         provenance["winsorized"] = True
-        provenance["winsorization_center"] = "nanmedian"
-        provenance["winsorization_scale"] = "iqr_sigma_with_standard_deviation_fallback"
-        provenance["final_center"] = "nanmean_after_winsorization"
-        provenance["final_scale"] = "nanstd_after_winsorization"
+        provenance["winsorization_center"] = "deterministic_linear_percentile_median"
+        provenance["winsorization_scale"] = (
+            "deterministic_iqr_sigma_with_frame_axis_std_fallback"
+        )
+        provenance["final_center"] = "deterministic_mean_after_winsorization"
+        provenance["final_scale"] = "deterministic_std_after_winsorization"
     return provenance
-
-
-def _iqr_scale(masked: np.ndarray) -> np.ndarray:
-    q25 = np.nanpercentile(masked, 25.0, axis=0)
-    q75 = np.nanpercentile(masked, 75.0, axis=0)
-    return ((q75 - q25) / np.float32(1.349)).astype(np.float32)
 
 
 def _all_valid_finite(stack: np.ndarray, valid: np.ndarray) -> bool:
@@ -245,6 +237,116 @@ def _winsorized_sigma_all_valid(
     scale = np.std(winsorized, axis=0, dtype=np.float64).astype(np.float32)
     scale = np.where(scale > 0, scale, first_scale)
     return center.astype(np.float32), scale.astype(np.float32)
+
+
+def _winsorized_sigma_valid_deterministic(
+    stack: np.ndarray,
+    valid: np.ndarray,
+    *,
+    low_sigma: float,
+    high_sigma: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    data = np.asarray(stack, dtype=np.float32)
+    valid_samples = np.asarray(valid, dtype=bool) & np.isfinite(data)
+    count = np.sum(valid_samples, axis=0).astype(np.int64)
+    sorted_stack = np.sort(np.where(valid_samples, data, np.inf), axis=0)
+    first_center = _percentile_from_sorted_valid(sorted_stack, count, 0.5)
+    q25 = _percentile_from_sorted_valid(sorted_stack, count, 0.25)
+    q75 = _percentile_from_sorted_valid(sorted_stack, count, 0.75)
+    fallback_scale = _frame_axis_std(data, valid_samples, count)
+    first_scale = ((q75 - q25) / np.float32(1.349)).astype(np.float32)
+    first_scale = np.where(
+        (first_scale > 0) & np.isfinite(first_scale),
+        first_scale,
+        fallback_scale,
+    ).astype(np.float32)
+    low = (first_center - np.float32(low_sigma) * first_scale).astype(np.float32)
+    high = (first_center + np.float32(high_sigma) * first_scale).astype(np.float32)
+    winsorized = np.clip(data, low[None, :, :], high[None, :, :])
+    count64 = count.astype(np.float64)
+    winsor_sum = np.sum(
+        np.where(valid_samples, winsorized, np.float32(0.0)).astype(np.float64),
+        axis=0,
+        dtype=np.float64,
+    )
+    winsor_mean = np.divide(
+        winsor_sum,
+        count64,
+        out=np.zeros_like(winsor_sum, dtype=np.float64),
+        where=count > 0,
+    ).astype(np.float32)
+    delta = winsorized.astype(np.float64) - winsor_mean[None, :, :].astype(np.float64)
+    variance_sum = np.sum(
+        np.where(valid_samples, delta * delta, 0.0),
+        axis=0,
+        dtype=np.float64,
+    )
+    variance = np.divide(
+        variance_sum,
+        count64,
+        out=np.zeros_like(variance_sum, dtype=np.float64),
+        where=count > 0,
+    )
+    scale = np.sqrt(variance).astype(np.float32)
+    scale = np.where((scale > 0) & np.isfinite(scale), scale, first_scale).astype(np.float32)
+    valid_pixels = count > 0
+    return (
+        np.where(valid_pixels, winsor_mean, np.float32(0.0)).astype(np.float32),
+        np.where(valid_pixels, scale, np.float32(0.0)).astype(np.float32),
+    )
+
+
+def _percentile_from_sorted_valid(
+    sorted_stack: np.ndarray,
+    count: np.ndarray,
+    fraction: float,
+) -> np.ndarray:
+    if sorted_stack.ndim != 3:
+        raise ValueError("sorted_stack must have shape (frame_count, height, width)")
+    safe_count = np.maximum(count, 1).astype(np.int64)
+    position = (safe_count - 1).astype(np.float32) * np.float32(fraction)
+    lower = np.floor(position).astype(np.int64)
+    upper = np.minimum(lower + 1, safe_count - 1).astype(np.int64)
+    interpolation = (position - lower.astype(np.float32)).astype(np.float32)
+    lower_values = np.take_along_axis(sorted_stack, lower[None, :, :], axis=0)[0].astype(
+        np.float32
+    )
+    upper_values = np.take_along_axis(sorted_stack, upper[None, :, :], axis=0)[0].astype(
+        np.float32
+    )
+    values = (
+        lower_values * (np.float32(1.0) - interpolation) + upper_values * interpolation
+    ).astype(np.float32)
+    return np.where(count > 0, values, np.float32(0.0)).astype(np.float32)
+
+
+def _frame_axis_std(data: np.ndarray, valid: np.ndarray, count: np.ndarray) -> np.ndarray:
+    count64 = count.astype(np.float64)
+    data64 = data.astype(np.float64)
+    value_sum = np.sum(
+        np.where(valid, data64, 0.0),
+        axis=0,
+        dtype=np.float64,
+    )
+    mean = np.divide(
+        value_sum,
+        count64,
+        out=np.zeros_like(value_sum, dtype=np.float64),
+        where=count > 0,
+    ).astype(np.float32)
+    delta = data64 - mean[None, :, :].astype(np.float64)
+    variance_sum = np.sum(
+        np.where(valid, delta * delta, 0.0),
+        axis=0,
+        dtype=np.float64,
+    )
+    variance = np.divide(
+        variance_sum,
+        count64,
+        out=np.zeros_like(variance_sum, dtype=np.float64),
+        where=count > 0,
+    )
+    return np.sqrt(variance).astype(np.float32)
 
 
 def _percentile_from_sorted(sorted_stack: np.ndarray, percentile: float) -> np.ndarray:

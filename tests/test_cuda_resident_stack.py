@@ -2764,6 +2764,67 @@ def test_resident_stack_hardened_winsorized_sigma_radix_select_over_512_matches_
     assert int(np.sum(high_reject)) > 0
 
 
+def test_resident_stack_hardened_winsorized_sigma_radix_select_mixed_valid_matches_cpu(
+    monkeypatch,
+):
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+    monkeypatch.setenv("GLASS_CUDA_RADIX_SELECT_WINSORIZED", "1")
+    monkeypatch.delenv("GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX", raising=False)
+    monkeypatch.delenv("GLASS_CUDA_UNIT_WEIGHT_LOCAL_REUSE", raising=False)
+
+    rng = np.random.default_rng(625)
+    stack_np = rng.normal(1000.0, 4.0, size=(545, 24, 24)).astype(np.float32)
+    stack_np[0, :, 0] -= np.float32(130.0)
+    stack_np[1, :, 1] += np.float32(135.0)
+    stack_np[2, 10:14, 6:10] -= np.float32(120.0)
+    stack_np[3, 9:13, 14:18] += np.float32(125.0)
+    stack_np[8, 3, 4] = np.nan
+    weights = rng.uniform(0.8, 1.2, size=(545,)).astype(np.float32)
+
+    resident_stack = module.ResidentCalibratedStack(
+        stack_np.shape[0],
+        stack_np.shape[1],
+        stack_np.shape[2],
+    )
+    for index, frame in enumerate(stack_np):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.5,
+            2.5,
+            max_reject_fraction=0.5,
+            count_map_dtype="uint16",
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            stack_np,
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.5,
+            high_sigma=2.5,
+            max_reject_fraction=0.5,
+        )
+    )
+
+    assert timing["native_kernel_capacity_selector"] == "radix_select_unbounded_positive_samples"
+    assert timing["native_profile"]["radix_select_enabled"] is True
+    assert timing["native_profile"]["radix_select_positive_sample_count"] == 545
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-4)
+    assert np.allclose(weight_map, expected_weight, rtol=2e-5, atol=2e-4)
+    assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
+
+
 def test_resident_stack_hardened_winsorized_sigma_quartile_rank_edge_counts_match_cpu():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(

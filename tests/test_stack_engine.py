@@ -76,23 +76,66 @@ def _winsorized_reference(
     low_sigma: float,
     high_sigma: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    masked = np.where(valid, stack, np.nan)
-    first_center = np.nanmedian(masked, axis=0)
-    q25 = np.nanpercentile(masked, 25.0, axis=0)
-    q75 = np.nanpercentile(masked, 75.0, axis=0)
-    first_scale = ((q75 - q25) / np.float32(1.349)).astype(np.float32)
-    fallback_scale = np.nanstd(masked, axis=0)
-    first_scale = np.where(first_scale > 0, first_scale, fallback_scale)
-    low = first_center - np.float32(low_sigma) * first_scale
-    high = first_center + np.float32(high_sigma) * first_scale
-    winsorized = np.where(valid, np.clip(stack, low[None, :, :], high[None, :, :]), np.nan)
-    center = np.nanmean(winsorized, axis=0)
-    scale = np.nanstd(winsorized, axis=0)
-    scale = np.where(scale > 0, scale, first_scale)
-    return center.astype(np.float32), scale.astype(np.float32)
+    data = np.asarray(stack, dtype=np.float32)
+    valid_samples = np.asarray(valid, dtype=bool) & np.isfinite(data)
+    center = np.zeros(data.shape[1:], dtype=np.float32)
+    scale = np.zeros(data.shape[1:], dtype=np.float32)
+    for y in range(data.shape[1]):
+        for x in range(data.shape[2]):
+            values = np.sort(data[:, y, x][valid_samples[:, y, x]]).astype(np.float32)
+            if values.size == 0:
+                continue
+            first_center = _linear_percentile_reference(values, 0.5)
+            q25 = _linear_percentile_reference(values, 0.25)
+            q75 = _linear_percentile_reference(values, 0.75)
+            mean = np.float32(np.sum(values.astype(np.float64), dtype=np.float64) / values.size)
+            fallback_scale = np.float32(
+                np.sqrt(
+                    np.sum(
+                        (values.astype(np.float64) - np.float64(mean)) ** 2,
+                        dtype=np.float64,
+                    )
+                    / values.size
+                )
+            )
+            first_scale = np.float32((q75 - q25) / np.float32(1.349))
+            if not (first_scale > 0 and np.isfinite(first_scale)):
+                first_scale = fallback_scale
+            low = np.float32(first_center - np.float32(low_sigma) * first_scale)
+            high = np.float32(first_center + np.float32(high_sigma) * first_scale)
+            winsorized = np.clip(values, low, high).astype(np.float32)
+            winsor_mean = np.float32(
+                np.sum(winsorized.astype(np.float64), dtype=np.float64) / values.size
+            )
+            winsor_scale = np.float32(
+                np.sqrt(
+                    np.sum(
+                        (winsorized.astype(np.float64) - np.float64(winsor_mean)) ** 2,
+                        dtype=np.float64,
+                    )
+                    / values.size
+                )
+            )
+            center[y, x] = winsor_mean
+            scale[y, x] = winsor_scale if winsor_scale > 0 and np.isfinite(winsor_scale) else first_scale
+    return center, scale
 
 
-def test_winsorized_sigma_all_valid_fast_path_matches_nan_reference(monkeypatch):
+def _linear_percentile_reference(values: np.ndarray, fraction: float) -> np.float32:
+    if values.size == 1:
+        return np.float32(values[0])
+    position = np.float32(values.size - 1) * np.float32(fraction)
+    lower = int(np.floor(position))
+    upper = min(lower + 1, values.size - 1)
+    t = np.float32(position - np.float32(lower))
+    lower_value = np.float32(values[lower])
+    if upper == lower or t <= 0:
+        return lower_value
+    upper_value = np.float32(values[upper])
+    return np.float32(lower_value * (np.float32(1.0) - t) + upper_value * t)
+
+
+def test_winsorized_sigma_all_valid_fast_path_matches_deterministic_reference(monkeypatch):
     rng = np.random.default_rng(594)
     stack = rng.normal(loc=100.0, scale=3.0, size=(20, 6, 7)).astype(np.float32)
     stack[-1, 2, 3] = np.float32(500.0)
@@ -118,6 +161,42 @@ def test_winsorized_sigma_all_valid_fast_path_matches_nan_reference(monkeypatch)
         method="winsorized_sigma",
         low_sigma=3.0,
         high_sigma=3.0,
+    )
+
+    assert np.allclose(center, expected_center, rtol=1.0e-6, atol=1.0e-5)
+    assert np.allclose(scale, expected_scale, rtol=1.0e-6, atol=1.0e-5)
+
+
+def test_winsorized_sigma_mixed_valid_path_matches_deterministic_reference(monkeypatch):
+    rng = np.random.default_rng(626)
+    stack = rng.normal(loc=1000.0, scale=4.0, size=(65, 5, 6)).astype(np.float32)
+    stack[0, 2, :] -= np.float32(90.0)
+    stack[1, :, 3] += np.float32(110.0)
+    stack[8, 2, 3] = np.nan
+    valid = np.ones_like(stack, dtype=bool)
+    valid[4, 1, 2] = False
+    valid[12, 4, 5] = False
+    expected_center, expected_scale = _winsorized_reference(
+        stack,
+        valid,
+        low_sigma=2.4,
+        high_sigma=2.4,
+    )
+
+    def fail_nan_stat(*args, **kwargs):
+        raise AssertionError("mixed-valid winsorized path should avoid nan statistics")
+
+    monkeypatch.setattr(np, "nanmedian", fail_nan_stat)
+    monkeypatch.setattr(np, "nanpercentile", fail_nan_stat)
+    monkeypatch.setattr(np, "nanmean", fail_nan_stat)
+    monkeypatch.setattr(np, "nanstd", fail_nan_stat)
+
+    center, scale = center_and_scale(
+        stack,
+        valid,
+        method="winsorized_sigma",
+        low_sigma=2.4,
+        high_sigma=2.4,
     )
 
     assert np.allclose(center, expected_center, rtol=1.0e-6, atol=1.0e-5)
@@ -410,7 +489,7 @@ def test_cpu_stack_engine_winsorized_sigma_is_distinct_for_low_sample_outlier():
     assert winsorized.dq_provenance["rejection_policy"]["winsorized"] is True
     assert (
         winsorized.dq_provenance["rejection_policy"]["winsorization_scale"]
-        == "iqr_sigma_with_standard_deviation_fallback"
+        == "deterministic_iqr_sigma_with_frame_axis_std_fallback"
     )
 
 

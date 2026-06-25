@@ -63,11 +63,10 @@ Current code is intentionally gated:
   at most 512. Gate625 can process groups above 512 positive-weight samples on
   the GPU when `GLASS_CUDA_RADIX_SELECT_WINSORIZED=1` is set, but this is still
   an opt-in correctness prototype pending large-active-count performance
-  validation. NaN-containing over-512 stacks can still show rare one-sample
-  rejection-boundary drift when a sample lies exactly on a CPU/GPU threshold;
-  this is tracked as parity-hardening work rather than hidden with a tolerance
-  guard. Richer robust rejection policies, cosmetic correction, and broader
-  data-shape support remain future work.
+  validation. Gate626 resolves the mixed-valid/NaN radix-select parity edge by
+  making the CPU winsorized baseline deterministic instead of adding a
+  rejection-threshold tolerance. Richer robust rejection policies, cosmetic
+  correction, and broader data-shape support remain future work.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must

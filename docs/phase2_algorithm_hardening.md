@@ -401,6 +401,62 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 626: Deterministic Mixed-Valid Winsorized CPU Baseline
+
+Gate 626 closes the parity-hardening item left by Gate625. The all-valid
+StackEngine winsorized path already used GLASS-owned deterministic percentile
+interpolation, but DQ-masked or non-finite tiles still fell back to NumPy
+`nanmean`/`nanstd` reductions. That left a rare boundary case where CUDA
+radix-select accumulated in frame-axis order while the CPU baseline used a
+different vectorized reduction order. This gate changes the mixed-valid CPU
+baseline itself instead of adding a CUDA threshold tolerance.
+
+Implementation:
+
+- Replaces the mixed-valid `winsorized_sigma` statistics branch with a
+  deterministic GLASS helper that filters finite valid samples, sorts valid
+  samples per pixel, and computes q25/median/q75 with `(count - 1) * fraction`
+  float32 linear interpolation.
+- Computes the fallback standard deviation, winsorized mean, and winsorized
+  standard deviation from frame-axis-valid samples with double accumulation
+  followed by float32 state, matching the resident radix-select contract.
+- Keeps final rejection strict: original samples still reject only on `< low`
+  and `> high`; no rejection-threshold tolerance is introduced.
+- Updates StackEngine DQ provenance strings from `nan*` wording to
+  deterministic percentile/mean/std wording.
+- Adds CPU tests proving both all-valid and mixed-valid winsorized paths avoid
+  `np.nanmedian`, `np.nanpercentile`, `np.nanmean`, and `np.nanstd`.
+- Adds a CUDA radix-select mixed-valid `545 x 24 x 24` test with one NaN sample
+  and non-unit positive weights.
+
+Validation:
+
+- `ruff` over touched files: passed.
+- Focused StackEngine and CPU integration tests: `24 passed`.
+- Focused resident CUDA hardened winsorized tests: `14 passed, 52 deselected`.
+- Mixed-valid radix-select synthetic probe:
+  `C:\glass_runs\phase2_s2_gate626_deterministic_winsorized\radix_select_nan_boundary_probe.json`;
+  master, weight, coverage, low-reject, and high-reject maps were all bitwise
+  exact against the deterministic CPU baseline.
+- Real 200-light default resident CUDA run:
+  `C:\glass_runs\phase2_s2_gate626_deterministic_winsorized\real_200_default_gate626_20260625_131241`.
+- Real A/B against Gate625:
+  `resident_regression_gate_gate626_vs_gate625.json` passed with elapsed ratio
+  `0.9578194032630468`, `193` active frames, `7` masked frames, and no output or
+  contract drift.
+- Full pytest: `1318 passed in 61.45 s`.
+
+Decision:
+
+- The Gate625 NaN/radix boundary caveat is resolved by making the CPU baseline
+  deterministic for mixed-valid winsorized statistics.
+- The over-512 radix-select reducer remains opt-in because its repeated
+  frame-axis scans are still a correctness prototype, not the default
+  throughput path.
+- The next substantive integration target remains a faster all-device
+  segmented/cooperative reducer or resident registration/warp orchestration
+  work, not additional report-only gates.
+
 ### S2-Gate 625: Opt-In Radix-Select CUDA Reducer For Over-512 Active Samples
 
 Gate 625 implements the first true device-side path for resident hardened

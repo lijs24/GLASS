@@ -185,11 +185,15 @@ record `percentile_strategy=radix_select_order_statistics_scan`. This path is
 not the default yet because it rereads the resident frame axis many times per
 output pixel; it exists to validate a true over-512 device-side reduction before
 later cooperative or segmented performance work.
-The first validation target is finite resident stacks; a NaN-containing stress
-probe exposed rare one-sample rejection drift when a sample falls exactly on a
-threshold and CPU vectorized `nanmean`/`nanstd` reduction order differs from the
-device frame-axis order. That edge is tracked for a later parity-hardening gate
-instead of being hidden with an arbitrary rejection tolerance.
+
+S2-Gate 626 makes the CPU winsorized baseline deterministic for mixed-valid
+tiles as well as all-valid tiles. DQ-masked or non-finite samples are filtered
+before per-pixel sorting; q25/median/q75 use the same `(count - 1) * fraction`
+float32 interpolation as the CUDA selectors; fallback and winsorized standard
+deviation use frame-axis-valid double accumulation followed by float32 state.
+The NaN-containing radix-select stress probe now matches CPU exactly for
+master, weight, coverage, and low/high rejection maps without adding any
+threshold tolerance.
 
 S2-Gate 608 raises the native exact hardened CUDA capacity from 256 to 512
 frames. The native kernel now stores and sorts up to 512 valid samples per
