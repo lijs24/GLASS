@@ -66,6 +66,30 @@ def _resident_frame_mask_rows(resident_frame_masks: dict[str, Any] | None) -> li
     return rows
 
 
+def _resident_dq_lifecycle_groups(
+    resident_dq_lifecycle: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if not resident_dq_lifecycle:
+        return []
+    groups = resident_dq_lifecycle.get("groups")
+    if not isinstance(groups, list):
+        return []
+    return [group for group in groups if isinstance(group, dict)]
+
+
+def _resident_dq_lifecycle_group_for_filter(
+    groups: list[dict[str, Any]],
+    filt: Any,
+) -> dict[str, Any]:
+    if not groups:
+        return {}
+    text = str(filt or "")
+    for group in groups:
+        if str(group.get("filter") or "") == text:
+            return group
+    return groups[0] if len(groups) == 1 else {}
+
+
 def _local_norm_rows(local_norm: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not local_norm:
         return []
@@ -265,6 +289,8 @@ def _exception_frames(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "resident_dq_mask_contract_status": row.get("resident_dq_mask_contract_status"),
                 "resident_dq_mask_contract_passed": row.get("resident_dq_mask_contract_passed"),
                 "resident_dq_mask_contract_sources": row.get("resident_dq_mask_contract_sources"),
+                "resident_dq_lifecycle_status": row.get("resident_dq_lifecycle_status"),
+                "resident_dq_lifecycle_passed": row.get("resident_dq_lifecycle_passed"),
                 "registration_status": row.get("registration_status"),
                 "warp_status": row.get("warp_status"),
                 "local_norm_status": row.get("local_norm_status"),
@@ -304,6 +330,7 @@ def build_frame_accounting(
     integration = _read_optional_json(run / "integration_results.json")
     resident = _read_optional_json(run / "resident_artifacts.json")
     resident_frame_masks = _read_optional_json(run / "resident_frame_masks.json")
+    resident_dq_lifecycle = _read_optional_json(run / "resident_dq_lifecycle.json")
 
     quality_by_id = {
         str(item.get("frame_id")): item for item in (quality or {}).get("frame_quality", [])
@@ -330,6 +357,12 @@ def build_frame_accounting(
         for item in _resident_frame_mask_rows(resident_frame_masks)
         if item.get("frame_id") is not None
     }
+    resident_dq_lifecycle_groups = _resident_dq_lifecycle_groups(resident_dq_lifecycle)
+    resident_dq_lifecycle_summary = (
+        resident_dq_lifecycle.get("summary")
+        if isinstance((resident_dq_lifecycle or {}).get("summary"), dict)
+        else {}
+    )
     warp_by_id = {str(item.get("frame_id")): item for item in (warp or {}).get("warp_results", [])}
     warp_skipped_by_id = {
         str(item.get("frame_id")): item for item in (warp or {}).get("skipped_frames", [])
@@ -467,6 +500,24 @@ def build_frame_accounting(
             frame_mask_reasons = []
             frame_mask_auditable = None
 
+        resident_dq_lifecycle_group = _resident_dq_lifecycle_group_for_filter(
+            resident_dq_lifecycle_groups,
+            base.get("filter"),
+        )
+        resident_dq_lifecycle_available = bool(resident_dq_lifecycle_group)
+        resident_dq_lifecycle_passed = (
+            bool(resident_dq_lifecycle_group.get("passed"))
+            if resident_dq_lifecycle_available
+            else None
+        )
+        resident_dq_lifecycle_status = (
+            resident_dq_lifecycle_group.get("status")
+            if resident_dq_lifecycle_available
+            else "missing"
+            if resident_dq_lifecycle
+            else "not_applicable"
+        )
+
         registration_row = registration_by_id.get(frame_id)
         if registration_row:
             registration_status = str(registration_row.get("status") or "unknown")
@@ -578,6 +629,19 @@ def build_frame_accounting(
                 "resident_frame_mask_categories": frame_mask_categories,
                 "resident_frame_mask_reasons": frame_mask_reasons,
                 "resident_frame_mask_auditable": frame_mask_auditable,
+                "resident_dq_lifecycle_available": resident_dq_lifecycle_available,
+                "resident_dq_lifecycle_status": resident_dq_lifecycle_status,
+                "resident_dq_lifecycle_passed": resident_dq_lifecycle_passed,
+                "resident_dq_lifecycle_filter": resident_dq_lifecycle_group.get("filter"),
+                "resident_dq_lifecycle_active_frame_count": resident_dq_lifecycle_group.get(
+                    "active_frame_count"
+                ),
+                "resident_dq_lifecycle_masked_frame_count": resident_dq_lifecycle_group.get(
+                    "masked_frame_count"
+                ),
+                "resident_dq_lifecycle_source_input_samples": resident_dq_lifecycle_group.get(
+                    "source_input_samples"
+                ),
                 "registration_status": registration_status,
                 "registration_source": registration_source,
                 "warp_status": warp_status,
@@ -598,6 +662,12 @@ def build_frame_accounting(
     exceptions = _exception_frames(rows)
     resident_dq_mask_contract_rows = [
         row for row in rows if row.get("resident_dq_mask_contract_available") is True
+    ]
+    resident_dq_lifecycle_rows = [
+        row for row in rows if row.get("resident_dq_lifecycle_available") is True
+    ]
+    resident_dq_lifecycle_failed_rows = [
+        row for row in resident_dq_lifecycle_rows if row.get("resident_dq_lifecycle_passed") is not True
     ]
     summary = {
         "input_light_frames": len(rows),
@@ -637,6 +707,23 @@ def build_frame_accounting(
                 for row in resident_dq_mask_contract_rows
                 for source in row["resident_dq_frame_mask_sources"]
             }
+        ),
+        "resident_dq_lifecycle_present": bool(resident_dq_lifecycle),
+        "resident_dq_lifecycle_status": (resident_dq_lifecycle_summary or {}).get("status"),
+        "resident_dq_lifecycle_passed": (resident_dq_lifecycle_summary or {}).get("passed"),
+        "resident_dq_lifecycle_group_count": len(resident_dq_lifecycle_groups),
+        "resident_dq_lifecycle_rows": len(resident_dq_lifecycle_rows),
+        "resident_dq_lifecycle_passed_rows": len(resident_dq_lifecycle_rows)
+        - len(resident_dq_lifecycle_failed_rows),
+        "resident_dq_lifecycle_failed_rows": len(resident_dq_lifecycle_failed_rows),
+        "resident_dq_lifecycle_active_frames": (resident_dq_lifecycle_summary or {}).get(
+            "active_frame_count"
+        ),
+        "resident_dq_lifecycle_masked_frames": (resident_dq_lifecycle_summary or {}).get(
+            "masked_frame_count"
+        ),
+        "resident_dq_lifecycle_source_input_samples": sum(
+            int(group.get("source_input_samples") or 0) for group in resident_dq_lifecycle_groups
         ),
         "quality_accepted_frames": sum(
             1 for row in rows if row["quality_gate_status"] == "accepted"
@@ -682,6 +769,7 @@ def build_frame_accounting(
             "integration": bool(integration),
             "resident": bool(resident),
             "resident_frame_masks": bool(resident_frame_masks),
+            "resident_dq_lifecycle": bool(resident_dq_lifecycle),
             "resident_calibrated_light_dq_ledger": bool(resident_dq_mask_contract_rows),
         },
         "calibration_artifact_type": calibration_artifact_type,

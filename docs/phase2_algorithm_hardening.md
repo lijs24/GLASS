@@ -728,6 +728,79 @@ Interpretation:
   default coverage for resident outputs, DQ/mask pipeline semantics, or the
   larger resident registration/warp and integration bottlenecks.
 
+### S2-Gate 638: Frame Accounting Resident DQ Lifecycle Bridge
+
+Gate 638 continues the mainline DQ/mask framework rather than adding another
+release/report handoff. Gate637 made `resident_dq_lifecycle.json` mandatory
+for resident CUDA runs and pipeline contracts, but the canonical
+`frame_accounting.json` ledger still did not carry that lifecycle evidence.
+That left the run-level artifact graph correct while the per-frame accounting
+surface could not prove which lifecycle group governed each light frame.
+
+Implementation:
+
+- `build_frame_accounting()` now reads `resident_dq_lifecycle.json`.
+- Each resident frame-accounting row records lifecycle availability, status,
+  pass/fail state, filter, active/masked group counts, and source input sample
+  count.
+- Frame-accounting summary records lifecycle presence, status, group count,
+  row count, passed/failed rows, active/masked counts, and source input samples.
+- Pipeline contract adds
+  `frame_accounting_resident_dq_lifecycle_contract`, which validates that the
+  frame-accounting lifecycle rows and summary close against the lifecycle
+  artifact.
+- Resident CUDA smoke tests now assert that production resident runs write the
+  new frame-accounting lifecycle bridge and that pipeline contract accepts it.
+- No image math, calibration, registration, warp, LN, rejection, or CUDA kernel
+  behavior changed.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Focused frame-accounting/pipeline/resident tests:
+  `13 passed, 168 deselected`.
+- Full frame-accounting and pipeline-contract tests: `54 passed`.
+- Resident CUDA focused smoke/science-output tests: `3 passed, 124 deselected`.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate638_frame_accounting_lifecycle\runs_20260625_155638\candidate_frame_accounting_lifecycle`.
+- Evidence root:
+  `C:\glass_runs\phase2_s2_gate638_frame_accounting_lifecycle\runs_20260625_155638`.
+- GLASS total elapsed: `12.560182699817233 s`.
+- Frame-accounting lifecycle summary:
+  `200` lifecycle rows, `193` active frames, `7` masked frames, and
+  `11898681600` source input samples.
+- Pipeline contract: passed, including
+  `frame_accounting_resident_dq_lifecycle_contract`.
+- StackEngine contract: passed.
+- Warp quality contract: passed.
+- Resident regression gate versus Gate637: passed, elapsed ratio
+  `1.0332341511321728`, zero output differences, zero frame-accounting
+  differences, and zero numerical drift.
+- Black-box reference elapsed: `1092.541 s`.
+- Acceptance speedup: `86.98448311710449x`.
+- Compare metrics at coverage >= `190`: shape match `true`, RMS
+  `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit status: passed.
+
+Interpretation:
+
+- This gate turns the resident DQ lifecycle from a run-level contract into a
+  canonical frame-accounting contract. Future regressions cannot keep
+  lifecycle JSON green while dropping the same evidence from the per-frame
+  ledger.
+- The runtime increase versus Gate637 is within the 20 percent regression
+  budget and is explained by normal resident reference/timing variance plus a
+  small JSON accounting expansion.
+- The next substantive gate should move from contract closure back to execution
+  improvements: resident registration/warp batching, a heavier resident
+  integration reducer, or StackEngine default execution coverage for another
+  still-legacy path.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization

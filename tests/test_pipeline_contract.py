@@ -659,6 +659,16 @@ def _write_frame_accounting_fixture(path: Path, *, conflict: bool = False) -> No
                 "integration_conflict_frames": conflict_count,
                 "exception_frames": exception_frames,
                 "final_status_counts": final_counts,
+                "resident_dq_lifecycle_present": True,
+                "resident_dq_lifecycle_status": "passed",
+                "resident_dq_lifecycle_passed": True,
+                "resident_dq_lifecycle_group_count": 1,
+                "resident_dq_lifecycle_rows": 3,
+                "resident_dq_lifecycle_passed_rows": 3,
+                "resident_dq_lifecycle_failed_rows": 0,
+                "resident_dq_lifecycle_active_frames": 3,
+                "resident_dq_lifecycle_masked_frames": 0,
+                "resident_dq_lifecycle_source_input_samples": 12,
             },
             "exception_summary": {
                 "count": exception_frames,
@@ -666,7 +676,19 @@ def _write_frame_accounting_fixture(path: Path, *, conflict: bool = False) -> No
                 "primary_stage_counts": {"quality": 1} if conflict else {},
             },
             "exception_frames": [frames[0]] if conflict else [],
-            "frames": frames,
+            "frames": [
+                {
+                    **frame,
+                    "resident_dq_lifecycle_available": True,
+                    "resident_dq_lifecycle_status": "passed",
+                    "resident_dq_lifecycle_passed": True,
+                    "resident_dq_lifecycle_filter": "H",
+                    "resident_dq_lifecycle_active_frame_count": 3,
+                    "resident_dq_lifecycle_masked_frame_count": 0,
+                    "resident_dq_lifecycle_source_input_samples": 12,
+                }
+                for frame in frames
+            ],
         },
     )
 
@@ -723,6 +745,13 @@ def _write_resident_frame_accounting_dq_ledger_fixture(
                 "resident_calibrated_light_frame_mask_contract_passed": passed,
                 "resident_frame_mask_status": "active" if integrated else "masked",
                 "resident_frame_mask_auditable": True,
+                "resident_dq_lifecycle_available": True,
+                "resident_dq_lifecycle_status": "passed",
+                "resident_dq_lifecycle_passed": True,
+                "resident_dq_lifecycle_filter": "H",
+                "resident_dq_lifecycle_active_frame_count": active,
+                "resident_dq_lifecycle_masked_frame_count": masked,
+                "resident_dq_lifecycle_source_input_samples": active * 4,
             }
         )
 
@@ -751,6 +780,16 @@ def _write_resident_frame_accounting_dq_ledger_fixture(
                 "resident_frame_mask_active_frames": active,
                 "resident_frame_mask_masked_frames": masked,
                 "resident_frame_mask_unaudited_frames": 0,
+                "resident_dq_lifecycle_present": True,
+                "resident_dq_lifecycle_status": "passed",
+                "resident_dq_lifecycle_passed": True,
+                "resident_dq_lifecycle_group_count": 1,
+                "resident_dq_lifecycle_rows": int(frame_count),
+                "resident_dq_lifecycle_passed_rows": int(frame_count),
+                "resident_dq_lifecycle_failed_rows": 0,
+                "resident_dq_lifecycle_active_frames": active,
+                "resident_dq_lifecycle_masked_frames": masked,
+                "resident_dq_lifecycle_source_input_samples": active * 4,
             },
             "exception_summary": {
                 "count": masked,
@@ -1402,11 +1441,13 @@ def test_pipeline_contract_passes_frame_accounting_admission_consistency(tmp_pat
 
     assert audit["passed"] is True
     assert checks["frame_accounting_no_integration_conflicts"]["passed"] is True
+    assert checks["frame_accounting_resident_dq_lifecycle_contract"]["passed"] is True
     assert audit["artifacts"]["frame_accounting"]["exists"] is True
     assert audit["frame_accounting"]["present"] is True
     assert audit["frame_accounting"]["status"] == "passed"
     assert audit["frame_accounting"]["integration_conflict_frames"] == 0
     assert audit["frame_accounting"]["integrated_frames"] == 3
+    assert audit["frame_accounting_resident_dq_lifecycle"]["accounting_rows"] == 3
 
 
 def test_pipeline_contract_blocks_frame_accounting_integration_conflicts(tmp_path: Path):
@@ -2075,6 +2116,33 @@ def test_pipeline_contract_fails_frame_accounting_resident_dq_ledger_drift(
     assert "summary_row_count_matches_resident_calibration" in ledger["failed_checks"]
     assert "per_frame_contract_sources_match" in ledger["failed_checks"]
     assert ledger["source_mismatch_frame_ids"] == ["F1"]
+
+
+def test_pipeline_contract_fails_frame_accounting_resident_dq_lifecycle_drift(
+    tmp_path: Path,
+):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    _write_resident_native_calibration_source(run)
+    _write_resident_source_dq_execution_fixture(run)
+    write_resident_calibration_artifacts(run)
+    _write_resident_frame_accounting_dq_ledger_fixture(run)
+    accounting = read_json(run / "frame_accounting.json")
+    accounting["summary"]["resident_dq_lifecycle_rows"] = 2
+    accounting["summary"]["resident_dq_lifecycle_source_input_samples"] = 0
+    accounting["frames"][0]["resident_dq_lifecycle_passed"] = False
+    write_json(run / "frame_accounting.json", accounting)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    lifecycle = audit["frame_accounting_resident_dq_lifecycle"]
+
+    assert audit["passed"] is False
+    assert checks["frame_accounting_resident_dq_lifecycle_contract"]["passed"] is False
+    assert "summary_rows_match_lifecycle_frame_count" in lifecycle["failed_checks"]
+    assert "per_frame_lifecycle_pass_flags_match" in lifecycle["failed_checks"]
+    assert "source_input_samples_match_lifecycle" in lifecycle["failed_checks"]
+    assert lifecycle["failed_frame_ids"] == ["F1"]
 
 
 def test_pipeline_contract_fails_resident_calibrated_light_dq_when_source_dq_fails(

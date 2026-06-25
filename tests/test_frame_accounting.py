@@ -44,6 +44,46 @@ def _resident_dq_contract(frame_id: str, *, passed: bool = True) -> dict[str, ob
     }
 
 
+def _resident_dq_lifecycle_artifact(
+    *,
+    frame_count: int,
+    active_frame_count: int,
+    masked_frame_count: int,
+    source_input_samples: int,
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "artifact": "resident_dq_lifecycle",
+        "backend": "cuda_resident_stack",
+        "source_stage": "resident_calibrated_stack",
+        "summary": {
+            "schema_version": 1,
+            "status": "passed",
+            "passed": True,
+            "group_count": 1,
+            "passed_group_count": 1,
+            "failed_group_count": 0,
+            "frame_count": frame_count,
+            "active_frame_count": active_frame_count,
+            "masked_frame_count": masked_frame_count,
+        },
+        "groups": [
+            {
+                "schema_version": 1,
+                "artifact": "resident_dq_lifecycle_group",
+                "filter": "H",
+                "status": "passed",
+                "passed": True,
+                "frame_count": frame_count,
+                "active_frame_count": active_frame_count,
+                "masked_frame_count": masked_frame_count,
+                "source_input_samples": source_input_samples,
+                "checks": [{"name": "source_dq_execution_passed", "passed": True, "details": {}}],
+            }
+        ],
+    }
+
+
 def test_frame_accounting_builds_per_light_ledger(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()
@@ -349,6 +389,15 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
             "outputs": [{"filter": "H", "frame_count": 1}],
         },
     )
+    write_json(
+        run / "resident_dq_lifecycle.json",
+        _resident_dq_lifecycle_artifact(
+            frame_count=2,
+            active_frame_count=1,
+            masked_frame_count=1,
+            source_input_samples=4,
+        ),
+    )
 
     accounting = build_frame_accounting(run)
     rows = {item["frame_id"]: item for item in accounting["frames"]}
@@ -366,9 +415,15 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
     assert rows["ref"]["resident_dq_mask_contract_sources"] == ["resident_source_dq_execution"]
     assert rows["ref"]["resident_dq_frame_mask_sources"] == ["resident_frame_masks"]
     assert rows["ref"]["resident_source_dq_execution_route"] == "resident_in_memory_mask_streaming"
+    assert rows["ref"]["resident_dq_lifecycle_available"] is True
+    assert rows["ref"]["resident_dq_lifecycle_status"] == "passed"
+    assert rows["ref"]["resident_dq_lifecycle_passed"] is True
+    assert rows["ref"]["resident_dq_lifecycle_active_frame_count"] == 1
+    assert rows["excluded"]["resident_dq_lifecycle_masked_frame_count"] == 1
     assert rows["excluded"]["final_status"] == "registration_rejected"
     written = read_json(run / "frame_accounting.json")
     assert written["sources"]["integration"] is True
+    assert written["sources"]["resident_dq_lifecycle"] is True
     assert written["sources"]["resident_calibrated_light_dq_ledger"] is True
     assert written["resident_native_calibration_artifact"] is True
     assert written["summary"]["resident_native_calibration_artifact"] is True
@@ -380,8 +435,15 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
     assert written["summary"]["resident_frame_mask_contract_rows"] == 2
     assert written["summary"]["resident_dq_mask_contract_sources"] == ["resident_source_dq_execution"]
     assert written["summary"]["resident_dq_frame_mask_sources"] == ["resident_frame_masks"]
+    assert written["summary"]["resident_dq_lifecycle_present"] is True
+    assert written["summary"]["resident_dq_lifecycle_rows"] == 2
+    assert written["summary"]["resident_dq_lifecycle_passed_rows"] == 2
+    assert written["summary"]["resident_dq_lifecycle_active_frames"] == 1
+    assert written["summary"]["resident_dq_lifecycle_masked_frames"] == 1
+    assert written["summary"]["resident_dq_lifecycle_source_input_samples"] == 4
     assert written["summary"]["calibration_master_count"] == 3
     assert written["exception_summary"]["primary_stage_counts"] == {"registration": 1}
+    assert written["exception_frames"][0]["resident_dq_lifecycle_status"] == "passed"
 
 
 def test_resident_frame_accounting_reads_grouped_local_norm_frame_results(tmp_path: Path):

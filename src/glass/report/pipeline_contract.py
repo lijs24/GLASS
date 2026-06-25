@@ -1806,6 +1806,163 @@ def _frame_accounting_resident_dq_ledger_state(
     }
 
 
+def _frame_accounting_resident_dq_lifecycle_state(
+    frame_accounting: dict[str, Any],
+    resident_dq_lifecycle: dict[str, Any],
+) -> dict[str, Any]:
+    lifecycle_summary = (
+        resident_dq_lifecycle.get("summary")
+        if isinstance(resident_dq_lifecycle.get("summary"), dict)
+        else {}
+    )
+    lifecycle_groups = [
+        group
+        for group in resident_dq_lifecycle.get("groups") or []
+        if isinstance(group, dict)
+    ]
+    expected_frame_count = _optional_rounded_int(lifecycle_summary.get("frame_count"))
+    expected_active = _optional_rounded_int(lifecycle_summary.get("active_frame_count"))
+    expected_masked = _optional_rounded_int(lifecycle_summary.get("masked_frame_count"))
+    expected_group_count = _optional_rounded_int(lifecycle_summary.get("group_count"))
+    expected_source_input_samples = sum(
+        _optional_rounded_int(group.get("source_input_samples")) or 0 for group in lifecycle_groups
+    )
+    if expected_frame_count is None:
+        active = expected_active or 0
+        masked = expected_masked or 0
+        expected_frame_count = active + masked if active or masked else None
+
+    summary = frame_accounting.get("summary") if isinstance(frame_accounting.get("summary"), dict) else {}
+    frames = frame_accounting.get("frames") if isinstance(frame_accounting.get("frames"), list) else []
+    sources = frame_accounting.get("sources") if isinstance(frame_accounting.get("sources"), dict) else {}
+    lifecycle_advertised = (
+        summary.get("resident_dq_lifecycle_present") is True
+        or sources.get("resident_dq_lifecycle") is True
+        or any(
+            isinstance(row, dict) and row.get("resident_dq_lifecycle_available") is True
+            for row in frames
+        )
+    )
+    required = bool(resident_dq_lifecycle.get("exists") and lifecycle_advertised)
+    if not required:
+        return {
+            "required": False,
+            "present": bool(frame_accounting),
+            "status": "not_required",
+            "passed": True,
+            "failed_checks": [],
+            "expected_rows": 0,
+            "accounting_rows": 0,
+            "failed_frame_ids": [],
+            "expected_source_input_samples": 0,
+            "accounting_source_input_samples": None,
+        }
+
+    accounting_rows = [
+        row
+        for row in frames
+        if isinstance(row, dict) and row.get("resident_dq_lifecycle_available") is True
+    ]
+    failed_frame_ids = sorted(
+        str(row.get("frame_id"))
+        for row in accounting_rows
+        if row.get("resident_dq_lifecycle_passed") is not True and row.get("frame_id")
+    )
+    accounting_source_input_samples = _optional_rounded_int(
+        summary.get("resident_dq_lifecycle_source_input_samples")
+    )
+    checks = [
+        _check(
+            "summary_lifecycle_present",
+            summary.get("resident_dq_lifecycle_present") is True,
+            {"summary_present": summary.get("resident_dq_lifecycle_present")},
+        ),
+        _check(
+            "summary_status_matches_lifecycle",
+            summary.get("resident_dq_lifecycle_status") == lifecycle_summary.get("status"),
+            {
+                "frame_accounting_status": summary.get("resident_dq_lifecycle_status"),
+                "lifecycle_status": lifecycle_summary.get("status"),
+            },
+        ),
+        _check(
+            "summary_group_count_matches_lifecycle",
+            _optional_rounded_int(summary.get("resident_dq_lifecycle_group_count")) == expected_group_count,
+            {
+                "frame_accounting_group_count": summary.get("resident_dq_lifecycle_group_count"),
+                "lifecycle_group_count": expected_group_count,
+            },
+        ),
+        _check(
+            "summary_rows_match_lifecycle_frame_count",
+            _optional_rounded_int(summary.get("resident_dq_lifecycle_rows")) == expected_frame_count,
+            {
+                "frame_accounting_rows": summary.get("resident_dq_lifecycle_rows"),
+                "lifecycle_frame_count": expected_frame_count,
+            },
+        ),
+        _check(
+            "per_frame_rows_match_lifecycle_frame_count",
+            len(accounting_rows) == expected_frame_count,
+            {
+                "frame_accounting_rows": len(accounting_rows),
+                "lifecycle_frame_count": expected_frame_count,
+            },
+        ),
+        _check(
+            "per_frame_lifecycle_pass_flags_match",
+            not failed_frame_ids,
+            {"failed_frame_ids": failed_frame_ids[:20]},
+        ),
+        _check(
+            "active_count_matches_lifecycle",
+            _optional_rounded_int(summary.get("resident_dq_lifecycle_active_frames")) == expected_active,
+            {
+                "frame_accounting_active": summary.get("resident_dq_lifecycle_active_frames"),
+                "lifecycle_active": expected_active,
+            },
+        ),
+        _check(
+            "masked_count_matches_lifecycle",
+            _optional_rounded_int(summary.get("resident_dq_lifecycle_masked_frames")) == expected_masked,
+            {
+                "frame_accounting_masked": summary.get("resident_dq_lifecycle_masked_frames"),
+                "lifecycle_masked": expected_masked,
+            },
+        ),
+        _check(
+            "source_input_samples_match_lifecycle",
+            accounting_source_input_samples == expected_source_input_samples,
+            {
+                "frame_accounting_source_input_samples": accounting_source_input_samples,
+                "lifecycle_source_input_samples": expected_source_input_samples,
+            },
+        ),
+    ]
+    failed_checks = [item["name"] for item in checks if not item["passed"]]
+    return {
+        "required": True,
+        "present": True,
+        "status": "passed" if not failed_checks else "failed",
+        "passed": not failed_checks,
+        "failed_checks": failed_checks,
+        "checks": checks,
+        "expected_rows": expected_frame_count,
+        "accounting_rows": len(accounting_rows),
+        "failed_frame_ids": failed_frame_ids[:20],
+        "expected_active_frame_count": expected_active,
+        "accounting_active_frame_count": _optional_rounded_int(
+            summary.get("resident_dq_lifecycle_active_frames")
+        ),
+        "expected_masked_frame_count": expected_masked,
+        "accounting_masked_frame_count": _optional_rounded_int(
+            summary.get("resident_dq_lifecycle_masked_frames")
+        ),
+        "expected_source_input_samples": expected_source_input_samples,
+        "accounting_source_input_samples": accounting_source_input_samples,
+    }
+
+
 def _resident_source_dq_execution_state(run_root: Path) -> dict[str, Any]:
     path = run_root / "resident_source_dq_execution.json"
     if not path.exists():
@@ -2729,6 +2886,10 @@ def build_pipeline_contract_audit(
         resident_frame_mask=resident_frame_mask,
         resident_source_dq_execution=resident_source_dq_execution,
     )
+    frame_accounting_resident_dq_lifecycle = _frame_accounting_resident_dq_lifecycle_state(
+        frame_accounting,
+        resident_dq_lifecycle,
+    )
     stack_engine_runtime_default = _stack_engine_runtime_default_state(
         calibration_master_rows=calibration_master_rows,
         integration_rows=integration_rows,
@@ -3052,6 +3213,38 @@ def build_pipeline_contract_audit(
                 "frame_mask_sources": frame_accounting_resident_dq_ledger["frame_mask_sources"],
             },
             "Resident frame accounting must close its calibrated-light DQ ledger against resident calibration artifacts.",
+        ),
+        _check(
+            "frame_accounting_resident_dq_lifecycle_contract",
+            bool(frame_accounting_resident_dq_lifecycle["passed"]),
+            {
+                "required": frame_accounting_resident_dq_lifecycle["required"],
+                "present": frame_accounting_resident_dq_lifecycle["present"],
+                "status": frame_accounting_resident_dq_lifecycle["status"],
+                "expected_rows": frame_accounting_resident_dq_lifecycle["expected_rows"],
+                "accounting_rows": frame_accounting_resident_dq_lifecycle["accounting_rows"],
+                "expected_active_frame_count": frame_accounting_resident_dq_lifecycle.get(
+                    "expected_active_frame_count"
+                ),
+                "accounting_active_frame_count": frame_accounting_resident_dq_lifecycle.get(
+                    "accounting_active_frame_count"
+                ),
+                "expected_masked_frame_count": frame_accounting_resident_dq_lifecycle.get(
+                    "expected_masked_frame_count"
+                ),
+                "accounting_masked_frame_count": frame_accounting_resident_dq_lifecycle.get(
+                    "accounting_masked_frame_count"
+                ),
+                "expected_source_input_samples": frame_accounting_resident_dq_lifecycle.get(
+                    "expected_source_input_samples"
+                ),
+                "accounting_source_input_samples": frame_accounting_resident_dq_lifecycle.get(
+                    "accounting_source_input_samples"
+                ),
+                "failed_checks": frame_accounting_resident_dq_lifecycle["failed_checks"],
+                "failed_frame_ids": frame_accounting_resident_dq_lifecycle["failed_frame_ids"],
+            },
+            "Resident frame accounting must carry the resident DQ lifecycle into the canonical per-frame ledger.",
         ),
     ]
     if calibration_artifact_present or resident_calibration_rows:
@@ -3443,6 +3636,12 @@ def build_pipeline_contract_audit(
                 "status": resident_dq_lifecycle["status"],
                 "passed": resident_dq_lifecycle["passed"],
             },
+            "frame_accounting_resident_dq_lifecycle": {
+                "required": frame_accounting_resident_dq_lifecycle["required"],
+                "present": frame_accounting_resident_dq_lifecycle["present"],
+                "status": frame_accounting_resident_dq_lifecycle["status"],
+                "passed": frame_accounting_resident_dq_lifecycle["passed"],
+            },
         },
         "calibration": {
             "artifact_path": str(calibration_path),
@@ -3485,6 +3684,7 @@ def build_pipeline_contract_audit(
         },
         "frame_accounting": frame_accounting_admission,
         "frame_accounting_resident_dq_ledger": frame_accounting_resident_dq_ledger,
+        "frame_accounting_resident_dq_lifecycle": frame_accounting_resident_dq_lifecycle,
         "resident_source_dq_execution": resident_source_dq_execution,
         "resident_source_dq_integration_effect": resident_source_dq_integration_effect,
         "resident_frame_masks": resident_frame_mask,
@@ -3603,6 +3803,26 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
         f"frame-mask sources `{resident_dq_ledger.get('frame_mask_sources')}`, "
         f"missing `{resident_dq_ledger.get('missing_frame_ids')}`, "
         f"extra `{resident_dq_ledger.get('extra_frame_ids')}`"
+    )
+    accounting_lifecycle = audit.get("frame_accounting_resident_dq_lifecycle") or {}
+    lines.extend(["", "## Frame Accounting Resident DQ Lifecycle", ""])
+    lines.append(
+        "- "
+        f"required `{accounting_lifecycle.get('required')}`, "
+        f"present `{accounting_lifecycle.get('present')}`, "
+        f"status `{accounting_lifecycle.get('status')}`, "
+        f"expected rows `{accounting_lifecycle.get('expected_rows')}`, "
+        f"accounting rows `{accounting_lifecycle.get('accounting_rows')}`, "
+        f"failed checks `{accounting_lifecycle.get('failed_checks')}`"
+    )
+    lines.append(
+        "- "
+        f"active `{accounting_lifecycle.get('accounting_active_frame_count')}`/"
+        f"`{accounting_lifecycle.get('expected_active_frame_count')}`, "
+        f"masked `{accounting_lifecycle.get('accounting_masked_frame_count')}`/"
+        f"`{accounting_lifecycle.get('expected_masked_frame_count')}`, "
+        f"source samples `{accounting_lifecycle.get('accounting_source_input_samples')}`/"
+        f"`{accounting_lifecycle.get('expected_source_input_samples')}`"
     )
     source_dq = audit.get("resident_source_dq_execution") or {}
     summary = source_dq.get("summary") if isinstance(source_dq.get("summary"), dict) else {}

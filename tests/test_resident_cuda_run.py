@@ -3111,6 +3111,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     state = read_json(run / "run_state.json")
     resident = read_json(run / "resident_artifacts.json")
     calibration = read_json(run / "calibration_artifacts.json")
+    frame_accounting = read_json(run / "frame_accounting.json")
     resident_dq_lifecycle = read_json(run / "resident_dq_lifecycle.json")
     resident_result_contract = read_json(run / "resident_result_contract.json")
     resident_calibration_contract = read_json(run / "resident_calibration_contract.json")
@@ -3135,6 +3136,15 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert resident_dq_lifecycle["summary"]["passed"] is True
     assert integration["resident_dq_lifecycle_summary"] == resident_dq_lifecycle["summary"]
     assert any(item["stage"] == "resident_dq_lifecycle" for item in state["artifacts"])
+    assert frame_accounting["sources"]["resident_dq_lifecycle"] is True
+    assert frame_accounting["summary"]["resident_dq_lifecycle_present"] is True
+    assert frame_accounting["summary"]["resident_dq_lifecycle_rows"] == resident_dq_lifecycle["summary"]["frame_count"]
+    assert frame_accounting["summary"]["resident_dq_lifecycle_active_frames"] == resident_dq_lifecycle["summary"][
+        "active_frame_count"
+    ]
+    assert frame_accounting["summary"]["resident_dq_lifecycle_masked_frames"] == resident_dq_lifecycle["summary"][
+        "masked_frame_count"
+    ]
     assert integration["outputs"][0]["master_path"] == resident["artifacts"][0]["master_path"]
     assert integration["outputs"][0]["weight_map_path"] == resident["artifacts"][0]["weight_map_path"]
     assert integration["outputs"][0]["coverage_map_path"] == resident["artifacts"][0]["coverage_map_path"]
@@ -3199,6 +3209,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     pipeline_checks = {item["name"]: item for item in pipeline_contract["checks"]}
     assert pipeline_checks["integration_resident_result_contract"]["passed"] is True
     assert pipeline_checks["resident_calibrated_light_embedded_dq_mask_contract"]["passed"] is True
+    assert pipeline_checks["frame_accounting_resident_dq_lifecycle_contract"]["passed"] is True
     assert pipeline_checks["local_normalization_continuous_contract_audit"]["passed"] is True
     assert pipeline_contract["artifacts"]["local_norm_contract"]["attached"] is True
     assert any(item["stage"] == "pipeline_contract" for item in state["artifacts"])
