@@ -38,6 +38,7 @@ from glass.engine.resident_reference_health import (
     DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
     DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
     build_resident_reference_health,
+    resident_reference_health_action_backend,
     resolve_resident_reference_health_action,
 )
 from glass.engine.resident_registration_health import (
@@ -1181,7 +1182,7 @@ def _resident_reference_health_is_needed(run: Path, args: argparse.Namespace) ->
         scout = read_json(scout_path)
     except Exception:
         return True
-    scout_backend = str(scout.get("catalog_backend") or "") if isinstance(scout, dict) else ""
+    scout_backend = resident_reference_health_action_backend(scout) if isinstance(scout, dict) else ""
     action = resolve_resident_reference_health_action(
         getattr(args, "resident_reference_health_gate", DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE),
         scout_backend=scout_backend,

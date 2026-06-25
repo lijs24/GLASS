@@ -568,6 +568,92 @@ Interpretation:
   health model, DQ/mask contract simplification, or a cooperative resident
   reducer for heavier stacks.
 
+### S2-Gate 636: Reference Health For CUDA-Attempt Auto Scout
+
+Gate 636 closes the remaining default-path gap from Gate635. Gate635 made
+`auto` safe by falling back to the CPU reference when the CUDA raw-catalog
+candidate failed the CPU guard, but the final effective scout backend became
+`cpu`, so the resident reference-health stage was skipped. That meant the run
+did not persist calibrated reference-health evidence even when a resident
+master cache was available.
+
+This gate treats a scout with `catalog_backend_resolution.attempted=cuda` as a
+CUDA-attempted scout for health-gate purposes, even if its effective official
+backend is CPU after fallback. The default run now writes
+`resident_reference_health.json` before reference admission, memory admission,
+registration, warp, local normalization, or integration.
+
+Implementation:
+
+- Added `resident_reference_health_action_backend()` to resolve the action
+  backend from the scout artifact.
+- `resident_reference_health_action_backend()` returns `cuda` when the scout
+  records `attempted=cuda`; otherwise it returns the effective scout backend.
+- CLI reference-health admission now uses that helper, so auto CUDA-attempt
+  fallbacks run the existing reference-health stage.
+- `resident_reference_health.json` records both `scout_backend` and
+  `health_action_backend`, making the distinction between official reference
+  backend and health-gate trigger auditable.
+- No calibration, registration, warp, local-normalization, rejection, DQ, or
+  integration formulas changed.
+
+Focused validation:
+
+- Added a direct test proving an auto CUDA-attempt scout that falls back to CPU
+  still runs reference health with `effective_action=fail`, records
+  `health_action_backend=cuda`, and passes the calibrated master-cache guard.
+- Added a CLI test proving `glass run` writes `resident_reference_health.json`
+  between `resident_reference_scout` and `resident_reference_admission` for an
+  auto CUDA-attempt fallback.
+- Focused tests: `13 passed, 68 deselected`.
+- Ruff over touched files: passed.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate636_reference_health_for_cuda_attempt\runs_20260625_151939\candidate_reference_health_cuda_attempt`.
+- Evidence root:
+  `C:\glass_runs\phase2_s2_gate636_reference_health_for_cuda_attempt\runs_20260625_151939`.
+- Reference scout result: requested `auto`, attempted `cuda`, effective `cpu`.
+- Official reference: `F000225`.
+- Reference-health action: `fail`.
+- Reference-health action backend: `cuda`.
+- CPU crosscheck reference: `F000225`.
+- Calibrated reference: `F000079`.
+- Official reference calibrated evidence: star ratio `0.9032258064516129`,
+  rank fraction `0.047619047619047616`.
+- CUDA-calibrated diagnostic reference: `F000114`.
+- Official reference CUDA-calibrated evidence: star ratio `1.0`, rank fraction
+  `0.12698412698412698`.
+- GLASS total elapsed: `12.167883900227025 s`.
+- Reference-health stage elapsed: `1.535151300020516 s`.
+- Resident calibration/integration stage elapsed: `9.430013900040649 s`.
+- Frame accounting: `200` lights, `193` active weighted frames, `7` masked
+  registration frames.
+- Resident regression gate versus Gate635: passed, elapsed ratio
+  `1.1092202985059865` with max allowed `1.2`.
+- Black-box reference elapsed: `1092.541 s`.
+- Acceptance speedup: `89.7889073366007x`.
+- Compare metrics at coverage >= `190`: shape match `true`, RMS
+  `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Pipeline contract: passed.
+- StackEngine contract: passed.
+- Warp quality contract: passed.
+- Acceptance audit status: passed.
+
+Interpretation:
+
+- This is a mainline completeness gate: a CUDA-attempted default reference path
+  now has a persisted calibrated health artifact, not just a scout-local guard.
+- The new health stage has measurable overhead on the 200-light run but stays
+  within the real benchmark's regression budget and preserves the accepted
+  frame set and output comparison.
+- The next substantive gate should either reduce that reference-health overhead
+  by moving the calibrated sample check closer to resident GPU data, or attack
+  the larger resident registration/warp and integration reducer bottlenecks.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization

@@ -104,22 +104,25 @@ Machine-readable speedup summary:
   frames, and `7` zero-weight frames, matching the WBPP FastIntegration accepted
   frame set used for the parity comparison.
 
-Current Phase 2 latest guarded-reference acceptance:
+Current Phase 2 latest guarded-reference-health acceptance:
 
-- Gate: S2-Gate 635.
+- Gate: S2-Gate 636.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate635_guarded_cuda_reference_scout\runs_20260625_151002`.
+  `C:\glass_runs\phase2_s2_gate636_reference_health_for_cuda_attempt\runs_20260625_151939`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate635_guarded_cuda_reference_scout\runs_20260625_151002\candidate_guarded_cuda_reference_scout`.
-- GLASS elapsed time: `10.969763099914417 s`.
+  `C:\glass_runs\phase2_s2_gate636_reference_health_for_cuda_attempt\runs_20260625_151939\candidate_reference_health_cuda_attempt`.
+- GLASS elapsed time: `12.167883900227025 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `99.5956785984306x`.
+- Speedup: `89.7889073366007x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
 - Reference scout: `auto` attempted CUDA, selected CUDA candidate `F000215`,
   failed the CPU guard at star ratio `0.7843137254901961` and rank fraction
   `0.4411764705882353`, then officially fell back to CPU reference `F000225`.
+- Reference health: action `fail`, action backend `cuda`, official reference
+  `F000225`; calibrated reference `F000079`; official reference calibrated star
+  ratio `0.9032258064516129` and rank fraction `0.047619047619047616`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
@@ -127,10 +130,10 @@ Current Phase 2 latest guarded-reference acceptance:
 - Pipeline contract: passed.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate633: passed with candidate/baseline
-  elapsed ratio `1.0218540265834237`.
+- Resident regression gate versus Gate635: passed with candidate/baseline
+  elapsed ratio `1.1092202985059865`.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate635_guarded_cuda_reference_scout\runs_20260625_151002\gate635_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate636_reference_health_for_cuda_attempt\runs_20260625_151939\gate636_acceptance_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

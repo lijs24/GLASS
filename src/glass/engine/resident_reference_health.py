@@ -40,6 +40,14 @@ def resolve_resident_reference_health_action(
     return "fail" if str(scout_backend or "").lower() == "cuda" else "off"
 
 
+def resident_reference_health_action_backend(scout: dict[str, Any]) -> str:
+    backend = str(scout.get("catalog_backend") or "")
+    resolution = scout.get("catalog_backend_resolution")
+    if isinstance(resolution, dict) and str(resolution.get("attempted") or "").lower() == "cuda":
+        return "cuda"
+    return backend
+
+
 def _selection_key(row: dict[str, Any]) -> tuple[int, float, float, float, float]:
     return (
         int(row.get("star_count") or 0),
@@ -732,7 +740,8 @@ def build_resident_reference_health(
     if not isinstance(plan, dict):
         raise ValueError(f"processing plan is not a JSON object: {plan_path}")
     scout_backend = str(scout.get("catalog_backend") or "")
-    action = resolve_resident_reference_health_action(requested_action, scout_backend=scout_backend)
+    health_action_backend = resident_reference_health_action_backend(scout)
+    action = resolve_resident_reference_health_action(requested_action, scout_backend=health_action_backend)
     enabled = action in {"warn", "fail"}
     reference_frame_id = str(scout.get("reference_frame_id") or "")
     cpu_crosscheck = build_resident_reference_scout(
@@ -841,6 +850,7 @@ def build_resident_reference_health(
         "run_dir": str(run),
         "scout_path": str(scout_path),
         "scout_backend": scout_backend,
+        "health_action_backend": health_action_backend,
         "requested_action": str(requested_action or DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE).lower(),
         "effective_action": action,
         "status": status,

@@ -1435,6 +1435,76 @@ def test_resident_reference_health_calibrated_crosscheck_can_block_when_raw_thre
     assert "selected_reference_calibrated_star_ratio" in health["failed_checks"]
 
 
+def test_resident_reference_health_enforces_auto_cuda_attempt_after_cpu_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import glass_cuda
+
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "reference_health_auto_cuda_attempt"
+    cache_dir = tmp_path / "resident_master_cache"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    strong_id = _light_frame_id_by_stem(plan, "light_002")
+
+    def fake_cuda_prefers_weak(
+        data,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell,
+        max_output_candidates,
+        min_separation_px,
+    ):
+        image = np.asarray(data, dtype=np.float32)
+        is_weak = float(np.max(image)) < 2000.0
+        count = 30 if is_weak else 1
+        flux = np.full((count,), float(threshold) + 100.0, dtype=np.float32)
+        coords = np.arange(count, dtype=np.float32)
+        return {
+            "count": count,
+            "stored_count": count,
+            "grid_cols": int(grid_cols),
+            "grid_rows": int(grid_rows),
+            "candidates_per_cell": int(candidates_per_cell),
+            "grid_capacity": int(grid_cols) * int(grid_rows) * int(candidates_per_cell),
+            "max_output_candidates": int(max_output_candidates),
+            "min_separation_px": float(min_separation_px),
+            "catalog_sort_mode": "fake_cuda_prefers_weak",
+            "catalog_topk_mode": "fake_cuda_prefers_weak",
+            "x": coords,
+            "y": coords,
+            "flux": flux,
+        }
+
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: True)
+    monkeypatch.setattr(glass_cuda, "star_grid_top_nms_candidates_f32", fake_cuda_prefers_weak)
+    scout_path = write_resident_reference_scout(plan, run, sample_stride=1, max_frames=0, catalog_backend="auto")
+    scout = read_json(scout_path)
+    assert scout["catalog_backend"] == "cpu"
+    assert scout["catalog_backend_resolution"]["attempted"] == "cuda"
+    assert scout["reference_frame_id"] == strong_id
+
+    _write_reference_health_master_cache(cache_dir)
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: False)
+
+    health = build_resident_reference_health(plan, run, master_cache_dir=cache_dir, flat_floor=0.05)
+
+    assert health["effective_action"] == "fail"
+    assert health["scout_backend"] == "cpu"
+    assert health["health_action_backend"] == "cuda"
+    assert health["passed"] is True
+    assert health["blocking"] is False
+    assert health["summary"]["reference_frame_id"] == strong_id
+    assert health["summary"]["cpu_reference_frame_id"] == strong_id
+    assert health["calibrated_crosscheck"]["available"] is True
+    assert health["calibrated_crosscheck"]["status"] == "passed"
+
+
 def test_cli_resident_run_blocks_bad_cuda_reference_before_compute(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1478,6 +1548,102 @@ def test_cli_resident_run_blocks_bad_cuda_reference_before_compute(
     ]
     assert timing["stages"][-1]["status"] == "failed"
     assert not (run / "resident_memory_admission.json").exists()
+
+
+def test_cli_resident_run_writes_reference_health_for_auto_cuda_attempt_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import glass_cuda
+
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "auto_cuda_attempt_health_cli"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    def fake_cuda_prefers_weak(
+        data,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell,
+        max_output_candidates,
+        min_separation_px,
+    ):
+        image = np.asarray(data, dtype=np.float32)
+        is_weak = float(np.max(image)) < 2000.0
+        count = 30 if is_weak else 1
+        flux = np.full((count,), float(threshold) + 100.0, dtype=np.float32)
+        coords = np.arange(count, dtype=np.float32)
+        return {
+            "count": count,
+            "stored_count": count,
+            "grid_cols": int(grid_cols),
+            "grid_rows": int(grid_rows),
+            "candidates_per_cell": int(candidates_per_cell),
+            "grid_capacity": int(grid_cols) * int(grid_rows) * int(candidates_per_cell),
+            "max_output_candidates": int(max_output_candidates),
+            "min_separation_px": float(min_separation_px),
+            "catalog_sort_mode": "fake_cuda_prefers_weak",
+            "catalog_topk_mode": "fake_cuda_prefers_weak",
+            "x": coords,
+            "y": coords,
+            "flux": flux,
+        }
+
+    def fake_memory_admission(run_dir, _args, *, plan_path=None):
+        path = Path(run_dir) / "resident_memory_admission.json"
+        write_json(path, {"schema_version": 1, "blocking": False, "plan_path": str(plan_path)})
+        return path
+
+    def fake_resident_run(_plan_path, out_dir, *_args, **_kwargs):
+        state = initialize_run(Path(out_dir))
+        state.current_stage = "integration"
+        state.completed_stages.append("resident_calibration_integration")
+        _write_resident_registration_quality(Path(out_dir), frame_count=2, accepted_count=2)
+        return state
+
+    monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: True)
+    monkeypatch.setattr(glass_cuda, "star_grid_top_nms_candidates_f32", fake_cuda_prefers_weak)
+    monkeypatch.setattr("glass.cli._write_resident_memory_admission", fake_memory_admission)
+    monkeypatch.setattr("glass.cli.run_resident_calibration_integration", fake_resident_run)
+
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--resident-reference-scout-stride",
+                "1",
+                "--resident-reference-scout-max-frames",
+                "0",
+            ]
+        )
+        == 0
+    )
+
+    scout = read_json(run / "resident_reference_scout.json")
+    health = read_json(run / "resident_reference_health.json")
+    timing = read_json(run / "run_timing.json")
+
+    assert scout["catalog_backend"] == "cpu"
+    assert scout["catalog_backend_resolution"]["attempted"] == "cuda"
+    assert health["effective_action"] == "fail"
+    assert health["health_action_backend"] == "cuda"
+    assert health["passed"] is True
+    assert "resident_reference_health" in [item["stage"] for item in timing["stages"]]
+    assert [item["stage"] for item in timing["stages"][:3]] == [
+        "resident_reference_scout",
+        "resident_reference_health",
+        "resident_reference_admission",
+    ]
 
 
 def test_resident_reference_scout_auto_keeps_cuda_when_cpu_guard_passes(
