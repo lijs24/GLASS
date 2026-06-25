@@ -1022,6 +1022,18 @@ def _write_run_command(run: Path, args: argparse.Namespace) -> None:
     argv = list(getattr(args, "_glass_argv", []) or sys.argv[1:])
     command = subprocess.list2cmdline(["glass", *argv])
     (run / "run_command.txt").write_text(command, encoding="utf-8")
+    write_json(
+        run / "run_invocation.json",
+        {
+            "schema_version": 1,
+            "artifact_type": "run_invocation",
+            "created_at": now_iso(),
+            "argv": argv,
+            "command": command,
+            "subcommand": argv[0] if argv else None,
+            "cwd": str(Path.cwd()),
+        },
+    )
 
 
 def _resolve_route_sidecar_path(path: str | Path, *, artifact_root: Path) -> Path:
@@ -2215,6 +2227,58 @@ def _write_resident_resume_success_state(run: Path) -> None:
     write_json(state_path, state)
 
 
+def _write_resident_resume_reentry_artifact(
+    run: Path,
+    *,
+    preflight: dict[str, Any],
+    exit_code: int | None,
+) -> Path:
+    path = run / "resident_resume_reentry.json"
+    reentry = preflight.get("reentry") if isinstance(preflight.get("reentry"), dict) else {}
+    invocation = reentry.get("invocation") if isinstance(reentry.get("invocation"), dict) else {}
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "resident_resume_reentry",
+            "created_at": now_iso(),
+            "run": str(run),
+            "preflight_action": preflight.get("resume_action"),
+            "preflight_reason": preflight.get("reason"),
+            "argv": invocation.get("argv") if isinstance(invocation.get("argv"), list) else [],
+            "exit_code": exit_code,
+            "status": "passed" if exit_code == 0 else "failed",
+        },
+    )
+    return path
+
+
+def _append_run_state_artifact(run: Path, *, stage: str, path: Path) -> None:
+    state_path = run / "run_state.json"
+    if not state_path.exists():
+        return
+    state = read_json(state_path)
+    if not isinstance(state, dict):
+        return
+    artifacts = state.setdefault("artifacts", [])
+    if not isinstance(artifacts, list):
+        return
+    artifact_path = str(path)
+    if any(isinstance(item, dict) and item.get("path") == artifact_path for item in artifacts):
+        return
+    artifacts.append(
+        {
+            "stage": stage,
+            "path": artifact_path,
+            "format": "json",
+            "created_at": now_iso(),
+            "source_frames": [],
+            "checksum_optional": None,
+        }
+    )
+    write_json(state_path, state)
+
+
 def _write_resident_stage_ledger_artifact(run: Path, state, timing: dict[str, Any]) -> Path:
     ledger_path = write_resident_stage_ledger(run, state=state, timing=timing)
     state.artifacts.append(
@@ -3224,25 +3288,96 @@ def cmd_resume(args: argparse.Namespace) -> int:
     if is_resident_run(run):
         preflight_path = write_resident_resume_preflight(run)
         preflight = read_json(preflight_path)
-        if preflight.get("passed") is True:
+        action = preflight.get("resume_action")
+        if preflight.get("passed") is True and action == "noop_complete":
             _write_resident_resume_success_state(run)
             console.print(resume_summary(args.run))
             console.print(
                 {
                     "status": "ok",
                     "stage": "resident_resume",
-                    "action": preflight.get("resume_action"),
+                    "action": action,
                     "preflight": str(preflight_path),
                 }
             )
             console.print("Resident CUDA run already has complete artifacts; no stages repeated.")
             return 0
+        if preflight.get("passed") is True and action == "reenter_from_run_invocation":
+            reentry = preflight.get("reentry") if isinstance(preflight.get("reentry"), dict) else {}
+            invocation = reentry.get("invocation") if isinstance(reentry.get("invocation"), dict) else {}
+            argv = [str(item) for item in invocation.get("argv", [])] if isinstance(invocation.get("argv"), list) else []
+            if not argv:
+                _write_resident_resume_failed_state(run, preflight)
+                console.print(
+                    {
+                        "status": "failed",
+                        "stage": "resident_resume",
+                        "action": action,
+                        "reason": "resident resume reentry missing stored argv",
+                        "preflight": str(preflight_path),
+                    }
+                )
+                return 2
+            console.print(
+                {
+                    "status": "running",
+                    "stage": "resident_resume",
+                    "action": action,
+                    "preflight": str(preflight_path),
+                }
+            )
+            exit_code = main(argv)
+            reentry_path = _write_resident_resume_reentry_artifact(
+                run,
+                preflight=preflight,
+                exit_code=exit_code,
+            )
+            _append_run_state_artifact(run, stage="resident_resume_reentry", path=reentry_path)
+            if exit_code != 0:
+                console.print(
+                    {
+                        "status": "failed",
+                        "stage": "resident_resume",
+                        "action": action,
+                        "exit_code": exit_code,
+                        "reentry": str(reentry_path),
+                    }
+                )
+                return int(exit_code)
+            final_preflight_path = write_resident_resume_preflight(run)
+            final_preflight = read_json(final_preflight_path)
+            if final_preflight.get("passed") is True:
+                _write_resident_resume_success_state(run)
+                _append_run_state_artifact(run, stage="resident_resume_reentry", path=reentry_path)
+                console.print(
+                    {
+                        "status": "ok",
+                        "stage": "resident_resume",
+                        "action": action,
+                        "final_action": final_preflight.get("resume_action"),
+                        "reentry": str(reentry_path),
+                        "preflight": str(final_preflight_path),
+                    }
+                )
+                return 0
+            _write_resident_resume_failed_state(run, final_preflight)
+            console.print(
+                {
+                    "status": "failed",
+                    "stage": "resident_resume",
+                    "action": action,
+                    "final_action": final_preflight.get("resume_action"),
+                    "reentry": str(reentry_path),
+                    "preflight": str(final_preflight_path),
+                }
+            )
+            return 2
         _write_resident_resume_failed_state(run, preflight)
         console.print(
             {
                 "status": "failed",
                 "stage": "resident_resume",
-                "action": preflight.get("resume_action"),
+                "action": action,
                 "reason": preflight.get("reason"),
                 "preflight": str(preflight_path),
             }

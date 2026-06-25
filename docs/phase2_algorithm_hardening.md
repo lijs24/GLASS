@@ -801,6 +801,91 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 647: Resident Pre-Integration Reentry
+
+Gate647 makes the resident resume framework take its first real partial reentry
+step. Gate646 centralized resident stage/artifact expectations in
+`resident_stage_ledger.json`, but incomplete resident runs were still blocked
+even when they had not entered the heavy CUDA calibration/integration stage.
+Gate647 adds a conservative reentry path: if a resident run has a stored
+machine-readable invocation and `resident_calibration_integration` has not
+started, `glass resume` can re-enter through the original `glass run` argv.
+
+Implementation:
+
+- `glass run` now writes `run_invocation.json` next to `run_command.txt`.
+  The JSON records argv, subcommand, and cwd so resume does not have to parse a
+  shell-formatted command string.
+- `resident_resume_preflight.json` now includes a `reentry` block with
+  eligibility, stored invocation, reasons, and whether
+  `resident_calibration_integration` has already started.
+- `glass resume` handles `resume_action=reenter_from_run_invocation` by invoking
+  the stored `glass run` argv.
+- Reentry is intentionally narrow:
+  - the stored invocation must be a `run` command;
+  - the stored `--out` must resolve to the same run directory;
+  - `run_state.failed_stage` must be empty;
+  - `resident_calibration_integration` must not have started.
+- `resident_resume_reentry.json` records the argv, exit code, and reentry
+  status.
+- After successful reentry, resume rewrites the ledger/preflight, records the
+  reentry artifact in `run_state.json`, and finishes with
+  `resume_action=noop_complete`.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Resident resume and stage-ledger focused tests: `5 passed`.
+- Tests cover completed-run no-op, incomplete-run fallback blocking, and a
+  stored-invocation reentry that becomes a completed no-op resume.
+
+Real 200-light validation:
+
+- Partial run skeleton:
+  `C:\glass_runs\phase2_s2_gate647_resident_reentry\runs_20260625_190000\candidate_reentry_from_scout`.
+- The skeleton contained `run_timing.json` and `run_state.json` indicating only
+  `resident_reference_scout` had completed, plus `run_invocation.json` for the
+  real resident CUDA command.
+- Command:
+  `glass resume --run C:\glass_runs\phase2_s2_gate647_resident_reentry\runs_20260625_190000\candidate_reentry_from_scout`.
+- Initial resume action: `reenter_from_run_invocation`.
+- Reentry artifact:
+  `C:\glass_runs\phase2_s2_gate647_resident_reentry\runs_20260625_190000\candidate_reentry_from_scout\resident_resume_reentry.json`.
+- Reentry status: passed, exit code `0`.
+- Final resume action: `noop_complete`.
+- Evidence summary:
+  `C:\glass_runs\phase2_s2_gate647_resident_reentry\runs_20260625_190000\gate647_ab_summary.json`.
+- GLASS elapsed after reentry: `11.2256182001438 s`.
+- Resident calibration/integration stage: `9.59789230010938 s`.
+- Black-box reference elapsed: `1092.541 s`.
+- Acceptance speedup: `97.325686703473x`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames.
+- Resident stage ledger: started stages `15`, complete stages `15`, expected
+  artifact rows `23`, missing artifact rows `0`, `can_noop_resume=true`.
+- Resident regression gate versus Gate646: passed, elapsed ratio
+  `0.8885626915461112`, no failed checks.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed.
+- Phase 2 mainline audit: passed.
+
+Interpretation:
+
+- This is the first resident partial-reentry behavior, not only a diagnostic
+  report. `glass resume` can now restart a resident run that stopped before the
+  heavy CUDA calibration/integration stage.
+- The guard remains conservative. If resident calibration/integration has
+  started or a failed stage is present, resume still blocks rather than guessing
+  how to reuse partial VRAM/disk state.
+- Pixel math is unchanged and the 200-light output remains inside the accepted
+  comparison envelope.
+- The next substantive gate should push the reentry boundary deeper by adding a
+  safe checkpoint around resident master-cache reuse or a completed
+  calibration/admission boundary inside `resident_calibration_integration`.
+
 ### S2-Gate 646: Resident Stage Ledger
 
 Gate646 continues the Phase 2 mainline-framework work. Gate645 stopped resident

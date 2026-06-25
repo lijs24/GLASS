@@ -35,6 +35,75 @@ def _stage_names_from_timing(timing: dict[str, Any]) -> list[str]:
     return names
 
 
+def _resident_stage_started(ledger: dict[str, Any], stage: str) -> bool:
+    rows = ledger.get("stages") if isinstance(ledger.get("stages"), list) else []
+    for row in rows:
+        if isinstance(row, dict) and row.get("stage") == stage:
+            return bool(row.get("started"))
+    return False
+
+
+def _run_invocation(run: Path) -> dict[str, Any]:
+    invocation = _read_json_if_exists(run / "run_invocation.json")
+    argv = invocation.get("argv") if isinstance(invocation.get("argv"), list) else []
+    return {
+        "path": str(run / "run_invocation.json"),
+        "exists": (run / "run_invocation.json").exists(),
+        "subcommand": invocation.get("subcommand"),
+        "argv": [str(item) for item in argv],
+        "cwd": str(invocation.get("cwd") or ""),
+    }
+
+
+def _argv_option_value(argv: list[str], flag: str) -> str | None:
+    for index, token in enumerate(argv):
+        if token == flag and index + 1 < len(argv):
+            return argv[index + 1]
+        prefix = f"{flag}="
+        if token.startswith(prefix):
+            return token[len(prefix) :]
+    return None
+
+
+def _resident_reentry_candidate(run: Path, ledger: dict[str, Any], failed_stage: Any) -> dict[str, Any]:
+    invocation = _run_invocation(run)
+    argv = invocation["argv"] if isinstance(invocation.get("argv"), list) else []
+    out_arg = _argv_option_value(argv, "--out")
+    invocation_cwd = Path(str(invocation.get("cwd") or Path.cwd()))
+    out_path = None if out_arg is None else Path(str(out_arg))
+    resolved_out = None if out_path is None else (out_path if out_path.is_absolute() else invocation_cwd / out_path)
+    integration_started = _resident_stage_started(ledger, "resident_calibration_integration")
+    eligible = bool(
+        invocation.get("exists")
+        and invocation.get("subcommand") == "run"
+        and not failed_stage
+        and not integration_started
+        and out_arg is not None
+        and resolved_out is not None
+        and resolved_out.resolve() == run.resolve()
+    )
+    reasons: list[str] = []
+    if not invocation.get("exists"):
+        reasons.append("missing_run_invocation")
+    if invocation.get("subcommand") != "run":
+        reasons.append("run_invocation_not_run")
+    if failed_stage:
+        reasons.append(f"run_state_failed_stage:{failed_stage}")
+    if integration_started:
+        reasons.append("resident_calibration_integration_already_started")
+    if out_arg is None:
+        reasons.append("run_invocation_missing_out")
+    elif resolved_out is None or resolved_out.resolve() != run.resolve():
+        reasons.append("run_invocation_out_mismatch")
+    return {
+        "eligible": eligible,
+        "action": "reenter_from_run_invocation" if eligible else "blocked",
+        "reasons": reasons,
+        "invocation": invocation,
+        "resident_calibration_integration_started": integration_started,
+    }
+
+
 def _state_mentions_resident(state: dict[str, Any]) -> bool:
     stages: list[str] = []
     for key in ("current_stage", "failed_stage"):
@@ -81,6 +150,7 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
     )
     integration_complete = bool(summary.get("integration_complete"))
     failed_stage = state.get("failed_stage")
+    reentry = _resident_reentry_candidate(run, ledger, failed_stage)
     if not resident:
         action = "not_resident_run"
         passed = True
@@ -89,6 +159,10 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
         action = "blocked_failed_resident_run"
         passed = False
         reason = f"run_state failed_stage is {failed_stage}"
+    elif not integration_complete and reentry["eligible"]:
+        action = "reenter_from_run_invocation"
+        passed = True
+        reason = "resident CUDA run can re-enter from stored run invocation before calibration/integration started"
     elif not integration_complete:
         action = "blocked_incomplete_resident_run"
         passed = False
@@ -119,7 +193,9 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
             "failed_stage": failed_stage,
             "memory_mode": summary.get("memory_mode"),
             "stage_ledger_can_noop_resume": bool(summary.get("can_noop_resume")),
+            "reentry_eligible": bool(reentry.get("eligible")),
         },
+        "reentry": reentry,
         "stage_ledger": {
             "path": str(run / "resident_stage_ledger.json"),
             "summary": summary,
