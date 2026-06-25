@@ -81,6 +81,14 @@ Current code is intentionally gated:
   requires an explicit true value and ignores values such as `auto`. Richer
   robust rejection policies, cosmetic correction, and broader data-shape
   support remain future work.
+- The default native-completion calibration schedule still uses 4 lanes. Gate631
+  tested 8/12/16-lane real 200-light variants and rejected default promotion:
+  8-lane preserved output but did not deliver a stable native H2D/calibration
+  win, while 12/16 lanes increased native calibration time in the first matrix.
+  `resident_light_pipeline_profile.native_completion` now records lane-fill,
+  queue-buffer, worker, wave-fill, and slot-reuse metrics so the next
+  substantive improvement can target wave-fill/overlap instead of blindly
+  increasing lane count.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must

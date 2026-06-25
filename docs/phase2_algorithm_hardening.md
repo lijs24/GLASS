@@ -229,6 +229,58 @@ Interpretation:
   read/H2D/calibration pipeline where `native_h2d_calibrate_store` remains a
   dominant component.
 
+### S2-Gate 631: Native Completion Lane-Fill Profile
+
+Gate 631 returns to the resident read/H2D/calibration hot path and tests whether
+the high-VRAM completion queue should use more calibration lanes by default.
+
+Implementation:
+
+- `resident_light_pipeline_profile` now exposes a `native_completion` block
+  with worker count, queue-buffer count, submit/completion counts, slot-reuse
+  wait, consumer wave count, max wave size, multi-frame wave fraction, timed
+  wave-fill wait, and `consumer_lane_fill_ratio`.
+- The same lane-fill ratio is duplicated into the profile `knobs` section so
+  report/benchmark consumers can compare runtime knobs without opening the full
+  `resident_io_pipeline` payload.
+- The profile recommendation now flags
+  `improve_native_completion_wave_fill_before_adding_lanes` when native
+  H2D/calibration dominates and completion waves are underfilled.
+- The default runtime preset remains unchanged: `throughput-v4-native-completion`
+  still requests 4 calibration streams/waves.
+
+Real 200-light validation:
+
+- Matrix root:
+  `C:\glass_runs\phase2_s2_gate631_calibration_lane_matrix\runs_20260625_140533`.
+- Variants:
+  - default 4-lane: total `11.165 s`,
+    native H2D+calibration `1.977 s`, lane fill `0.862`;
+  - 8-lane: total `10.790 s`,
+    native H2D+calibration `1.968 s`, lane fill `0.610`;
+  - 12-lane: total `10.887 s`,
+    native H2D+calibration `2.032 s`, lane fill `0.450`;
+  - 16-lane: total `10.835 s`,
+    native H2D+calibration `2.011 s`, lane fill `0.735`.
+- Repeat default-vs-8-lane pair:
+  - default: total `10.662 s`, native H2D+calibration `1.974 s`;
+  - 8-lane: total `10.862 s`, native H2D+calibration `1.980 s`.
+- Regressions:
+  - default4 versus lanes8: passed, elapsed ratio `0.9663834722897465`;
+  - default4_r2 versus lanes8_r2: passed, elapsed ratio
+    `1.0188336004688132`;
+  - default4 versus the post-change profile-contract rerun: passed, elapsed
+    ratio `0.9623754746375969`.
+- All runs preserved the `193 / 7` active/masked frame accounting.
+
+Decision:
+
+- Do not promote 8, 12, or 16 lanes as the default. 8-lane is numerically safe
+  but not a stable native-calibration or total-time win; 12/16 lanes increased
+  native H2D+calibration time in the first matrix.
+- The next real optimization should improve native completion wave-fill or
+  overlap before adding lanes, or return to the hardened reducer kernel itself.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization

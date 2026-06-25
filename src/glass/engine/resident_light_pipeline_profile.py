@@ -21,6 +21,10 @@ def _fraction(value: float, total: float) -> float:
     return float(value / total) if total > 0.0 else 0.0
 
 
+def _none_if_nonpositive(value: float) -> float | None:
+    return float(value) if value > 0.0 else None
+
+
 def build_resident_light_pipeline_profile(
     *,
     timing_s: Mapping[str, Any],
@@ -65,8 +69,42 @@ def build_resident_light_pipeline_profile(
     read_wait_fraction = _fraction(read_wait, wall)
     native_fraction = _fraction(native, wall)
     unaccounted_fraction = _fraction(unaccounted, wall)
+    requested_streams = _int_value(resident_io_pipeline, "calibration_batch_requested_streams")
+    native_completion_enabled = bool(
+        resident_io_pipeline.get("native_completion_calibration_enabled", False)
+    )
+    native_completion_count = _int_value(
+        resident_io_pipeline,
+        "native_completion_calibration_completion_count",
+    )
+    native_completion_consumer_wave_count = _int_value(
+        resident_io_pipeline,
+        "native_completion_calibration_consumer_wave_count",
+    )
+    native_completion_lane_slots = native_completion_consumer_wave_count * max(
+        1,
+        requested_streams,
+    )
+    native_completion_lane_fill_ratio = _fraction(
+        float(native_completion_count),
+        float(native_completion_lane_slots),
+    )
+    native_completion_multi_frame_wave_count = _int_value(
+        resident_io_pipeline,
+        "native_completion_calibration_consumer_multi_frame_wave_count",
+    )
+    native_completion_multi_frame_wave_fraction = _fraction(
+        float(native_completion_multi_frame_wave_count),
+        float(native_completion_consumer_wave_count),
+    )
     if master_fraction >= 0.45:
         recommendation = "reuse_or_prebuild_master_calibration_cache"
+    elif (
+        native_completion_enabled
+        and native_fraction >= 0.45
+        and 0.0 < native_completion_lane_fill_ratio < 0.70
+    ):
+        recommendation = "improve_native_completion_wave_fill_before_adding_lanes"
     elif read_wait_fraction >= 0.45 and native_fraction < 0.40:
         recommendation = "increase_prefetch_supply_or_reduce_decode_cost"
     elif read_wait_fraction >= 0.30 and native_fraction >= 0.30:
@@ -120,6 +158,89 @@ def build_resident_light_pipeline_profile(
                 if isinstance(resident_io_pipeline.get("master_cache_async_write"), Mapping)
                 else {},
                 "written_bytes",
+            ),
+        },
+        "native_completion": {
+            "enabled": native_completion_enabled,
+            "submit_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_submit_count",
+            ),
+            "completion_count": native_completion_count,
+            "out_of_order_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_out_of_order_count",
+            ),
+            "worker_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_worker_count",
+            ),
+            "queue_buffer_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_queue_buffer_count",
+            ),
+            "queue_buffers_per_stream": _none_if_nonpositive(
+                _fraction(
+                    float(
+                        _int_value(
+                            resident_io_pipeline,
+                            "native_completion_calibration_queue_buffer_count",
+                        )
+                    ),
+                    float(requested_streams),
+                )
+            ),
+            "slot_release_mode": resident_io_pipeline.get(
+                "native_completion_calibration_slot_release_mode"
+            ),
+            "slot_reuse_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_slot_reuse_count",
+            ),
+            "slot_reuse_wait_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_slot_reuse_wait_count",
+            ),
+            "slot_reuse_wait_s": _float_value(
+                resident_io_pipeline,
+                "native_completion_calibration_slot_reuse_wait_s",
+            ),
+            "consumer_schedule_mode": resident_io_pipeline.get(
+                "native_completion_calibration_consumer_schedule_mode"
+            ),
+            "consumer_wave_count": native_completion_consumer_wave_count,
+            "consumer_max_wave_frames": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_consumer_max_wave_frames",
+            ),
+            "consumer_multi_frame_wave_count": native_completion_multi_frame_wave_count,
+            "consumer_multi_frame_wave_fraction": native_completion_multi_frame_wave_fraction,
+            "consumer_lane_fill_ratio": native_completion_lane_fill_ratio,
+            "consumer_wave_fill_policy": resident_io_pipeline.get(
+                "native_completion_calibration_consumer_wave_fill_policy"
+            ),
+            "consumer_wave_fill_source": resident_io_pipeline.get(
+                "native_completion_calibration_consumer_wave_fill_source"
+            ),
+            "consumer_wave_fill_wait_us": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_consumer_wave_fill_wait_us",
+            ),
+            "consumer_wave_fill_requested_wait_us": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_consumer_wave_fill_requested_wait_us",
+            ),
+            "consumer_wave_fill_wait_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_consumer_wave_fill_wait_count",
+            ),
+            "consumer_wave_fill_timeout_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_consumer_wave_fill_timeout_count",
+            ),
+            "consumer_wave_fill_wait_s": _float_value(
+                resident_io_pipeline,
+                "native_completion_calibration_consumer_wave_fill_wait_s",
             ),
         },
         "knobs": {
@@ -193,6 +314,16 @@ def build_resident_light_pipeline_profile(
             "calibration_release_mode_effective": resident_io_pipeline.get(
                 "calibration_release_mode_effective"
             ),
+            "native_completion_calibration_enabled": native_completion_enabled,
+            "native_completion_calibration_worker_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_worker_count",
+            ),
+            "native_completion_calibration_queue_buffer_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_calibration_queue_buffer_count",
+            ),
+            "native_completion_consumer_lane_fill_ratio": native_completion_lane_fill_ratio,
             "prefetch_ready_queue_callback_count": _int_value(
                 resident_io_pipeline,
                 "prefetch_ready_queue_callback_count",

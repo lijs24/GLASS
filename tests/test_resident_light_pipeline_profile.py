@@ -86,3 +86,53 @@ def test_light_pipeline_profile_accounts_master_load_inside_light_loop() -> None
     assert profile["background_cache_write"]["hidden_write_s"] == 2.5
     assert profile["background_cache_write"]["written_bytes"] == 739890139
     assert profile["fractions"]["python_orchestration_unaccounted_without_master"] == 10.7 / 14.0
+
+
+def test_light_pipeline_profile_exposes_native_completion_lane_fill() -> None:
+    profile = build_resident_light_pipeline_profile(
+        timing_s={
+            "light_read_upload_calibrate": 4.0,
+            "light_calibration_batch_native_total": 2.5,
+            "light_calibrate_store": 2.3,
+            "light_calibration_batch_sync": 0.1,
+            "light_loop_unaccounted": 0.2,
+        },
+        resident_io_pipeline={
+            "calibration_batch_requested_streams": 8,
+            "native_completion_calibration_enabled": True,
+            "native_completion_calibration_submit_count": 200,
+            "native_completion_calibration_completion_count": 200,
+            "native_completion_calibration_out_of_order_count": 3,
+            "native_completion_calibration_worker_count": 16,
+            "native_completion_calibration_queue_buffer_count": 32,
+            "native_completion_calibration_slot_release_mode": "event_query_deferred_reuse",
+            "native_completion_calibration_slot_reuse_count": 168,
+            "native_completion_calibration_slot_reuse_wait_count": 0,
+            "native_completion_calibration_slot_reuse_wait_s": 0.0,
+            "native_completion_calibration_consumer_schedule_mode": "completion_lane_wave_drain",
+            "native_completion_calibration_consumer_wave_count": 41,
+            "native_completion_calibration_consumer_max_wave_frames": 8,
+            "native_completion_calibration_consumer_multi_frame_wave_count": 33,
+            "native_completion_calibration_consumer_wave_fill_policy": "timed_wait_25us",
+            "native_completion_calibration_consumer_wave_fill_source": "cli",
+            "native_completion_calibration_consumer_wave_fill_wait_us": 25,
+            "native_completion_calibration_consumer_wave_fill_requested_wait_us": 25,
+            "native_completion_calibration_consumer_wave_fill_wait_count": 167,
+            "native_completion_calibration_consumer_wave_fill_timeout_count": 38,
+            "native_completion_calibration_consumer_wave_fill_wait_s": 0.288,
+        },
+        resident_io_overlap={},
+    )
+
+    native = profile["native_completion"]
+    assert native["enabled"] is True
+    assert native["completion_count"] == 200
+    assert native["worker_count"] == 16
+    assert native["queue_buffer_count"] == 32
+    assert native["queue_buffers_per_stream"] == 4.0
+    assert native["consumer_lane_fill_ratio"] == 200 / (41 * 8)
+    assert native["consumer_multi_frame_wave_fraction"] == 33 / 41
+    assert native["consumer_wave_fill_wait_s"] == 0.288
+    assert profile["knobs"]["native_completion_calibration_enabled"] is True
+    assert profile["knobs"]["native_completion_consumer_lane_fill_ratio"] == 200 / (41 * 8)
+    assert profile["recommendation"] == "improve_native_completion_wave_fill_before_adding_lanes"
