@@ -91,6 +91,15 @@ calibrated-stack/peak byte estimates. Small smoke runs may derive shape from
 output FITS headers and frame counts from `frame_accounting.json`, but they
 still use the same contract.
 
+As of S2-Gate 681, `--ram-budget-gb` participates in resident native-completion
+raw staging. When no explicit raw-ring frame count is supplied, GLASS may use
+up to 25% of the RAM budget for pinned host raw FITS completion buffers,
+capped by light-frame count and never below the runtime preset's safe base.
+This is a RAM warm-cache policy for the read/H2D/calibration boundary only; it
+does not change the device-resident calibrated stack or promote full raw-frame
+preload as a default. The resolved budget source, cap, planned frames, and
+effective native queue buffer count are recorded in resident artifacts.
+
 At steady state the planner should keep only the active source layer, the target
 layer being produced, and stage scratch buffers. Brief two-layer residency is
 allowed because every transition needs a source and a destination. Additional

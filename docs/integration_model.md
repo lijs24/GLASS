@@ -416,6 +416,20 @@ default: total elapsed `12.695490699843504 s` versus
 available for high-memory A/B runs, but 64 frames is not promoted as the
 default on this workstation.
 
+S2-Gate 681 connects `--ram-budget-gb` to the same native-completion raw-ring
+policy. When no explicit queue-buffer frame count is supplied, resident CUDA
+may reserve up to 25% of the RAM budget for raw pinned-host FITS completion
+buffers, capped by the light-frame count and never below the existing safe
+base. The policy is recorded as `ram_budget_auto` with a budget reason and the
+raw frame byte model in resident artifacts and
+`resident_light_pipeline_profile.native_completion`. A real 200-light
+`--ram-budget-gb 24` run expanded the raw ring from 32 to 52 frames and used
+about `6411724800` bytes of pinned raw staging. It passed Phase 2 mainline and
+regression gates against the Gate680 32-frame default, and all six integration
+FITS outputs were bitwise identical. Runtime compare still selected the
+32-frame default, so this remains a budget-aware execution option rather than a
+default promotion.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

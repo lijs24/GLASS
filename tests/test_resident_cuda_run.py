@@ -2593,15 +2593,20 @@ def _write_u16_bzero_test_frame(path: Path, frame_type: str, data: np.ndarray, e
     hdu.writeto(path)
 
 
-def _u16_gpu_decode_dataset(tmp_path: Path) -> Path:
+def _u16_gpu_decode_dataset(tmp_path: Path, *, light_count: int = 2) -> Path:
     root = tmp_path / "u16_gpu_decode"
     shape = (24, 24)
     yy, xx = np.indices(shape, dtype=np.uint16)
     _write_test_frame(root / "bias" / "bias_001.fits", "bias", np.zeros(shape, dtype=np.float32), 0.0)
     _write_test_frame(root / "dark" / "dark_001.fits", "dark", np.full(shape, 10.0, dtype=np.float32), 60.0)
     _write_test_frame(root / "flat" / "flat_001.fits", "flat", np.ones(shape, dtype=np.float32), 60.0)
-    _write_u16_bzero_test_frame(root / "light" / "light_001.fits", "light", 1000 + xx + yy, 60.0)
-    _write_u16_bzero_test_frame(root / "light" / "light_002.fits", "light", 1100 + xx + yy, 60.0)
+    for index in range(light_count):
+        _write_u16_bzero_test_frame(
+            root / "light" / f"light_{index + 1:03d}.fits",
+            "light",
+            1000 + index * 5 + xx + yy,
+            60.0,
+        )
     return root
 
 
@@ -7913,6 +7918,82 @@ def test_cli_resident_cuda_native_completion_queue_buffer_frames_are_explicit(
     assert profile["queue_buffer_policy_source"] == "explicit_cli"
     assert profile["queue_buffer_requested_frames"] == 64
     assert profile["queue_buffer_planned_frames"] == 64
+
+
+def test_cli_resident_cuda_native_completion_queue_buffer_uses_ram_budget(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = cuda_module_or_skip()
+    if not hasattr(
+        module.ResidentCalibratedStack,
+        "calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed",
+    ):
+        pytest.skip("native u16 GPU completion calibration resident path is not available")
+    dataset = _u16_gpu_decode_dataset(tmp_path, light_count=40)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_native_completion_ram_budget"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_BATCH_READ", raising=False)
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_QUEUE_READ", raising=False)
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", raising=False)
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION", raising=False)
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US", raising=False)
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v4-native-completion",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-fits-read-mode",
+            "native_u16_gpu",
+            "--ram-budget-gb",
+            "0.001",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
+    io_pipeline = artifact["resident_io_pipeline"]
+    profile = artifact["resident_light_pipeline_profile"]["native_completion"]
+    assert io_pipeline["native_completion_calibration_enabled"] is True
+    assert io_pipeline["native_completion_queue_buffer_policy_source"] == "ram_budget_auto"
+    assert io_pipeline["native_completion_queue_buffer_budget_reason"] == "ram_budget_expanded"
+    assert io_pipeline["native_completion_queue_buffer_requested_frames"] is None
+    assert io_pipeline["native_completion_queue_buffer_base_frames"] == 32
+    assert io_pipeline["native_completion_queue_buffer_ram_budget_gb"] == pytest.approx(0.001)
+    assert io_pipeline["native_completion_queue_buffer_ram_budget_fraction"] == pytest.approx(0.25)
+    assert io_pipeline["native_completion_queue_buffer_raw_frame_bytes"] == 24 * 24 * 2
+    assert io_pipeline["native_completion_queue_buffer_ram_budget_cap_frames"] == 40
+    assert io_pipeline["native_completion_queue_buffer_planned_frames"] == 40
+    assert io_pipeline["native_completion_calibration_queue_buffer_count"] == 40
+    assert io_pipeline["native_completion_queue_buffer_estimated_bytes"] == 40 * 24 * 24 * 2
+    assert io_pipeline["native_completion_queue_buffer_effective_bytes"] == 40 * 24 * 24 * 2
+    assert profile["queue_buffer_policy_source"] == "ram_budget_auto"
+    assert profile["queue_buffer_budget_reason"] == "ram_budget_expanded"
+    assert profile["queue_buffer_ram_budget_gb"] == pytest.approx(0.001)
+    assert profile["queue_buffer_ram_budget_cap_frames"] == 40
+    assert profile["queue_buffer_planned_frames"] == 40
 
 
 def test_cli_resident_cuda_native_u16_batch_read_is_opt_in(tmp_path: Path, monkeypatch) -> None:

@@ -193,6 +193,28 @@ def build_resident_light_pipeline_profile(
                 resident_io_pipeline,
                 "native_completion_queue_buffer_planned_frames",
             ),
+            "queue_buffer_raw_frame_bytes": _int_value(
+                resident_io_pipeline,
+                "native_completion_queue_buffer_raw_frame_bytes",
+            ),
+            "queue_buffer_ram_budget_gb": resident_io_pipeline.get(
+                "native_completion_queue_buffer_ram_budget_gb"
+            ),
+            "queue_buffer_ram_budget_fraction": resident_io_pipeline.get(
+                "native_completion_queue_buffer_ram_budget_fraction"
+            ),
+            "queue_buffer_ram_budget_bytes": resident_io_pipeline.get(
+                "native_completion_queue_buffer_ram_budget_bytes"
+            ),
+            "queue_buffer_ram_budget_cap_bytes": resident_io_pipeline.get(
+                "native_completion_queue_buffer_ram_budget_cap_bytes"
+            ),
+            "queue_buffer_ram_budget_cap_frames": resident_io_pipeline.get(
+                "native_completion_queue_buffer_ram_budget_cap_frames"
+            ),
+            "queue_buffer_budget_reason": resident_io_pipeline.get(
+                "native_completion_queue_buffer_budget_reason"
+            ),
             "queue_buffer_estimated_bytes": _int_value(
                 resident_io_pipeline,
                 "native_completion_queue_buffer_estimated_bytes",

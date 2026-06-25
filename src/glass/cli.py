@@ -1115,6 +1115,7 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
         "resident_native_completion_queue_buffer_frames",
         None,
     )
+    timing["ram_budget_gb"] = getattr(args, "ram_budget_gb", None)
     timing["resident_native_batch_read"] = getattr(args, "resident_native_batch_read", "off")
     timing["resident_native_queue_read"] = getattr(args, "resident_native_queue_read", "off")
     timing["resident_native_queue_drain_mode"] = getattr(args, "resident_native_queue_drain_mode", None)
@@ -3190,6 +3191,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
             lambda: run_resident_calibration_integration(
                 plan_path,
                 out,
+                ram_budget_gb=args.ram_budget_gb,
                 integration_weighting=args.integration_weighting,
                 integration_rejection=args.integration_rejection,
                 integration_rejection_min_samples=args.integration_rejection_min_samples,
@@ -3501,6 +3503,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             lambda: run_resident_calibration_integration(
                 args.plan,
                 args.out,
+                ram_budget_gb=args.ram_budget_gb,
                 integration_weighting=args.integration_weighting,
                 integration_rejection=args.integration_rejection,
                 integration_rejection_min_samples=args.integration_rejection_min_samples,

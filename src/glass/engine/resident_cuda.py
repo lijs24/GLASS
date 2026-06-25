@@ -194,6 +194,7 @@ _RESIDENT_MASTER_STACK_TILE_SIZE = 512
 _RESIDENT_MASTER_CACHE_BUILDER = "resident_stack_engine_resident_cuda_policy_master_cache_v2"
 _RESIDENT_MASTER_RAW_U16_STREAM_COUNT = 4
 _RESIDENT_MASTER_RAW_U16_WAVE_FRAMES = 4
+_RESIDENT_NATIVE_COMPLETION_RAM_BUDGET_FRACTION = 0.25
 _OUTPUT_DIAGNOSTICS_EXACT_PERCENTILE_MAX_PIXELS = 2_000_000
 _OUTPUT_DIAGNOSTICS_PERCENTILE_SAMPLE_PIXELS = 1_000_000
 
@@ -7091,6 +7092,7 @@ def _load_or_build_aggregate_masters(
 def run_resident_calibration_integration(
     plan_path: str | Path,
     run_dir: str | Path,
+    ram_budget_gb: float | None = None,
     integration_weighting: str = "auto",
     integration_rejection: str = "none",
     integration_rejection_min_samples: int | None = None,
@@ -7387,6 +7389,8 @@ def run_resident_calibration_integration(
         and int(resident_native_completion_queue_buffer_frames) < 1
     ):
         raise ValueError("resident_native_completion_queue_buffer_frames must be at least 1")
+    if ram_budget_gb is not None and float(ram_budget_gb) <= 0.0:
+        raise ValueError("ram_budget_gb must be positive when provided")
     if resident_native_batch_read not in {"off", "on"}:
         raise ValueError("resident_native_batch_read must be off or on")
     if resident_native_queue_read not in {"off", "on"}:
@@ -8148,17 +8152,71 @@ def run_resident_calibration_integration(
                 if resident_native_completion_queue_buffer_frames is None
                 else int(resident_native_completion_queue_buffer_frames)
             )
-            native_completion_queue_buffer_policy_source = (
-                "explicit_cli"
-                if native_completion_queue_buffer_requested_frames is not None
-                else "runtime_auto_base"
+            native_completion_queue_buffer_raw_frame_bytes = int(height * width * 2)
+            native_completion_queue_buffer_ram_budget_gb = (
+                None if ram_budget_gb is None else float(ram_budget_gb)
             )
-            native_completion_queue_buffer_planned_frames = max(
-                native_completion_queue_buffer_base_frames,
-                native_completion_queue_buffer_requested_frames or 0,
+            native_completion_queue_buffer_ram_budget_fraction = (
+                _RESIDENT_NATIVE_COMPLETION_RAM_BUDGET_FRACTION
             )
+            native_completion_queue_buffer_ram_budget_bytes = (
+                None
+                if native_completion_queue_buffer_ram_budget_gb is None
+                else int(native_completion_queue_buffer_ram_budget_gb * (1024**3))
+            )
+            native_completion_queue_buffer_ram_budget_cap_bytes = (
+                None
+                if native_completion_queue_buffer_ram_budget_bytes is None
+                else int(
+                    native_completion_queue_buffer_ram_budget_bytes
+                    * native_completion_queue_buffer_ram_budget_fraction
+                )
+            )
+            native_completion_queue_buffer_ram_budget_cap_frames = None
+            if (
+                native_completion_queue_buffer_ram_budget_cap_bytes is not None
+                and native_completion_queue_buffer_raw_frame_bytes > 0
+            ):
+                native_completion_queue_buffer_ram_budget_cap_frames = min(
+                    len(light_frames),
+                    max(
+                        1,
+                        int(
+                            native_completion_queue_buffer_ram_budget_cap_bytes
+                            // native_completion_queue_buffer_raw_frame_bytes
+                        ),
+                    ),
+                )
+            if native_completion_queue_buffer_requested_frames is not None:
+                native_completion_queue_buffer_policy_source = "explicit_cli"
+                native_completion_queue_buffer_budget_reason = "explicit_override"
+                native_completion_queue_buffer_planned_frames = max(
+                    native_completion_queue_buffer_base_frames,
+                    native_completion_queue_buffer_requested_frames,
+                )
+            elif (
+                native_completion_queue_buffer_ram_budget_cap_frames is not None
+                and native_completion_queue_buffer_ram_budget_cap_frames
+                > native_completion_queue_buffer_base_frames
+            ):
+                native_completion_queue_buffer_policy_source = "ram_budget_auto"
+                native_completion_queue_buffer_budget_reason = "ram_budget_expanded"
+                native_completion_queue_buffer_planned_frames = (
+                    native_completion_queue_buffer_ram_budget_cap_frames
+                )
+            else:
+                native_completion_queue_buffer_policy_source = "runtime_auto_base"
+                native_completion_queue_buffer_budget_reason = (
+                    "ram_budget_not_above_base"
+                    if native_completion_queue_buffer_ram_budget_cap_frames is not None
+                    else "ram_budget_not_provided"
+                )
+                native_completion_queue_buffer_planned_frames = (
+                    native_completion_queue_buffer_base_frames
+                )
             native_completion_queue_buffer_estimated_bytes = int(
-                native_completion_queue_buffer_planned_frames * height * width * 2
+                native_completion_queue_buffer_planned_frames
+                * native_completion_queue_buffer_raw_frame_bytes
             )
             native_completion_calibration_order_sample: list[int] = []
             native_completion_calibration_slot_release_mode: str | None = None
@@ -13478,6 +13536,35 @@ def run_resident_calibration_integration(
                 ),
                 "native_completion_queue_buffer_planned_frames": int(
                     native_completion_queue_buffer_planned_frames
+                ),
+                "native_completion_queue_buffer_raw_frame_bytes": int(
+                    native_completion_queue_buffer_raw_frame_bytes
+                ),
+                "native_completion_queue_buffer_ram_budget_gb": (
+                    None
+                    if native_completion_queue_buffer_ram_budget_gb is None
+                    else float(native_completion_queue_buffer_ram_budget_gb)
+                ),
+                "native_completion_queue_buffer_ram_budget_fraction": float(
+                    native_completion_queue_buffer_ram_budget_fraction
+                ),
+                "native_completion_queue_buffer_ram_budget_bytes": (
+                    None
+                    if native_completion_queue_buffer_ram_budget_bytes is None
+                    else int(native_completion_queue_buffer_ram_budget_bytes)
+                ),
+                "native_completion_queue_buffer_ram_budget_cap_bytes": (
+                    None
+                    if native_completion_queue_buffer_ram_budget_cap_bytes is None
+                    else int(native_completion_queue_buffer_ram_budget_cap_bytes)
+                ),
+                "native_completion_queue_buffer_ram_budget_cap_frames": (
+                    None
+                    if native_completion_queue_buffer_ram_budget_cap_frames is None
+                    else int(native_completion_queue_buffer_ram_budget_cap_frames)
+                ),
+                "native_completion_queue_buffer_budget_reason": str(
+                    native_completion_queue_buffer_budget_reason
                 ),
                 "native_completion_queue_buffer_estimated_bytes": int(
                     native_completion_queue_buffer_estimated_bytes

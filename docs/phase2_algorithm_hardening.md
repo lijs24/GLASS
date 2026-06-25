@@ -1689,6 +1689,82 @@ Interpretation:
 - The next mainline optimization should move to deeper read/H2D overlap design
   or a cooperative/segmented reducer, not another fixed ring-size sweep.
 
+### S2-Gate 681: RAM-Budget Native Completion Ring Policy
+
+Gate681 makes the existing `--ram-budget-gb` input meaningful for the
+resident native-completion read/H2D/calibration pipeline. Gate680 proved that
+fixed larger raw-ring sizes are not automatically faster on the current
+workstation. Gate681 therefore does not promote a larger default. Instead, it
+adds a conservative budget-aware policy that can expand the pinned raw FITS
+completion ring only when the user supplies a RAM budget and does not supply an
+explicit ring size.
+
+Implementation:
+
+- Added `ram_budget_gb` to `run_resident_calibration_integration`.
+- `glass run` and `glass audit` now pass `--ram-budget-gb` into the resident
+  CUDA runner instead of limiting it to preflight/admission metadata.
+- Native-completion raw-ring planning now resolves in this order:
+  - explicit `--resident-native-completion-queue-buffer-frames`;
+  - RAM-budget auto policy;
+  - existing runtime auto base.
+- The RAM-budget auto policy reserves at most 25% of `--ram-budget-gb` for the
+  raw pinned-host completion ring, caps the plan by light-frame count, and only
+  enlarges the established base.
+- Resident artifacts now record raw frame bytes, RAM budget, budget fraction,
+  budget byte cap, budget frame cap, policy source, budget reason, planned
+  frames, effective native queue buffer count, and estimated/effective bytes.
+- `resident_light_pipeline_profile.native_completion` mirrors the new budget
+  fields.
+
+Validation:
+
+- Focused CLI/resident CUDA tests passed:
+  `3 passed in 1.16 s`.
+- Real 200-light RAM-budget candidate:
+  `C:\glass_runs\phase2_s2_gate681_ram_budget_ring\runs_20260626_170000\ram24_auto`.
+- The run used `--ram-budget-gb 24` and recorded
+  `native_completion_queue_buffer_policy_source=ram_budget_auto`,
+  `native_completion_queue_buffer_budget_reason=ram_budget_expanded`,
+  planned/effective raw buffers `52 / 52`, raw frame bytes `123302400`, and
+  estimated/effective pinned raw bytes `6411724800 / 6411724800`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate681_ram_budget_ring\gate681_ram_budget_phase2_mainline_audit.json`.
+  Failed checks `[]`, input lights `200`, active/masked frames `193 / 7`.
+- Regression against the Gate680 32-buffer default passed:
+  `C:\glass_runs\phase2_s2_gate681_ram_budget_ring\gate681_ram_budget_regression_gate.json`.
+  Failed checks `[]`, elapsed ratio `1.0156699953413586`.
+- Runtime compare:
+  `C:\glass_runs\phase2_s2_gate681_ram_budget_ring\gate681_ram_budget_runtime_compare.json`.
+  Best label remains `queue32_default`.
+- FITS result comparison against the Gate680 32-buffer default:
+  `C:\glass_runs\phase2_s2_gate681_ram_budget_ring\gate681_result_compare_queue32_vs_ram24.json`.
+  `resident_master_H.fits`, weight, coverage, low rejection, high rejection,
+  and DQ maps were bitwise identical.
+
+Timing:
+
+- Gate680 32-buffer default:
+  - total elapsed `12.245715199969709 s`;
+  - `light_read_upload_calibrate=3.391568800085224 s`;
+  - native completion planned/effective raw buffers `32 / 32`.
+- Gate681 RAM-budget 24GB candidate:
+  - total elapsed ratio versus baseline `1.0156699953413586`;
+  - `light_read_upload_calibrate=3.8902179000433534 s`;
+  - native completion planned/effective raw buffers `52 / 52`.
+
+Interpretation:
+
+- This gate closes a real resource-model gap: `--ram-budget-gb` now affects the
+  resident raw staging policy instead of being merely descriptive.
+- The output is bitwise identical to the established 32-buffer default, proving
+  the policy changes scheduling and host staging only.
+- On the current workstation, the larger RAM-budget ring is still not promoted
+  because `queue32_default` remains the best observed runtime.
+- The next substantive optimization should use asynchronous multi-buffer
+  read/decode/H2D overlap or a resident reducer redesign rather than further
+  single-knob raw-ring sweeps.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

@@ -592,6 +592,22 @@ Current Phase 2 latest mainline acceptance:
   against the 32-buffer control with failed checks `[]` and elapsed ratio
   `1.0367292144663716`, but runtime compare selected `queue32`, so 64 buffers
   are not promoted as default.
+- Gate681 wires `--ram-budget-gb` into resident native-completion raw-ring
+  planning. The real 200-light RAM-budget candidate at
+  `C:\glass_runs\phase2_s2_gate681_ram_budget_ring\runs_20260626_170000\ram24_auto`
+  used `--ram-budget-gb 24`, recorded
+  `native_completion_queue_buffer_policy_source=ram_budget_auto`,
+  `native_completion_queue_buffer_budget_reason=ram_budget_expanded`,
+  raw frame bytes `123302400`, planned/effective raw buffers `52 / 52`, and
+  estimated/effective pinned raw bytes `6411724800 / 6411724800`. Phase 2
+  mainline audit passed with failed checks `[]`, input lights `200`, and
+  active/masked frames `193 / 7`. Resident regression against the Gate680
+  32-buffer default passed with failed checks `[]` and elapsed ratio
+  `1.0156699953413586`. Direct FITS comparison against the 32-buffer default
+  showed bitwise-identical master, weight, coverage, low-rejection,
+  high-rejection, and DQ maps. Runtime compare still selected
+  `queue32_default`, so RAM-budget expansion is an auditable option rather than
+  a default promotion.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
