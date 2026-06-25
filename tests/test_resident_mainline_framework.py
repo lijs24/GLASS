@@ -9,6 +9,10 @@ from glass.engine.resident_component_timing import (
     build_resident_component_timing,
     materialize_resident_component_timing,
 )
+from glass.engine.resident_memory_lifecycle import (
+    materialize_resident_memory_lifecycle,
+    write_resident_memory_lifecycle,
+)
 from glass.engine.resident_mainline_framework import (
     build_resident_mainline_framework,
     write_resident_mainline_framework,
@@ -16,13 +20,17 @@ from glass.engine.resident_mainline_framework import (
 from glass.engine.resident_registration_runtime_contract import (
     write_resident_registration_runtime_contract,
 )
+from glass.io.fits_io import create_empty_fits_image
 from glass.io.json_io import read_json, write_json
 from glass.models import PipelineArtifact, now_iso
 
 
 def _touch(path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("fixture", encoding="utf-8")
+    if path.suffix.lower() in {".fit", ".fits", ".fts"}:
+        create_empty_fits_image(path, width=2, height=2)
+    else:
+        path.write_text("fixture", encoding="utf-8")
     return str(path)
 
 
@@ -380,6 +388,10 @@ def _write_minimal_green_resident_run(
         },
     )
     write_resident_registration_runtime_contract(run)
+    timing = read_json(run / "run_timing.json")
+    memory_lifecycle_path = write_resident_memory_lifecycle(run, timing=timing)
+    materialize_resident_memory_lifecycle(timing, read_json(memory_lifecycle_path))
+    write_json(run / "run_timing.json", timing)
     return maps
 
 

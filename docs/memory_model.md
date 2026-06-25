@@ -83,6 +83,14 @@ allocator trace: it proves the declared stage handoff and provides a stable
 target for future allocator telemetry, but it must not be read as exact peak
 VRAM measurement.
 
+As of S2-Gate 674, this lifecycle is a mainline postcondition. Resident default
+runs are not green unless `phase2-mainline-audit` and
+`resident-regression-gate` can see a passing lifecycle artifact with transient
+raw staging, resident calibrated frames, no registered disk cache, and valid
+calibrated-stack/peak byte estimates. Small smoke runs may derive shape from
+output FITS headers and frame counts from `frame_accounting.json`, but they
+still use the same contract.
+
 At steady state the planner should keep only the active source layer, the target
 layer being produced, and stage scratch buffers. Brief two-layer residency is
 allowed because every transition needs a source and a destination. Additional

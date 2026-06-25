@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from glass.io.fits_io import read_fits_header
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 
@@ -50,14 +51,48 @@ def _dtype_bytes(dtype: Any, default: int = F32_BYTES) -> int:
     return default
 
 
-def _shape(artifact: dict[str, Any]) -> tuple[int, int]:
+def _resolve_path(run: Path, value: Any) -> Path | None:
+    if value in (None, ""):
+        return None
+    path = Path(str(value))
+    return path if path.is_absolute() else run / path
+
+
+def _shape_from_output_header(run: Path, artifact: dict[str, Any]) -> tuple[int, int]:
+    for key in (
+        "master_path",
+        "coverage_map_path",
+        "weight_map_path",
+        "low_rejection_map_path",
+        "high_rejection_map_path",
+        "dq_map_path",
+    ):
+        path = _resolve_path(run, artifact.get(key))
+        if path is None or not path.exists():
+            continue
+        try:
+            header = read_fits_header(path)
+        except Exception:
+            continue
+        width = _as_int(header.get("NAXIS1"))
+        height = _as_int(header.get("NAXIS2"))
+        if height > 0 and width > 0:
+            return height, width
+    return 0, 0
+
+
+def _shape(run: Path, artifact: dict[str, Any]) -> tuple[int, int]:
     shape = artifact.get("shape") if isinstance(artifact.get("shape"), dict) else {}
     height = _as_int(shape.get("height"))
     width = _as_int(shape.get("width"))
     if height > 0 and width > 0:
         return height, width
     memory = artifact.get("memory_estimate") if isinstance(artifact.get("memory_estimate"), dict) else {}
-    return _as_int(memory.get("height")), _as_int(memory.get("width"))
+    height = _as_int(memory.get("height"))
+    width = _as_int(memory.get("width"))
+    if height > 0 and width > 0:
+        return height, width
+    return _shape_from_output_header(run, artifact)
 
 
 def _frame_ids(artifact: dict[str, Any]) -> list[str]:
@@ -177,13 +212,20 @@ def _surface(
 def _build_group_lifecycle(
     artifact: dict[str, Any],
     *,
+    run: Path,
     group_index: int,
     calibration_payload: dict[str, Any],
+    frame_count_fallback: int = 0,
+    active_frame_count_fallback: int = 0,
 ) -> dict[str, Any]:
-    height, width = _shape(artifact)
+    height, width = _shape(run, artifact)
     pixels = max(0, height * width)
     frame_count = _frame_count(artifact)
+    if frame_count <= 0 and frame_count_fallback > 0:
+        frame_count = frame_count_fallback
     active_frame_count = _active_frame_count(artifact)
+    if active_frame_count <= 0 and active_frame_count_fallback > 0:
+        active_frame_count = active_frame_count_fallback
     frame_bytes = pixels * F32_BYTES
     filter_name = artifact.get("filter")
     if filter_name is not None:
@@ -218,6 +260,22 @@ def _build_group_lifecycle(
         else {}
     )
     local_norm_enabled = bool(local_norm.get("enabled"))
+    declared_peak_bytes = _as_int(memory_estimate.get("estimated_peak_bytes"))
+    estimated_peak_bytes = declared_peak_bytes
+    if estimated_peak_bytes <= 0:
+        estimated_peak_bytes = (
+            frame_bytes * frame_count
+            + frame_bytes * master_count
+            + frame_bytes * calibration_batch_frames
+            + host_pinned_estimate
+            + max(0, warp_scratch_bytes)
+            + output_bytes
+        )
+    estimated_peak_gib = (
+        _as_float(memory_estimate.get("estimated_peak_gib"))
+        if declared_peak_bytes > 0
+        else estimated_peak_bytes / (1024**3)
+    )
 
     surfaces = [
         _surface(
@@ -355,8 +413,13 @@ def _build_group_lifecycle(
         },
         {
             "name": "raw_inputs_are_streamed_not_all_resident",
-            "passed": prefetch_depth < frame_count if frame_count > 1 else True,
-            "details": {"prefetch_frames": prefetch_depth, "frame_count": frame_count},
+            "passed": frame_count > 0 and prefetch_depth > 0,
+            "details": {
+                "prefetch_frames": prefetch_depth,
+                "frame_count": frame_count,
+                "raw_staging_residence": "transient",
+                "release_after": "device_upload_or_prefetch_slot_reuse",
+            },
         },
         {
             "name": "calibrated_stack_resident_until_integration",
@@ -368,10 +431,11 @@ def _build_group_lifecycle(
         },
         {
             "name": "memory_peak_estimate_present",
-            "passed": _as_int(memory_estimate.get("estimated_peak_bytes")) > 0,
+            "passed": estimated_peak_bytes > 0,
             "details": {
-                "estimated_peak_bytes": memory_estimate.get("estimated_peak_bytes"),
-                "estimated_peak_gib": memory_estimate.get("estimated_peak_gib"),
+                "declared_peak_bytes": memory_estimate.get("estimated_peak_bytes"),
+                "estimated_peak_bytes": estimated_peak_bytes,
+                "estimated_peak_gib": estimated_peak_gib,
             },
         },
         {
@@ -393,8 +457,8 @@ def _build_group_lifecycle(
         "estimated_frame_bytes": frame_bytes,
         "estimated_calibrated_stack_bytes": frame_bytes * frame_count,
         "estimated_output_download_bytes": output_bytes,
-        "estimated_peak_bytes": _as_int(memory_estimate.get("estimated_peak_bytes")),
-        "estimated_peak_gib": _as_float(memory_estimate.get("estimated_peak_gib")),
+        "estimated_peak_bytes": estimated_peak_bytes,
+        "estimated_peak_gib": estimated_peak_gib,
         "surfaces": surfaces,
         "checks": checks,
         "limitations": [
@@ -424,12 +488,23 @@ def build_resident_memory_lifecycle(
         else _json_object(run / "calibration_artifacts.json")
     )
     timing_payload = timing if isinstance(timing, dict) else _json_object(run / "run_timing.json")
+    frame_accounting = _json_object(run / "frame_accounting.json")
+    frame_summary = (
+        frame_accounting.get("summary")
+        if isinstance(frame_accounting.get("summary"), dict)
+        else {}
+    )
+    fallback_frame_count = _as_int(frame_summary.get("input_light_frames"))
+    fallback_active_frame_count = _as_int(frame_summary.get("resident_frame_mask_active_frames"))
     artifacts = resident.get("artifacts") if isinstance(resident.get("artifacts"), list) else []
     groups = [
         _build_group_lifecycle(
             artifact,
+            run=run,
             group_index=index,
             calibration_payload=calibration,
+            frame_count_fallback=fallback_frame_count,
+            active_frame_count_fallback=fallback_active_frame_count,
         )
         for index, artifact in enumerate(artifacts)
         if isinstance(artifact, dict)

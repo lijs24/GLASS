@@ -1225,6 +1225,73 @@ Interpretation:
 - It does not change CUDA kernels, registration math, calibration math,
   rejection math, frame admission, or runtime defaults.
 
+### S2-Gate 674: Resident Lifecycle Mainline Guard And Reducer A/B
+
+Gate674 makes the Gate673 resident memory lifecycle artifact part of the
+runtime mainline guard instead of leaving it as an optional side report. The
+goal is to protect the high-VRAM design assumption while continuing to test
+substantive performance candidates on the real 200-light route.
+
+Implementation:
+
+- Added `resident_memory_lifecycle.json` to the Phase 2 mainline required
+  artifact set.
+- `phase2-mainline-audit` now requires the lifecycle artifact to pass and to
+  prove:
+  - raw light frames are transient staging, not an all-frame resident cache;
+  - calibrated light frames are resident through integration;
+  - registered frames are not materialized as a disk cache;
+  - calibrated-stack and peak byte estimates are present.
+- `resident-regression-gate` now requires the same resident memory lifecycle
+  contract by default, with an explicit legacy escape hatch
+  `--allow-missing-resident-memory-lifecycle`.
+- The lifecycle builder now falls back to output FITS headers for shape, to
+  `frame_accounting.json` for light-frame counts, and to a conservative
+  computed peak estimate when a small smoke run has no explicit runtime memory
+  estimate. This preserves the contract for tiny synthetic/source-DQ runs
+  without reading image pixels.
+- Resident mainline framework fixtures now create real FITS headers and
+  generate the lifecycle artifact through the production builder.
+
+Validation:
+
+- Focused lifecycle/mainline/regression tests:
+  `16 passed`, then the expanded source-DQ/mainline/lifecycle set:
+  `19 passed`.
+- Full pytest:
+  `1418 passed in 64.75 s`.
+- Real 200-light final default run:
+  `C:\glass_runs\phase2_s2_gate674_lifecycle_mainline\runs_20260626_080000\default_lifecycle_guard_final`.
+  It recorded `200` input lights, `193/7` active/masked frames, total elapsed
+  `12.066693499917164 s`, calibrated-stack residency
+  `45.93372344970703 GiB`, estimated peak `49.608429938554764 GiB`,
+  `raw_all_frames_resident=false`, `calibrated_stack_resident=true`, and
+  `registered_cache_materialized_on_disk=false`.
+- Final Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate674_lifecycle_mainline\runs_20260626_080000\gate674_final_phase2_mainline_audit.json`.
+  Status passed, failed checks `[]`, input lights `200`, active frames `193`.
+- Final regression against Gate673:
+  `C:\glass_runs\phase2_s2_gate674_lifecycle_mainline\runs_20260626_080000\gate674_final_vs_gate673_regression.json`.
+  Status passed, failed checks `[]`, elapsed ratio `1.0415137090462976`.
+- Hot-path A/B candidate:
+  `GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX=1` was run at
+  `C:\glass_runs\phase2_s2_gate674_lifecycle_mainline\runs_20260626_080000\candidate_active_index_reducer`.
+  Regression against the paired default run passed with elapsed ratio
+  `1.0181637343039516`, but resident integration slowed from
+  `3.2689969999482855 s` to `3.385160299949348 s`
+  (`1.0355348444807078x`). Runtime compare selected the default route, so the
+  active-index reducer was not promoted.
+
+Interpretation:
+
+- This gate is not a release/report handoff. It turns the intended resident
+  memory lifecycle into a hard runtime postcondition that future StackEngine,
+  DQ/mask, and CUDA optimization gates must preserve.
+- The next substantive optimization target remains the resident integration
+  reducer or light upload/calibration overlap. Active-index sample selection is
+  numerically safe on the 200-light data but is not faster for the current
+  `193/200` active-frame case.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

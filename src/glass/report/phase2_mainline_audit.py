@@ -26,6 +26,7 @@ REQUIRED_CORE_ARTIFACTS = (
     "resident_master_cache.json",
     "resident_stage_ledger.json",
     "resident_component_timing.json",
+    "resident_memory_lifecycle.json",
     "resident_registration_runtime_contract.json",
     "resident_result_contract.json",
     "pipeline_contract.json",
@@ -274,6 +275,65 @@ def _stage_ledger_state(run: Path) -> dict[str, Any]:
     }
 
 
+def _resident_memory_lifecycle_state(run: Path, timing: dict[str, Any]) -> dict[str, Any]:
+    path = run / "resident_memory_lifecycle.json"
+    payload = _json_if_exists(path)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    timing_summary = (
+        timing.get("resident_memory_lifecycle_summary")
+        if isinstance(timing.get("resident_memory_lifecycle_summary"), dict)
+        else {}
+    )
+    group_count = _int_or_none(summary.get("group_count"))
+    failed_group_count = _int_or_none(summary.get("failed_group_count"))
+    calibrated_bytes = _int_or_none(summary.get("max_estimated_calibrated_stack_bytes"))
+    peak_bytes = _int_or_none(summary.get("max_estimated_peak_bytes"))
+    timing_path = timing.get("resident_memory_lifecycle_path")
+    passed = bool(
+        path.exists()
+        and payload.get("artifact_type") == "resident_memory_lifecycle"
+        and payload.get("passed") is True
+        and group_count is not None
+        and group_count > 0
+        and failed_group_count == 0
+        and summary.get("raw_all_frames_resident") is False
+        and summary.get("calibrated_stack_resident") is True
+        and summary.get("registered_cache_materialized_on_disk") is False
+        and calibrated_bytes is not None
+        and calibrated_bytes > 0
+        and peak_bytes is not None
+        and peak_bytes >= calibrated_bytes
+        and timing_path == "resident_memory_lifecycle.json"
+        and timing_summary.get("calibrated_stack_resident") is True
+    )
+    return {
+        "path": str(path),
+        "exists": path.exists(),
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "payload_passed": payload.get("passed"),
+        "summary": {
+            "group_count": group_count,
+            "failed_group_count": failed_group_count,
+            "raw_all_frames_resident": summary.get("raw_all_frames_resident"),
+            "calibrated_stack_resident": summary.get("calibrated_stack_resident"),
+            "registered_cache_materialized_on_disk": summary.get("registered_cache_materialized_on_disk"),
+            "max_estimated_calibrated_stack_bytes": calibrated_bytes,
+            "max_estimated_peak_bytes": peak_bytes,
+        },
+        "timing_path": timing_path,
+        "timing_summary": {
+            "calibrated_stack_resident": timing_summary.get("calibrated_stack_resident"),
+            "raw_all_frames_resident": timing_summary.get("raw_all_frames_resident"),
+            "registered_cache_materialized_on_disk": timing_summary.get(
+                "registered_cache_materialized_on_disk"
+            ),
+            "max_estimated_peak_bytes": timing_summary.get("max_estimated_peak_bytes"),
+        },
+        "passed": passed,
+    }
+
+
 def _comparison_summary(compare_payload: dict[str, Any]) -> dict[str, Any]:
     region = (
         compare_payload.get("comparison_region")
@@ -367,6 +427,7 @@ def build_phase2_mainline_audit(
     output_maps = _output_map_state(run_root, resident_artifact)
     timing_state = _timing_components(run_root, timing, resident_artifact)
     stage_ledger_state = _stage_ledger_state(run_root)
+    memory_lifecycle_state = _resident_memory_lifecycle_state(run_root, timing)
     registration_runtime = _registration_runtime_state(run_root)
 
     default_route_evidence = {
@@ -524,6 +585,12 @@ def build_phase2_mainline_audit(
             stage_ledger_state,
         ),
         _check(
+            "resident_memory_lifecycle_contract",
+            bool(memory_lifecycle_state["passed"]),
+            memory_lifecycle_state,
+            "Default resident CUDA runs must preserve the raw-stream, calibrated-stack-resident, no registered-cache lifecycle.",
+        ),
+        _check(
             "resident_registration_runtime_contract_passed",
             registration_runtime["exists"] is True and registration_runtime["passed"] is True,
             registration_runtime,
@@ -652,6 +719,7 @@ def build_phase2_mainline_audit(
             "comparison": comparison_summary,
             "largest_stage": timing_state["largest_stage"],
             "largest_resident_component": timing_state["largest_resident_component"],
+            "resident_memory_lifecycle": memory_lifecycle_state["summary"],
             "resident_registration_runtime": registration_runtime,
         },
         "checks": checks,

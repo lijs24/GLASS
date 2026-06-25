@@ -23,6 +23,7 @@ def _write_run(
     dq_lifecycle_passed: bool = True,
     source_dq_passed: bool = True,
     master_cache_passed: bool = True,
+    memory_lifecycle_passed: bool = True,
     active_frame_count: int = 2,
     masked_frame_count: int = 0,
 ) -> None:
@@ -145,6 +146,23 @@ def _write_run(
         },
     )
     write_json(
+        path / "resident_memory_lifecycle.json",
+        {
+            "artifact_type": "resident_memory_lifecycle",
+            "passed": memory_lifecycle_passed,
+            "status": "passed" if memory_lifecycle_passed else "failed",
+            "summary": {
+                "group_count": 1 if memory_lifecycle_passed else 0,
+                "failed_group_count": 0 if memory_lifecycle_passed else 1,
+                "raw_all_frames_resident": False,
+                "calibrated_stack_resident": memory_lifecycle_passed,
+                "registered_cache_materialized_on_disk": False,
+                "max_estimated_calibrated_stack_bytes": 32,
+                "max_estimated_peak_bytes": 64,
+            },
+        },
+    )
+    write_json(
         path / "resident_frame_masks.json",
         {
             "summary": {
@@ -189,6 +207,7 @@ def test_resident_regression_gate_fails_runtime_contract_and_frame_mask(tmp_path
         dq_lifecycle_passed=False,
         source_dq_passed=False,
         master_cache_passed=False,
+        memory_lifecycle_passed=False,
         active_frame_count=1,
         masked_frame_count=2,
     )
@@ -210,8 +229,43 @@ def test_resident_regression_gate_fails_runtime_contract_and_frame_mask(tmp_path
     assert "candidate_resident_dq_lifecycle_passed" in payload["failed_checks"]
     assert "candidate_resident_source_dq_execution_passed" in payload["failed_checks"]
     assert "candidate_resident_master_cache_passed" in payload["failed_checks"]
+    assert "candidate_resident_memory_lifecycle_passed" in payload["failed_checks"]
     assert "candidate_active_frame_count_at_least_min" in payload["failed_checks"]
     assert "candidate_masked_frame_count_at_most_max" in payload["failed_checks"]
+
+
+def test_resident_regression_gate_fails_missing_memory_lifecycle(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _write_run(baseline, elapsed_s=10.0)
+    _write_run(candidate, elapsed_s=10.1)
+    (candidate / "resident_memory_lifecycle.json").unlink()
+
+    payload = build_resident_regression_gate(
+        baseline,
+        candidate,
+        max_elapsed_ratio=1.1,
+    )
+
+    assert payload["passed"] is False
+    assert "candidate_resident_memory_lifecycle_passed" in payload["failed_checks"]
+
+
+def test_resident_regression_gate_can_allow_missing_memory_lifecycle(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _write_run(baseline, elapsed_s=10.0)
+    _write_run(candidate, elapsed_s=10.1)
+    (candidate / "resident_memory_lifecycle.json").unlink()
+
+    payload = build_resident_regression_gate(
+        baseline,
+        candidate,
+        max_elapsed_ratio=1.1,
+        require_resident_memory_lifecycle=False,
+    )
+
+    assert payload["passed"] is True
 
 
 def test_resident_regression_gate_cli_writes_json_and_markdown(tmp_path: Path) -> None:

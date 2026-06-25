@@ -29,6 +29,62 @@ def _payload_passed(payload: dict[str, Any]) -> bool:
     return str(payload.get("status") or "").lower() == "passed"
 
 
+def _memory_lifecycle_check(run: Path, *, required: bool) -> dict[str, Any]:
+    path = run / "resident_memory_lifecycle.json"
+    payload = _json_if_exists(path)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    exists = bool(payload)
+    if not required and not exists:
+        return _check(
+            "candidate_resident_memory_lifecycle_passed",
+            True,
+            {"path": str(path), "required": required, "exists": False},
+        )
+    raw_all_frames_resident = summary.get("raw_all_frames_resident")
+    calibrated_stack_resident = summary.get("calibrated_stack_resident")
+    registered_cache_materialized = summary.get("registered_cache_materialized_on_disk")
+    group_count = summary.get("group_count")
+    failed_group_count = summary.get("failed_group_count")
+    calibrated_bytes = summary.get("max_estimated_calibrated_stack_bytes")
+    peak_bytes = summary.get("max_estimated_peak_bytes")
+    passed = bool(
+        exists
+        and _payload_passed(payload)
+        and payload.get("artifact_type") == "resident_memory_lifecycle"
+        and isinstance(group_count, int)
+        and group_count > 0
+        and failed_group_count == 0
+        and raw_all_frames_resident is False
+        and calibrated_stack_resident is True
+        and registered_cache_materialized is False
+        and isinstance(calibrated_bytes, int | float)
+        and calibrated_bytes > 0
+        and isinstance(peak_bytes, int | float)
+        and peak_bytes >= calibrated_bytes
+    )
+    return _check(
+        "candidate_resident_memory_lifecycle_passed",
+        passed,
+        {
+            "path": str(path),
+            "required": required,
+            "exists": exists,
+            "payload_passed": _payload_passed(payload) if exists else None,
+            "status": payload.get("status"),
+            "artifact_type": payload.get("artifact_type"),
+            "summary": {
+                "group_count": group_count,
+                "failed_group_count": failed_group_count,
+                "raw_all_frames_resident": raw_all_frames_resident,
+                "calibrated_stack_resident": calibrated_stack_resident,
+                "registered_cache_materialized_on_disk": registered_cache_materialized,
+                "max_estimated_calibrated_stack_bytes": calibrated_bytes,
+                "max_estimated_peak_bytes": peak_bytes,
+            },
+        },
+    )
+
+
 def _contract_check(run: Path, filename: str, name: str, *, required: bool) -> dict[str, Any]:
     path = run / filename
     payload = _json_if_exists(path)
@@ -75,6 +131,7 @@ def build_resident_regression_gate(
     require_resident_dq_lifecycle: bool = True,
     require_resident_source_dq_execution: bool = True,
     require_resident_master_cache: bool = True,
+    require_resident_memory_lifecycle: bool = True,
 ) -> dict[str, Any]:
     baseline = Path(baseline_run)
     candidate = Path(candidate_run)
@@ -164,6 +221,7 @@ def build_resident_regression_gate(
             "candidate_resident_master_cache_passed",
             required=require_resident_master_cache,
         ),
+        _memory_lifecycle_check(candidate, required=require_resident_memory_lifecycle),
     ]
     if min_active_frame_count is not None:
         checks.append(
@@ -206,6 +264,7 @@ def build_resident_regression_gate(
             "require_resident_dq_lifecycle": require_resident_dq_lifecycle,
             "require_resident_source_dq_execution": require_resident_source_dq_execution,
             "require_resident_master_cache": require_resident_master_cache,
+            "require_resident_memory_lifecycle": require_resident_memory_lifecycle,
         },
         "determinism_summary": determinism.get("summary", {}),
         "runtime_summary": runtime.get("summary", {}),

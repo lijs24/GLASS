@@ -33,9 +33,12 @@ Current code is intentionally gated:
   S2-Gate 673 writes `resident_memory_lifecycle.json`, which records the
   declared raw-staging -> calibrated-resident -> registration/LN/integration
   release chain and estimated byte counts. This artifact is not yet a live CUDA
-  allocator trace: raw FITS frames are still streamed through reusable buffers
-  rather than preloaded all at once, while calibrated light frames are the
-  primary resident stack.
+  allocator trace, but S2-Gate 674 makes it a required mainline/regression
+  contract. Raw FITS frames are still streamed through reusable buffers rather
+  than preloaded all at once, while calibrated light frames are the primary
+  resident stack. Current lifecycle byte counts can be inferred from output FITS
+  headers and frame accounting when tiny smoke runs lack full runtime memory
+  estimates.
   S2-Gate 616 sets the default resident matrix-warp chunk capacity to `8`
   frames after real 200-light probes showed larger chunks used much more VRAM
   and slowed the current Lanczos3 batch kernel; explicit chunk-capacity

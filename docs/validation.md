@@ -485,6 +485,21 @@ Current Phase 2 latest mainline acceptance:
   active/masked frames, and zero artifact/frame/registration/output/numerical
   drift. The Phase 2 mainline audit and StackEngine resident contract both
   passed, and full pytest passed with `1414 passed in 64.50 s`.
+- Gate674 promotes that memory lifecycle from evidence to a mainline runtime
+  guard. `phase2-mainline-audit` now requires
+  `resident_memory_lifecycle.json`, and `resident-regression-gate` requires the
+  same contract by default. The real 200-light final run at
+  `C:\glass_runs\phase2_s2_gate674_lifecycle_mainline\runs_20260626_080000\default_lifecycle_guard_final`
+  passed with `200` input lights, `193/7` active/masked frames, total elapsed
+  `12.066693499917164 s`, calibrated-stack residency
+  `45.93372344970703 GiB`, estimated peak `49.608429938554764 GiB`, and the
+  expected raw-stream/calibrated-resident/no-registered-cache lifecycle
+  booleans. The final mainline audit passed with failed checks `[]`, and the
+  regression against Gate673 passed with elapsed ratio `1.0415137090462976`.
+  An active-index reducer A/B candidate passed determinism/regression but was
+  slower on the paired default run: total ratio `1.0181637343039516` and
+  integration ratio `1.0355348444807078`, so it was not promoted. Full pytest
+  passed with `1418 passed in 64.75 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

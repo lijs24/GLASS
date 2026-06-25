@@ -5249,6 +5249,7 @@ def cmd_resident_regression_gate(args: argparse.Namespace) -> int:
         require_resident_dq_lifecycle=not args.allow_missing_resident_dq_lifecycle,
         require_resident_source_dq_execution=not args.allow_missing_resident_source_dq_execution,
         require_resident_master_cache=not args.allow_missing_resident_master_cache,
+        require_resident_memory_lifecycle=not args.allow_missing_resident_memory_lifecycle,
     )
     write_resident_regression_gate(args.out, payload, markdown=args.markdown)
     console.print(
@@ -10169,6 +10170,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--allow-missing-resident-master-cache",
         action="store_true",
         help="do not fail when candidate resident_master_cache.json is absent",
+    )
+    resident_regression_gate.add_argument(
+        "--allow-missing-resident-memory-lifecycle",
+        action="store_true",
+        help="do not fail when candidate resident_memory_lifecycle.json is absent",
     )
     resident_regression_gate.add_argument(
         "--fail-on-failure",

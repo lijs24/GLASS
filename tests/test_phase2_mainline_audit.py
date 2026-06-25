@@ -42,6 +42,16 @@ def _write_green_run(run: Path) -> None:
             "resident_local_normalization_mode": "grid_mean_std",
             "resident_warp_interpolation": "lanczos3",
             "resident_fits_read_mode_resolution": {"effective": "auto"},
+            "resident_memory_lifecycle_path": "resident_memory_lifecycle.json",
+            "resident_memory_lifecycle_summary": {
+                "group_count": 1,
+                "failed_group_count": 0,
+                "raw_all_frames_resident": False,
+                "calibrated_stack_resident": True,
+                "registered_cache_materialized_on_disk": False,
+                "max_estimated_calibrated_stack_bytes": 800,
+                "max_estimated_peak_bytes": 1200,
+            },
             "total_elapsed_s": 12.5,
             "stages": [
                 {"stage": "resident_reference_scout", "elapsed_s": 1.0},
@@ -158,6 +168,23 @@ def _write_green_run(run: Path) -> None:
                 "active_frame_count": 193,
                 "masked_frame_count": 7,
             }
+        },
+    )
+    write_json(
+        run / "resident_memory_lifecycle.json",
+        {
+            "artifact_type": "resident_memory_lifecycle",
+            "passed": True,
+            "status": "passed",
+            "summary": {
+                "group_count": 1,
+                "failed_group_count": 0,
+                "raw_all_frames_resident": False,
+                "calibrated_stack_resident": True,
+                "registered_cache_materialized_on_disk": False,
+                "max_estimated_calibrated_stack_bytes": 800,
+                "max_estimated_peak_bytes": 1200,
+            },
         },
     )
     for name in (
@@ -285,6 +312,41 @@ def test_phase2_mainline_audit_fails_missing_component_ledger_artifact(tmp_path:
     checks = {check["name"]: check for check in audit["checks"]}
     evidence = checks["resident_stage_ledger_component_contract"]["evidence"]
     assert evidence["summary"]["missing_artifact_count"] == 1
+
+
+def test_phase2_mainline_audit_fails_missing_memory_lifecycle_artifact(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_green_run(run)
+    (run / "resident_memory_lifecycle.json").unlink()
+
+    audit = build_phase2_mainline_audit(run)
+
+    assert audit["passed"] is False
+    assert "core_artifacts_present" in audit["failed_checks"]
+    assert "resident_memory_lifecycle_contract" in audit["failed_checks"]
+    checks = {check["name"]: check for check in audit["checks"]}
+    evidence = checks["resident_memory_lifecycle_contract"]["evidence"]
+    assert evidence["exists"] is False
+
+
+def test_phase2_mainline_audit_fails_nonresident_memory_lifecycle(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_green_run(run)
+    payload = read_json(run / "resident_memory_lifecycle.json")
+    payload["summary"]["calibrated_stack_resident"] = False
+    write_json(run / "resident_memory_lifecycle.json", payload)
+
+    audit = build_phase2_mainline_audit(run)
+
+    assert audit["passed"] is False
+    assert "resident_memory_lifecycle_contract" in audit["failed_checks"]
+    checks = {check["name"]: check for check in audit["checks"]}
+    evidence = checks["resident_memory_lifecycle_contract"]["evidence"]
+    assert evidence["summary"]["calibrated_stack_resident"] is False
 
 
 def test_phase2_mainline_audit_fails_missing_component_timing_artifact(tmp_path: Path) -> None:
