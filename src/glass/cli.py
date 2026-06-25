@@ -4406,6 +4406,7 @@ def cmd_resident_regression_gate(args: argparse.Namespace) -> int:
         require_resident_result_contract=not args.allow_missing_resident_result_contract,
         require_resident_frame_masks=not args.allow_missing_resident_frame_masks,
         require_dq_pixel_closure=not args.allow_missing_dq_pixel_closure,
+        require_resident_dq_lifecycle=not args.allow_missing_resident_dq_lifecycle,
         require_resident_source_dq_execution=not args.allow_missing_resident_source_dq_execution,
         require_resident_master_cache=not args.allow_missing_resident_master_cache,
     )
@@ -9087,6 +9088,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--allow-missing-dq-pixel-closure",
         action="store_true",
         help="do not fail when candidate resident_dq_pixel_closure.json is absent",
+    )
+    resident_regression_gate.add_argument(
+        "--allow-missing-resident-dq-lifecycle",
+        action="store_true",
+        help="do not fail when candidate resident_dq_lifecycle.json is absent",
     )
     resident_regression_gate.add_argument(
         "--allow-missing-resident-source-dq-execution",

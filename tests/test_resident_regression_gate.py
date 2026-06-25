@@ -20,6 +20,7 @@ def _write_run(
     resident_result_passed: bool = True,
     frame_masks_passed: bool = True,
     dq_passed: bool = True,
+    dq_lifecycle_passed: bool = True,
     source_dq_passed: bool = True,
     master_cache_passed: bool = True,
     active_frame_count: int = 2,
@@ -114,6 +115,16 @@ def _write_run(
     )
     write_json(path / "resident_dq_pixel_closure.json", {"passed": dq_passed, "status": "passed" if dq_passed else "failed"})
     write_json(
+        path / "resident_dq_lifecycle.json",
+        {
+            "artifact": "resident_dq_lifecycle",
+            "summary": {
+                "passed": dq_lifecycle_passed,
+                "status": "passed" if dq_lifecycle_passed else "failed",
+            },
+        },
+    )
+    write_json(
         path / "resident_source_dq_execution.json",
         {
             "artifact": "resident_source_dq_execution",
@@ -175,6 +186,7 @@ def test_resident_regression_gate_fails_runtime_contract_and_frame_mask(tmp_path
         resident_result_passed=False,
         frame_masks_passed=False,
         dq_passed=False,
+        dq_lifecycle_passed=False,
         source_dq_passed=False,
         master_cache_passed=False,
         active_frame_count=1,
@@ -195,6 +207,7 @@ def test_resident_regression_gate_fails_runtime_contract_and_frame_mask(tmp_path
     assert "candidate_resident_result_contract_passed" in payload["failed_checks"]
     assert "candidate_resident_frame_masks_passed" in payload["failed_checks"]
     assert "candidate_dq_pixel_closure_passed" in payload["failed_checks"]
+    assert "candidate_resident_dq_lifecycle_passed" in payload["failed_checks"]
     assert "candidate_resident_source_dq_execution_passed" in payload["failed_checks"]
     assert "candidate_resident_master_cache_passed" in payload["failed_checks"]
     assert "candidate_active_frame_count_at_least_min" in payload["failed_checks"]

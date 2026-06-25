@@ -164,6 +164,59 @@ def _write_resident_mask_artifacts(path: Path, *, frame_count: int = 3, active_f
             ],
         },
     )
+    lifecycle_checks = [
+        "source_dq_execution_passed",
+        "frame_mask_contract_passed",
+        "dq_pixel_closure_passed",
+        "source_frame_count_matches_frame_mask",
+        "source_active_matches_frame_mask",
+        "frame_mask_active_matches_pixel_closure",
+        "frame_mask_masked_matches_pixel_closure",
+        "source_input_samples_use_active_frames",
+        "source_dq_stays_resident_streaming",
+    ]
+    write_json(
+        path / "resident_dq_lifecycle.json",
+        {
+            "schema_version": 1,
+            "artifact": "resident_dq_lifecycle",
+            "backend": "cuda_resident_stack",
+            "source_stage": "resident_calibrated_stack",
+            "summary": {
+                "schema_version": 1,
+                "passed": True,
+                "status": "passed",
+                "group_count": 1,
+                "passed_group_count": 1,
+                "failed_group_count": 0,
+                "failed_groups": [],
+                "frame_count": int(frame_count),
+                "active_frame_count": active,
+                "masked_frame_count": masked,
+                "check_counts": {name: 1 for name in lifecycle_checks},
+                "failed_check_counts": {},
+            },
+            "groups": [
+                {
+                    "schema_version": 1,
+                    "artifact": "resident_dq_lifecycle_group",
+                    "filter": "H",
+                    "status": "passed",
+                    "passed": True,
+                    "frame_count": int(frame_count),
+                    "active_frame_count": active,
+                    "masked_frame_count": masked,
+                    "source_input_samples": active * 4,
+                    "source_input_invalid_samples_before_rejection": 0,
+                    "all_frame_input_invalid_samples_before_frame_mask": 0,
+                    "checks": [
+                        {"name": name, "passed": True, "details": {}}
+                        for name in lifecycle_checks
+                    ],
+                }
+            ],
+        },
+    )
 
 
 def _write_resident_registration_quality_artifact(
@@ -431,10 +484,13 @@ def _write_resident_source_dq_execution_fixture(path: Path, *, passed: bool = Tr
                 "passed": passed,
                 "group_count": 1,
                 "frame_count": 3,
+                "active_frame_count": 3,
                 "frame_with_invalid_count": 1,
                 "applied_frame_count": 1,
                 "input_invalid_samples_before_rejection": input_invalid,
+                "all_frame_input_invalid_samples_before_frame_mask": input_invalid,
                 "applied_invalid_samples": applied_invalid,
+                "all_frame_applied_invalid_samples": applied_invalid,
                 "input_flagged_samples": input_invalid,
                 "input_nonfinite_samples": 0,
                 "materializes_calibrated_dq_cache": False,
@@ -454,12 +510,16 @@ def _write_resident_source_dq_execution_fixture(path: Path, *, passed: bool = Tr
                     "native_methods": ["ResidentCalibratedStack.apply_invalid_mask_frame"],
                     "materializes_calibrated_dq_cache": False,
                     "frame_count": 3,
+                    "active_frame_count": 3,
                     "height": 2,
                     "width": 2,
+                    "input_samples": 12,
                     "frame_with_invalid_count": 1,
                     "applied_frame_count": 1,
                     "input_invalid_samples_before_rejection": input_invalid,
+                    "all_frame_input_invalid_samples_before_frame_mask": input_invalid,
                     "applied_invalid_samples": applied_invalid,
+                    "all_frame_applied_invalid_samples": applied_invalid,
                     "input_flagged_samples": input_invalid,
                     "input_nonfinite_samples": 0,
                     "source_dq_flag_counts": {"hot_pixel": input_invalid},
@@ -942,9 +1002,11 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert checks["resident_frame_mask_admission_contract"]["passed"] is True
     assert checks["resident_registration_quality_contract"]["passed"] is True
     assert checks["resident_dq_pixel_closure_contract"]["passed"] is True
+    assert checks["resident_dq_lifecycle_contract"]["passed"] is True
     assert audit["resident_frame_masks"]["closure"]["active_frame_count"] == 3
     assert audit["resident_registration_quality"]["closure"]["active_decision_count"] == 3
     assert audit["resident_dq_pixel_closure"]["closure"]["active_frame_count"] == 3
+    assert audit["resident_dq_lifecycle"]["closure"]["active_frame_count"] == 3
 
 
 def test_pipeline_contract_passes_segmented_resident_hardened_winsorized_contract(
@@ -1070,6 +1132,30 @@ def test_pipeline_contract_blocks_resident_dq_pixel_closure_failure(tmp_path: Pa
     assert evidence["status"] == "failed"
     assert evidence["failed_groups"][0]["filter"] == "H"
     assert evidence["group_failed_checks"][0]["check"] == "geometric_coverage_count_matches_active"
+
+
+def test_pipeline_contract_blocks_resident_dq_lifecycle_active_drift(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    lifecycle = read_json(run / "resident_dq_lifecycle.json")
+    lifecycle["summary"]["passed"] = False
+    lifecycle["summary"]["failed_group_count"] = 1
+    lifecycle["summary"]["failed_check_counts"] = {"source_active_matches_frame_mask": 1}
+    lifecycle["groups"][0]["active_frame_count"] = 2
+    lifecycle["groups"][0]["passed"] = False
+    lifecycle["groups"][0]["status"] = "failed"
+    lifecycle["groups"][0]["checks"][4]["passed"] = False
+    write_json(run / "resident_dq_lifecycle.json", lifecycle)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    evidence = checks["resident_dq_lifecycle_contract"]["evidence"]
+
+    assert audit["passed"] is False
+    assert checks["resident_dq_lifecycle_contract"]["passed"] is False
+    assert evidence["status"] == "failed"
+    assert evidence["failed_groups"][0]["filter"] == "H"
+    assert evidence["group_failed_checks"][0]["check"] == "source_active_matches_frame_mask"
 
 
 def test_pipeline_contract_respects_resident_minimal_output_map_policy(tmp_path: Path):

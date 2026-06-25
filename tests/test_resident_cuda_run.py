@@ -3111,6 +3111,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     state = read_json(run / "run_state.json")
     resident = read_json(run / "resident_artifacts.json")
     calibration = read_json(run / "calibration_artifacts.json")
+    resident_dq_lifecycle = read_json(run / "resident_dq_lifecycle.json")
     resident_result_contract = read_json(run / "resident_result_contract.json")
     resident_calibration_contract = read_json(run / "resident_calibration_contract.json")
     local_norm_contract = read_json(run / "local_norm_contract.json")
@@ -3125,6 +3126,15 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert Path(integration["outputs"][0]["dq_map_path"]).exists()
     assert integration["outputs"][0]["dq_map_path"] == resident["artifacts"][0]["dq_map_path"]
     assert integration["outputs"][0]["dq_summary"] == resident["artifacts"][0]["dq_summary"]
+    assert integration["outputs"][0]["resident_dq_lifecycle"]["path"] == str(
+        run / "resident_dq_lifecycle.json"
+    )
+    assert resident["artifacts"][0]["resident_dq_lifecycle"]["path"] == str(
+        run / "resident_dq_lifecycle.json"
+    )
+    assert resident_dq_lifecycle["summary"]["passed"] is True
+    assert integration["resident_dq_lifecycle_summary"] == resident_dq_lifecycle["summary"]
+    assert any(item["stage"] == "resident_dq_lifecycle" for item in state["artifacts"])
     assert integration["outputs"][0]["master_path"] == resident["artifacts"][0]["master_path"]
     assert integration["outputs"][0]["weight_map_path"] == resident["artifacts"][0]["weight_map_path"]
     assert integration["outputs"][0]["coverage_map_path"] == resident["artifacts"][0]["coverage_map_path"]
@@ -4893,6 +4903,7 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     integration = read_json(run / "integration_results.json")
     resident = read_json(run / "resident_artifacts.json")
     dq_closure = read_json(run / "resident_dq_pixel_closure.json")
+    dq_lifecycle = read_json(run / "resident_dq_lifecycle.json")
     output = integration["outputs"][0]
     artifact = resident["artifacts"][0]
     assert output["output_map_policy"]["mode"] == "science"
@@ -4920,7 +4931,11 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     assert output["dq_provenance_summary"] == artifact["dq_provenance_summary"]
     assert output["resident_dq_pixel_closure"]["path"] == str(run / "resident_dq_pixel_closure.json")
     assert artifact["resident_dq_pixel_closure"]["path"] == str(run / "resident_dq_pixel_closure.json")
+    assert output["resident_dq_lifecycle"]["path"] == str(run / "resident_dq_lifecycle.json")
+    assert artifact["resident_dq_lifecycle"]["path"] == str(run / "resident_dq_lifecycle.json")
     assert dq_closure["summary"]["passed"] is True
+    assert dq_lifecycle["summary"]["passed"] is True
+    assert dq_lifecycle["summary"]["active_frame_count"] == 2
     assert dq_closure["summary"]["group_count"] == 1
     assert dq_closure["groups"][0]["frame_mask_active_frame_count"] == 2
     assert dq_closure["groups"][0]["geometric_warp_coverage_frame_count"] == 2

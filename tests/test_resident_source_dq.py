@@ -692,6 +692,72 @@ def test_resident_source_dq_summary_records_no_source_dq_fast_skip():
     assert summary["rows"] == []
 
 
+def test_resident_source_dq_summary_uses_active_frame_ids_for_integration_samples():
+    rows = [
+        {
+            "frame_id": "f0",
+            "status": "applied",
+            "source": "test",
+            "application_order": "calibration_pre_registration",
+            "registration_catalog_visible": True,
+            "registration_catalog_visibility_required": True,
+            "invalid_samples": 1,
+            "flagged_samples": 1,
+            "nonfinite_samples": 0,
+            "flag_counts": {"hot_pixel": 1},
+            "applied": True,
+        },
+        {
+            "frame_id": "f1",
+            "status": "applied",
+            "source": "test",
+            "application_order": "calibration_pre_registration",
+            "registration_catalog_visible": True,
+            "registration_catalog_visibility_required": True,
+            "invalid_samples": 2,
+            "flagged_samples": 2,
+            "nonfinite_samples": 0,
+            "flag_counts": {"hot_pixel": 2},
+            "applied": True,
+        },
+    ]
+
+    summary = build_resident_source_dq_summary(
+        rows,
+        frame_count=2,
+        active_frame_count=1,
+        active_frame_ids=["f0"],
+        height=2,
+        width=3,
+    )
+    group = build_resident_source_dq_execution_group(
+        summary,
+        filter_name="H",
+        frame_count=2,
+        height=2,
+        width=3,
+    )
+    aggregate = summarize_resident_source_dq_execution_groups([group])
+
+    assert summary["active_frame_count"] == 1
+    assert summary["input_samples"] == 6
+    assert summary["input_invalid_samples_before_rejection"] == 1
+    assert summary["all_frame_input_invalid_samples_before_frame_mask"] == 3
+    assert summary["inactive_frame_input_invalid_samples_before_frame_mask"] == 2
+    assert summary["source_dq_flag_counts"] == {"hot_pixel": 1}
+    assert summary["passed"] is True
+    assert group["active_frame_count"] == 1
+    assert group["input_samples"] == 6
+    assert group["all_frame_input_invalid_samples_before_frame_mask"] == 3
+    assert any(
+        check["name"] == "all_frame_invalid_samples_applied" and check["passed"] is True
+        for check in group["checks"]
+    )
+    assert aggregate["active_frame_count"] == 1
+    assert aggregate["input_samples"] == 6
+    assert aggregate["all_frame_input_invalid_samples_before_frame_mask"] == 3
+
+
 def test_resident_source_dq_execution_group_proves_streaming_route_without_cache():
     summary = build_resident_source_dq_summary(
         [

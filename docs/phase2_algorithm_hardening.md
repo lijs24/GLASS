@@ -654,6 +654,80 @@ Interpretation:
   by moving the calibrated sample check closer to resident GPU data, or attack
   the larger resident registration/warp and integration reducer bottlenecks.
 
+### S2-Gate 637: Resident DQ Lifecycle Contract
+
+Gate 637 is a self-review mainline framework gate. It does not tune a small
+kernel detail; it closes the resident data-quality contract between source-DQ
+application, frame-level admission/masking, pixel-level coverage/rejection
+closure, pipeline-contract reporting, and resident-regression acceptance.
+
+Before this gate, resident runs already emitted `resident_source_dq_execution`,
+`resident_frame_masks`, and `resident_dq_pixel_closure` artifacts, but those
+surfaces could drift independently. This gate adds a single lifecycle artifact
+that proves the same active frame set flows through DQ accounting and
+integration.
+
+Implementation:
+
+- Added `resident_dq_lifecycle.json` as a first-class resident artifact.
+- Added a lifecycle validator that joins source-DQ execution, resident frame
+  masks, and pixel closure per light group.
+- Source-DQ integration sample counts now use the active frame set that reaches
+  integration, while all-frame counters remain available for registration and
+  catalog auditing.
+- Resident run outputs link the lifecycle artifact from `resident_artifacts`,
+  `integration_results`, `run_state`, the pipeline contract, and the resident
+  regression gate.
+- `glass resident-regression-gate` now requires the lifecycle artifact by
+  default, with an explicit escape hatch for old runs.
+- No calibration, registration, warp, local-normalization, rejection, or image
+  math changed.
+
+Focused validation:
+
+- Ruff over touched Python files: passed.
+- Lifecycle/source-DQ/pipeline/regression focused tests:
+  `69 passed`.
+- Resident CUDA focused smoke/science-output tests:
+  `3 passed, 124 deselected`.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate637_dq_lifecycle\runs_20260625_153833\candidate_dq_lifecycle`.
+- Evidence root:
+  `C:\glass_runs\phase2_s2_gate637_dq_lifecycle\runs_20260625_153833`.
+- GLASS total elapsed: `12.156182300066575 s`.
+- Frame accounting: `200` lights, `193` active weighted frames, `7` masked
+  registration frames.
+- Resident DQ lifecycle: passed, with active/masked counts `193 / 7` and
+  active-frame source input samples `11898681600`.
+- Pipeline contract: passed, including `resident_dq_lifecycle_contract`.
+- StackEngine contract: passed.
+- Warp quality contract: passed.
+- Resident regression gate versus Gate636: passed, elapsed ratio
+  `0.9990383208570693`, zero output differences, zero frame-accounting
+  differences, and zero numerical drift.
+- Black-box reference elapsed: `1092.541 s`.
+- Acceptance speedup: `89.87533857517228x`.
+- Compare metrics at coverage >= `190`: shape match `true`, RMS
+  `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit status: passed.
+
+Interpretation:
+
+- This gate improves the Phase 2 framework by making resident DQ/mask
+  correctness a default-path contract rather than a set of loosely related
+  reports.
+- It preserves Gate636 runtime and output behavior while adding a required
+  evidence surface for future StackEngine default-path, DQ/mask pipeline, and
+  resident CUDA optimization work.
+- The next substantive gate should return to algorithm execution: StackEngine
+  default coverage for resident outputs, DQ/mask pipeline semantics, or the
+  larger resident registration/warp and integration bottlenecks.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization

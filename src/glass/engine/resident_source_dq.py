@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 
@@ -1331,15 +1331,35 @@ def build_resident_source_dq_summary(
     height: int,
     width: int,
     active_frame_count: int | None = None,
+    active_frame_ids: Iterable[str] | None = None,
     fast_skip_frame_count: int = 0,
     fast_skip_reason: str | None = None,
 ) -> dict[str, Any]:
     fast_skip_frame_count = max(0, int(fast_skip_frame_count))
-    total_invalid = sum(int(row.get("invalid_samples") or 0) for row in rows)
-    total_flagged = sum(int(row.get("flagged_samples") or 0) for row in rows)
-    total_nonfinite = sum(int(row.get("nonfinite_samples") or 0) for row in rows)
-    total_would_invalid = sum(int(row.get("would_invalid_samples") or 0) for row in rows)
+    active_frame_id_set = (
+        None if active_frame_ids is None else {str(frame_id) for frame_id in active_frame_ids}
+    )
+
+    def row_is_active(row: dict[str, Any]) -> bool:
+        if active_frame_id_set is None:
+            return True
+        return str(row.get("frame_id")) in active_frame_id_set
+
+    active_rows = [row for row in rows if row_is_active(row)]
+    inactive_rows = [row for row in rows if not row_is_active(row)]
+    total_invalid = sum(int(row.get("invalid_samples") or 0) for row in active_rows)
+    total_flagged = sum(int(row.get("flagged_samples") or 0) for row in active_rows)
+    total_nonfinite = sum(int(row.get("nonfinite_samples") or 0) for row in active_rows)
+    total_would_invalid = sum(int(row.get("would_invalid_samples") or 0) for row in active_rows)
+    all_frame_invalid = sum(int(row.get("invalid_samples") or 0) for row in rows)
+    all_frame_flagged = sum(int(row.get("flagged_samples") or 0) for row in rows)
+    all_frame_nonfinite = sum(int(row.get("nonfinite_samples") or 0) for row in rows)
+    all_frame_would_invalid = sum(int(row.get("would_invalid_samples") or 0) for row in rows)
+    inactive_invalid = sum(int(row.get("invalid_samples") or 0) for row in inactive_rows)
     applied_invalid = sum(
+        int(row.get("invalid_samples") or 0) for row in active_rows if bool(row.get("applied"))
+    )
+    all_frame_applied_invalid = sum(
         int(row.get("invalid_samples") or 0) for row in rows if bool(row.get("applied"))
     )
     unsupported = [row for row in rows if str(row.get("status") or "").startswith("unsupported")]
@@ -1393,8 +1413,9 @@ def build_resident_source_dq_summary(
             sidecar_paths.add(str(sidecar_path))
         for artifact_path in list(row.get("sidecar_artifact_paths") or []):
             sidecar_artifact_paths.add(str(artifact_path))
-        for flag, count in dict(row.get("flag_counts") or {}).items():
-            flag_counts[str(flag)] = int(flag_counts.get(str(flag), 0)) + int(count or 0)
+        if row_is_active(row):
+            for flag, count in dict(row.get("flag_counts") or {}).items():
+                flag_counts[str(flag)] = int(flag_counts.get(str(flag), 0)) + int(count or 0)
     if fast_skip_frame_count:
         source_counts["no_source_dq_fast_skip"] = (
             source_counts.get("no_source_dq_fast_skip", 0) + fast_skip_frame_count
@@ -1430,10 +1451,23 @@ def build_resident_source_dq_summary(
         "input_guarded_invalid_samples_skipped": int(max(0, total_would_invalid - total_invalid)),
         "input_flagged_samples": int(total_flagged),
         "input_nonfinite_samples": int(total_nonfinite),
+        "all_frame_input_invalid_samples_before_frame_mask": int(all_frame_invalid),
+        "all_frame_input_would_invalid_samples_before_guard": int(all_frame_would_invalid),
+        "all_frame_input_flagged_samples": int(all_frame_flagged),
+        "all_frame_input_nonfinite_samples": int(all_frame_nonfinite),
+        "all_frame_applied_invalid_samples": int(all_frame_applied_invalid),
+        "inactive_frame_input_invalid_samples_before_frame_mask": int(inactive_invalid),
+        "active_frame_ids_provided": active_frame_id_set is not None,
         "source_dq_flag_counts": {key: value for key, value in sorted(flag_counts.items()) if value},
         "applied_invalid_samples": int(applied_invalid),
-        "frame_with_invalid_count": int(sum(1 for row in rows if int(row.get("invalid_samples") or 0) > 0)),
-        "applied_frame_count": int(sum(1 for row in rows if bool(row.get("applied")))),
+        "frame_with_invalid_count": int(
+            sum(1 for row in active_rows if int(row.get("invalid_samples") or 0) > 0)
+        ),
+        "all_frame_with_invalid_count": int(
+            sum(1 for row in rows if int(row.get("invalid_samples") or 0) > 0)
+        ),
+        "applied_frame_count": int(sum(1 for row in active_rows if bool(row.get("applied")))),
+        "all_frame_applied_frame_count": int(sum(1 for row in rows if bool(row.get("applied")))),
         "unsupported_frame_count": len(unsupported),
         "native_missing_frame_count": len(native_missing),
         "fast_skip_frame_count": fast_skip_frame_count,
@@ -1452,7 +1486,12 @@ def build_resident_source_dq_summary(
         "sidecar_path_count": len(sidecar_paths),
         "sidecar_artifact_path_count": len(sidecar_artifact_paths),
         "sidecar_artifact_paths": sorted(sidecar_artifact_paths),
-        "passed": len(unsupported) == 0 and len(native_missing) == 0 and applied_invalid == total_invalid,
+        "passed": (
+            len(unsupported) == 0
+            and len(native_missing) == 0
+            and applied_invalid == total_invalid
+            and all_frame_applied_invalid == all_frame_invalid
+        ),
         "rows": rows,
         "semantics": (
             "Resident CUDA consumes source-DQ invalid samples by setting resident "
@@ -1487,6 +1526,13 @@ def build_resident_source_dq_execution_group(
     all_frame_mask_bytes = per_frame_mask_bytes * int(frame_count)
     input_invalid = int(source_dq_summary.get("input_invalid_samples_before_rejection") or 0)
     applied_invalid = int(source_dq_summary.get("applied_invalid_samples") or 0)
+    all_frame_input_invalid = int(
+        source_dq_summary.get("all_frame_input_invalid_samples_before_frame_mask", input_invalid)
+        or 0
+    )
+    all_frame_applied_invalid = int(
+        source_dq_summary.get("all_frame_applied_invalid_samples", applied_invalid) or 0
+    )
     unsupported = int(source_dq_summary.get("unsupported_frame_count") or 0)
     native_missing = int(source_dq_summary.get("native_missing_frame_count") or 0)
     missing_application_order = int(source_dq_summary.get("rows_missing_application_order_count") or 0)
@@ -1504,6 +1550,14 @@ def build_resident_source_dq_execution_group(
             "invalid_samples_applied",
             applied_invalid == input_invalid,
             {"applied_invalid_samples": applied_invalid, "input_invalid_samples": input_invalid},
+        ),
+        _execution_check(
+            "all_frame_invalid_samples_applied",
+            all_frame_applied_invalid == all_frame_input_invalid,
+            {
+                "all_frame_applied_invalid_samples": all_frame_applied_invalid,
+                "all_frame_input_invalid_samples": all_frame_input_invalid,
+            },
         ),
         _execution_check(
             "no_unsupported_frames",
@@ -1556,14 +1610,32 @@ def build_resident_source_dq_execution_group(
         "native_methods": list(source_dq_summary.get("native_methods") or []),
         "materializes_calibrated_dq_cache": False,
         "frame_count": int(frame_count),
+        "active_frame_count": int(source_dq_summary.get("active_frame_count") or frame_count),
         "height": int(height),
         "width": int(width),
+        "input_samples": int(source_dq_summary.get("input_samples") or 0),
         "frame_with_invalid_count": int(source_dq_summary.get("frame_with_invalid_count") or 0),
+        "all_frame_with_invalid_count": int(source_dq_summary.get("all_frame_with_invalid_count") or 0),
         "applied_frame_count": int(source_dq_summary.get("applied_frame_count") or 0),
+        "all_frame_applied_frame_count": int(
+            source_dq_summary.get("all_frame_applied_frame_count") or 0
+        ),
         "input_invalid_samples_before_rejection": input_invalid,
         "applied_invalid_samples": applied_invalid,
+        "all_frame_input_invalid_samples_before_frame_mask": all_frame_input_invalid,
+        "all_frame_applied_invalid_samples": all_frame_applied_invalid,
+        "inactive_frame_input_invalid_samples_before_frame_mask": int(
+            source_dq_summary.get("inactive_frame_input_invalid_samples_before_frame_mask") or 0
+        ),
+        "active_frame_ids_provided": bool(source_dq_summary.get("active_frame_ids_provided")),
         "input_flagged_samples": int(source_dq_summary.get("input_flagged_samples") or 0),
         "input_nonfinite_samples": int(source_dq_summary.get("input_nonfinite_samples") or 0),
+        "all_frame_input_flagged_samples": int(
+            source_dq_summary.get("all_frame_input_flagged_samples") or 0
+        ),
+        "all_frame_input_nonfinite_samples": int(
+            source_dq_summary.get("all_frame_input_nonfinite_samples") or 0
+        ),
         "source_dq_flag_counts": dict(source_dq_summary.get("source_dq_flag_counts") or {}),
         "source_counts": dict(source_dq_summary.get("source_counts") or {}),
         "status_counts": dict(source_dq_summary.get("status_counts") or {}),
@@ -1618,15 +1690,38 @@ def summarize_resident_source_dq_execution_groups(groups: list[dict[str, Any]]) 
         "group_count": len(groups),
         "failed_groups": failed,
         "frame_count": int(sum(int(group.get("frame_count") or 0) for group in groups)),
+        "active_frame_count": int(sum(int(group.get("active_frame_count") or 0) for group in groups)),
+        "input_samples": int(sum(int(group.get("input_samples") or 0) for group in groups)),
         "frame_with_invalid_count": int(
             sum(int(group.get("frame_with_invalid_count") or 0) for group in groups)
         ),
+        "all_frame_with_invalid_count": int(
+            sum(int(group.get("all_frame_with_invalid_count") or 0) for group in groups)
+        ),
         "applied_frame_count": int(sum(int(group.get("applied_frame_count") or 0) for group in groups)),
+        "all_frame_applied_frame_count": int(
+            sum(int(group.get("all_frame_applied_frame_count") or 0) for group in groups)
+        ),
         "input_invalid_samples_before_rejection": int(
             sum(int(group.get("input_invalid_samples_before_rejection") or 0) for group in groups)
         ),
         "applied_invalid_samples": int(
             sum(int(group.get("applied_invalid_samples") or 0) for group in groups)
+        ),
+        "all_frame_input_invalid_samples_before_frame_mask": int(
+            sum(
+                int(group.get("all_frame_input_invalid_samples_before_frame_mask") or 0)
+                for group in groups
+            )
+        ),
+        "all_frame_applied_invalid_samples": int(
+            sum(int(group.get("all_frame_applied_invalid_samples") or 0) for group in groups)
+        ),
+        "inactive_frame_input_invalid_samples_before_frame_mask": int(
+            sum(
+                int(group.get("inactive_frame_input_invalid_samples_before_frame_mask") or 0)
+                for group in groups
+            )
         ),
         "materializes_calibrated_dq_cache": any(
             bool(group.get("materializes_calibrated_dq_cache")) for group in groups

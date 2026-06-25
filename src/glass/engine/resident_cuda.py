@@ -50,6 +50,11 @@ from glass.engine.resident_dq_pixel_closure import (
     summarize_resident_dq_pixel_closure_groups,
     validate_resident_dq_pixel_closure_group,
 )
+from glass.engine.resident_dq_lifecycle import (
+    build_resident_dq_lifecycle_group,
+    summarize_resident_dq_lifecycle_groups,
+    validate_resident_dq_lifecycle_group,
+)
 from glass.engine.resident_frame_mask import (
     build_resident_frame_mask_contract,
     summarize_resident_frame_mask_contracts,
@@ -7312,6 +7317,7 @@ def run_resident_calibration_integration(
     registration_quality_decisions_by_frame: dict[str, dict[str, Any]] = {}
     resident_frame_mask_contract_groups: list[dict[str, Any]] = []
     resident_dq_pixel_closure_groups: list[dict[str, Any]] = []
+    resident_dq_lifecycle_groups: list[dict[str, Any]] = []
     resident_source_dq_execution_groups: list[dict[str, Any]] = []
     resident_master_cache_groups: list[dict[str, Any]] = []
     resident_master_cache_write_queues: list[_ResidentMasterCacheWriteQueue] = []
@@ -12562,6 +12568,8 @@ def run_resident_calibration_integration(
                 frame_count=len(light_frames),
                 height=height,
                 width=width,
+                active_frame_count=active_frame_count,
+                active_frame_ids=group_frame_mask_contract["summary"]["active_frame_ids"],
                 fast_skip_frame_count=source_dq_fast_skipped_frame_count,
                 fast_skip_reason=source_dq_fast_skip_reason,
             )
@@ -12931,6 +12939,14 @@ def run_resident_calibration_integration(
             )
             validate_resident_dq_pixel_closure_group(group_dq_pixel_closure)
             resident_dq_pixel_closure_groups.append(group_dq_pixel_closure)
+            group_dq_lifecycle = build_resident_dq_lifecycle_group(
+                source_dq_execution_group=group_source_dq_execution,
+                frame_mask_group=group_frame_mask_contract,
+                dq_pixel_closure_group=group_dq_pixel_closure,
+                filter_name=filter_name,
+            )
+            validate_resident_dq_lifecycle_group(group_dq_lifecycle)
+            resident_dq_lifecycle_groups.append(group_dq_lifecycle)
             count_dtype = _count_map_dtype(len(light_frames))
             available_output_maps = ["master"]
             if weight_map is not None:
@@ -13698,6 +13714,16 @@ def run_resident_calibration_integration(
                             "geometric_warp_coverage_frame_count": group_dq_pixel_closure[
                                 "geometric_warp_coverage_frame_count"
                             ],
+                        },
+                    },
+                    "resident_dq_lifecycle": {
+                        "path": str(run / "resident_dq_lifecycle.json"),
+                        "summary": {
+                            "passed": group_dq_lifecycle["passed"],
+                            "status": group_dq_lifecycle["status"],
+                            "active_frame_count": group_dq_lifecycle["active_frame_count"],
+                            "masked_frame_count": group_dq_lifecycle["masked_frame_count"],
+                            "source_input_samples": group_dq_lifecycle["source_input_samples"],
                         },
                     },
                     "resident_master_cache": {
@@ -15167,6 +15193,16 @@ def run_resident_calibration_integration(
                             ],
                         },
                     },
+                    "resident_dq_lifecycle": {
+                        "path": str(run / "resident_dq_lifecycle.json"),
+                        "summary": {
+                            "passed": group_dq_lifecycle["passed"],
+                            "status": group_dq_lifecycle["status"],
+                            "active_frame_count": group_dq_lifecycle["active_frame_count"],
+                            "masked_frame_count": group_dq_lifecycle["masked_frame_count"],
+                            "source_input_samples": group_dq_lifecycle["source_input_samples"],
+                        },
+                    },
                     "resident_master_cache": {
                         "path": str(run / "resident_master_cache.json"),
                         "summary": {
@@ -15207,6 +15243,7 @@ def run_resident_calibration_integration(
         registration_quality_path = run / "resident_registration_quality.json"
         resident_frame_masks_path = run / "resident_frame_masks.json"
         resident_dq_pixel_closure_path = run / "resident_dq_pixel_closure.json"
+        resident_dq_lifecycle_path = run / "resident_dq_lifecycle.json"
         resident_source_dq_execution_path = run / "resident_source_dq_execution.json"
         resident_master_cache_path = run / "resident_master_cache.json"
         resident_frame_mask_payload = {
@@ -15237,6 +15274,18 @@ def run_resident_calibration_integration(
             failed = ", ".join(resident_dq_pixel_closure_payload["summary"].get("failed_groups") or [])
             raise RuntimeError(f"resident DQ pixel closure failed for group(s): {failed}")
         write_json(resident_dq_pixel_closure_path, resident_dq_pixel_closure_payload)
+        resident_dq_lifecycle_payload = {
+            "schema_version": 1,
+            "artifact": "resident_dq_lifecycle",
+            "source_stage": "resident_calibrated_stack",
+            "backend": "cuda_resident_stack",
+            "summary": summarize_resident_dq_lifecycle_groups(resident_dq_lifecycle_groups),
+            "groups": resident_dq_lifecycle_groups,
+        }
+        if not resident_dq_lifecycle_payload["summary"]["passed"]:
+            failed = ", ".join(resident_dq_lifecycle_payload["summary"].get("failed_groups") or [])
+            raise RuntimeError(f"resident DQ lifecycle failed for group(s): {failed}")
+        write_json(resident_dq_lifecycle_path, resident_dq_lifecycle_payload)
         resident_source_dq_execution_payload = {
             "schema_version": 1,
             "artifact": "resident_source_dq_execution",
@@ -15559,6 +15608,8 @@ def run_resident_calibration_integration(
                 "resident_frame_mask_contract_summary": resident_frame_mask_payload["summary"],
                 "resident_dq_pixel_closure_path": str(resident_dq_pixel_closure_path),
                 "resident_dq_pixel_closure_summary": resident_dq_pixel_closure_payload["summary"],
+                "resident_dq_lifecycle_path": str(resident_dq_lifecycle_path),
+                "resident_dq_lifecycle_summary": resident_dq_lifecycle_payload["summary"],
                 "resident_source_dq_execution_path": str(resident_source_dq_execution_path),
                 "resident_source_dq_execution_summary": resident_source_dq_execution_payload["summary"],
                 "resident_master_cache_path": str(resident_master_cache_path),
@@ -15632,6 +15683,15 @@ def run_resident_calibration_integration(
             PipelineArtifact(
                 stage="resident_dq_pixel_closure",
                 path=str(resident_dq_pixel_closure_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=list(frames.keys()),
+            )
+        )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_dq_lifecycle",
+                path=str(resident_dq_lifecycle_path),
                 format="json",
                 created_at=now_iso(),
                 source_frames=list(frames.keys()),

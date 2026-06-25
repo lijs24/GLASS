@@ -72,6 +72,7 @@ def build_resident_regression_gate(
     require_resident_result_contract: bool = True,
     require_resident_frame_masks: bool = True,
     require_dq_pixel_closure: bool = True,
+    require_resident_dq_lifecycle: bool = True,
     require_resident_source_dq_execution: bool = True,
     require_resident_master_cache: bool = True,
 ) -> dict[str, Any]:
@@ -147,6 +148,12 @@ def build_resident_regression_gate(
         ),
         _contract_check(
             candidate,
+            "resident_dq_lifecycle.json",
+            "candidate_resident_dq_lifecycle_passed",
+            required=require_resident_dq_lifecycle,
+        ),
+        _contract_check(
+            candidate,
             "resident_source_dq_execution.json",
             "candidate_resident_source_dq_execution_passed",
             required=require_resident_source_dq_execution,
@@ -196,6 +203,7 @@ def build_resident_regression_gate(
             "require_resident_result_contract": require_resident_result_contract,
             "require_resident_frame_masks": require_resident_frame_masks,
             "require_dq_pixel_closure": require_dq_pixel_closure,
+            "require_resident_dq_lifecycle": require_resident_dq_lifecycle,
             "require_resident_source_dq_execution": require_resident_source_dq_execution,
             "require_resident_master_cache": require_resident_master_cache,
         },

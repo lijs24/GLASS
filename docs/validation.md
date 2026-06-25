@@ -104,36 +104,36 @@ Machine-readable speedup summary:
   frames, and `7` zero-weight frames, matching the WBPP FastIntegration accepted
   frame set used for the parity comparison.
 
-Current Phase 2 latest guarded-reference-health acceptance:
+Current Phase 2 latest resident DQ lifecycle acceptance:
 
-- Gate: S2-Gate 636.
+- Gate: S2-Gate 637.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate636_reference_health_for_cuda_attempt\runs_20260625_151939`.
+  `C:\glass_runs\phase2_s2_gate637_dq_lifecycle\runs_20260625_153833`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate636_reference_health_for_cuda_attempt\runs_20260625_151939\candidate_reference_health_cuda_attempt`.
-- GLASS elapsed time: `12.167883900227025 s`.
+  `C:\glass_runs\phase2_s2_gate637_dq_lifecycle\runs_20260625_153833\candidate_dq_lifecycle`.
+- GLASS elapsed time: `12.156182300066575 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `89.7889073366007x`.
+- Speedup: `89.87533857517228x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
-- Reference scout: `auto` attempted CUDA, selected CUDA candidate `F000215`,
-  failed the CPU guard at star ratio `0.7843137254901961` and rank fraction
-  `0.4411764705882353`, then officially fell back to CPU reference `F000225`.
-- Reference health: action `fail`, action backend `cuda`, official reference
-  `F000225`; calibrated reference `F000079`; official reference calibrated star
-  ratio `0.9032258064516129` and rank fraction `0.047619047619047616`.
+- Reference scout and health preserve the Gate636 default behavior:
+  `auto` attempts CUDA, the official reference remains CPU-selected after the
+  guard, and reference-health evidence is persisted for the CUDA-attempt path.
+- Resident DQ lifecycle: passed. Source-DQ execution, resident frame masks, and
+  pixel closure agree on `193` active frames, `7` masked frames, and
+  `11898681600` active-frame input samples.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
   pixels `60105814`.
-- Pipeline contract: passed.
+- Pipeline contract: passed, including `resident_dq_lifecycle_contract`.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate635: passed with candidate/baseline
-  elapsed ratio `1.1092202985059865`.
+- Resident regression gate versus Gate636: passed with candidate/baseline
+  elapsed ratio `0.9990383208570693`.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate636_reference_health_for_cuda_attempt\runs_20260625_151939\gate636_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate637_dq_lifecycle\runs_20260625_153833\gate637_acceptance_audit.json`.
 
 Historical Phase 2 hot-path validation:
 
