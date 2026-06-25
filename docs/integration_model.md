@@ -308,6 +308,18 @@ hardened integration substage from `3.386920899967663 s` to
 single real run still contains I/O and warp timing variation, this path remains
 explicitly opt-in pending repeated-run promotion evidence.
 
+S2-Gate 630 repeat-tested that promotion question on the real 200-light
+benchmark with three default/mask-scan pairs. Mask-scan won total elapsed time
+in all three pairs, but it lost the actual hardened integration and kernel-sync
+measurements in all three pairs: `hardened_total_mean_ratio=1.0079091197710124`
+and `native_kernel_sync_mean_ratio=1.0063806007728684`. The total-time win was
+therefore attributed to surrounding I/O/runtime variance, not to a stable
+reducer improvement. Gate630 keeps mask-scan opt-in and hardens the environment
+flag parser: `GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN` now enables the path only for
+explicit true values (`1`, `true`, `yes`, or `on`). Values such as `auto` are
+recorded as `unit_positive_weight_mask_reason=ignored_unrecognized_env_value`
+and use the default `global_reread_weighted_samples` strategy.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted

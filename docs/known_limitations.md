@@ -74,8 +74,13 @@ Current code is intentionally gated:
   preserves output determinism on the real 200-light A/B and improves the
   measured run, but the integration-only gain is modest in a single run, so it
   remains a guarded probe until repeated-run evidence justifies default
-  promotion. Richer robust rejection policies, cosmetic correction, and broader
-  data-shape support remain future work.
+  promotion. Gate630 ran that repeat evidence and rejected default promotion:
+  mask-scan won total elapsed time in three paired runs, but hardened
+  integration and kernel-sync timings were consistently slower, so the total
+  gain was attributed to surrounding runtime variance. The environment flag now
+  requires an explicit true value and ignores values such as `auto`. Richer
+  robust rejection policies, cosmetic correction, and broader data-shape
+  support remain future work.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must

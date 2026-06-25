@@ -23,6 +23,7 @@
 #include <condition_variable>
 #include <deque>
 #include <mutex>
+#include <cctype>
 
 namespace py = pybind11;
 
@@ -1026,6 +1027,48 @@ using Clock = std::chrono::steady_clock;
 
 double seconds_since(const Clock::time_point& start) {
   return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+std::string glass_get_env_string(const char* name) {
+#ifdef _MSC_VER
+  char* env_buffer = nullptr;
+  std::size_t env_length = 0;
+  std::string value;
+  if (_dupenv_s(&env_buffer, &env_length, name) == 0 && env_buffer != nullptr) {
+    value = env_buffer;
+    std::free(env_buffer);
+  }
+  return value;
+#else
+  const char* value = std::getenv(name);
+  return value == nullptr ? std::string() : std::string(value);
+#endif
+}
+
+std::string glass_lower_ascii(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  return value;
+}
+
+bool glass_env_flag_enabled_strict(const std::string& value) {
+  const std::string lowered = glass_lower_ascii(value);
+  return lowered == "1" || lowered == "true" || lowered == "yes" || lowered == "on";
+}
+
+std::string glass_env_flag_reason_strict(const std::string& value) {
+  if (value.empty()) {
+    return "disabled";
+  }
+  if (glass_env_flag_enabled_strict(value)) {
+    return "environment_enabled";
+  }
+  const std::string lowered = glass_lower_ascii(value);
+  if (lowered == "0" || lowered == "false" || lowered == "no" || lowered == "off") {
+    return "environment_disabled";
+  }
+  return "ignored_unrecognized_env_value";
 }
 
 double sorted_median_f32(std::vector<float>& values) {
@@ -11615,14 +11658,21 @@ class ResidentCalibratedStack {
         unit_local_reuse_env_value != "false" && unit_local_reuse_env_value != "FALSE";
     const bool unit_positive_local_reuse_enabled =
         unit_positive_local_reuse_requested && !unit_positive_active_index_enabled;
-    const char* unit_mask_scan_env = std::getenv("GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN");
-    const std::string unit_mask_scan_env_value = unit_mask_scan_env == nullptr ? "" : std::string(unit_mask_scan_env);
+    const std::string unit_mask_scan_env_value =
+        glass_get_env_string("GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN");
+    const bool unit_positive_weight_mask_env_enabled =
+        glass_env_flag_enabled_strict(unit_mask_scan_env_value);
+    const std::string unit_positive_weight_mask_env_reason =
+        glass_env_flag_reason_strict(unit_mask_scan_env_value);
     const bool unit_positive_weight_mask_requested =
         !radix_select_enabled && unit_positive_weights &&
         !unit_positive_active_index_enabled && !unit_positive_local_reuse_enabled &&
-        !unit_mask_scan_env_value.empty() && unit_mask_scan_env_value != "0" &&
-        unit_mask_scan_env_value != "false" && unit_mask_scan_env_value != "FALSE";
+        unit_positive_weight_mask_env_enabled;
     const bool unit_positive_weight_mask_enabled = unit_positive_weight_mask_requested;
+    const std::string unit_positive_weight_mask_reason = unit_positive_weight_mask_enabled
+        ? "environment_enabled"
+        : (unit_positive_weight_mask_env_enabled ? "disabled_by_precedence"
+                                                 : unit_positive_weight_mask_env_reason);
     std::vector<unsigned int> unit_positive_frame_indices;
     if (unit_positive_active_index_enabled) {
       unit_positive_frame_indices.reserve(frame_count_);
@@ -11908,9 +11958,7 @@ class ResidentCalibratedStack {
             : "disabled";
         profile_info["unit_positive_weight_mask_requested"] = unit_positive_weight_mask_requested;
         profile_info["unit_positive_weight_mask_enabled"] = unit_positive_weight_mask_enabled;
-        profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_enabled
-            ? "environment_enabled"
-            : (unit_positive_weight_mask_requested ? "disabled_by_precedence" : "disabled");
+        profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_reason;
         profile_info["unit_positive_weight_frame_count"] =
             static_cast<unsigned long long>(unit_positive_weight_frame_count);
         profile_info["unit_positive_active_frame_count"] =
@@ -12160,9 +12208,7 @@ class ResidentCalibratedStack {
           : "disabled";
       profile_info["unit_positive_weight_mask_requested"] = unit_positive_weight_mask_requested;
       profile_info["unit_positive_weight_mask_enabled"] = unit_positive_weight_mask_enabled;
-      profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_enabled
-          ? "environment_enabled"
-          : (unit_positive_weight_mask_requested ? "disabled_by_precedence" : "disabled");
+      profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_reason;
       profile_info["unit_positive_weight_frame_count"] =
           static_cast<unsigned long long>(unit_positive_weight_frame_count);
       profile_info["unit_positive_active_frame_count"] =

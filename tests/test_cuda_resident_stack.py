@@ -3066,6 +3066,66 @@ def test_resident_stack_hardened_winsorized_sigma_unit_weight_mask_scan_matches_
     assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
 
 
+def test_resident_stack_hardened_winsorized_sigma_unit_weight_mask_scan_auto_is_not_enabled(
+    monkeypatch,
+):
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    monkeypatch.delenv("GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX", raising=False)
+    monkeypatch.delenv("GLASS_CUDA_UNIT_WEIGHT_LOCAL_REUSE", raising=False)
+    monkeypatch.setenv("GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN", "auto")
+    frames = [
+        np.array([[5, 7], [11, 13]], dtype=np.float32),
+        np.array([[5, 9], [11, 30]], dtype=np.float32),
+        np.array([[6, 7], [11, 13]], dtype=np.float32),
+    ]
+    weights = np.array([1.0, 0.0, 1.0], dtype=np.float32)
+    resident_stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.2,
+            2.2,
+            min_samples=1,
+            max_reject_fraction=1.0,
+            count_map_dtype="uint16",
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            np.stack(frames, axis=0),
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.2,
+            high_sigma=2.2,
+            min_samples=1,
+            max_reject_fraction=1.0,
+        )
+    )
+
+    profile = timing["native_profile"]
+    assert profile["unit_positive_weights_detected"] is True
+    assert profile["unit_positive_weight_mask_requested"] is False
+    assert profile["unit_positive_weight_mask_enabled"] is False
+    assert profile["unit_positive_weight_mask_reason"] == "ignored_unrecognized_env_value"
+    assert profile["unit_positive_weight_mask_bytes"] == 0
+    assert profile["sample_reuse_strategy"] == "global_reread_weighted_samples"
+    assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5)
+    assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
+
+
 def test_resident_stack_hardened_winsorized_sigma_unit_weight_local_reuse_matches_cpu(
     monkeypatch,
 ):

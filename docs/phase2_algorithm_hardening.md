@@ -174,6 +174,61 @@ Interpretation:
   larger current bottleneck: reducing resident registration/warp orchestration
   and host/device coordination without changing the accepted frame set.
 
+### S2-Gate 630: Mask-Scan Repeat Rejection And Env Guard
+
+Gate 630 runs the Gate629 repeat matrix and closes the default-promotion
+question with real data instead of intuition.
+
+Real 200-light repeat validation:
+
+- Repeat batch:
+  `C:\glass_runs\phase2_s2_gate630_mask_scan_repeat\runs_20260625_135142`.
+- Summary:
+  `C:\glass_runs\phase2_s2_gate630_mask_scan_repeat\runs_20260625_135142\gate630_repeat_summary.json`.
+- Three paired default/mask-scan runs were executed with identical plan,
+  resident master cache, audit maps, and 200-light data.
+- Pairwise resident-regression-gate results:
+  - repeat 1: passed, elapsed ratio `0.9750897233280544`;
+  - repeat 2: passed, elapsed ratio `0.9869597641504888`;
+  - repeat 3: passed, elapsed ratio `0.8852464975146617`.
+- All three regression gates reported zero output differences and zero
+  numerical drift.
+
+Repeat statistics:
+
+- Total elapsed mean ratio: `0.9467959733011961`.
+- Total elapsed median ratio: `0.9761950500020543`.
+- Mask-scan total-time wins: `3 / 3`.
+- Hardened integration mean ratio: `1.0079091197710124`.
+- Hardened integration median ratio: `1.0086009065859771`.
+- Native kernel-sync mean ratio: `1.0063806007728684`.
+- Native kernel-sync median ratio: `1.0066921331048393`.
+- Hardened/kernel wins for mask-scan: `0 / 3`.
+
+Implementation:
+
+- Kept the mask-scan reducer opt-in; it is not promoted as the resident default.
+- Hardened native environment parsing for
+  `GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN`: only `1`, `true`, `yes`, and `on`
+  enable the path.
+- Values such as `auto` are ignored and recorded as
+  `unit_positive_weight_mask_reason=ignored_unrecognized_env_value`.
+- The Windows native wrapper now reads this variable with the same safe
+  `_dupenv_s` path used by the other CUDA experiment flags, removing the MSVC
+  `getenv` warning for this path.
+
+Interpretation:
+
+- The total-time improvement in the repeat matrix is real but not attributable
+  to the mask-scan kernel branch; the kernel branch was slightly slower in the
+  repeated measurements.
+- This gate prevents accidental default promotion and avoids spending more
+  time on a misleading micro-optimization.
+- The next substantive optimization target is the measured hot path, not more
+  report plumbing: the bounded hardened reducer itself, or the resident
+  read/H2D/calibration pipeline where `native_h2d_calibrate_store` remains a
+  dominant component.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization
