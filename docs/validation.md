@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 642.
+- Gate: S2-Gate 643.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate642_source_dq_positive_mainline\runs_20260625_165708`.
+  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate642_source_dq_positive_mainline\runs_20260625_165708\candidate_default_strict`.
-- GLASS elapsed time: `11.854997799731791 s`.
+  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853\candidate_default_strict`.
+- GLASS elapsed time: `11.895962899900042 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `92.15868433351525x`.
+- Speedup: `91.84132543059464x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -138,6 +138,12 @@ Current Phase 2 latest mainline acceptance:
   also validates a synthetic positive source-DQ route where `1` invalid sample
   is applied through resident in-memory mask streaming and observed by
   integration provenance.
+- Gate643 makes StackEngine default readiness and pipeline DQ ledger readiness
+  resident strict-run postconditions. Latest evidence records
+  `stack_engine.default_promotion_ready=true`,
+  `stack_engine.pipeline_contract_dq_ledger_ready=true`,
+  `stack_engine.phase2_stack_engine_default_gap_count=0`, and
+  `stack_engine.surface_count=4`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
@@ -146,12 +152,12 @@ Current Phase 2 latest mainline acceptance:
   `frame_accounting_resident_dq_lifecycle_contract`.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate641: passed with candidate/baseline
-  elapsed ratio `0.9984591805032615` and no failed checks.
+- Resident regression gate versus Gate642: passed with candidate/baseline
+  elapsed ratio `1.0034555130975373` and no failed checks.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate642_source_dq_positive_mainline\runs_20260625_165708\gate642_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853\gate643_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate642_source_dq_positive_mainline\runs_20260625_165708\gate642_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853\gate643_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

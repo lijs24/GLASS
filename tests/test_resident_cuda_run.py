@@ -4324,9 +4324,14 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     assert mainline_framework["framework_scope"] == "source_dq_positive"
     assert mainline_framework["policy"]["min_source_dq_invalid_samples"] == 1
     assert mainline_framework["policy"]["min_source_dq_applied_samples"] == 1
+    assert mainline_framework["stack_engine"]["default_promotion_ready"] is True
+    assert mainline_framework["stack_engine"]["pipeline_contract_dq_ledger_ready"] is True
+    assert mainline_framework["stack_engine"]["phase2_stack_engine_default_gap_count"] == 0
     assert mainline_framework["source_dq"]["input_invalid_samples_before_rejection"] == 1
     assert mainline_framework["source_dq"]["applied_invalid_samples"] == 1
     mainline_checks = {row["name"]: row for row in mainline_framework["checks"]}
+    assert mainline_checks["stack_engine_default_promotion_ready"]["passed"] is True
+    assert mainline_checks["stack_engine_pipeline_dq_ledger_ready"]["passed"] is True
     assert mainline_checks["resident_source_dq_invalid_threshold_met"]["passed"] is True
     assert mainline_checks["resident_source_dq_applied_threshold_met"]["passed"] is True
 

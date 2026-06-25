@@ -18,6 +18,66 @@ def _touch(path: Path) -> str:
     return str(path)
 
 
+def _stack_engine_contract(
+    *,
+    ready: bool = True,
+    dq_ledger_ready: bool = True,
+    gap_count: int = 0,
+) -> dict:
+    blockers = [] if ready else [{"name": "phase2_stack_engine_default_gaps", "gap_count": gap_count or 1}]
+    ledger_failures = [] if dq_ledger_ready else ["dq_ledger_check_failed"]
+    return {
+        "audit_type": "stack_engine_default_contract",
+        "passed": True,
+        "status": "passed",
+        "scope": "all",
+        "expected_integration_engine": "cuda_resident_stack",
+        "adoption": {
+            "contract_ready_count": 4,
+            "cuda_resident_surface_count": 4,
+            "phase2_stack_engine_default_gap_count": int(gap_count),
+            "recommendation": (
+                "stack_engine_default_ready"
+                if ready and gap_count == 0
+                else "stack_engine_contract_gaps_remain"
+            ),
+            "surface_count": 4,
+        },
+        "default_promotion": {
+            "actual_scope": "all",
+            "blocker_count": len(blockers),
+            "blockers": blockers,
+            "calibration_surface_count": 3,
+            "integration_surface_count": 1,
+            "phase2_stack_engine_default_gap_count": int(gap_count),
+            "pipeline_contract_dq_ledger": {
+                "accounting_rows": 3,
+                "attached": True,
+                "check_passed": dq_ledger_ready,
+                "expected_failed_rows": 0,
+                "expected_passed_rows": 3,
+                "expected_rows": 3,
+                "failed_checks": ledger_failures,
+                "ready": dq_ledger_ready,
+                "required": True,
+                "status": "ready" if dq_ledger_ready else "failed",
+            },
+            "pipeline_contract_dq_ledger_ready": dq_ledger_ready,
+            "pipeline_contract_dq_ledger_required": True,
+            "ready": ready,
+            "recommendation": (
+                "stack_engine_default_ready"
+                if ready and gap_count == 0
+                else "stack_engine_contract_gaps_remain"
+            ),
+            "required_scope": "all",
+            "resident_surface_count": 4,
+            "status": "ready" if ready else "blocked",
+            "surface_count": 4,
+        },
+    }
+
+
 def _write_minimal_green_resident_run(
     run: Path,
     *,
@@ -115,9 +175,9 @@ def _write_minimal_green_resident_run(
     )
     for name in ("resident_dq_pixel_closure.json", "resident_master_cache.json"):
         write_json(run / name, {"summary": {"passed": True, "status": "passed"}})
+    write_json(run / "stack_engine_contract.json", _stack_engine_contract())
     for name in (
         "pipeline_contract.json",
-        "stack_engine_contract.json",
         "warp_quality_contract.json",
         "resident_result_contract.json",
         "integration_results.json",
@@ -142,6 +202,8 @@ def test_resident_mainline_framework_passes_minimal_green_run(tmp_path: Path) ->
     assert payload["passed"] is True
     assert payload["blocking"] is False
     assert payload["policy"]["requested_action"] == "warn"
+    assert payload["stack_engine"]["default_promotion_ready"] is True
+    assert payload["stack_engine"]["pipeline_contract_dq_ledger_ready"] is True
     assert payload["source_dq"]["input_invalid_samples_before_rejection"] == 0
     assert payload["source_dq"]["applied_invalid_samples"] == 0
 
@@ -161,6 +223,45 @@ def test_resident_mainline_framework_strict_blocks_missing_map(tmp_path: Path) -
     assert payload["passed"] is False
     assert payload["blocking"] is True
     assert "resident_output_maps_present" in payload["failed_checks"]
+
+
+def test_resident_mainline_framework_strict_blocks_stack_engine_default_gap(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_minimal_green_resident_run(run)
+    write_json(run / "stack_engine_contract.json", _stack_engine_contract(ready=False, gap_count=1))
+
+    payload = build_resident_mainline_framework(
+        run,
+        requested_action="strict",
+        min_lights=3,
+        min_active_frames=3,
+    )
+
+    assert payload["passed"] is False
+    assert payload["blocking"] is True
+    assert "stack_engine_default_promotion_ready" in payload["failed_checks"]
+    assert "stack_engine_default_gap_count_zero" in payload["failed_checks"]
+
+
+def test_resident_mainline_framework_strict_blocks_stack_engine_dq_ledger_gap(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_minimal_green_resident_run(run)
+    write_json(run / "stack_engine_contract.json", _stack_engine_contract(dq_ledger_ready=False))
+
+    payload = build_resident_mainline_framework(
+        run,
+        requested_action="strict",
+        min_lights=3,
+        min_active_frames=3,
+    )
+
+    assert payload["passed"] is False
+    assert payload["blocking"] is True
+    assert "stack_engine_pipeline_dq_ledger_ready" in payload["failed_checks"]
 
 
 def test_resident_mainline_framework_source_dq_positive_threshold_passes(tmp_path: Path) -> None:

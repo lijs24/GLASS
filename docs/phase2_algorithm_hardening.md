@@ -801,6 +801,83 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 643: StackEngine DQ Runtime Postcondition
+
+Gate643 continues the StackEngine/DQ mainline. Gate642 made positive
+source-DQ evidence enforceable, but the resident mainline framework still only
+required that `stack_engine_contract.json` existed and had `passed=true`. That
+left an important loophole: a resident strict run could pass even if the
+StackEngine default-promotion summary or the pipeline DQ ledger inside that
+contract was not ready. Gate643 closes that loophole inside the resident run
+postcondition.
+
+Implementation:
+
+- Extended `resident_mainline_framework.json` with a normalized
+  `stack_engine` summary read from `stack_engine_contract.json`.
+- Added hard checks for:
+  - StackEngine contract presence;
+  - top-level StackEngine contract pass status;
+  - `default_promotion.ready`;
+  - zero Phase 2 StackEngine default gaps;
+  - master-calibration plus integration surface coverage;
+  - pipeline DQ ledger readiness when resident StackEngine surfaces require it.
+- The checks run as part of `glass run --resident-mainline-framework-gate
+  strict`, so a default resident run now fails immediately if StackEngine/DQ
+  runtime-default evidence regresses.
+- Updated focused resident-mainline tests with negative fixtures for default
+  gaps and failed DQ ledger readiness.
+- Tightened the resident CUDA source-DQ cache route test so it asserts the new
+  StackEngine checks pass through the real CLI path.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Focused resident-mainline, StackEngine contract, and resident CUDA tests:
+  `28 passed`.
+- Synthetic positive source-DQ + StackEngine validation:
+  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\resident_source_dq_stackengine_strict`.
+- Synthetic strict run evidence: `resident_mainline_framework.json` passed
+  with source-DQ invalid/applied samples `1 / 1`,
+  `stack_engine_default_promotion_ready=true`,
+  `stack_engine_pipeline_dq_ledger_ready=true`, and StackEngine gap count `0`.
+
+Real 200-light default validation:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853\candidate_default_strict`.
+- Evidence summary:
+  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853\gate643_ab_summary.json`.
+- `resident_mainline_framework.json`: passed, no failed checks.
+- StackEngine runtime evidence: `default_promotion_ready=true`,
+  `pipeline_contract_dq_ledger_ready=true`, default gap count `0`, surface
+  count `4`.
+- GLASS total elapsed: `11.895962899900042 s`.
+- Black-box reference elapsed: `1092.541 s`.
+- Acceptance speedup: `91.84132543059464x`.
+- Resident calibration/integration stage: `9.4771528999554 s`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames.
+- Resident regression gate versus Gate642: passed, elapsed ratio
+  `1.0034555130975373`, no failed checks.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed.
+- Phase 2 mainline audit: passed.
+
+Interpretation:
+
+- This is a runtime mainline hardening gate: StackEngine default coverage and
+  DQ ledger readiness are now enforced by the resident strict run itself.
+- The promoted 200-light default path remains numerically unchanged and stays
+  inside the 15 percent runtime budget.
+- The next substantive gate should move from postcondition hardening into
+  execution coverage: reducing resident calibration/registration orchestration
+  or making another legacy StackEngine surface execute through the unified
+  engine by default.
+
 ### S2-Gate 642: Source-DQ Positive Mainline Gate
 
 Gate642 returns to the DQ/mask mainline rather than adding another release or

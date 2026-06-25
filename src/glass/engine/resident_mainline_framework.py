@@ -131,6 +131,156 @@ def _source_dq_checks(
     ]
 
 
+def _stack_engine_summary(run: Path) -> dict[str, Any]:
+    path = run / "stack_engine_contract.json"
+    payload = _json_if_exists(path)
+    adoption = payload.get("adoption") if isinstance(payload.get("adoption"), dict) else {}
+    promotion = (
+        payload.get("default_promotion")
+        if isinstance(payload.get("default_promotion"), dict)
+        else {}
+    )
+    ledger = (
+        promotion.get("pipeline_contract_dq_ledger")
+        if isinstance(promotion.get("pipeline_contract_dq_ledger"), dict)
+        else payload.get("pipeline_contract_dq_ledger")
+        if isinstance(payload.get("pipeline_contract_dq_ledger"), dict)
+        else {}
+    )
+    blocker_count = _int_or_none(promotion.get("blocker_count"))
+    blockers = promotion.get("blockers") if isinstance(promotion.get("blockers"), list) else []
+    return {
+        "path": str(path),
+        "exists": path.exists(),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "audit_type": payload.get("audit_type") or payload.get("artifact_type"),
+        "scope": payload.get("scope"),
+        "expected_integration_engine": payload.get("expected_integration_engine"),
+        "default_promotion_ready": promotion.get("ready"),
+        "default_promotion_status": promotion.get("status"),
+        "default_promotion_blocker_count": blocker_count,
+        "default_promotion_blockers": blockers,
+        "recommendation": promotion.get("recommendation") or adoption.get("recommendation"),
+        "surface_count": _int_or_none(promotion.get("surface_count") or adoption.get("surface_count")),
+        "calibration_surface_count": _int_or_none(promotion.get("calibration_surface_count")),
+        "integration_surface_count": _int_or_none(promotion.get("integration_surface_count")),
+        "resident_surface_count": _int_or_none(promotion.get("resident_surface_count")),
+        "contract_ready_count": _int_or_none(adoption.get("contract_ready_count")),
+        "phase2_stack_engine_default_gap_count": _int_or_none(
+            promotion.get("phase2_stack_engine_default_gap_count")
+            if "phase2_stack_engine_default_gap_count" in promotion
+            else adoption.get("phase2_stack_engine_default_gap_count")
+        ),
+        "pipeline_contract_dq_ledger_ready": promotion.get(
+            "pipeline_contract_dq_ledger_ready"
+        )
+        if "pipeline_contract_dq_ledger_ready" in promotion
+        else ledger.get("ready"),
+        "pipeline_contract_dq_ledger_required": promotion.get(
+            "pipeline_contract_dq_ledger_required"
+        )
+        if "pipeline_contract_dq_ledger_required" in promotion
+        else ledger.get("required"),
+        "pipeline_contract_dq_ledger_status": ledger.get("status"),
+        "pipeline_contract_dq_ledger_expected_rows": _int_or_none(ledger.get("expected_rows")),
+        "pipeline_contract_dq_ledger_accounting_rows": _int_or_none(
+            ledger.get("accounting_rows")
+        ),
+        "pipeline_contract_dq_ledger_failed_checks": (
+            list(ledger.get("failed_checks"))
+            if isinstance(ledger.get("failed_checks"), list)
+            else []
+        ),
+        "failed_checks": (
+            list(payload.get("failed_checks"))
+            if isinstance(payload.get("failed_checks"), list)
+            else []
+        ),
+    }
+
+
+def _positive_or_unknown(value: int | None) -> bool:
+    return value is not None and value > 0
+
+
+def _zero_or_none(value: int | None) -> bool:
+    return value in (0, None)
+
+
+def _stack_engine_checks(stack_engine: dict[str, Any]) -> list[dict[str, Any]]:
+    surface_coverage_passed = (
+        _positive_or_unknown(stack_engine.get("surface_count"))
+        and _positive_or_unknown(stack_engine.get("calibration_surface_count"))
+        and _positive_or_unknown(stack_engine.get("integration_surface_count"))
+    )
+    dq_ledger_required = stack_engine.get("pipeline_contract_dq_ledger_required") is True
+    dq_ledger_ready = stack_engine.get("pipeline_contract_dq_ledger_ready") is True
+    return [
+        _check(
+            "stack_engine_contract_present",
+            bool(stack_engine.get("exists")),
+            {
+                "path": stack_engine.get("path"),
+                "exists": stack_engine.get("exists"),
+            },
+        ),
+        _check(
+            "stack_engine_contract_passed",
+            stack_engine.get("passed") is True,
+            {
+                "status": stack_engine.get("status"),
+                "passed": stack_engine.get("passed"),
+                "failed_checks": stack_engine.get("failed_checks"),
+            },
+        ),
+        _check(
+            "stack_engine_default_promotion_ready",
+            stack_engine.get("default_promotion_ready") is True,
+            {
+                "ready": stack_engine.get("default_promotion_ready"),
+                "status": stack_engine.get("default_promotion_status"),
+                "blocker_count": stack_engine.get("default_promotion_blocker_count"),
+                "blockers": stack_engine.get("default_promotion_blockers"),
+                "recommendation": stack_engine.get("recommendation"),
+            },
+            "Resident mainline strict runs must prove StackEngine default readiness, not just write a contract file.",
+        ),
+        _check(
+            "stack_engine_default_gap_count_zero",
+            _zero_or_none(stack_engine.get("phase2_stack_engine_default_gap_count")),
+            {
+                "gap_count": stack_engine.get("phase2_stack_engine_default_gap_count"),
+                "recommendation": stack_engine.get("recommendation"),
+            },
+        ),
+        _check(
+            "stack_engine_surface_coverage_present",
+            surface_coverage_passed,
+            {
+                "surface_count": stack_engine.get("surface_count"),
+                "calibration_surface_count": stack_engine.get("calibration_surface_count"),
+                "integration_surface_count": stack_engine.get("integration_surface_count"),
+                "resident_surface_count": stack_engine.get("resident_surface_count"),
+                "contract_ready_count": stack_engine.get("contract_ready_count"),
+            },
+        ),
+        _check(
+            "stack_engine_pipeline_dq_ledger_ready",
+            dq_ledger_ready if dq_ledger_required else True,
+            {
+                "required": dq_ledger_required,
+                "ready": stack_engine.get("pipeline_contract_dq_ledger_ready"),
+                "status": stack_engine.get("pipeline_contract_dq_ledger_status"),
+                "expected_rows": stack_engine.get("pipeline_contract_dq_ledger_expected_rows"),
+                "accounting_rows": stack_engine.get("pipeline_contract_dq_ledger_accounting_rows"),
+                "failed_checks": stack_engine.get("pipeline_contract_dq_ledger_failed_checks"),
+            },
+            "Resident StackEngine surfaces require the pipeline DQ ledger to be ready.",
+        ),
+    ]
+
+
 def build_resident_mainline_framework(
     run: str | Path,
     *,
@@ -165,6 +315,8 @@ def build_resident_mainline_framework(
         min_source_dq_invalid_samples=max(0, int(min_source_dq_invalid_samples)),
         min_source_dq_applied_samples=max(0, int(min_source_dq_applied_samples)),
     )
+    stack_engine = _stack_engine_summary(run_path)
+    stack_engine_checks = _stack_engine_checks(stack_engine)
     audit_checks = list(audit.get("checks") or [])
     if scope == "source_dq_positive":
         relaxed = {"default_resident_cuda_route", "resident_output_maps_present"}
@@ -173,7 +325,7 @@ def build_resident_mainline_framework(
             for check in audit_checks
             if not (isinstance(check, dict) and check.get("name") in relaxed)
         ]
-    checks = audit_checks + extra_checks
+    checks = audit_checks + stack_engine_checks + extra_checks
     failed_checks = [
         str(check.get("name"))
         for check in checks
@@ -181,7 +333,7 @@ def build_resident_mainline_framework(
     ]
     passed = not failed_checks
     summary = audit.get("summary") if isinstance(audit.get("summary"), dict) else {}
-    summary = {**summary, "source_dq": source_dq}
+    summary = {**summary, "stack_engine": stack_engine, "source_dq": source_dq}
     return {
         **audit,
         "artifact_type": "resident_mainline_framework",
@@ -203,6 +355,7 @@ def build_resident_mainline_framework(
         "summary": summary,
         "checks": checks,
         "failed_checks": failed_checks,
+        "stack_engine": stack_engine,
         "source_dq": source_dq,
         "status": "passed" if passed else "failed",
         "passed": passed,
