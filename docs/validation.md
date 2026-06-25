@@ -104,7 +104,30 @@ Machine-readable speedup summary:
   frames, and `7` zero-weight frames, matching the WBPP FastIntegration accepted
   frame set used for the parity comparison.
 
-Latest Phase 2 hot-path validation:
+Current Phase 2 latest-HEAD acceptance:
+
+- Gate: S2-Gate 634.
+- Evidence root:
+  `C:\glass_runs\phase2_s2_gate634_latest_head_ab\runs_20260625_145407`.
+- GLASS run:
+  `C:\glass_runs\phase2_s2_gate633_lazy_fallback\runs_20260625_144040\candidate_lazy_fallback_r2`.
+- GLASS elapsed time: `10.735156700015068 s`.
+- Black-box reference elapsed time: `1092.541 s`.
+- Speedup: `101.77224520611482x`.
+- Frame accounting: `200` planned lights, `193` active weighted frames, and
+  `7` zero-weight frames.
+- Calibration frame counts: `20` bias, `20` dark, `20` flat.
+- Coverage-masked compare to the reference master with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Pipeline contract: passed.
+- StackEngine contract: passed.
+- Warp quality contract: passed.
+- Acceptance audit:
+  `C:\glass_runs\phase2_s2_gate634_latest_head_ab\runs_20260625_145407\gate634_latest_head_acceptance_audit.json`.
+
+Historical Phase 2 hot-path validation:
 
 - Run:
   `C:\glass_runs\phase2_s2_gate537_real_ab\runs_20260623_133539\current_head_default`.

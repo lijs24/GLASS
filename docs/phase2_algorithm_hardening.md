@@ -412,6 +412,81 @@ Interpretation:
   registration/warp orchestration, or deeper native read/H2D/calibration
   overlap.
 
+### S2-Gate 634: Latest-HEAD Real 200-Light Acceptance
+
+Gate 634 is a self-audit checkpoint. After several small runtime and release
+evidence gates, the work returned to the main Phase 2 objective: proving that
+the current HEAD still runs the real 200-light resident CUDA pipeline, preserves
+frame and DQ contracts, and remains clearly faster than the black-box reference
+on the same data.
+
+Scope:
+
+- No algorithm code was changed in this gate.
+- The latest green HEAD output from Gate633 was re-compared against the M38
+  200-light black-box reference master.
+- The existing `glass acceptance-audit` command was used as the hard gate
+  instead of adding another report-only artifact.
+- The gate used strict real-data thresholds: 200 lights, at least 20 bias, 20
+  dark, and 20 flat frames, at least 190 active frames, at least `50x` speedup,
+  coverage fraction at least `0.97`, RMS difference no greater than `0.006`,
+  and p99 absolute difference no greater than `0.003`.
+- The candidate also had to carry passing pipeline, StackEngine, and warp
+  quality contracts.
+
+Real 200-light validation:
+
+- GLASS run:
+  `C:\glass_runs\phase2_s2_gate633_lazy_fallback\runs_20260625_144040\candidate_lazy_fallback_r2`.
+- Gate634 artifact root:
+  `C:\glass_runs\phase2_s2_gate634_latest_head_ab\runs_20260625_145407`.
+- Compare JSON:
+  `gate634_latest_head_vs_wbpp_compare.json`.
+- Speedup summary:
+  `gate634_latest_head_wbpp_speedup_summary.json`.
+- Acceptance audit:
+  `gate634_latest_head_acceptance_audit.json`.
+- GLASS elapsed: `10.735156700015068 s`.
+- Black-box reference elapsed: `1092.541 s`.
+- Speedup: `101.77224520611482x`.
+- Frame accounting: `200` lights, `193` active weighted frames, `7`
+  zero-weight frames.
+- Calibration frame counts: `20` bias, `20` dark, `20` flat.
+- Compare metrics at coverage >= `190`: shape match `true`, RMS
+  `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Pipeline contract: passed.
+- StackEngine contract: passed.
+- Warp quality contract: passed.
+- Acceptance audit status: passed.
+
+Validation commands:
+
+- `glass compare` against the black-box reference master with the established
+  GLASS scale/offset and coverage map.
+- `glass speedup-summary` with `--min-speedup 50`.
+- `glass acceptance-audit` with real-data frame, speed, coverage, compare, and
+  contract thresholds.
+- Focused tests:
+  `56 passed in 1.61s`.
+- Ruff:
+  passed.
+- Full pytest:
+  `1327 passed in 62.87s`.
+
+Interpretation:
+
+- This gate deliberately avoids more release/default-promotion/report plumbing.
+  It verifies the current mainline behavior against the final real-data
+  acceptance target.
+- The current HEAD still demonstrates a large speed margin and stable
+  reference-level image agreement on the 200-light benchmark.
+- The next gate should change the real processing framework, not just the
+  evidence chain: the strongest candidates are resident registration/warp
+  orchestration, a cooperative/segmented resident reducer, or deeper native
+  read/H2D/calibration overlap.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization
