@@ -704,6 +704,22 @@ Current Phase 2 latest mainline acceptance:
   `triangle_warp_identity_bypass_frame_count=0`, so the gate validates
   compatibility and future identity-matrix behavior rather than a speedup on
   the current M38 stack.
+- Gate690 adds the hard Phase 2 mainline A/B validation command
+  `glass phase2-mainline-ab`. The real 200-light candidate at
+  `C:\glass_runs\phase2_s2_gate690_mainline_ab\runs_20260627_023000\mainline_weight_aligned`
+  passed the mainline audit, resident regression versus Gate689, and the new
+  A/B gate. The new gate requires passing pipeline/resident-result contracts,
+  at least `190` active frames, elapsed ratio no higher than `1.15`, all six
+  resident integration output classes, and SHA256/size stability for tracked
+  FITS maps unless hash drift is explicitly allowed. The Gate690 candidate
+  recorded `193` active frames, elapsed ratio `0.9895780022628549` versus
+  Gate689, six tracked maps present, zero missing map patterns, and zero hash
+  mismatches. Component timing was light read/upload/calibrate
+  `3.44842360005714 s`, registration/warp `0.26703780062962323 s`, local
+  normalization `0.3525654999539256 s`, integration
+  `3.2566704000346363 s`, and output write `0.28603319998364896 s`. Final
+  validation also fixed resident CUDA completion-queue frame-weight alignment:
+  weights are now written by stack frame index rather than completion order.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

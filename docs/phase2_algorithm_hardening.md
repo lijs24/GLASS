@@ -2389,6 +2389,72 @@ Interpretation:
   measured elapsed ratio reflects normal single-run storage/GPU scheduling
   variance, not a numerical or algorithmic regression.
 
+### S2-Gate 690: Phase 2 Mainline A/B Validation Harness
+
+Gate690 pauses narrow optimization probes and adds a reusable hard gate for the
+current resident CUDA mainline. The command validates a baseline run and a
+candidate run together, then fails with exit code `2` when required contracts,
+active-frame count, runtime budget, complete integration maps, or tracked FITS
+hash stability fail.
+
+Implementation:
+
+- Added `glass phase2-mainline-ab`.
+- The gate combines resident runtime comparison with candidate contract checks,
+  active-frame admission checks, resident component timing, and SHA256/size
+  checks for the six resident integration output classes: master, weight,
+  coverage, low-rejection, high-rejection, and DQ maps.
+- `--fail-on-failed` makes the command usable as a real gate or CI check.
+- `--allow-hash-drift` is available only as an explicit diagnostic escape hatch
+  for future numeric experiments.
+
+Validation:
+
+- Focused A/B harness tests passed: `3 passed in 0.25 s`.
+- Ruff on touched files passed.
+- Full pytest passed: `1434 passed in 66.48 s`.
+- Real 200-light candidate:
+  `C:\glass_runs\phase2_s2_gate690_mainline_ab\runs_20260627_023000\mainline_weight_aligned`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate690_mainline_ab\gate690_weight_aligned_mainline_audit.json`.
+- Resident regression gate versus Gate689 passed:
+  `C:\glass_runs\phase2_s2_gate690_mainline_ab\gate690_weight_aligned_regression_gate.json`;
+  failed checks `[]`, elapsed ratio `0.9895780022628549`.
+- New Phase 2 mainline A/B gate passed:
+  `C:\glass_runs\phase2_s2_gate690_mainline_ab\gate690_weight_aligned_phase2_mainline_ab.json`;
+  failed checks `[]`, active frames `193`, tracked map count `6`, hash
+  mismatches `0`, missing map patterns `0`.
+
+Timing and telemetry:
+
+- Candidate total elapsed: `12.393503400264308 s`.
+- Baseline-to-candidate elapsed ratio: `0.9895780022628549`.
+- Resident components:
+  - light read/upload/calibrate `3.44842360005714 s`;
+  - registration/warp `0.26703780062962323 s`;
+  - local normalization `0.3525654999539256 s`;
+  - integration `3.2566704000346363 s`;
+  - output write `0.28603319998364896 s`.
+- Native completion calibration remained enabled with requested read backend
+  `auto` and about `26.053602899942863 s` of overlapped read supply time hidden
+  behind GPU work.
+
+Interpretation:
+
+- This is a mainline completeness and regression gate, not a release/default
+  promotion artifact and not another report-only handoff.
+- During final validation, Gate690 also fixed resident CUDA frame-weight
+  alignment for completion-queue calibration paths: frame weights are now
+  written by stack frame index instead of completion order, keeping integration
+  weights and frame-mask contracts in the same coordinate system.
+- It locks the evidence surface needed before larger risky work on the resident
+  integration reducer or read/upload pipeline: contracts must pass, 193 active
+  frames must remain admitted, and all six integration maps must remain present
+  and hash-stable unless a future gate explicitly opts into hash drift.
+- The dominant measured components remain light read/upload/calibrate and
+  resident integration. The next substantive gate should target one of those
+  two paths while preserving this A/B contract.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

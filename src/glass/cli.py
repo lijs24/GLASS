@@ -228,6 +228,10 @@ from glass.report.phase2_mainline_audit import (
     build_phase2_mainline_audit,
     write_phase2_mainline_audit,
 )
+from glass.report.phase2_mainline_ab import (
+    build_phase2_mainline_ab,
+    write_phase2_mainline_ab,
+)
 from glass.report.quality_metrics_compare import (
     build_quality_metrics_compare,
     write_quality_metrics_compare,
@@ -6809,6 +6813,30 @@ def cmd_phase2_mainline_audit(args: argparse.Namespace) -> int:
     return 0 if payload.get("passed") or not args.fail_on_not_green else 2
 
 
+def cmd_phase2_mainline_ab(args: argparse.Namespace) -> int:
+    payload = build_phase2_mainline_ab(
+        args.baseline_run,
+        args.candidate_run,
+        max_elapsed_ratio=args.max_elapsed_ratio,
+        min_active_frame_count=args.min_active_frame_count,
+        require_hash_match=not args.allow_hash_drift,
+    )
+    write_phase2_mainline_ab(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("summary", {}).get("status"),
+            "passed": payload.get("passed"),
+            "elapsed_ratio": payload.get("summary", {}).get("elapsed_ratio"),
+            "largest_component": payload.get("summary", {}).get("largest_component"),
+            "failed_checks": [item.get("name") for item in payload.get("failed_checks", [])],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if payload.get("passed") or not args.fail_on_failed else 2
+
+
 def cmd_quality_metrics_compare(args: argparse.Namespace) -> int:
     payload = build_quality_metrics_compare(
         args.baseline,
@@ -6953,6 +6981,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless all mainline checks pass",
     )
     phase2_mainline.set_defaults(func=cmd_phase2_mainline_audit)
+
+    phase2_mainline_ab = sub.add_parser(
+        "phase2-mainline-ab",
+        help="compare two resident CUDA mainline runs for performance and output-map stability",
+    )
+    phase2_mainline_ab.add_argument("--baseline-run", required=True, help="baseline resident CUDA run directory")
+    phase2_mainline_ab.add_argument("--candidate-run", required=True, help="candidate resident CUDA run directory")
+    phase2_mainline_ab.add_argument("--out", required=True, help="output Phase 2 mainline A/B JSON")
+    phase2_mainline_ab.add_argument("--markdown", help="optional output Markdown summary")
+    phase2_mainline_ab.add_argument("--max-elapsed-ratio", type=float, default=1.15)
+    phase2_mainline_ab.add_argument("--min-active-frame-count", type=int, default=190)
+    phase2_mainline_ab.add_argument(
+        "--allow-hash-drift",
+        action="store_true",
+        help="do not fail when tracked resident integration FITS hashes differ",
+    )
+    phase2_mainline_ab.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 if any A/B check fails",
+    )
+    phase2_mainline_ab.set_defaults(func=cmd_phase2_mainline_ab)
 
     quality_metrics_compare = sub.add_parser(
         "quality-metrics-compare",

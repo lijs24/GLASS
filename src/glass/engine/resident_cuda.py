@@ -7852,7 +7852,7 @@ def run_resident_calibration_integration(
 
             registration_during_load_elapsed = 0.0
             gc_elapsed = 0.0
-            frame_weight_values: list[float] = []
+            frame_weight_values: list[float] = [0.0 for _ in light_frames]
             agreement_weight_multipliers = [1.0 for _ in light_frames]
             current_master_key: str | None = None
             current_dark_exposure: float | None = None
@@ -8957,7 +8957,7 @@ def run_resident_calibration_integration(
                                     batch_threshold_apply_items.append(threshold_item)
                             frame_weight = 0.0 if _matches_any_token(frame, excluded_tokens) else 1.0
                             frame_weights[str(frame["id"])] = frame_weight
-                            frame_weight_values.append(frame_weight)
+                            frame_weight_values[int(item_index)] = frame_weight
                             per_frame_calibrate_s.append(batch_calibrate_elapsed * frame_share)
                             per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)) * frame_share)
                             per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)) * frame_share)
@@ -9205,7 +9205,7 @@ def run_resident_calibration_integration(
                         if resident_registration == "off" and _matches_any_token(frame, excluded_tokens):
                             frame_weight = 0.0
                         frame_weights[frame["id"]] = frame_weight
-                        frame_weight_values.append(frame_weight)
+                        frame_weight_values[index] = frame_weight
                         del light
                         if index % 10 == 9:
                             gc_start = perf_counter()
