@@ -1660,7 +1660,10 @@ def test_resident_hardened_winsorized_contract_late_promotes_active_count_native
     _validate_resident_winsorized_runtime_contract(promoted)
 
 
-def test_resident_hardened_winsorized_contract_keeps_segmented_when_active_count_over_limit():
+def test_resident_hardened_winsorized_contract_keeps_segmented_when_active_count_over_limit(
+    monkeypatch,
+):
+    monkeypatch.delenv("GLASS_CUDA_RADIX_SELECT_WINSORIZED", raising=False)
     frame_count = RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 32
     contract = _resident_winsorized_runtime_contract(
         rejection_mode="winsorized_sigma",
@@ -1678,6 +1681,35 @@ def test_resident_hardened_winsorized_contract_keeps_segmented_when_active_count
     assert promoted["native_active_frame_limit_ok"] is False
     assert promoted["late_native_active_count_promotion"] is False
     assert promoted["segmented_cpu_fallback_used"] is True
+    _validate_resident_winsorized_runtime_contract(promoted)
+
+
+def test_resident_hardened_winsorized_contract_radix_select_promotes_over_limit_active_count(
+    monkeypatch,
+):
+    monkeypatch.setenv("GLASS_CUDA_RADIX_SELECT_WINSORIZED", "1")
+    frame_count = RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 32
+    active_count = RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 1
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="hardened_cpu_parity",
+        frame_count=frame_count,
+        dispatch_mode="stack",
+    )
+
+    promoted = _resident_winsorized_contract_with_active_count(
+        contract,
+        active_frame_count=active_count,
+    )
+
+    assert promoted["hardened_execution_route"] == "native_cuda_resident_stack"
+    assert promoted["implementation"] == "median_iqr_hardened_cuda_resident_radix_select_prototype"
+    assert promoted["native_active_frame_limit_ok"] is False
+    assert promoted["native_radix_select_winsorized_enabled"] is True
+    assert promoted["native_radix_select_admission_ok"] is True
+    assert promoted["late_native_active_count_promotion"] is True
+    assert promoted["segmented_cpu_fallback_used"] is False
+    assert "late_native_radix_select_active_count" in promoted["resolution_reason"]
     _validate_resident_winsorized_runtime_contract(promoted)
 
 

@@ -401,6 +401,60 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 625: Opt-In Radix-Select CUDA Reducer For Over-512 Active Samples
+
+Gate 625 implements the first true device-side path for resident hardened
+`winsorized_sigma` groups with more than `512` finite positive-weight samples.
+Gate624 could keep over-512 total-frame groups native only when active positive
+samples were still within the bounded local-array kernels. Gate625 adds an
+opt-in exact order-statistic scan that does not store all per-pixel samples in
+thread-local arrays.
+
+Implementation:
+
+- Adds a CUDA radix/order-key selector for exact kth order statistics over
+  finite `float32` resident samples. It scans sortable IEEE float keys bit by
+  bit, avoiding a per-thread `values[MaxFrames]` buffer.
+- Adds a resident hardened winsorized radix-select kernel that uses the same
+  GLASS CPU-baseline formula: exact q25/median/q75, IQR scale with std
+  fallback, winsorized mean/std, original-sample rejection, rejection guard, and
+  final weighted mean.
+- Adds native float and `uint16` count-map launchers and profile fields:
+  `percentile_strategy=radix_select_order_statistics_scan`,
+  `native_kernel_capacity_selector=radix_select_unbounded_positive_samples`,
+  `radix_select_requested`, and `radix_select_enabled`.
+- Keeps the path guarded behind `GLASS_CUDA_RADIX_SELECT_WINSORIZED=1`. Default
+  runs still use the Gate624 exact kernels up to `512` active samples and the
+  segmented CPUStackEngine fallback above that threshold.
+- Extends the resident runtime contract so opt-in runs can late-promote an
+  active count above `512` from segmented CPU fallback to
+  `native_cuda_resident_stack` with implementation
+  `median_iqr_hardened_cuda_resident_radix_select_prototype`.
+
+Validation:
+
+- Native CUDA rebuild with CUDA Toolkit 13.2.
+- Focused CUDA tests for default over-limit rejection, a `545` positive-weight
+  resident stack using radix-select, Gate624 active-count native admission, and
+  non-unit active-count admission: `5 passed` as part of the focused suite.
+- Focused runtime-contract tests for default segmented retention, Gate624
+  active-count promotion, and opt-in radix-select over-limit promotion: passed.
+
+Decision:
+
+- Keep radix-select as an explicit prototype until real large-active-count
+  performance is measured. The algorithm removes the hard local-array capacity
+  dependency but currently rereads the frame axis many times per percentile.
+- Record a follow-up parity-hardening item for NaN-containing stacks with samples
+  exactly on the rejection threshold. A stress probe found rare one-sample
+  differences caused by GLASS CPU vectorized `nanmean`/`nanstd` reduction order
+  versus device/frame-axis accumulation; Gate625 does not hide that with a
+  threshold tolerance.
+- Use the next performance gate to compare this path against segmented
+  CPUStackEngine fallback on synthetic or real groups whose positive active
+  count exceeds `512`, then decide whether to optimize/cooperatively batch it or
+  keep it as a correctness escape hatch.
+
 ### S2-Gate 624: Native Active-Count Admission For Over-Limit Hardened Groups
 
 Gate 624 moves a real class of over-512 resident hardened winsorized groups

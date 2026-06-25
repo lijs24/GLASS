@@ -3948,6 +3948,11 @@ def _resident_stack_hardened_winsorized_available(cuda_module: Any) -> tuple[boo
     return True, None
 
 
+def _resident_radix_select_winsorized_enabled() -> bool:
+    value = os.environ.get("GLASS_CUDA_RADIX_SELECT_WINSORIZED", "").strip().lower()
+    return value in {"1", "true", "yes", "on", "force", "radix", "radix_select"}
+
+
 def _resolve_resident_rejection_max_fraction(
     *,
     rejection_mode: str,
@@ -4196,19 +4201,23 @@ def _resident_winsorized_contract_with_active_count(
         )
     )
     active_limit_ok = 0 < active_count <= native_limit
+    radix_select_enabled = _resident_radix_select_winsorized_enabled()
+    radix_select_admission_ok = bool(radix_select_enabled and active_count > native_limit)
     can_promote = (
         updated.get("hardened_requested", False)
         and updated.get("hardened_available", True)
         and updated.get("hardened_execution_route")
         == RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
         and frame_count > native_limit
-        and active_limit_ok
+        and (active_limit_ok or radix_select_admission_ok)
         and updated.get("dispatch_ok", True)
     )
     updated.update(
         {
             "active_frame_count": active_count,
             "native_active_frame_limit_ok": bool(active_limit_ok),
+            "native_radix_select_winsorized_enabled": bool(radix_select_enabled),
+            "native_radix_select_admission_ok": bool(radix_select_admission_ok),
             "native_active_count_admission_available": bool(can_promote),
             "late_native_active_count_promotion": bool(can_promote),
         }
@@ -4216,18 +4225,27 @@ def _resident_winsorized_contract_with_active_count(
     if not can_promote:
         return updated
 
+    if radix_select_admission_ok:
+        resolution_reason = (
+            "late_native_radix_select_active_count:"
+            f"{active_count}>{native_limit};frame_count:{frame_count}"
+        )
+        implementation = "median_iqr_hardened_cuda_resident_radix_select_prototype"
+    else:
+        resolution_reason = (
+            "late_native_active_count_within_limit:"
+            f"{active_count}<={native_limit}<frame_count:{frame_count}"
+        )
+        implementation = "median_iqr_hardened_cuda_resident_prototype"
     updated.update(
         {
-            "resolution_reason": (
-                "late_native_active_count_within_limit:"
-                f"{active_count}<={native_limit}<frame_count:{frame_count}"
-            ),
+            "resolution_reason": resolution_reason,
             "hardened_execution_route": RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE,
             "frame_limit_applies": True,
             "frame_limit_ok": True,
             "segmented_cpu_fallback_used": False,
             "native_hardened_required": True,
-            "implementation": "median_iqr_hardened_cuda_resident_prototype",
+            "implementation": implementation,
         }
     )
     return updated

@@ -676,6 +676,34 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     float max_reject_fraction,
     bool unit_positive_weights,
     bool unit_positive_local_reuse);
+void glass_integrate_resident_hardened_winsorized_sigma_f32_radix_select_launch(
+    const float* stack,
+    const float* weights,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* low_rejection_map,
+    float* high_rejection_map,
+    std::size_t frame_count,
+    std::size_t pixels_per_frame,
+    float low_sigma,
+    float high_sigma,
+    int min_samples,
+    float max_reject_fraction);
+void glass_integrate_resident_hardened_winsorized_sigma_f32_radix_select_u16_counts_launch(
+    const float* stack,
+    const float* weights,
+    float* master,
+    float* weight_map,
+    unsigned short* coverage_map,
+    unsigned short* low_rejection_map,
+    unsigned short* high_rejection_map,
+    std::size_t frame_count,
+    std::size_t pixels_per_frame,
+    float low_sigma,
+    float high_sigma,
+    int min_samples,
+    float max_reject_fraction);
 void glass_integrate_resident_tile_local_sigma_clip_f32_launch(
     const float* stack,
     const float* weights,
@@ -11507,16 +11535,9 @@ class ResidentCalibratedStack {
         unit_positive_weights = false;
       }
     }
-    if (unit_positive_weight_frame_count == 0) {
-      throw std::invalid_argument(
-          "hardened resident winsorized sigma requires at least one positive-weight resident frame");
-    }
-    if (unit_positive_weight_frame_count > 512) {
-      throw std::invalid_argument(
-          "hardened resident winsorized sigma currently supports at most 512 positive-weight resident frames");
-    }
     std::string unit_active_index_env_value;
     std::string unit_local_reuse_env_value;
+    std::string radix_select_env_value;
 #ifdef _MSC_VER
     char* unit_active_index_env_buffer = nullptr;
     std::size_t unit_active_index_env_length = 0;
@@ -11538,6 +11559,16 @@ class ResidentCalibratedStack {
       unit_local_reuse_env_value = unit_local_reuse_env_buffer;
       std::free(unit_local_reuse_env_buffer);
     }
+    char* radix_select_env_buffer = nullptr;
+    std::size_t radix_select_env_length = 0;
+    if (_dupenv_s(
+            &radix_select_env_buffer,
+            &radix_select_env_length,
+            "GLASS_CUDA_RADIX_SELECT_WINSORIZED") == 0 &&
+        radix_select_env_buffer != nullptr) {
+      radix_select_env_value = radix_select_env_buffer;
+      std::free(radix_select_env_buffer);
+    }
 #else
     const char* unit_active_index_env = std::getenv("GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX");
     if (unit_active_index_env != nullptr) {
@@ -11547,16 +11578,36 @@ class ResidentCalibratedStack {
     if (unit_local_reuse_env != nullptr) {
       unit_local_reuse_env_value = unit_local_reuse_env;
     }
+    const char* radix_select_env = std::getenv("GLASS_CUDA_RADIX_SELECT_WINSORIZED");
+    if (radix_select_env != nullptr) {
+      radix_select_env_value = radix_select_env;
+    }
 #endif
+    const bool radix_select_requested =
+        !radix_select_env_value.empty() && radix_select_env_value != "0" &&
+        radix_select_env_value != "false" && radix_select_env_value != "FALSE";
+    const bool radix_select_enabled =
+        radix_select_requested && unit_positive_weight_frame_count > 512;
+    if (unit_positive_weight_frame_count == 0) {
+      throw std::invalid_argument(
+          "hardened resident winsorized sigma requires at least one positive-weight resident frame");
+    }
+    if (unit_positive_weight_frame_count > 512 && !radix_select_enabled) {
+      throw std::invalid_argument(
+          "hardened resident winsorized sigma currently supports at most 512 positive-weight resident frames");
+    }
     const bool unit_positive_active_index_requested =
-        unit_positive_weights && !unit_active_index_env_value.empty() && unit_active_index_env_value != "0" &&
+        !radix_select_enabled && unit_positive_weights &&
+        !unit_active_index_env_value.empty() && unit_active_index_env_value != "0" &&
         unit_active_index_env_value != "false" && unit_active_index_env_value != "FALSE";
     const bool unit_positive_active_count_admission =
-        unit_positive_weights && frame_count_ > 512 && unit_positive_weight_frame_count <= 512;
+        !radix_select_enabled && unit_positive_weights && frame_count_ > 512 &&
+        unit_positive_weight_frame_count <= 512;
     const bool unit_positive_active_index_enabled =
         unit_positive_active_index_requested || unit_positive_active_count_admission;
     const bool unit_positive_local_reuse_requested =
-        unit_positive_weights && !unit_local_reuse_env_value.empty() && unit_local_reuse_env_value != "0" &&
+        !radix_select_enabled && unit_positive_weights &&
+        !unit_local_reuse_env_value.empty() && unit_local_reuse_env_value != "0" &&
         unit_local_reuse_env_value != "false" && unit_local_reuse_env_value != "FALSE";
     const bool unit_positive_local_reuse_enabled =
         unit_positive_local_reuse_requested && !unit_positive_active_index_enabled;
@@ -11571,6 +11622,25 @@ class ResidentCalibratedStack {
       }
     }
     const std::size_t unit_positive_active_frame_count = unit_positive_frame_indices.size();
+    const std::string percentile_strategy = radix_select_enabled
+        ? "radix_select_order_statistics_scan"
+        : "ascending_unique_quartile_quickselect_order_statistics";
+    const std::string sample_reuse_strategy = radix_select_enabled
+        ? "radix_select_global_rescan_weighted_samples"
+        : (unit_positive_active_index_enabled
+               ? "active_index_global_reread_unit_positive_weights"
+               : (unit_positive_local_reuse_enabled ? "local_ordered_reuse_unit_positive_weights"
+                                                     : "global_reread_weighted_samples"));
+    const unsigned long long native_admission_frame_limit =
+        radix_select_enabled ? 0ull : static_cast<unsigned long long>(512);
+    const unsigned long long native_kernel_frame_capacity =
+        radix_select_enabled
+            ? static_cast<unsigned long long>(unit_positive_weight_frame_count)
+            : static_cast<unsigned long long>(
+                  unit_positive_weight_frame_count <= 256 ? 256 : 512);
+    const std::string native_kernel_capacity_selector = radix_select_enabled
+        ? "radix_select_unbounded_positive_samples"
+        : (unit_positive_weight_frame_count <= 256 ? "small_256" : "large_512");
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     const py::buffer_info master_info = master.request();
@@ -11666,24 +11736,41 @@ class ResidentCalibratedStack {
         }
         weights_upload_s = seconds_since(weights_upload_start);
         const auto kernel_start = Clock::now();
-        glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
-            d_stack_,
-            d_weights,
-            d_unit_positive_frame_indices,
-            d_master,
-            d_weight_map,
-            d_coverage_map,
-            d_low_rejection_map,
-            d_high_rejection_map,
-            frame_count_,
-            unit_positive_weight_frame_count,
-            pixels_per_frame_,
-            low_sigma,
-            high_sigma,
-            min_samples,
-            max_reject_fraction,
-            unit_positive_active_index_enabled,
-            unit_positive_local_reuse_enabled);
+        if (radix_select_enabled) {
+          glass_integrate_resident_hardened_winsorized_sigma_f32_radix_select_u16_counts_launch(
+              d_stack_,
+              d_weights,
+              d_master,
+              d_weight_map,
+              d_coverage_map,
+              d_low_rejection_map,
+              d_high_rejection_map,
+              frame_count_,
+              pixels_per_frame_,
+              low_sigma,
+              high_sigma,
+              min_samples,
+              max_reject_fraction);
+        } else {
+          glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
+              d_stack_,
+              d_weights,
+              d_unit_positive_frame_indices,
+              d_master,
+              d_weight_map,
+              d_coverage_map,
+              d_low_rejection_map,
+              d_high_rejection_map,
+              frame_count_,
+              unit_positive_weight_frame_count,
+              pixels_per_frame_,
+              low_sigma,
+              high_sigma,
+              min_samples,
+              max_reject_fraction,
+              unit_positive_active_index_enabled,
+              unit_positive_local_reuse_enabled);
+        }
         check_cuda(
             cudaGetLastError(),
             "ResidentCalibratedStack.integrate_hardened_winsorized_sigma uint16 kernel launch");
@@ -11751,23 +11838,21 @@ class ResidentCalibratedStack {
         py::dict profile_info;
         profile_info["schema_version"] = 1;
         profile_info["native_profile_model"] = "chrono_allocation_upload_kernel_download_free";
-        profile_info["percentile_strategy"] = "ascending_unique_quartile_quickselect_order_statistics";
+        profile_info["percentile_strategy"] = percentile_strategy;
         profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
-        profile_info["sample_reuse_strategy"] = unit_positive_active_index_enabled
-            ? "active_index_global_reread_unit_positive_weights"
-            : (unit_positive_local_reuse_enabled ? "local_ordered_reuse_unit_positive_weights"
-                                                  : "global_reread_weighted_samples");
+        profile_info["sample_reuse_strategy"] = sample_reuse_strategy;
         profile_info["native_frame_count_exceeds_limit"] = frame_count_ > 512;
         profile_info["native_active_count_admission_enabled"] =
             frame_count_ > 512 && unit_positive_weight_frame_count <= 512;
         profile_info["native_admission_sample_count"] =
             static_cast<unsigned long long>(unit_positive_weight_frame_count);
-        profile_info["native_admission_frame_limit"] = static_cast<unsigned long long>(512);
-        profile_info["native_kernel_frame_capacity"] =
-            static_cast<unsigned long long>(
-                unit_positive_weight_frame_count <= 256 ? 256 : 512);
-        profile_info["native_kernel_capacity_selector"] =
-            unit_positive_weight_frame_count <= 256 ? "small_256" : "large_512";
+        profile_info["native_admission_frame_limit"] = native_admission_frame_limit;
+        profile_info["native_kernel_frame_capacity"] = native_kernel_frame_capacity;
+        profile_info["native_kernel_capacity_selector"] = native_kernel_capacity_selector;
+        profile_info["radix_select_requested"] = radix_select_requested;
+        profile_info["radix_select_enabled"] = radix_select_enabled;
+        profile_info["radix_select_positive_sample_count"] =
+            static_cast<unsigned long long>(unit_positive_weight_frame_count);
         profile_info["unit_positive_weights_detected"] = unit_positive_weights;
         profile_info["unit_positive_weights_fast_path"] = unit_positive_active_index_enabled;
         profile_info["unit_positive_local_reuse_requested"] = unit_positive_local_reuse_requested;
@@ -11876,24 +11961,41 @@ class ResidentCalibratedStack {
       }
       weights_upload_s = seconds_since(weights_upload_start);
       const auto kernel_start = Clock::now();
-      glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
-          d_stack_,
-          d_weights,
-          d_unit_positive_frame_indices,
-          d_master,
-          d_weight_map,
-          d_coverage_map,
-          d_low_rejection_map,
-          d_high_rejection_map,
-          frame_count_,
-          unit_positive_weight_frame_count,
-          pixels_per_frame_,
-          low_sigma,
+      if (radix_select_enabled) {
+        glass_integrate_resident_hardened_winsorized_sigma_f32_radix_select_launch(
+            d_stack_,
+            d_weights,
+            d_master,
+            d_weight_map,
+            d_coverage_map,
+            d_low_rejection_map,
+            d_high_rejection_map,
+            frame_count_,
+            pixels_per_frame_,
+            low_sigma,
+            high_sigma,
+            min_samples,
+            max_reject_fraction);
+      } else {
+        glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
+            d_stack_,
+            d_weights,
+            d_unit_positive_frame_indices,
+            d_master,
+            d_weight_map,
+            d_coverage_map,
+            d_low_rejection_map,
+            d_high_rejection_map,
+            frame_count_,
+            unit_positive_weight_frame_count,
+            pixels_per_frame_,
+            low_sigma,
             high_sigma,
             min_samples,
             max_reject_fraction,
             unit_positive_active_index_enabled,
             unit_positive_local_reuse_enabled);
+      }
       check_cuda(
           cudaGetLastError(),
           "ResidentCalibratedStack.integrate_hardened_winsorized_sigma kernel launch");
@@ -11961,23 +12063,21 @@ class ResidentCalibratedStack {
       py::dict profile_info;
       profile_info["schema_version"] = 1;
       profile_info["native_profile_model"] = "chrono_allocation_upload_kernel_download_free";
-      profile_info["percentile_strategy"] = "ascending_unique_quartile_quickselect_order_statistics";
+      profile_info["percentile_strategy"] = percentile_strategy;
       profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
-      profile_info["sample_reuse_strategy"] = unit_positive_active_index_enabled
-          ? "active_index_global_reread_unit_positive_weights"
-          : (unit_positive_local_reuse_enabled ? "local_ordered_reuse_unit_positive_weights"
-                                                : "global_reread_weighted_samples");
+      profile_info["sample_reuse_strategy"] = sample_reuse_strategy;
       profile_info["native_frame_count_exceeds_limit"] = frame_count_ > 512;
       profile_info["native_active_count_admission_enabled"] =
           frame_count_ > 512 && unit_positive_weight_frame_count <= 512;
       profile_info["native_admission_sample_count"] =
           static_cast<unsigned long long>(unit_positive_weight_frame_count);
-      profile_info["native_admission_frame_limit"] = static_cast<unsigned long long>(512);
-      profile_info["native_kernel_frame_capacity"] =
-          static_cast<unsigned long long>(
-              unit_positive_weight_frame_count <= 256 ? 256 : 512);
-      profile_info["native_kernel_capacity_selector"] =
-          unit_positive_weight_frame_count <= 256 ? "small_256" : "large_512";
+      profile_info["native_admission_frame_limit"] = native_admission_frame_limit;
+      profile_info["native_kernel_frame_capacity"] = native_kernel_frame_capacity;
+      profile_info["native_kernel_capacity_selector"] = native_kernel_capacity_selector;
+      profile_info["radix_select_requested"] = radix_select_requested;
+      profile_info["radix_select_enabled"] = radix_select_enabled;
+      profile_info["radix_select_positive_sample_count"] =
+          static_cast<unsigned long long>(unit_positive_weight_frame_count);
       profile_info["unit_positive_weights_detected"] = unit_positive_weights;
       profile_info["unit_positive_weights_fast_path"] = unit_positive_active_index_enabled;
       profile_info["unit_positive_local_reuse_requested"] = unit_positive_local_reuse_requested;

@@ -2667,7 +2667,7 @@ def test_resident_stack_hardened_winsorized_sigma_over_limit_nonunit_active_coun
     assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
 
 
-def test_resident_stack_hardened_winsorized_sigma_over_limit_active_count_rejects():
+def test_resident_stack_hardened_winsorized_sigma_over_limit_active_count_rejects(monkeypatch):
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
         module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
@@ -2675,6 +2675,7 @@ def test_resident_stack_hardened_winsorized_sigma_over_limit_active_count_reject
         raise AssertionError(
             "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
         )
+    monkeypatch.delenv("GLASS_CUDA_RADIX_SELECT_WINSORIZED", raising=False)
 
     stack_np = np.ones((520, 2, 2), dtype=np.float32)
     weights = np.zeros((520,), dtype=np.float32)
@@ -2694,6 +2695,73 @@ def test_resident_stack_hardened_winsorized_sigma_over_limit_active_count_reject
             3.0,
             count_map_dtype="uint16",
         )
+
+
+def test_resident_stack_hardened_winsorized_sigma_radix_select_over_512_matches_cpu(monkeypatch):
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+    monkeypatch.setenv("GLASS_CUDA_RADIX_SELECT_WINSORIZED", "1")
+    monkeypatch.delenv("GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX", raising=False)
+    monkeypatch.delenv("GLASS_CUDA_UNIT_WEIGHT_LOCAL_REUSE", raising=False)
+
+    rng = np.random.default_rng(626)
+    stack_np = rng.normal(1200.0, 5.0, size=(545, 3, 4)).astype(np.float32)
+    stack_np[0, 0, :] -= np.float32(180.0)
+    stack_np[1, 1, :] += np.float32(190.0)
+    stack_np[2, :, 2] += np.float32(170.0)
+    stack_np[8, 2, 3] = np.nan
+    weights = rng.uniform(0.75, 1.25, size=(545,)).astype(np.float32)
+
+    resident_stack = module.ResidentCalibratedStack(
+        stack_np.shape[0],
+        stack_np.shape[1],
+        stack_np.shape[2],
+    )
+    for index, frame in enumerate(stack_np):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.45,
+            2.45,
+            max_reject_fraction=0.5,
+            count_map_dtype="uint16",
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            stack_np,
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.45,
+            high_sigma=2.45,
+            max_reject_fraction=0.5,
+        )
+    )
+
+    profile = timing["native_profile"]
+    assert timing["frame_count"] == 545
+    assert timing["native_kernel_frame_capacity"] == 545
+    assert timing["native_kernel_capacity_selector"] == "radix_select_unbounded_positive_samples"
+    assert profile["radix_select_requested"] is True
+    assert profile["radix_select_enabled"] is True
+    assert profile["radix_select_positive_sample_count"] == 545
+    assert profile["native_admission_frame_limit"] == 0
+    assert profile["percentile_strategy"] == "radix_select_order_statistics_scan"
+    assert profile["sample_reuse_strategy"] == "radix_select_global_rescan_weighted_samples"
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-4)
+    assert np.allclose(weight_map, expected_weight, rtol=2e-5, atol=2e-4)
+    assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
+    assert int(np.sum(low_reject)) > 0
+    assert int(np.sum(high_reject)) > 0
 
 
 def test_resident_stack_hardened_winsorized_sigma_quartile_rank_edge_counts_match_cpu():

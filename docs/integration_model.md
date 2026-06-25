@@ -175,6 +175,22 @@ promotion after registration, frame-mask, and weighting decisions are final.
 Groups with more than 512 positive-weight frames still use the segmented
 CPUStackEngine fallback.
 
+S2-Gate 625 adds an opt-in native CUDA correctness prototype for groups with
+more than 512 positive-weight samples. When
+`GLASS_CUDA_RADIX_SELECT_WINSORIZED=1` is set, the resident hardened kernel can
+select q25/median/q75 through a bitwise sortable-float radix scan instead of a
+bounded thread-local sample array. The winsorized formula, rejection guard, and
+final weighted mean remain the same as the GLASS CPU baseline, and artifacts
+record `percentile_strategy=radix_select_order_statistics_scan`. This path is
+not the default yet because it rereads the resident frame axis many times per
+output pixel; it exists to validate a true over-512 device-side reduction before
+later cooperative or segmented performance work.
+The first validation target is finite resident stacks; a NaN-containing stress
+probe exposed rare one-sample rejection drift when a sample falls exactly on a
+threshold and CPU vectorized `nanmean`/`nanstd` reduction order differs from the
+device frame-axis order. That edge is tracked for a later parity-hardening gate
+instead of being hidden with an arbitrary rejection tolerance.
+
 S2-Gate 608 raises the native exact hardened CUDA capacity from 256 to 512
 frames. The native kernel now stores and sorts up to 512 valid samples per
 pixel before applying the same median/IQR winsorized formula, so 260-frame

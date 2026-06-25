@@ -39,8 +39,11 @@ Current code is intentionally gated:
   downloads resident calibrated tiles to host and records the route. S2-Gate 624
   admits a subset of over-limit groups back to native CUDA when the final finite
   positive-weight sample count is at most 512, even if total input frame count
-  is higher. Current CUDA builds use a batch tile-download surface for the
-  remaining fallback when available, with a single-frame tile loop retained as a
+  is higher. S2-Gate 625 adds an explicit opt-in CUDA radix-select correctness
+  prototype for groups above 512 positive-weight samples, but that path is not
+  yet the default because it trades the local-array limit for repeated frame-axis
+  scans. Current CUDA builds use a batch tile-download surface for the remaining
+  default fallback when available, with a single-frame tile loop retained as a
   compatibility escape hatch. S2-Gate 623 filters this fallback to finite
   positive integration weights before download, so zero-weight quality/mask
   rejects are not replayed on host. Minimal-output runs, unsupported dispatch,
@@ -57,10 +60,14 @@ Current code is intentionally gated:
   fallback, Gate608 covers 260-frame groups natively, Gate623 avoids
   downloading zero-weight inactive frames in the host fallback, and Gate624
   keeps over-512 total-frame groups native when active positive-weight count is
-  at most 512. Groups above 512 positive-weight samples still reduce on host
-  through the GLASS CPUStackEngine. Richer robust
-  rejection policies, cosmetic correction, and broader data-shape support
-  remain future work.
+  at most 512. Gate625 can process groups above 512 positive-weight samples on
+  the GPU when `GLASS_CUDA_RADIX_SELECT_WINSORIZED=1` is set, but this is still
+  an opt-in correctness prototype pending large-active-count performance
+  validation. NaN-containing over-512 stacks can still show rare one-sample
+  rejection-boundary drift when a sample lies exactly on a CPU/GPU threshold;
+  this is tracked as parity-hardening work rather than hidden with a tolerance
+  guard. Richer robust rejection policies, cosmetic correction, and broader
+  data-shape support remain future work.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must
