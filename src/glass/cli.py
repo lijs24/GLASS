@@ -22,6 +22,7 @@ from glass.engine.resident_calibration_artifacts import build_resident_calibrati
 from glass.engine.resident_cuda import build_resident_memory_admission, run_resident_calibration_integration
 from glass.engine.resident_mainline_framework import (
     DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_GATE,
+    DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_SCOPE,
     write_resident_mainline_framework,
 )
 from glass.engine.resident_reference_scout import (
@@ -1582,9 +1583,24 @@ def _write_resident_mainline_framework(
     path = write_resident_mainline_framework(
         run,
         requested_action=action,
+        framework_scope=getattr(
+            args,
+            "resident_mainline_framework_scope",
+            DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_SCOPE,
+        ),
         min_lights=getattr(args, "resident_mainline_min_lights", 1),
         min_active_frames=getattr(args, "resident_mainline_min_active_frames", 1),
         max_masked_frames=getattr(args, "resident_mainline_max_masked_frames", 1_000_000),
+        min_source_dq_invalid_samples=getattr(
+            args,
+            "resident_mainline_min_source_dq_invalid_samples",
+            0,
+        ),
+        min_source_dq_applied_samples=getattr(
+            args,
+            "resident_mainline_min_source_dq_applied_samples",
+            0,
+        ),
     )
     payload = read_json(path)
     state.artifacts.append(
@@ -6455,9 +6471,20 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_GATE,
         help="write a resident mainline framework postcondition; strict fails the run when it is not green",
     )
+    run.add_argument(
+        "--resident-mainline-framework-scope",
+        choices=["default", "source_dq_positive"],
+        default=DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_SCOPE,
+        help=(
+            "framework postcondition scope: default enforces the promoted resident mainline, "
+            "source_dq_positive is for positive source-DQ resident fixtures"
+        ),
+    )
     run.add_argument("--resident-mainline-min-lights", type=int, default=1)
     run.add_argument("--resident-mainline-min-active-frames", type=int, default=1)
     run.add_argument("--resident-mainline-max-masked-frames", type=int, default=1_000_000)
+    run.add_argument("--resident-mainline-min-source-dq-invalid-samples", type=int, default=0)
+    run.add_argument("--resident-mainline-min-source-dq-applied-samples", type=int, default=0)
     run.add_argument(
         "--resident-winsorized-mode",
         choices=["auto", "fast_approx", "hardened_cpu_parity"],
@@ -7069,9 +7096,20 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_GATE,
         help="write a resident mainline framework postcondition; strict fails the run when it is not green",
     )
+    audit.add_argument(
+        "--resident-mainline-framework-scope",
+        choices=["default", "source_dq_positive"],
+        default=DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_SCOPE,
+        help=(
+            "framework postcondition scope: default enforces the promoted resident mainline, "
+            "source_dq_positive is for positive source-DQ resident fixtures"
+        ),
+    )
     audit.add_argument("--resident-mainline-min-lights", type=int, default=1)
     audit.add_argument("--resident-mainline-min-active-frames", type=int, default=1)
     audit.add_argument("--resident-mainline-max-masked-frames", type=int, default=1_000_000)
+    audit.add_argument("--resident-mainline-min-source-dq-invalid-samples", type=int, default=0)
+    audit.add_argument("--resident-mainline-min-source-dq-applied-samples", type=int, default=0)
     audit.add_argument(
         "--resident-inline-source-dq",
         choices=["off", "cosmetic", "cosmetic_cuda"],

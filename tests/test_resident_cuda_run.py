@@ -4241,6 +4241,14 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
             "2",
             "--resident-output-maps",
             "audit",
+            "--resident-mainline-framework-gate",
+            "strict",
+            "--resident-mainline-framework-scope",
+            "source_dq_positive",
+            "--resident-mainline-min-source-dq-invalid-samples",
+            "1",
+            "--resident-mainline-min-source-dq-applied-samples",
+            "1",
             "--tile-size",
             "16",
         ]
@@ -4252,6 +4260,7 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     state = read_json(run / "run_state.json")
     integration = read_json(run / "integration_results.json")
     warp_quality = read_json(run / "warp_quality_contract.json")
+    mainline_framework = read_json(run / "resident_mainline_framework.json")
     output = integration["outputs"][0]
     master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
     weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
@@ -4292,8 +4301,10 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     assert any(item["stage"] == "resident_source_dq_cache" for item in state["artifacts"])
     assert any(item["stage"] == "stack_engine_contract" for item in state["artifacts"])
     assert any(item["stage"] == "warp_quality_contract" for item in state["artifacts"])
+    assert any(item["stage"] == "resident_mainline_framework" for item in state["artifacts"])
     assert (run / "stack_engine_contract.json").exists()
     assert (run / "warp_quality_contract.json").exists()
+    assert (run / "resident_mainline_framework.json").exists()
     assert warp_quality["passed"] is True
     assert warp_quality["contract_surface"] == "resident_in_vram"
     assert warp_quality["thresholds"]["require_artifacts"] is False
@@ -4309,6 +4320,15 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
     assert source_dq["sidecar_source_counts"] == {"calibration_artifacts": 2}
     assert artifact["source_dq_calibration_artifact_index"]["available"] is True
     assert artifact["source_dq_calibration_artifact_index"]["sidecar_frame_count"] == 2
+    assert mainline_framework["passed"] is True
+    assert mainline_framework["framework_scope"] == "source_dq_positive"
+    assert mainline_framework["policy"]["min_source_dq_invalid_samples"] == 1
+    assert mainline_framework["policy"]["min_source_dq_applied_samples"] == 1
+    assert mainline_framework["source_dq"]["input_invalid_samples_before_rejection"] == 1
+    assert mainline_framework["source_dq"]["applied_invalid_samples"] == 1
+    mainline_checks = {row["name"]: row for row in mainline_framework["checks"]}
+    assert mainline_checks["resident_source_dq_invalid_threshold_met"]["passed"] is True
+    assert mainline_checks["resident_source_dq_applied_threshold_met"]["passed"] is True
 
 
 def test_resident_source_dq_cache_preflight_blocks_oversized_cache(tmp_path: Path):

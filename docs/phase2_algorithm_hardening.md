@@ -801,6 +801,79 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 642: Source-DQ Positive Mainline Gate
+
+Gate642 returns to the DQ/mask mainline rather than adding another release or
+report handoff. Gate641 made the resident mainline framework enforceable, but
+the real M38 benchmark has no nonzero source-DQ invalid pixels. Gate642 adds a
+positive source-DQ scope so a resident run can require that nonzero source-DQ
+samples actually pass through resident in-memory mask streaming and become
+visible to integration provenance.
+
+Implementation:
+
+- Extended `resident_mainline_framework.json` with `framework_scope`.
+- Added `source_dq_positive` scope for targeted positive source-DQ fixtures.
+  This scope still uses the resident mainline contracts, but it can focus on
+  source-DQ propagation without requiring the exact promoted default route.
+- Added thresholds:
+  `--resident-mainline-min-source-dq-invalid-samples` and
+  `--resident-mainline-min-source-dq-applied-samples`.
+- The postcondition now summarizes `resident_source_dq_execution.json` and
+  adds explicit checks for required source-DQ artifact presence, pass status,
+  invalid samples, and applied invalid samples.
+- Added `glass run` and `glass audit` CLI arguments for the scope and
+  thresholds.
+- Updated resident CUDA source-DQ cache tests so a strict
+  `source_dq_positive` run must also pass `resident_mainline_framework.json`.
+
+Validation:
+
+- Ruff over touched files: passed.
+- Full pytest: `1348 passed in 60.55 s`.
+- Synthetic positive source-DQ resident run with registration/warp contracts:
+  `C:\glass_runs\phase2_s2_gate642_source_dq_positive_mainline\resident_source_dq_positive_translation_strict`.
+- Synthetic positive run evidence: `resident_mainline_framework.json`,
+  `resident_source_dq_execution.json`, `pipeline_contract.json`, and
+  `warp_quality_contract.json` all passed.
+- Synthetic source-DQ counters: `1` invalid sample before rejection and `1`
+  applied invalid sample, via `resident_in_memory_mask_streaming`.
+
+Real 200-light default validation:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate642_source_dq_positive_mainline\runs_20260625_165708\candidate_default_strict`.
+- Evidence summary:
+  `C:\glass_runs\phase2_s2_gate642_source_dq_positive_mainline\runs_20260625_165708\gate642_ab_summary.json`.
+- Default strict framework scope remained `default`, with source-DQ thresholds
+  at zero because the real M38 dataset has no sidecar invalid samples.
+- `resident_mainline_framework.json`: passed, no failed checks.
+- GLASS total elapsed: `11.854997799731791 s`.
+- Black-box reference elapsed: `1092.541 s`.
+- Acceptance speedup: `92.15868433351525x`.
+- Resident calibration/integration stage: `9.52495039999485 s`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames.
+- Resident regression gate versus Gate641: passed, elapsed ratio
+  `0.9984591805032615`, no failed checks.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed.
+- Phase 2 mainline audit: passed.
+
+Interpretation:
+
+- This gate is a substantive DQ/mask framework gate: a nonzero source-DQ sample
+  must be resident-applied and integration-visible under a strict run.
+- The promoted 200-light default path is unchanged and remains green against
+  Gate641 and the black-box reference.
+- The next substantive gate should continue into the resident execution core:
+  default StackEngine/DQ mask surface coverage or measured resident
+  calibration/registration batching, rather than additional report-only
+  contract handoffs.
+
 ### S2-Gate 641: Resident Mainline Framework Postcondition
 
 Gate641 is a self-review and framework-completeness gate that moves the
