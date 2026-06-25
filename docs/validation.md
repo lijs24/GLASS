@@ -210,6 +210,19 @@ Current Phase 2 latest mainline acceptance:
   `resident_integration=3.2337921999860555 s`. Optional measured components
   include `resident_local_normalization=0.3582464000210166 s` and
   `output_write=0.23136649990919977 s`.
+- Gate653 fixes resident strict-run state synchronization before
+  `resident_mainline_framework` invokes the Phase 2 mainline audit. Without the
+  fix, a just-finished resident run could have complete in-memory stages but a
+  stale `run_state.json`, causing the recomputed stage ledger to mark
+  `resident_calibration`, `resident_registration`,
+  `resident_local_normalization`, and `resident_integration` as `not_started`.
+  The real 200-light validation under
+  `C:\glass_runs\phase2_s2_gate653_runtime_state_wavefill\runs_20260626_013000`
+  completed strict default and 10us wave-fill candidate runs, both passed
+  `phase2-mainline-audit --fail-on-not-green`, and the candidate-vs-default
+  regression gate passed with elapsed ratio `0.9981548371313056`. The 10us
+  wave-fill candidate was not promoted because the total-time improvement was
+  only about `0.18%`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

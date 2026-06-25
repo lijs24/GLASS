@@ -1609,6 +1609,8 @@ def _write_resident_mainline_framework(
     if action == "off":
         return None
     write_resident_stage_ledger(run, state=state)
+    if getattr(state, "completed_stages", None) or getattr(state, "artifacts", None):
+        write_run_state(run, state)
     path = write_resident_mainline_framework(
         run,
         requested_action=action,

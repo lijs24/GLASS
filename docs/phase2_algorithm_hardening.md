@@ -801,6 +801,66 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 653: Resident Runtime State Sync
+
+Gate653 fixes a runtime strict-gate bug exposed by the Gate652 component-ledger
+hardening. Resident runs had complete in-memory `RunState` data when
+`resident_mainline_framework` executed, but `run_state.json` on disk could still
+be stale until the outer run command returned. Since `phase2-mainline-audit`
+recomputes the resident stage ledger from disk, a strict resident run could
+finish the CUDA pipeline and then fail the final postcondition with
+`resident_calibration`, `resident_registration`, `resident_local_normalization`,
+and `resident_integration` incorrectly reported as `not_started`.
+
+Implementation:
+
+- `src/glass/cli.py` now writes the current in-memory `RunState` to
+  `run_state.json` before building `resident_mainline_framework`, but only when
+  that state already carries completed stages or artifacts. Empty diagnostic
+  helper states do not overwrite an existing green run state.
+- Added a regression test that intentionally leaves disk `run_state.json` stale
+  while the in-memory state contains complete resident component stages. The
+  helper must synchronize state before invoking the mainline audit.
+
+Focused validation:
+
+- Ruff over `src/glass/cli.py` and `tests/test_resident_mainline_framework.py`:
+  passed.
+- `tests/test_resident_mainline_framework.py`: `11 passed`.
+
+Real 200-light validation:
+
+- Evidence root:
+  `C:\glass_runs\phase2_s2_gate653_runtime_state_wavefill\runs_20260626_013000`.
+- Default 25us run:
+  `C:\glass_runs\phase2_s2_gate653_runtime_state_wavefill\runs_20260626_013000\default_25us`.
+- Candidate 10us run:
+  `C:\glass_runs\phase2_s2_gate653_runtime_state_wavefill\runs_20260626_013000\candidate_10us`.
+- Both strict resident runs completed successfully and wrote
+  `resident_mainline_framework.json` with `passed=true`.
+- Both `glass phase2-mainline-audit --fail-on-not-green` runs passed with
+  `200` lights, `193` active frames, `7` masked frames, and no failed checks.
+- Regression gate candidate 10us versus default 25us passed:
+  `elapsed_ratio=0.9981548371313056`, no failed checks.
+
+Wave-fill A/B result:
+
+- Default 25us total elapsed: `11.252502299728803 s`.
+- Candidate 10us total elapsed: `11.231739600305445 s`.
+- Candidate 10us improved total elapsed by only about `0.18%`, while
+  `resident_integration` was slightly slower. This is below a meaningful
+  promotion threshold, so the default remains `25us`.
+
+Interpretation:
+
+- This gate restores the ability for real resident strict runs to pass the
+  hardened Gate652 mainline ledger without weakening any audit check.
+- The wave-fill probe was deliberately not promoted because the measured gain
+  is noise-scale on the 200-light benchmark.
+- The next substantive gate should return to a larger runtime target:
+  resident light read/upload/calibration overlap or the resident winsorized
+  integration reducer.
+
 ### S2-Gate 652: Resident Component Timing Surface
 
 Gate652 turns the resident hot-path timing breakdown from an implicit

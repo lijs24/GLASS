@@ -14,6 +14,7 @@ from glass.engine.resident_mainline_framework import (
     write_resident_mainline_framework,
 )
 from glass.io.json_io import read_json, write_json
+from glass.models import PipelineArtifact, now_iso
 
 
 def _touch(path: Path) -> str:
@@ -392,6 +393,64 @@ def test_cli_resident_mainline_framework_helper_updates_run_state_artifacts(tmp_
     assert state.failed_stage is None
     assert "resident_mainline_framework" in state.completed_stages
     assert state.artifacts[-1].stage == "resident_mainline_framework"
+
+
+def test_cli_resident_mainline_framework_syncs_in_memory_state_before_audit(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_minimal_green_resident_run(run)
+    write_json(
+        run / "run_state.json",
+        {
+            "current_stage": "resident_calibration_integration",
+            "completed_stages": [],
+            "failed_stage": None,
+            "errors": [],
+            "artifacts": [],
+        },
+    )
+    state = initialize_run(run)
+    state.completed_stages.extend(
+        [
+            "resident_light_calibration",
+            "resident_registration",
+            "resident_local_normalization",
+            "resident_integration",
+        ]
+    )
+    for stage, name in (
+        ("resident_calibration", "calibration_artifacts.json"),
+        ("resident_registration", "registration_results.json"),
+        ("resident_local_normalization", "local_norm_results.json"),
+        ("resident_integration", "integration_results.json"),
+    ):
+        state.artifacts.append(
+            PipelineArtifact(
+                stage=stage,
+                path=str(run / name),
+                format="json",
+                created_at=now_iso(),
+                source_frames=[],
+            )
+        )
+    args = Namespace(
+        resident_mainline_framework_gate="strict",
+        resident_mainline_framework_scope="default",
+        resident_mainline_min_lights=3,
+        resident_mainline_min_active_frames=3,
+        resident_mainline_max_masked_frames=0,
+        resident_mainline_min_source_dq_invalid_samples=0,
+        resident_mainline_min_source_dq_applied_samples=0,
+    )
+
+    path = _write_resident_mainline_framework(run, args, state)
+
+    assert path == run / "resident_mainline_framework.json"
+    assert read_json(path)["passed"] is True
+    synced = read_json(run / "run_state.json")
+    assert "resident_integration" in synced["completed_stages"]
+    assert synced["failed_stage"] is None
 
 
 def test_cli_resident_mainline_framework_helper_strict_sets_failed_stage(tmp_path: Path) -> None:
