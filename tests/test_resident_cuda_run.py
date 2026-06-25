@@ -3193,6 +3193,13 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert all(item["resident_calibration_contract"]["passed"] for item in calibration["masters"].values())
     assert all(item["stack_engine_surface_contract"]["passed"] for item in calibration["masters"].values())
     assert all(item["stack_engine_surface_contract"]["stack_request"]["frame_ids"] for item in calibration["masters"].values())
+    assert all(Path(item["dq_mask_path"]).exists() for item in calibration["masters"].values())
+    assert all(item["resident_master_dq_contract"]["passed"] for item in calibration["masters"].values())
+    assert all(item["dq_summary"].get("valid", 0) > 0 for item in calibration["masters"].values())
+    assert all(
+        item["stack_engine_dq_provenance"]["output_dq_summary"] == item["dq_summary"]
+        for item in calibration["masters"].values()
+    )
     assert resident_calibration_contract["artifact_type"] == "resident_cuda_calibration_contract"
     assert resident_calibration_contract["passed"] is True
     assert resident_calibration_contract["outputs"][0]["filter"] == "H"

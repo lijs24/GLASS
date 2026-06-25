@@ -36,6 +36,13 @@ summary is mirrored in StackEngine DQ provenance. The DQ mask marks no-data
 pixels and pixels touched by low/high rejection according to GLASS DQ flag
 semantics; this makes master-frame DQ inspectable instead of JSON-only.
 
+As of S2-Gate 672, resident CUDA calibration artifacts also materialize master
+DQ FITS sidecars when resident master cache arrays are readable. These sidecars
+record output-master validity only: non-finite resident master pixels are
+marked `NO_DATA`, and fully finite master arrays record `{"valid": width *
+height}`. Per-pixel resident master rejection-touched maps are not synthesized;
+resident rejection sample accounting remains in DQ provenance.
+
 Both tile-mode and resident-mode `glass run` honor `--flat-floor`, and the
 effective value is written into `calibration_artifacts.json` or
 `resident_artifacts.json`. This is scientifically important for real flat

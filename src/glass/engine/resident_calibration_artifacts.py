@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
+from glass.engine.contracts import DQFlag
+from glass.engine.dq import dq_header
 from glass.engine.resident_stack_surface import build_resident_master_stack_surface_contract
+from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 
@@ -40,6 +45,10 @@ def _cache_component_path(calibration_set: dict[str, Any], component: str) -> st
     if not cache_dir or not cache_key:
         return None
     return str(Path(str(cache_dir)) / f"{cache_key}_{component}.npy")
+
+
+def _resident_master_dq_path(run: Path, name: str) -> Path:
+    return run / "calib_cache" / "dq" / f"dq_master_{_safe_name(name)}.fits"
 
 
 def _contract_check(name: str, passed: bool, evidence: dict[str, Any]) -> dict[str, Any]:
@@ -213,13 +222,166 @@ def _dq_summary_for_resident_master(
     }
 
 
+def _materialize_resident_master_dq_sidecar(
+    *,
+    run: Path,
+    name: str,
+    master_path: str | None,
+    shape: dict[str, Any],
+) -> dict[str, Any]:
+    dq_path = _resident_master_dq_path(run, name)
+    expected_height = _positive_int(shape.get("height"))
+    expected_width = _positive_int(shape.get("width"))
+    checks: list[dict[str, Any]] = []
+    if not master_path:
+        checks.append(_contract_check("resident_master_path_present", False, {"path": master_path}))
+        return {
+            "path": str(dq_path),
+            "summary": {},
+            "contract": {
+                "schema_version": 1,
+                "contract_type": "resident_master_dq_sidecar_contract",
+                "passed": False,
+                "status": "failed",
+                "checks": checks,
+            },
+        }
+
+    source = Path(master_path)
+    source_exists = source.exists()
+    checks.append(_contract_check("resident_master_path_exists", source_exists, {"path": str(source)}))
+    if not source_exists:
+        return {
+            "path": str(dq_path),
+            "summary": {},
+            "contract": {
+                "schema_version": 1,
+                "contract_type": "resident_master_dq_sidecar_contract",
+                "passed": False,
+                "status": "failed",
+                "checks": checks,
+            },
+        }
+
+    try:
+        data = np.load(source, mmap_mode="r")
+    except Exception as exc:
+        checks.append(
+            _contract_check(
+                "resident_master_array_loadable",
+                False,
+                {"path": str(source), "error": f"{type(exc).__name__}: {exc}"},
+            )
+        )
+        return {
+            "path": str(dq_path),
+            "summary": {},
+            "contract": {
+                "schema_version": 1,
+                "contract_type": "resident_master_dq_sidecar_contract",
+                "passed": False,
+                "status": "failed",
+                "checks": checks,
+            },
+        }
+    checks.append(_contract_check("resident_master_array_loadable", True, {"path": str(source)}))
+    checks.append(
+        _contract_check(
+            "resident_master_is_2d",
+            getattr(data, "ndim", 0) == 2,
+            {"shape": [int(value) for value in getattr(data, "shape", ())]},
+        )
+    )
+    if getattr(data, "ndim", 0) != 2:
+        return {
+            "path": str(dq_path),
+            "summary": {},
+            "contract": {
+                "schema_version": 1,
+                "contract_type": "resident_master_dq_sidecar_contract",
+                "passed": False,
+                "status": "failed",
+                "checks": checks,
+            },
+        }
+
+    height, width = (int(data.shape[0]), int(data.shape[1]))
+    expected_matches = (
+        expected_height is None
+        or expected_width is None
+        or (height == expected_height and width == expected_width)
+    )
+    checks.append(
+        _contract_check(
+            "resident_master_shape_matches_record",
+            expected_matches,
+            {
+                "actual": {"height": height, "width": width},
+                "expected": {"height": expected_height, "width": expected_width},
+            },
+        )
+    )
+
+    dq = np.zeros((height, width), dtype=np.int16)
+    no_data_count = 0
+    rows_per_chunk = max(1, 64 * 1024 * 1024 // max(1, width * np.dtype(np.float32).itemsize))
+    for y0 in range(0, height, rows_per_chunk):
+        y1 = min(height, y0 + rows_per_chunk)
+        invalid = ~np.isfinite(np.asarray(data[y0:y1], dtype=np.float32))
+        if np.any(invalid):
+            dq[y0:y1][invalid] = int(DQFlag.NO_DATA)
+            no_data_count += int(np.count_nonzero(invalid))
+    total_pixels = int(height * width)
+    summary = {"valid": total_pixels - no_data_count}
+    if no_data_count:
+        summary["no_data"] = no_data_count
+    dq_path.parent.mkdir(parents=True, exist_ok=True)
+    write_fits_data(
+        dq_path,
+        dq,
+        header=dq_header("master_calibration", name),
+        dtype=np.int16,
+    )
+    path_exists = dq_path.exists()
+    checks.extend(
+        [
+            _contract_check("resident_master_dq_path_exists", path_exists, {"path": str(dq_path)}),
+            _contract_check(
+                "resident_master_dq_summary_closes_pixels",
+                int(summary.get("valid", 0)) + int(summary.get("no_data", 0)) == total_pixels,
+                {"summary": dict(summary), "total_pixels": total_pixels},
+            ),
+        ]
+    )
+    passed = all(item["passed"] for item in checks)
+    return {
+        "path": str(dq_path),
+        "summary": summary,
+        "contract": {
+            "schema_version": 1,
+            "contract_type": "resident_master_dq_sidecar_contract",
+            "passed": passed,
+            "status": "passed" if passed else "failed",
+            "checks": checks,
+            "semantics": (
+                "Resident master DQ sidecars mark output master pixels that are "
+                "non-finite as NO_DATA. Master rejection sample accounting remains "
+                "in resident DQ provenance; this sidecar does not claim to encode "
+                "per-pixel low/high rejection touches for master construction."
+            ),
+        },
+    }
+
+
 def _resident_master_record(
     *,
+    run: Path,
     output_filter: str,
     set_key: str,
     master_type: str,
     calibration_set: dict[str, Any],
     policy: dict[str, Any],
+    materialize_master_dq: bool,
 ) -> dict[str, Any] | None:
     stats = calibration_set.get(master_type)
     if not isinstance(stats, dict):
@@ -251,6 +413,14 @@ def _resident_master_record(
         shape=shape,
         policy=policy,
     )
+    dq_materialization: dict[str, Any] | None = None
+    if materialize_master_dq:
+        dq_materialization = _materialize_resident_master_dq_sidecar(
+            run=run,
+            name=name,
+            master_path=path,
+            shape=shape,
+        )
     record: dict[str, Any] = {
         "type": master_type,
         "path": path,
@@ -297,6 +467,19 @@ def _resident_master_record(
             frame_count=source_count,
         ),
     }
+    if dq_materialization is not None:
+        dq_summary = dict(dq_materialization.get("summary") or {})
+        record.update(
+            {
+                "dq_mask_path": dq_materialization["path"],
+                "dq_summary": dq_summary,
+                "resident_master_dq_contract": dq_materialization["contract"],
+            }
+        )
+        record["stack_engine_dq_provenance"]["output_dq_summary"] = dq_summary
+        record["dq_provenance_summary"]["output_dq_summary"] = dq_summary
+        record["dq_provenance_summary"]["valid_pixels"] = dq_summary.get("valid")
+        record["dq_provenance_summary"]["no_data_pixels"] = dq_summary.get("no_data", 0)
     if master_type == "dark":
         includes_bias = calibration_set.get(
             "master_dark_includes_bias",
@@ -335,6 +518,8 @@ def _resident_master_record(
 def build_resident_calibration_artifacts(
     run_dir: str | Path,
     resident_payload: dict[str, Any] | None = None,
+    *,
+    materialize_master_dq: bool = False,
 ) -> dict[str, Any]:
     """Build first-class calibration_artifacts.json content for resident CUDA runs."""
 
@@ -368,11 +553,13 @@ def build_resident_calibration_artifacts(
             set_filter = str(calibration_set.get("filter") or output_filter)
             for master_type in ("bias", "dark", "flat"):
                 row = _resident_master_record(
+                    run=run,
                     output_filter=set_filter,
                     set_key=str(set_key),
                     master_type=master_type,
                     calibration_set=calibration_set,
                     policy=policy,
+                    materialize_master_dq=materialize_master_dq,
                 )
                 if row is None:
                     warnings.append(f"resident calibration set {set_key} has no {master_type} stats")
@@ -469,6 +656,10 @@ def write_resident_calibration_artifacts(
     *,
     compact_json: bool = False,
 ) -> dict[str, Any]:
-    payload = build_resident_calibration_artifacts(run_dir, resident_payload)
+    payload = build_resident_calibration_artifacts(
+        run_dir,
+        resident_payload,
+        materialize_master_dq=True,
+    )
     write_json(Path(run_dir) / "calibration_artifacts.json", payload, compact=compact_json)
     return payload

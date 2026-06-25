@@ -112,6 +112,14 @@ Current code is intentionally gated:
   output parity. The previous `multi_wait` behavior remains available through
   `--resident-native-completion-wave-fill-mode multi_wait` for hardware or disk
   configurations where repeated fill waits are beneficial.
+- S2-Gate 672 adds resident master DQ sidecars, but their scope is intentionally
+  narrower than CPU/tile StackEngine master DQ. Resident sidecars mark
+  non-finite output master pixels as `NO_DATA`; they do not yet encode
+  per-pixel master-construction low/high rejection touches. Those rejection
+  sample counts remain in resident DQ provenance. A real 200-light high-VRAM
+  deep-queue candidate also showed that simply increasing prefetch depth,
+  worker count, calibration batch size, and wave-fill wait can slow the light
+  pipeline, so larger queues are not a default optimization strategy.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must

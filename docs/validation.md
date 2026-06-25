@@ -458,6 +458,21 @@ Current Phase 2 latest mainline acceptance:
   passed regression against Gate670 with elapsed ratio `0.9480347464554004`,
   no failed checks, and zero artifact/frame/registration or output
   differences. Full pytest passed with `1410 passed in 63.10 s`.
+- Gate672 extends master DQ artifacts to the resident CUDA calibration surface.
+  The real 200-light default resident run at
+  `C:\glass_runs\phase2_s2_gate672_high_vram_runtime\runs_20260626_060000\default_with_resident_master_dq`
+  wrote three resident master DQ sidecars under `calib_cache\dq`, one each for
+  bias, dark, and flat. Each sidecar recorded `dq_summary={"valid": 61651200}`
+  and a passing `resident_master_dq_contract`. The resident regression against
+  Gate671 passed with elapsed ratio `1.0533260571398728`, no failed checks, and
+  zero artifact/frame/registration/output/numerical drift. The Phase 2
+  mainline audit passed with `200` input lights and `193` active frames, and
+  the StackEngine resident contract passed with
+  `default_promotion_ready=true`. A high-VRAM deep-queue candidate at
+  `C:\glass_runs\phase2_s2_gate672_high_vram_runtime\runs_20260626_060000\candidate_deep_queue`
+  was rejected: it failed `runtime_within_threshold` at elapsed ratio
+  `1.17939080551414`, mainly because light read/upload/calibrate increased to
+  `4.3863005000166595 s`. Full pytest passed with `1411 passed in 64.01 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

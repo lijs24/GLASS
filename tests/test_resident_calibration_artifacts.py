@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
+
 from glass.cli import main
 from glass.engine.resident_calibration_artifacts import (
     build_resident_calibration_artifacts,
     write_resident_calibration_artifacts,
 )
+from glass.io.fits_io import read_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.report.stack_engine_contract import build_stack_engine_contract_audit
 
@@ -15,8 +18,10 @@ def _write_resident_run(path: Path) -> None:
     cache_dir = path / "calib_cache" / "resident_masters"
     cache_dir.mkdir(parents=True)
     cache_key = "H_24x24_bias-B_dark-D_flat-F_abc123"
-    for suffix in ["master_bias.npy", "master_dark.npy", "master_flat.npy", "master_stats.json"]:
-        (cache_dir / f"{cache_key}_{suffix}").write_bytes(b"fixture")
+    np.save(cache_dir / f"{cache_key}_master_bias.npy", np.ones((24, 24), dtype=np.float32))
+    np.save(cache_dir / f"{cache_key}_master_dark.npy", np.full((24, 24), 2.0, dtype=np.float32))
+    np.save(cache_dir / f"{cache_key}_master_flat.npy", np.full((24, 24), 1.0, dtype=np.float32))
+    write_json(cache_dir / f"{cache_key}_master_stats.json", {"fixture": True})
     stats = {"min": 1.0, "max": 2.0, "mean": 1.5, "median": 1.5, "std": 0.1}
     write_json(
         path / "resident_artifacts.json",
@@ -110,6 +115,27 @@ def test_resident_calibration_artifacts_pass_stack_engine_calibration_scope(tmp_
     assert read_json(run / "calibration_artifacts.json")["memory_mode"] == "resident"
 
 
+def test_write_resident_calibration_artifacts_materializes_master_dq_sidecars(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    _write_resident_run(run)
+
+    payload = write_resident_calibration_artifacts(run)
+
+    assert (run / "calib_cache" / "dq").exists()
+    for master in payload["masters"].values():
+        dq_path = Path(master["dq_mask_path"])
+        assert dq_path.exists()
+        assert master["dq_summary"] == {"valid": 24 * 24}
+        assert master["resident_master_dq_contract"]["passed"] is True
+        assert master["stack_engine_dq_provenance"]["output_dq_summary"] == master["dq_summary"]
+        assert master["dq_provenance_summary"]["output_dq_summary"] == master["dq_summary"]
+        assert master["dq_provenance_summary"]["valid_pixels"] == 24 * 24
+        dq_data = read_fits_data(dq_path)
+        assert dq_data.shape == (24, 24)
+        assert np.count_nonzero(dq_data) == 0
+
+
 def test_resident_calibration_artifacts_cli_writes_default_artifact(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()
@@ -121,3 +147,4 @@ def test_resident_calibration_artifacts_cli_writes_default_artifact(tmp_path: Pa
     assert payload["artifact_type"] == "resident_cuda_calibration_artifacts"
     assert len(payload["masters"]) == 3
     assert len(payload["calibrated_lights"]) == 2
+    assert all(Path(item["dq_mask_path"]).exists() for item in payload["masters"].values())

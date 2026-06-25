@@ -20,7 +20,10 @@ from glass.engine.local_norm import local_normalize_registered_frames
 from glass.engine.pipeline import initialize_run, run_calibration_stages
 from glass.engine.quality import measure_calibrated_quality
 from glass.engine.registration import register_calibrated_frames
-from glass.engine.resident_calibration_artifacts import build_resident_calibration_artifacts
+from glass.engine.resident_calibration_artifacts import (
+    build_resident_calibration_artifacts,
+    write_resident_calibration_artifacts,
+)
 from glass.engine.resident_component_timing import (
     materialize_resident_component_timing,
     write_resident_component_timing,
@@ -5656,9 +5659,12 @@ def cmd_resident_calibration_contract(args: argparse.Namespace) -> int:
 
 
 def cmd_resident_calibration_artifacts(args: argparse.Namespace) -> int:
-    payload = build_resident_calibration_artifacts(args.run)
     out = Path(args.out) if args.out else Path(args.run) / "calibration_artifacts.json"
-    write_json(out, payload)
+    if out == Path(args.run) / "calibration_artifacts.json":
+        payload = write_resident_calibration_artifacts(args.run)
+    else:
+        payload = build_resident_calibration_artifacts(args.run, materialize_master_dq=True)
+        write_json(out, payload)
     console.print(
         {
             "artifact_type": payload.get("artifact_type"),

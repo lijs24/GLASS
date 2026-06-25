@@ -1083,6 +1083,80 @@ Interpretation:
 - Resident CUDA master-cache artifacts are unchanged and remain covered by the
   resident calibration contracts.
 
+### S2-Gate 672: Resident Master DQ Sidecars And High-VRAM Runtime Check
+
+Gate672 returns to the Phase 2 mainline in two ways. First, it closes the
+resident calibration DQ artifact gap left by Gate671: resident CUDA master
+bias/dark/flat cache entries now get auditable master DQ FITS sidecars when
+`calibration_artifacts.json` is written. Second, it tests a tempting high-VRAM
+runtime idea, deeper prefetch and larger calibration batches, and records that
+the current 200-light workload rejects that direction as a default strategy.
+
+Implementation:
+
+- `write_resident_calibration_artifacts` now materializes
+  `calib_cache/dq/dq_master_resident_*.fits` for resident CUDA master bias,
+  dark, and flat records when the underlying `.npy` master cache is readable.
+- Each resident master record now carries `dq_mask_path`, `dq_summary`, and a
+  `resident_master_dq_contract`; the same summary is mirrored into
+  `stack_engine_dq_provenance.output_dq_summary` and
+  `dq_provenance_summary.output_dq_summary`.
+- The resident master DQ sidecar is deliberately limited to output-master
+  pixel validity: non-finite master pixels are marked `NO_DATA`. Per-pixel
+  master rejection-touched maps are not invented; rejection sample accounting
+  remains in resident DQ provenance.
+- If a legacy test or diagnostic cache path exists but is not a readable `.npy`
+  array, sidecar materialization records a failed sidecar contract instead of
+  aborting the whole calibration artifact build.
+- `glass resident-calibration-artifacts` now uses the same writer path, so a
+  manually regenerated resident calibration artifact also writes sidecars.
+
+Validation:
+
+- Focused tests:
+  - resident calibration artifact tests plus resident stack-surface tests:
+    `7 passed`;
+  - resident CUDA smoke with master DQ sidecar assertions: `1 passed`;
+  - pipeline-contract compatibility tests for old fixture caches: `5 passed`;
+  - resident calibration/CUDA/StackEngine focused suite: `6 passed`.
+- Full pytest: `1411 passed in 64.01 s`.
+- Real 200-light default resident run:
+  `C:\glass_runs\phase2_s2_gate672_high_vram_runtime\runs_20260626_060000\default_with_resident_master_dq`.
+  It wrote three resident master DQ FITS sidecars, each with
+  `dq_summary={"valid": 61651200}` and a passing
+  `resident_master_dq_contract`.
+- Gate672 default versus Gate671 resident regression:
+  `C:\glass_runs\phase2_s2_gate672_high_vram_runtime\runs_20260626_060000\gate672_default_master_dq_vs_gate671.json`.
+  Status passed; failed checks `[]`; elapsed ratio `1.0533260571398728`;
+  artifact, frame-accounting, frame-signature, registration, output, and
+  numerical-drift difference counts were all zero.
+- Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate672_high_vram_runtime\runs_20260626_060000\gate672_phase2_mainline_audit.json`.
+  Status passed with `200` input light frames and `193` active frames.
+- StackEngine resident contract:
+  `C:\glass_runs\phase2_s2_gate672_high_vram_runtime\runs_20260626_060000\gate672_stack_engine_contract_resident.json`.
+  Status passed with `expected_integration_engine=cuda_resident_stack`,
+  `pipeline_contract_dq_ledger_ready=true`, and
+  `default_promotion_ready=true`.
+- Rejected high-VRAM deep-queue candidate:
+  `C:\glass_runs\phase2_s2_gate672_high_vram_runtime\runs_20260626_060000\candidate_deep_queue`.
+  The candidate used 64 prefetch frames, 24 prefetch workers, a 32-frame
+  calibration batch, and 50 us native-completion wave fill. Regression against
+  Gate671 failed `runtime_within_threshold` with elapsed ratio
+  `1.17939080551414`. Its light read/upload/calibrate component increased from
+  Gate671's `3.1634445999516174 s` to `4.3863005000166595 s`, while resident
+  integration stayed essentially unchanged.
+
+Interpretation:
+
+- Resident DQ/mask artifacts are now more complete on both CPU/tile and
+  resident CUDA master-calibration surfaces.
+- The high-VRAM lesson is negative but important: on the current USB/C-drive
+  cached 200-light benchmark, simply making queues and batches larger hurts the
+  light pipeline. Future performance gates should target the resident hardened
+  winsorized reducer or a measured overlap issue, not blindly increase prefetch
+  depth.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual
