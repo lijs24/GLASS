@@ -7237,6 +7237,12 @@ class ResidentCalibratedStack {
             : consumer_wave_fill_mode == "single_wait"
             ? "single_wait_" + std::to_string(consumer_wave_fill_wait_us) + "us"
             : "timed_wait_" + std::to_string(consumer_wave_fill_wait_us) + "us";
+    const bool consumer_wave_fill_micro_poll =
+        consumer_wave_fill_wait_us > 0 && consumer_wave_fill_wait_us <= 500;
+    const std::string consumer_wave_fill_wait_strategy =
+        consumer_wave_fill_wait_us <= 0
+            ? "disabled"
+            : (consumer_wave_fill_micro_poll ? "micro_poll_yield" : "condition_variable_wait_for");
     const auto indices = parse_index_sequence(indices_obj, "indices");
     const auto paths = py::cast<std::vector<std::string>>(paths_obj);
     const auto data_offsets = py::cast<std::vector<unsigned long long>>(data_offsets_obj);
@@ -7282,6 +7288,7 @@ class ResidentCalibratedStack {
       out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
       out["native_completion_consumer_wave_fill_mode"] = consumer_wave_fill_mode;
       out["native_completion_consumer_wave_fill_policy"] = consumer_wave_fill_policy;
+      out["native_completion_consumer_wave_fill_wait_strategy"] = consumer_wave_fill_wait_strategy;
       out["native_completion_consumer_wave_fill_wait_us"] = consumer_wave_fill_wait_us;
       out["native_completion_consumer_wave_fill_wait_count"] = 0;
       out["native_completion_consumer_wave_fill_timeout_count"] = 0;
@@ -7491,6 +7498,22 @@ class ResidentCalibratedStack {
       ++slot_reuse_count;
       return buffer_index;
     };
+    auto wait_for_wave_fill_completion = [&](std::unique_lock<std::mutex>& lock) -> bool {
+      if (!consumer_wave_fill_micro_poll) {
+        return completion_condition.wait_for(
+            lock,
+            std::chrono::microseconds(consumer_wave_fill_wait_us),
+            [&]() { return closing || !completions.empty(); });
+      }
+      const auto deadline =
+          std::chrono::steady_clock::now() + std::chrono::microseconds(consumer_wave_fill_wait_us);
+      while (!closing && completions.empty() && std::chrono::steady_clock::now() < deadline) {
+        lock.unlock();
+        std::this_thread::yield();
+        lock.lock();
+      }
+      return closing || !completions.empty();
+    };
 
     try {
       py::gil_scoped_release release;
@@ -7572,10 +7595,7 @@ class ResidentCalibratedStack {
                 completion_wave.size() < lane_count &&
                 submit_count > completion_count + static_cast<unsigned long long>(completion_wave.size())) {
               const auto fill_wait_start = Clock::now();
-              const bool filled = completion_condition.wait_for(
-                  lock,
-                  std::chrono::microseconds(consumer_wave_fill_wait_us),
-                  [&]() { return closing || !completions.empty(); });
+              const bool filled = wait_for_wave_fill_completion(lock);
               consumer_wave_fill_wait_s += seconds_since(fill_wait_start);
               ++consumer_wave_fill_wait_count;
               if (!filled && completions.empty()) {
@@ -7591,10 +7611,7 @@ class ResidentCalibratedStack {
                    completion_wave.size() < lane_count &&
                    submit_count > completion_count + static_cast<unsigned long long>(completion_wave.size())) {
               const auto fill_wait_start = Clock::now();
-              const bool filled = completion_condition.wait_for(
-                  lock,
-                  std::chrono::microseconds(consumer_wave_fill_wait_us),
-                  [&]() { return closing || !completions.empty(); });
+              const bool filled = wait_for_wave_fill_completion(lock);
               consumer_wave_fill_wait_s += seconds_since(fill_wait_start);
               ++consumer_wave_fill_wait_count;
               if (!filled && completions.empty()) {
@@ -7795,6 +7812,7 @@ class ResidentCalibratedStack {
     out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
     out["native_completion_consumer_wave_fill_mode"] = consumer_wave_fill_mode;
     out["native_completion_consumer_wave_fill_policy"] = consumer_wave_fill_policy;
+    out["native_completion_consumer_wave_fill_wait_strategy"] = consumer_wave_fill_wait_strategy;
     out["native_completion_consumer_wave_fill_wait_us"] = consumer_wave_fill_wait_us;
     out["native_completion_consumer_wave_fill_wait_count"] = consumer_wave_fill_wait_count;
     out["native_completion_consumer_wave_fill_timeout_count"] = consumer_wave_fill_timeout_count;

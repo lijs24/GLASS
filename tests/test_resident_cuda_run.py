@@ -7756,6 +7756,7 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_requested"] == "multi_wait"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_source"] == "cli"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_policy"] == "timed_wait_25us"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_wait_strategy"] == "micro_poll_yield"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_source"] == "env"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_wait_us"] == 25
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_requested_wait_us"] == 25
@@ -7829,6 +7830,7 @@ def test_cli_resident_cuda_native_completion_runtime_preset_is_cli_opt_in(
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_requested"] == "single_wait"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_source"] == "cli"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_policy"] == "single_wait_25us"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_wait_strategy"] == "micro_poll_yield"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_source"] == "cli"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_wait_us"] == 25
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_requested_wait_us"] == 25

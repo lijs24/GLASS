@@ -515,6 +515,18 @@ Current Phase 2 latest mainline acceptance:
   `1.0077329966094555`; the resident integration component improved from
   `3.323810000088997 s` to `3.2761442000046372 s`, and native kernel sync
   improved from `3.192917 s` to `3.1436261 s`.
+- Gate676 changes sub-millisecond native completion wave-fill waits from
+  `condition_variable.wait_for` to `micro_poll_yield` for waits up to `500 us`.
+  The real 200-light default run at
+  `C:\glass_runs\phase2_s2_gate676_micro_poll_wave_fill\runs_20260626_110000\default_micro_poll`
+  passed Phase 2 mainline audit with `200` input lights and `193` active
+  frames. The native completion profile recorded
+  `native_completion_calibration_consumer_wave_fill_wait_strategy=micro_poll_yield`;
+  wave-fill wait time dropped from Gate675 `0.19453819999999994 s` to
+  `0.005880000000000006 s`; `light_read_upload_calibrate` dropped from
+  `3.4165546000003815 s` to `3.0986569999950007 s`; and regression against
+  Gate675 passed with elapsed ratio `0.9725103078340935` and failed checks
+  `[]`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

@@ -8143,6 +8143,7 @@ def run_resident_calibration_integration(
             native_completion_calibration_consumer_schedule_mode: str | None = None
             native_completion_calibration_consumer_wave_fill_mode: str | None = None
             native_completion_calibration_consumer_wave_fill_policy: str | None = None
+            native_completion_calibration_consumer_wave_fill_wait_strategy: str | None = None
             native_completion_calibration_consumer_wave_fill_wait_us = 0
             native_completion_calibration_consumer_wave_fill_wait_count = 0
             native_completion_calibration_consumer_wave_fill_timeout_count = 0
@@ -8505,6 +8506,16 @@ def run_resident_calibration_integration(
                                 if timing_wave_fill_policy:
                                     native_completion_calibration_consumer_wave_fill_policy = (
                                         timing_wave_fill_policy
+                                    )
+                                timing_wave_fill_wait_strategy = str(
+                                    calibration_timing.get(
+                                        "native_completion_consumer_wave_fill_wait_strategy", ""
+                                    )
+                                    or ""
+                                )
+                                if timing_wave_fill_wait_strategy:
+                                    native_completion_calibration_consumer_wave_fill_wait_strategy = (
+                                        timing_wave_fill_wait_strategy
                                     )
                                 native_completion_calibration_consumer_wave_fill_wait_us = max(
                                     native_completion_calibration_consumer_wave_fill_wait_us,
@@ -13466,6 +13477,9 @@ def run_resident_calibration_integration(
                 ),
                 "native_completion_calibration_consumer_wave_fill_policy": (
                     native_completion_calibration_consumer_wave_fill_policy
+                ),
+                "native_completion_calibration_consumer_wave_fill_wait_strategy": (
+                    native_completion_calibration_consumer_wave_fill_wait_strategy
                 ),
                 "native_completion_calibration_consumer_wave_fill_source": (
                     native_completion_wave_fill_source

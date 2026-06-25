@@ -219,6 +219,9 @@ def build_resident_light_pipeline_profile(
             "consumer_wave_fill_policy": resident_io_pipeline.get(
                 "native_completion_calibration_consumer_wave_fill_policy"
             ),
+            "consumer_wave_fill_wait_strategy": resident_io_pipeline.get(
+                "native_completion_calibration_consumer_wave_fill_wait_strategy"
+            ),
             "consumer_wave_fill_mode": resident_io_pipeline.get(
                 "native_completion_calibration_consumer_wave_fill_mode"
             ),

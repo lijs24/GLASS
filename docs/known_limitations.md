@@ -123,7 +123,12 @@ Current code is intentionally gated:
   condition-variable waits on the real 200-light benchmark while preserving
   output parity. The previous `multi_wait` behavior remains available through
   `--resident-native-completion-wave-fill-mode multi_wait` for hardware or disk
-  configurations where repeated fill waits are beneficial.
+  configurations where repeated fill waits are beneficial. Gate676 changes
+  sub-millisecond native-completion wave-fill waits from Windows condition
+  variable sleeps to a short `micro_poll_yield` loop for requested waits up to
+  500 us, reducing measured oversleep on the real 200-light default path. This
+  is still a scheduling optimization only; the remaining H2D/calibration and
+  resident integration costs require larger pipeline or reducer work.
 - S2-Gate 672 adds resident master DQ sidecars, but their scope is intentionally
   narrower than CPU/tile StackEngine master DQ. Resident sidecars mark
   non-finite output master pixels as `NO_DATA`; they do not yet encode

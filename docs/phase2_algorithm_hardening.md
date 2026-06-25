@@ -1354,6 +1354,61 @@ Interpretation:
   gates should now return to either the light upload/calibration overlap or a
   larger resident order-statistic reducer redesign.
 
+### S2-Gate 676: Native Completion Micro-Poll Wave Fill
+
+Gate676 returns to the real `light_read_upload_calibrate` bottleneck. Gate675's
+default 200-light profile showed native completion `single_wait_25us` spending
+about `0.1945382 s` in wave-fill waits on Windows, far above the requested
+microsecond-scale delay. The default scheduling policy is still useful for
+packing completion waves, but `std::condition_variable::wait_for(25us)` can
+sleep at millisecond granularity on this platform.
+
+Implementation:
+
+- The native completion calibration path now uses a short `micro_poll_yield`
+  wait strategy for wave-fill waits from `1` to `500` microseconds.
+- Larger waits continue using `condition_variable_wait_for`; zero wait records
+  `disabled`.
+- The default preset remains `single_wait_25us`; this gate changes how that
+  sub-millisecond wait is executed, not the user-visible preset value.
+- Native timing, resident artifacts, and `resident_light_pipeline_profile`
+  record `native_completion_consumer_wave_fill_wait_strategy` /
+  `consumer_wave_fill_wait_strategy`.
+
+Validation:
+
+- Native CUDA rebuild passed under VS BuildTools/CUDA 13.2.
+- Focused tests passed:
+  `tests/test_cuda_resident_stack.py::test_resident_stack_calibrates_u16be_paths_completion_queue_on_gpu_like_cpu`,
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in`,
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_native_completion_runtime_preset_is_cli_opt_in`,
+  and `tests/test_resident_light_pipeline_profile.py`.
+- Real 200-light default run:
+  `C:\glass_runs\phase2_s2_gate676_micro_poll_wave_fill\runs_20260626_110000\default_micro_poll`.
+  The native completion strategy recorded `micro_poll_yield`, wait time dropped
+  from Gate675 `0.19453819999999994 s` to `0.005880000000000006 s`, and
+  `light_read_upload_calibrate` dropped from `3.4165546000003815 s` to
+  `3.0986569999950007 s`.
+- Final Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate676_micro_poll_wave_fill\runs_20260626_110000\gate676_phase2_mainline_audit.json`.
+  Status passed, failed checks `[]`, input lights `200`, active frames `193`.
+- Regression against Gate675:
+  `C:\glass_runs\phase2_s2_gate676_micro_poll_wave_fill\runs_20260626_110000\gate676_vs_gate675_regression.json`.
+  Status passed with failed checks `[]` and elapsed ratio
+  `0.9725103078340935`.
+
+Interpretation:
+
+- This is a substantive resident light-pipeline scheduling fix: it removes
+  unintended OS scheduler oversleep from the hot native completion path while
+  preserving the same science output and the same user-visible default preset.
+- The run also shows the tradeoff: lane fill decreases because the wait is now
+  genuinely short, but the light stage improves because it avoids spending
+  hundreds of milliseconds in coarse condition-variable waits.
+- The next larger target remains deeper read/H2D/calibration overlap or a
+  redesigned resident order-statistic reducer. Gate676 does not solve the
+  remaining native H2D/calibrate and integration costs.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual
