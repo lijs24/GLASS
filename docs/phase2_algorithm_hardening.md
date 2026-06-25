@@ -801,6 +801,90 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 639: Phase 2 Mainline Audit
+
+Gate639 is a self-audit and framework-completeness gate. It deliberately avoids
+another release/default-promotion/report-handoff expansion and instead
+formalizes what the Phase 2 execution mainline means for a real resident CUDA
+run: high-VRAM resident defaults, 200-light frame accounting, DQ/mask lifecycle
+closure, required output maps, required runtime contracts, optional black-box
+acceptance, and a concrete next-priority list based on measured stage timing.
+
+Implementation:
+
+- Added `src/glass/report/phase2_mainline_audit.py`.
+- Added `glass phase2-mainline-audit`.
+- The audit reads an existing run directory and verifies:
+  - default resident CUDA route:
+    `throughput-v4-native-completion`, `similarity_cuda_triangle`,
+    `winsorized_sigma`, LN `grid_mean_std`, and Lanczos3 warp;
+  - required resident artifacts and contracts are present and passing;
+  - frame-accounting, resident frame masks, and resident DQ lifecycle agree on
+    planned/active/masked frame counts;
+  - master, weight, coverage, low/high rejection, and DQ maps exist;
+  - run timing includes top-level stages and resident component timings;
+  - optional acceptance/compare artifacts meet speedup and numerical thresholds
+    when required.
+- The audit emits JSON and Markdown, and `--fail-on-not-green` returns a
+  nonzero exit code when any mainline check fails.
+- Added unit and CLI coverage for green runs, missing-map failures, and
+  Markdown output.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- `tests/test_phase2_mainline_audit.py`: `3 passed`.
+- The audit passed against the previous Gate638 real artifact bundle.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056\candidate_mainline_audit`.
+- Evidence root:
+  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056`.
+- GLASS total elapsed: `12.191199900000356 s`.
+- Stage timings:
+  - reference scout: `0.7159428000450134 s`;
+  - reference health: `1.4818928999593481 s`;
+  - resident calibration/integration: `9.57715389993973 s`;
+  - local-norm contract: `0.1806059000082314 s`;
+  - pipeline contract: `0.17197390005458146 s`;
+  - StackEngine contract: `0.021610099938698113 s`;
+  - warp-quality contract: `0.02295419992879033 s`.
+- Resident components from the run artifact:
+  - light read/upload/calibrate: `3.12554519996047 s`;
+  - resident registration/warp: `0.2631511997897178 s`;
+  - resident integration: `3.2806128000374883 s`;
+  - output write: `0.24803349992725998 s`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames, and `11898681600` lifecycle source input samples.
+- Resident regression gate versus Gate638: passed, elapsed ratio
+  `0.9706228158749438`, no failed checks.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed with speedup `89.61718362111084x` versus the
+  `1092.541 s` black-box reference.
+- Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056\gate639_mainline_audit.json`,
+  status passed with no failed checks.
+
+Interpretation:
+
+- Gate639 gives the project a single local hard gate for "is the Phase 2
+  resident CUDA mainline actually green?" without treating release packaging or
+  publication metadata as the main objective.
+- The measured next priorities are now explicit:
+  1. resident calibration/integration execution remains the largest stage;
+  2. reference scout/health resident reuse is the next whole-framework
+     correctness overhead;
+  3. nonzero source-DQ semantics still need broader data coverage because the
+     current real benchmark has no sidecar/inline invalid samples.
+- The next gate should implement an execution-path improvement or broaden
+  DQ/mask semantics under synthetic/real nonzero source-DQ inputs, using
+  `glass phase2-mainline-audit` as the acceptance guard.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization

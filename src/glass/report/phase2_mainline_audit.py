@@ -1,0 +1,533 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from glass.io.json_io import read_json, write_json
+from glass.models import now_iso
+
+
+REQUIRED_CORE_ARTIFACTS = (
+    "integration_results.json",
+    "resident_artifacts.json",
+    "frame_accounting.json",
+    "calibration_artifacts.json",
+    "registration_results.json",
+    "local_norm_results.json",
+    "resident_frame_masks.json",
+    "resident_dq_lifecycle.json",
+    "resident_source_dq_execution.json",
+    "resident_dq_pixel_closure.json",
+    "resident_master_cache.json",
+    "resident_result_contract.json",
+    "pipeline_contract.json",
+    "stack_engine_contract.json",
+    "warp_quality_contract.json",
+)
+
+REQUIRED_OUTPUT_MAP_FIELDS = (
+    "master_path",
+    "weight_map_path",
+    "coverage_map_path",
+    "low_rejection_map_path",
+    "high_rejection_map_path",
+    "dq_map_path",
+)
+
+
+def _json_if_exists(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    payload = read_json(path)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return None if value is None else int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
+    return {"name": name, "passed": bool(passed), "evidence": evidence, "note": note}
+
+
+def _first_resident_artifact(run: Path) -> dict[str, Any]:
+    payload = _json_if_exists(run / "resident_artifacts.json")
+    artifacts = payload.get("artifacts") if isinstance(payload.get("artifacts"), list) else []
+    first = artifacts[0] if artifacts else {}
+    return first if isinstance(first, dict) else {}
+
+
+def _resolve_run_path(run: Path, value: Any) -> Path | None:
+    if value in (None, ""):
+        return None
+    path = Path(str(value))
+    return path if path.is_absolute() else run / path
+
+
+def _artifact_passed(run: Path, name: str) -> dict[str, Any]:
+    path = run / name
+    payload = _json_if_exists(path)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    passed = payload.get("passed")
+    if passed is None:
+        passed = summary.get("passed")
+    status = payload.get("status")
+    if status is None:
+        status = summary.get("status")
+    return {
+        "path": str(path),
+        "exists": path.exists(),
+        "status": status,
+        "passed": passed,
+        "artifact_type": payload.get("artifact_type") or payload.get("audit_type") or payload.get("artifact"),
+    }
+
+
+def _stage_elapsed(timing: dict[str, Any], stage: str) -> float | None:
+    for item in timing.get("stages") or []:
+        if isinstance(item, dict) and item.get("stage") == stage:
+            return _number(item.get("elapsed_s"))
+    return None
+
+
+def _output_map_state(run: Path, artifact: dict[str, Any]) -> dict[str, Any]:
+    entries: dict[str, dict[str, Any]] = {}
+    for field in REQUIRED_OUTPUT_MAP_FIELDS:
+        path = _resolve_run_path(run, artifact.get(field))
+        entries[field] = {
+            "path": None if path is None else str(path),
+            "exists": bool(path and path.exists()),
+        }
+    missing = [field for field, record in entries.items() if not record["exists"]]
+    return {
+        "required_fields": list(REQUIRED_OUTPUT_MAP_FIELDS),
+        "missing_fields": missing,
+        "maps": entries,
+    }
+
+
+def _timing_components(timing: dict[str, Any], artifact: dict[str, Any]) -> dict[str, Any]:
+    timing_s = artifact.get("timing_s") if isinstance(artifact.get("timing_s"), dict) else {}
+    stages = {
+        "resident_reference_scout": _stage_elapsed(timing, "resident_reference_scout"),
+        "resident_reference_health": _stage_elapsed(timing, "resident_reference_health"),
+        "resident_calibration_integration": _stage_elapsed(timing, "resident_calibration_integration"),
+        "pipeline_contract": _stage_elapsed(timing, "pipeline_contract"),
+        "stack_engine_contract": _stage_elapsed(timing, "stack_engine_contract"),
+        "warp_quality_contract": _stage_elapsed(timing, "warp_quality_contract"),
+    }
+    components = {
+        "light_read_upload_calibrate": _number(timing_s.get("light_read_upload_calibrate")),
+        "resident_registration_warp": _number(timing_s.get("resident_registration_warp")),
+        "resident_local_normalization": _number(timing_s.get("resident_local_normalization")),
+        "resident_integration": _number(timing_s.get("resident_integration")),
+        "output_write": _number(timing_s.get("output_write")),
+    }
+    return {
+        "total_elapsed_s": _number(timing.get("total_elapsed_s")),
+        "stages": stages,
+        "resident_components_s": components,
+        "largest_stage": max(
+            ((name, value) for name, value in stages.items() if value is not None),
+            key=lambda item: item[1],
+            default=(None, None),
+        ),
+        "largest_resident_component": max(
+            ((name, value) for name, value in components.items() if value is not None),
+            key=lambda item: item[1],
+            default=(None, None),
+        ),
+    }
+
+
+def _comparison_summary(compare_payload: dict[str, Any]) -> dict[str, Any]:
+    region = (
+        compare_payload.get("comparison_region")
+        if isinstance(compare_payload.get("comparison_region"), dict)
+        else {}
+    )
+    full = (
+        compare_payload.get("full_frame_stats")
+        if isinstance(compare_payload.get("full_frame_stats"), dict)
+        else {}
+    )
+    return {
+        "shape_match": compare_payload.get("shape_match"),
+        "rms_diff": _number(compare_payload.get("rms_diff")),
+        "abs_diff_p99": _number(compare_payload.get("abs_diff_p99")),
+        "coverage_fraction": _number(region.get("coverage_fraction")),
+        "compared_pixels": _int_or_none(region.get("compared_pixels")),
+        "full_frame_rms_diff": _number(full.get("rms_diff")),
+        "full_frame_abs_diff_p99": _number(full.get("abs_diff_p99")),
+    }
+
+
+def build_phase2_mainline_audit(
+    run: str | Path,
+    *,
+    acceptance_audit: str | Path | None = None,
+    compare_json: str | Path | None = None,
+    min_lights: int = 200,
+    min_active_frames: int = 190,
+    max_masked_frames: int = 10,
+    min_speedup: float | None = None,
+    min_coverage_fraction: float | None = None,
+    max_rms_diff: float | None = None,
+    max_abs_diff_p99: float | None = None,
+    require_acceptance: bool = False,
+    require_compare: bool = False,
+) -> dict[str, Any]:
+    run_root = Path(run)
+    timing = _json_if_exists(run_root / "run_timing.json")
+    run_state = _json_if_exists(run_root / "run_state.json")
+    frame_accounting = _json_if_exists(run_root / "frame_accounting.json")
+    frame_summary = (
+        frame_accounting.get("summary")
+        if isinstance(frame_accounting.get("summary"), dict)
+        else {}
+    )
+    frame_masks = _json_if_exists(run_root / "resident_frame_masks.json")
+    frame_mask_summary = (
+        frame_masks.get("summary") if isinstance(frame_masks.get("summary"), dict) else {}
+    )
+    lifecycle = _json_if_exists(run_root / "resident_dq_lifecycle.json")
+    lifecycle_summary = (
+        lifecycle.get("summary") if isinstance(lifecycle.get("summary"), dict) else {}
+    )
+    resident_artifact = _first_resident_artifact(run_root)
+
+    input_light_frames = _int_or_none(frame_summary.get("input_light_frames"))
+    active_frames = _int_or_none(frame_summary.get("resident_frame_mask_active_frames"))
+    if active_frames is None:
+        active_frames = _int_or_none(frame_mask_summary.get("active_frame_count"))
+    masked_frames = _int_or_none(frame_summary.get("resident_frame_mask_masked_frames"))
+    if masked_frames is None:
+        masked_frames = _int_or_none(frame_mask_summary.get("masked_frame_count"))
+
+    required_paths = {name: str(run_root / name) for name in REQUIRED_CORE_ARTIFACTS}
+    missing_core = [name for name in REQUIRED_CORE_ARTIFACTS if not (run_root / name).exists()]
+
+    contract_names = (
+        "pipeline_contract.json",
+        "stack_engine_contract.json",
+        "warp_quality_contract.json",
+        "resident_result_contract.json",
+        "resident_frame_masks.json",
+        "resident_dq_lifecycle.json",
+        "resident_source_dq_execution.json",
+        "resident_dq_pixel_closure.json",
+        "resident_master_cache.json",
+    )
+    contract_state = {name: _artifact_passed(run_root, name) for name in contract_names}
+    failed_contracts = [
+        name
+        for name, record in contract_state.items()
+        if not record["exists"] or record["passed"] is not True
+    ]
+
+    output_maps = _output_map_state(run_root, resident_artifact)
+    timing_state = _timing_components(timing, resident_artifact)
+
+    default_route_evidence = {
+        "backend": timing.get("backend"),
+        "memory_mode": timing.get("memory_mode"),
+        "resident_runtime_preset": timing.get("resident_runtime_preset"),
+        "resident_registration": timing.get("resident_registration"),
+        "integration_rejection": timing.get("integration_rejection"),
+        "local_normalization": timing.get("local_normalization"),
+        "resident_local_normalization_mode": timing.get("resident_local_normalization_mode"),
+        "resident_warp_interpolation": timing.get("resident_warp_interpolation"),
+        "resident_fits_read_mode_effective": (
+            timing.get("resident_fits_read_mode_resolution") or {}
+        ).get("effective")
+        if isinstance(timing.get("resident_fits_read_mode_resolution"), dict)
+        else None,
+    }
+    default_route_passed = (
+        default_route_evidence["backend"] == "cuda"
+        and default_route_evidence["memory_mode"] == "resident"
+        and default_route_evidence["resident_runtime_preset"] == "throughput-v4-native-completion"
+        and default_route_evidence["resident_registration"] == "similarity_cuda_triangle"
+        and default_route_evidence["integration_rejection"] == "winsorized_sigma"
+        and default_route_evidence["local_normalization"] == "on"
+        and default_route_evidence["resident_local_normalization_mode"] == "grid_mean_std"
+        and default_route_evidence["resident_warp_interpolation"] == "lanczos3"
+    )
+
+    lifecycle_evidence = {
+        "frame_accounting_present": frame_summary.get("resident_dq_lifecycle_present"),
+        "frame_accounting_status": frame_summary.get("resident_dq_lifecycle_status"),
+        "frame_accounting_passed": frame_summary.get("resident_dq_lifecycle_passed"),
+        "frame_accounting_rows": frame_summary.get("resident_dq_lifecycle_rows"),
+        "frame_accounting_active_frames": frame_summary.get("resident_dq_lifecycle_active_frames"),
+        "frame_accounting_masked_frames": frame_summary.get("resident_dq_lifecycle_masked_frames"),
+        "lifecycle_status": lifecycle_summary.get("status"),
+        "lifecycle_passed": lifecycle_summary.get("passed"),
+        "lifecycle_frame_count": lifecycle_summary.get("frame_count"),
+        "lifecycle_active_frames": lifecycle_summary.get("active_frame_count"),
+        "lifecycle_masked_frames": lifecycle_summary.get("masked_frame_count"),
+    }
+    lifecycle_passed = (
+        lifecycle_evidence["frame_accounting_present"] is True
+        and lifecycle_evidence["frame_accounting_passed"] is True
+        and lifecycle_evidence["lifecycle_passed"] is True
+        and _int_or_none(lifecycle_evidence["frame_accounting_rows"]) == input_light_frames
+        and _int_or_none(lifecycle_evidence["lifecycle_frame_count"]) == input_light_frames
+        and _int_or_none(lifecycle_evidence["frame_accounting_active_frames"]) == active_frames
+        and _int_or_none(lifecycle_evidence["lifecycle_active_frames"]) == active_frames
+        and _int_or_none(lifecycle_evidence["frame_accounting_masked_frames"]) == masked_frames
+        and _int_or_none(lifecycle_evidence["lifecycle_masked_frames"]) == masked_frames
+    )
+
+    acceptance_payload: dict[str, Any] = {}
+    if acceptance_audit is not None:
+        acceptance_payload = _json_if_exists(Path(acceptance_audit))
+    compare_payload: dict[str, Any] = {}
+    if compare_json is not None:
+        compare_payload = _json_if_exists(Path(compare_json))
+    elif isinstance(acceptance_payload.get("compare_json"), str):
+        compare_payload = _json_if_exists(Path(acceptance_payload["compare_json"]))
+
+    speedup = None
+    comparison_summary: dict[str, Any] = {}
+    if acceptance_payload:
+        speedup_summary = (
+            acceptance_payload.get("speedup_summary")
+            if isinstance(acceptance_payload.get("speedup_summary"), dict)
+            else {}
+        )
+        speedup = _number(speedup_summary.get("speedup_vs_wbpp"))
+        comparison = speedup_summary.get("comparison") if isinstance(speedup_summary.get("comparison"), dict) else {}
+        if comparison:
+            comparison_summary = {
+                "shape_match": comparison.get("shape_match"),
+                "rms_diff": _number(comparison.get("rms_diff")),
+                "abs_diff_p99": _number(comparison.get("abs_diff_p99")),
+                "coverage_fraction": _number(comparison.get("coverage_fraction")),
+                "compared_pixels": _int_or_none(comparison.get("compared_pixels")),
+                "full_frame_rms_diff": _number(comparison.get("full_frame_rms_diff")),
+                "full_frame_abs_diff_p99": _number(comparison.get("full_frame_abs_diff_p99")),
+            }
+    if compare_payload:
+        comparison_summary = _comparison_summary(compare_payload)
+
+    acceptance_required_passed = True
+    if require_acceptance:
+        acceptance_required_passed = bool(acceptance_payload) and acceptance_payload.get("passed") is True
+    acceptance_speedup_passed = True
+    if min_speedup is not None:
+        acceptance_speedup_passed = speedup is not None and speedup >= float(min_speedup)
+
+    compare_required_passed = True
+    if require_compare:
+        compare_required_passed = bool(comparison_summary) and comparison_summary.get("shape_match") is True
+    compare_thresholds_passed = True
+    if min_coverage_fraction is not None:
+        value = _number(comparison_summary.get("coverage_fraction"))
+        compare_thresholds_passed = compare_thresholds_passed and value is not None and value >= min_coverage_fraction
+    if max_rms_diff is not None:
+        value = _number(comparison_summary.get("rms_diff"))
+        compare_thresholds_passed = compare_thresholds_passed and value is not None and value <= max_rms_diff
+    if max_abs_diff_p99 is not None:
+        value = _number(comparison_summary.get("abs_diff_p99"))
+        compare_thresholds_passed = compare_thresholds_passed and value is not None and value <= max_abs_diff_p99
+
+    checks = [
+        _check("run_exists", run_root.exists(), {"run_dir": str(run_root)}),
+        _check(
+            "run_state_not_failed",
+            run_state.get("failed_stage") in (None, ""),
+            {
+                "failed_stage": run_state.get("failed_stage"),
+                "error_count": len(run_state.get("errors") or []),
+                "current_stage": run_state.get("current_stage"),
+            },
+        ),
+        _check(
+            "default_resident_cuda_route",
+            default_route_passed,
+            default_route_evidence,
+            "Phase 2 mainline expects the high-VRAM resident CUDA default route.",
+        ),
+        _check(
+            "core_artifacts_present",
+            not missing_core,
+            {"missing": missing_core, "required_paths": required_paths},
+        ),
+        _check(
+            "contracts_passed",
+            not failed_contracts,
+            {"failed_contracts": failed_contracts, "contracts": contract_state},
+        ),
+        _check(
+            "frame_thresholds_met",
+            input_light_frames is not None
+            and input_light_frames >= min_lights
+            and active_frames is not None
+            and active_frames >= min_active_frames
+            and masked_frames is not None
+            and masked_frames <= max_masked_frames,
+            {
+                "input_light_frames": input_light_frames,
+                "min_lights": min_lights,
+                "active_frames": active_frames,
+                "min_active_frames": min_active_frames,
+                "masked_frames": masked_frames,
+                "max_masked_frames": max_masked_frames,
+            },
+        ),
+        _check("resident_dq_lifecycle_closes", lifecycle_passed, lifecycle_evidence),
+        _check(
+            "resident_output_maps_present",
+            not output_maps["missing_fields"],
+            output_maps,
+        ),
+        _check(
+            "timing_components_available",
+            timing_state["total_elapsed_s"] is not None
+            and timing_state["stages"]["resident_calibration_integration"] is not None
+            and timing_state["resident_components_s"]["resident_integration"] is not None,
+            timing_state,
+        ),
+        _check(
+            "acceptance_audit_passed_when_required",
+            acceptance_required_passed,
+            {
+                "required": require_acceptance,
+                "path": None if acceptance_audit is None else str(acceptance_audit),
+                "present": bool(acceptance_payload),
+                "passed": acceptance_payload.get("passed"),
+                "status": acceptance_payload.get("status"),
+            },
+        ),
+        _check(
+            "speedup_threshold_met",
+            acceptance_speedup_passed,
+            {"speedup_vs_wbpp": speedup, "min_speedup": min_speedup},
+        ),
+        _check(
+            "compare_shape_passed_when_required",
+            compare_required_passed,
+            {"required": require_compare, "comparison": comparison_summary},
+        ),
+        _check(
+            "compare_thresholds_met",
+            compare_thresholds_passed,
+            {
+                "comparison": comparison_summary,
+                "min_coverage_fraction": min_coverage_fraction,
+                "max_rms_diff": max_rms_diff,
+                "max_abs_diff_p99": max_abs_diff_p99,
+            },
+        ),
+    ]
+    failed_checks = [item["name"] for item in checks if not item["passed"]]
+
+    next_priorities = [
+        {
+            "priority": 1,
+            "area": "resident calibration/integration execution",
+            "reason": "largest measured mainline stage remains resident_calibration_integration",
+            "evidence_s": timing_state["stages"].get("resident_calibration_integration"),
+        },
+        {
+            "priority": 2,
+            "area": "reference scout/health resident reuse",
+            "reason": "reference scout plus calibrated health are correctness gates but add wall time",
+            "evidence_s": (
+                (timing_state["stages"].get("resident_reference_scout") or 0.0)
+                + (timing_state["stages"].get("resident_reference_health") or 0.0)
+            ),
+        },
+        {
+            "priority": 3,
+            "area": "DQ/mask semantics under nonzero source-DQ inputs",
+            "reason": "current real benchmark has no sidecar/inline source-DQ invalid samples",
+            "evidence": {
+                "resident_source_dq_contract_rows": frame_summary.get("resident_source_dq_contract_rows"),
+                "source_input_samples": frame_summary.get("resident_dq_lifecycle_source_input_samples"),
+            },
+        },
+    ]
+
+    passed = all(item["passed"] for item in checks)
+    return {
+        "schema_version": 1,
+        "artifact_type": "phase2_mainline_audit",
+        "created_at": now_iso(),
+        "run_dir": str(run_root),
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "failed_checks": failed_checks,
+        "thresholds": {
+            "min_lights": min_lights,
+            "min_active_frames": min_active_frames,
+            "max_masked_frames": max_masked_frames,
+            "min_speedup": min_speedup,
+            "min_coverage_fraction": min_coverage_fraction,
+            "max_rms_diff": max_rms_diff,
+            "max_abs_diff_p99": max_abs_diff_p99,
+            "require_acceptance": require_acceptance,
+            "require_compare": require_compare,
+        },
+        "summary": {
+            "input_light_frames": input_light_frames,
+            "active_frames": active_frames,
+            "masked_frames": masked_frames,
+            "total_elapsed_s": timing_state["total_elapsed_s"],
+            "speedup_vs_wbpp": speedup,
+            "comparison": comparison_summary,
+            "largest_stage": timing_state["largest_stage"],
+            "largest_resident_component": timing_state["largest_resident_component"],
+        },
+        "checks": checks,
+        "next_priorities": next_priorities,
+    }
+
+
+def _markdown(payload: dict[str, Any]) -> str:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    lines = [
+        "# Phase 2 Mainline Audit",
+        "",
+        f"- Status: `{payload.get('status')}`",
+        f"- Passed: `{payload.get('passed')}`",
+        f"- Run: `{payload.get('run_dir')}`",
+        f"- Input lights: `{summary.get('input_light_frames')}`",
+        f"- Active / masked frames: `{summary.get('active_frames')}` / `{summary.get('masked_frames')}`",
+        f"- Total elapsed: `{summary.get('total_elapsed_s')}` s",
+        f"- Speedup vs WBPP: `{summary.get('speedup_vs_wbpp')}`",
+        f"- Failed checks: `{payload.get('failed_checks')}`",
+        "",
+        "## Checks",
+    ]
+    for check in payload.get("checks") or []:
+        status = "PASS" if check.get("passed") else "FAIL"
+        lines.append(f"- `{check.get('name')}`: {status}")
+    lines.extend(["", "## Next Priorities"])
+    for item in payload.get("next_priorities") or []:
+        lines.append(f"- P{item.get('priority')} `{item.get('area')}`: {item.get('reason')}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_phase2_mainline_audit(
+    path: str | Path,
+    payload: dict[str, Any],
+    *,
+    markdown: str | Path | None = None,
+) -> None:
+    write_json(path, payload)
+    if markdown is not None:
+        Path(markdown).parent.mkdir(parents=True, exist_ok=True)
+        Path(markdown).write_text(_markdown(payload), encoding="utf-8")

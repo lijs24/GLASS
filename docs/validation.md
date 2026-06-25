@@ -104,16 +104,16 @@ Machine-readable speedup summary:
   frames, and `7` zero-weight frames, matching the WBPP FastIntegration accepted
   frame set used for the parity comparison.
 
-Current Phase 2 latest frame-accounting DQ lifecycle acceptance:
+Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 638.
+- Gate: S2-Gate 639.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate638_frame_accounting_lifecycle\runs_20260625_155638`.
+  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate638_frame_accounting_lifecycle\runs_20260625_155638\candidate_frame_accounting_lifecycle`.
-- GLASS elapsed time: `12.560182699817233 s`.
+  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056\candidate_mainline_audit`.
+- GLASS elapsed time: `12.191199900000356 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `86.98448311710449x`.
+- Speedup: `89.61718362111084x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -126,6 +126,9 @@ Current Phase 2 latest frame-accounting DQ lifecycle acceptance:
 - Frame-accounting DQ lifecycle bridge: passed. The canonical
   `frame_accounting.json` ledger records `200` lifecycle rows, `193` active
   frames, `7` masked frames, and `11898681600` lifecycle source input samples.
+- Phase 2 mainline audit: passed. The run satisfies the resident CUDA default
+  route, required contract, DQ/mask lifecycle, output-map, timing, acceptance,
+  and compare checks.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
@@ -134,11 +137,12 @@ Current Phase 2 latest frame-accounting DQ lifecycle acceptance:
   `frame_accounting_resident_dq_lifecycle_contract`.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate637: passed with candidate/baseline
-  elapsed ratio `1.0332341511321728`, zero output differences, zero
-  frame-accounting differences, and zero numerical drift.
+- Resident regression gate versus Gate638: passed with candidate/baseline
+  elapsed ratio `0.9706228158749438` and no failed checks.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate638_frame_accounting_lifecycle\runs_20260625_155638\gate638_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056\gate639_acceptance_audit.json`.
+- Mainline audit:
+  `C:\glass_runs\phase2_s2_gate639_mainline_audit\runs_20260625_161056\gate639_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

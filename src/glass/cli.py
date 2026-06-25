@@ -190,6 +190,10 @@ from glass.report.phase2_status import (
     write_phase2_status,
     write_phase2_status_compare,
 )
+from glass.report.phase2_mainline_audit import (
+    build_phase2_mainline_audit,
+    write_phase2_mainline_audit,
+)
 from glass.report.quality_metrics_compare import (
     build_quality_metrics_compare,
     write_quality_metrics_compare,
@@ -5876,6 +5880,37 @@ def cmd_phase2_status_compare(args: argparse.Namespace) -> int:
     return 0 if payload.get("passed") or not args.fail_on_regression else 2
 
 
+def cmd_phase2_mainline_audit(args: argparse.Namespace) -> int:
+    payload = build_phase2_mainline_audit(
+        args.run,
+        acceptance_audit=args.acceptance_audit,
+        compare_json=args.compare_json,
+        min_lights=args.min_lights,
+        min_active_frames=args.min_active_frames,
+        max_masked_frames=args.max_masked_frames,
+        min_speedup=args.min_speedup,
+        min_coverage_fraction=args.min_coverage_fraction,
+        max_rms_diff=args.max_rms_diff,
+        max_abs_diff_p99=args.max_abs_diff_p99,
+        require_acceptance=args.require_acceptance,
+        require_compare=args.require_compare,
+    )
+    write_phase2_mainline_audit(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "failed_checks": payload.get("failed_checks"),
+            "input_light_frames": (payload.get("summary") or {}).get("input_light_frames"),
+            "active_frames": (payload.get("summary") or {}).get("active_frames"),
+            "speedup_vs_wbpp": (payload.get("summary") or {}).get("speedup_vs_wbpp"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if payload.get("passed") or not args.fail_on_not_green else 2
+
+
 def cmd_quality_metrics_compare(args: argparse.Namespace) -> int:
     payload = build_quality_metrics_compare(
         args.baseline,
@@ -5987,6 +6022,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 if the candidate regresses relative to the baseline",
     )
     phase2_status_compare.set_defaults(func=cmd_phase2_status_compare)
+
+    phase2_mainline = sub.add_parser(
+        "phase2-mainline-audit",
+        help="audit a resident CUDA run against the Phase 2 mainline execution requirements",
+    )
+    phase2_mainline.add_argument("--run", required=True, help="resident CUDA run directory")
+    phase2_mainline.add_argument("--acceptance-audit", help="optional acceptance-audit JSON artifact")
+    phase2_mainline.add_argument("--compare-json", help="optional GLASS-vs-reference compare JSON artifact")
+    phase2_mainline.add_argument("--out", required=True, help="output Phase 2 mainline audit JSON")
+    phase2_mainline.add_argument("--markdown", help="optional output Markdown summary")
+    phase2_mainline.add_argument("--min-lights", type=int, default=200)
+    phase2_mainline.add_argument("--min-active-frames", type=int, default=190)
+    phase2_mainline.add_argument("--max-masked-frames", type=int, default=10)
+    phase2_mainline.add_argument("--min-speedup", type=float)
+    phase2_mainline.add_argument("--min-coverage-fraction", type=float)
+    phase2_mainline.add_argument("--max-rms-diff", type=float)
+    phase2_mainline.add_argument("--max-abs-diff-p99", type=float)
+    phase2_mainline.add_argument(
+        "--require-acceptance",
+        action="store_true",
+        help="fail unless a passing acceptance-audit artifact is supplied",
+    )
+    phase2_mainline.add_argument(
+        "--require-compare",
+        action="store_true",
+        help="fail unless a shape-matched compare artifact is supplied or discoverable from acceptance",
+    )
+    phase2_mainline.add_argument(
+        "--fail-on-not-green",
+        action="store_true",
+        help="return exit code 2 unless all mainline checks pass",
+    )
+    phase2_mainline.set_defaults(func=cmd_phase2_mainline_audit)
 
     quality_metrics_compare = sub.add_parser(
         "quality-metrics-compare",
