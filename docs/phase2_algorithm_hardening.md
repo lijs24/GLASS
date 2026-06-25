@@ -801,6 +801,74 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 644: Reference Health Sample Input Reuse
+
+Gate644 moves back from postcondition hardening into execution work. The
+resident reference-health stage still did real calibrated checks after the CPU
+scout rows were reused, but the CPU calibrated crosscheck and the CUDA
+calibrated diagnostic each reread the same sampled FITS crops and sliced the
+same master calibration arrays. Gate644 keeps both scientific checks but shares
+the sampled light/bias/dark/flat inputs between them.
+
+Implementation:
+
+- Added a sampled-input cache inside
+  `src/glass/engine/resident_reference_health.py`.
+- The cache stores only strided sample inputs, not full image crops:
+  light, bias, dark, and flat arrays for each scout row.
+- CPU calibrated reference-health rows and CUDA calibrated diagnostic rows now
+  reuse the same sampled inputs while still running their own CPU and CUDA
+  calibration/catalog logic.
+- Cache diagnostics are written into `resident_reference_health.json`:
+  `sample_input_cache_enabled`, hits, misses, and stored bytes.
+- The cache is enabled only when CUDA calibrated diagnostics are available; CPU
+  only runs do not retain extra sampled inputs.
+- Added focused tests proving CUDA calibrated diagnostics hit the cache after
+  the CPU calibrated pass fills it.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Resident reference-health focused tests: `6 passed`.
+
+Real 200-light default validation:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\candidate_sample_reuse_strict`.
+- Evidence summary:
+  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\gate644_ab_summary.json`.
+- `resident_reference_health.json`: passed.
+- Sample-input cache: enabled, `64` misses from the CPU calibrated pass,
+  `64` hits from the CUDA calibrated pass, stored bytes `9437184`.
+- `resident_mainline_framework.json`: passed, no failed checks.
+- GLASS total elapsed: `11.457953899982385 s`.
+- Resident reference-health stage: `0.4174907000269741 s`, down from
+  Gate643's `1.1234386999858543 s`.
+- Black-box reference elapsed: `1092.541 s`.
+- Acceptance speedup: `95.35219023718358x`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames.
+- Resident regression gate versus Gate643: passed, elapsed ratio
+  `0.9631800297627578`, no failed checks.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed.
+- Phase 2 mainline audit: passed.
+
+Interpretation:
+
+- This is an execution-path improvement: it removes duplicate sampled FITS
+  crop/master-slice reads between CPU and CUDA calibrated reference-health
+  checks.
+- The CPU and CUDA calibrated checks remain independent math paths; only their
+  sampled inputs are shared.
+- The 200-light result is numerically unchanged and faster than Gate643.
+- The next substantive gate should target the dominant
+  resident_calibration_integration stage or broaden StackEngine execution
+  coverage for a remaining legacy surface.
+
 ### S2-Gate 643: StackEngine DQ Runtime Postcondition
 
 Gate643 continues the StackEngine/DQ mainline. Gate642 made positive

@@ -1382,12 +1382,21 @@ def test_resident_reference_health_cuda_calibrated_crosscheck_is_diagnostic(
     )
 
     cuda_calibrated = health["cuda_calibrated_crosscheck"]
+    calibrated = health["calibrated_crosscheck"]
     assert health["passed"] is True
     assert health["blocking"] is False
     assert health["summary"]["reference_frame_id"] == weak_id
+    assert health["summary"]["sample_input_cache_enabled"] is True
+    assert health["summary"]["sample_input_cache_misses"] > 0
+    assert health["summary"]["sample_input_cache_hits"] == health["summary"]["sample_input_cache_misses"]
+    assert health["summary"]["sample_input_cache_stored_bytes"] > 0
     assert health["summary"]["calibrated_reference_frame_id"] == strong_id
+    assert calibrated["sample_input_cache"]["hits"] == 0
+    assert calibrated["sample_input_cache"]["misses"] == health["summary"]["sample_input_cache_misses"]
     assert cuda_calibrated["available"] is True
     assert cuda_calibrated["enforced"] is False
+    assert cuda_calibrated["sample_input_cache"]["hits"] == health["summary"]["sample_input_cache_hits"]
+    assert cuda_calibrated["sample_input_cache"]["misses"] == health["summary"]["sample_input_cache_misses"]
     assert cuda_calibrated["status"] == "failed"
     assert cuda_calibrated["summary"]["reference_frame_id"] == weak_id
     assert cuda_calibrated["summary"]["cuda_calibrated_reference_frame_id"] == strong_id

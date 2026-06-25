@@ -185,6 +185,118 @@ def _load_master_arrays(cache_set: dict[str, Any]) -> tuple[np.ndarray, np.ndarr
     )
 
 
+def _sample_cache_stats(sample_input_cache: dict[Any, Any] | None) -> dict[str, Any]:
+    if sample_input_cache is None:
+        return {
+            "enabled": False,
+            "hits": 0,
+            "misses": 0,
+            "stored_samples": 0,
+            "stored_bytes": 0,
+            "strategy": "disabled",
+        }
+    stats = sample_input_cache.setdefault(
+        "_stats",
+        {
+            "enabled": True,
+            "hits": 0,
+            "misses": 0,
+            "stored_samples": 0,
+            "stored_bytes": 0,
+            "strategy": "strided_light_bias_dark_flat_input_reuse",
+        },
+    )
+    return stats if isinstance(stats, dict) else {}
+
+
+def _sample_input_cache_key(
+    scout_row: dict[str, Any],
+    *,
+    frame: dict[str, Any],
+    x0: int,
+    y0: int,
+    sample_side: int,
+    stride: int,
+) -> tuple[str, str, int, int, int, int]:
+    return (
+        str(scout_row.get("frame_id")),
+        str(frame.get("path")),
+        int(x0),
+        int(y0),
+        int(sample_side),
+        int(stride),
+    )
+
+
+def _strided_sample_inputs(
+    scout_row: dict[str, Any],
+    *,
+    frame: dict[str, Any],
+    master_bias: np.ndarray,
+    master_dark: np.ndarray,
+    master_flat: np.ndarray,
+    sample_input_cache: dict[Any, Any] | None = None,
+) -> dict[str, Any]:
+    origin = scout_row.get("sample_origin_xy") if isinstance(scout_row.get("sample_origin_xy"), list) else [0, 0]
+    sample_shape = scout_row.get("sample_shape") if isinstance(scout_row.get("sample_shape"), list) else [1, 1]
+    stride = max(1, int(scout_row.get("sample_stride") or 1))
+    sample_side = max(1, int(scout_row.get("sample_side") or max(sample_shape)))
+    x0 = int(origin[0])
+    y0 = int(origin[1])
+    key = _sample_input_cache_key(
+        scout_row,
+        frame=frame,
+        x0=x0,
+        y0=y0,
+        sample_side=sample_side,
+        stride=stride,
+    )
+    stats = _sample_cache_stats(sample_input_cache)
+    if sample_input_cache is not None and key in sample_input_cache:
+        stats["hits"] = int(stats.get("hits") or 0) + 1
+        cached = sample_input_cache[key]
+        return dict(cached) if isinstance(cached, dict) else cached
+
+    path = Path(str(frame["path"]))
+    with FitsImageReader(path) as reader:
+        crop_width = min(int(reader.width) - x0, sample_side)
+        crop_height = min(int(reader.height) - y0, sample_side)
+        light = reader.read_tile(y0, y0 + crop_height, x0, x0 + crop_width)
+    sample_slice = (slice(None, None, stride), slice(None, None, stride))
+    record = {
+        "frame_id": str(scout_row.get("frame_id")),
+        "source_path": str(path),
+        "x0": x0,
+        "y0": y0,
+        "stride": stride,
+        "sample_side": sample_side,
+        "light": np.ascontiguousarray(light[sample_slice], dtype=np.float32),
+        "bias": np.ascontiguousarray(
+            master_bias[y0 : y0 + crop_height, x0 : x0 + crop_width][sample_slice],
+            dtype=np.float32,
+        ),
+        "dark": np.ascontiguousarray(
+            master_dark[y0 : y0 + crop_height, x0 : x0 + crop_width][sample_slice],
+            dtype=np.float32,
+        ),
+        "flat": np.ascontiguousarray(
+            master_flat[y0 : y0 + crop_height, x0 : x0 + crop_width][sample_slice],
+            dtype=np.float32,
+        ),
+    }
+    if sample_input_cache is not None:
+        stored_bytes = sum(
+            int(record[name].nbytes)
+            for name in ("light", "bias", "dark", "flat")
+            if isinstance(record.get(name), np.ndarray)
+        )
+        stats["misses"] = int(stats.get("misses") or 0) + 1
+        stats["stored_samples"] = int(stats.get("stored_samples") or 0) + 1
+        stats["stored_bytes"] = int(stats.get("stored_bytes") or 0) + stored_bytes
+        sample_input_cache[key] = record
+    return dict(record)
+
+
 def _cuda_reference_health_available() -> tuple[bool, str]:
     try:
         import glass_cuda
@@ -229,34 +341,28 @@ def _calibrated_crosscheck_row(
     policy: CalibrationPolicy,
     threshold_sigma: float,
     max_stars: int,
+    sample_input_cache: dict[Any, Any] | None = None,
 ) -> dict[str, Any]:
-    origin = scout_row.get("sample_origin_xy") if isinstance(scout_row.get("sample_origin_xy"), list) else [0, 0]
-    sample_shape = scout_row.get("sample_shape") if isinstance(scout_row.get("sample_shape"), list) else [1, 1]
-    stride = max(1, int(scout_row.get("sample_stride") or 1))
-    sample_side = max(1, int(scout_row.get("sample_side") or max(sample_shape)))
-    x0 = int(origin[0])
-    y0 = int(origin[1])
-    path = Path(str(frame["path"]))
-    with FitsImageReader(path) as reader:
-        crop_width = min(int(reader.width) - x0, sample_side)
-        crop_height = min(int(reader.height) - y0, sample_side)
-        light = reader.read_tile(y0, y0 + crop_height, x0, x0 + crop_width)
-    bias = np.asarray(master_bias[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
-    dark = np.asarray(master_dark[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
-    flat = np.asarray(master_flat[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
+    inputs = _strided_sample_inputs(
+        scout_row,
+        frame=frame,
+        master_bias=master_bias,
+        master_dark=master_dark,
+        master_flat=master_flat,
+        sample_input_cache=sample_input_cache,
+    )
     calibrated = calibrate_light(
-        light,
-        bias,
-        dark,
-        flat,
+        inputs["light"],
+        inputs["bias"],
+        inputs["dark"],
+        inputs["flat"],
         float(frame.get("exposure_s") or 0.0),
         dark_exposure_s,
         policy,
     )
-    sample = calibrated[::stride, ::stride]
-    stats = robust_background(sample)
+    stats = robust_background(calibrated)
     stars = detect_stars(
-        sample,
+        calibrated,
         threshold_sigma=float(threshold_sigma),
         max_stars=int(max_stars),
         background=stats.median,
@@ -276,7 +382,7 @@ def _calibrated_crosscheck_row(
     )
     return {
         "frame_id": str(scout_row.get("frame_id")),
-        "source_path": str(path),
+        "source_path": str(inputs["source_path"]),
         "metric_source": "resident_reference_health_calibrated_sample_v1",
         "star_count": len(stars),
         "quality_score": weight,
@@ -289,10 +395,10 @@ def _calibrated_crosscheck_row(
         "fwhm_px": star_metrics["fwhm_median_px"],
         "eccentricity": star_metrics["eccentricity_median"],
         "star_metrics": star_metrics,
-        "sample_origin_xy": [x0, y0],
-        "sample_shape": [int(sample.shape[0]), int(sample.shape[1])],
-        "sample_stride": stride,
-        "sample_side": sample_side,
+        "sample_origin_xy": [int(inputs["x0"]), int(inputs["y0"])],
+        "sample_shape": [int(calibrated.shape[0]), int(calibrated.shape[1])],
+        "sample_stride": int(inputs["stride"]),
+        "sample_side": int(inputs["sample_side"]),
     }
 
 
@@ -307,44 +413,38 @@ def _cuda_calibrated_crosscheck_row(
     policy: CalibrationPolicy,
     threshold_sigma: float,
     max_stars: int,
+    sample_input_cache: dict[Any, Any] | None = None,
 ) -> dict[str, Any]:
     import glass_cuda
 
-    origin = scout_row.get("sample_origin_xy") if isinstance(scout_row.get("sample_origin_xy"), list) else [0, 0]
-    sample_shape = scout_row.get("sample_shape") if isinstance(scout_row.get("sample_shape"), list) else [1, 1]
-    stride = max(1, int(scout_row.get("sample_stride") or 1))
-    sample_side = max(1, int(scout_row.get("sample_side") or max(sample_shape)))
-    x0 = int(origin[0])
-    y0 = int(origin[1])
-    path = Path(str(frame["path"]))
-    with FitsImageReader(path) as reader:
-        crop_width = min(int(reader.width) - x0, sample_side)
-        crop_height = min(int(reader.height) - y0, sample_side)
-        light = reader.read_tile(y0, y0 + crop_height, x0, x0 + crop_width)
-    bias = np.asarray(master_bias[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
-    dark = np.asarray(master_dark[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
-    flat = np.asarray(master_flat[y0 : y0 + crop_height, x0 : x0 + crop_width], dtype=np.float32)
+    inputs = _strided_sample_inputs(
+        scout_row,
+        frame=frame,
+        master_bias=master_bias,
+        master_dark=master_dark,
+        master_flat=master_flat,
+        sample_input_cache=sample_input_cache,
+    )
     calibrated = np.asarray(
         glass_cuda.calibrate_tile_f32(
-            light,
-            bias,
-            dark,
-            flat,
+            inputs["light"],
+            inputs["bias"],
+            inputs["dark"],
+            inputs["flat"],
             float(frame.get("exposure_s") or 0.0),
             dark_exposure_s,
             asdict(policy),
         ),
         dtype=np.float32,
     )
-    sample = calibrated[::stride, ::stride]
-    stats = robust_background(sample)
+    stats = robust_background(calibrated)
     threshold = float(stats.median) + float(threshold_sigma) * max(float(stats.noise), 1.0e-6)
-    height, width = sample.shape
+    height, width = calibrated.shape
     grid_cols = max(1, min(16, int(np.ceil(width / 64.0))))
     grid_rows = max(1, min(12, int(np.ceil(height / 64.0))))
     min_separation = max(2.0, float(min(height, width)) / 32.0)
     catalog = glass_cuda.star_grid_top_nms_candidates_f32(
-        sample,
+        calibrated,
         threshold,
         grid_cols,
         grid_rows,
@@ -372,7 +472,7 @@ def _cuda_calibrated_crosscheck_row(
     )
     return {
         "frame_id": str(scout_row.get("frame_id")),
-        "source_path": str(path),
+        "source_path": str(inputs["source_path"]),
         "metric_source": "resident_reference_health_cuda_calibrated_sample_v1",
         "star_count": stored_count,
         "detected_count": detected_count,
@@ -397,10 +497,10 @@ def _cuda_calibrated_crosscheck_row(
             "catalog_sort_mode": str(catalog.get("catalog_sort_mode", "unavailable")),
             "catalog_topk_mode": str(catalog.get("catalog_topk_mode", "unavailable")),
         },
-        "sample_origin_xy": [x0, y0],
-        "sample_shape": [int(sample.shape[0]), int(sample.shape[1])],
-        "sample_stride": stride,
-        "sample_side": sample_side,
+        "sample_origin_xy": [int(inputs["x0"]), int(inputs["y0"])],
+        "sample_shape": [int(calibrated.shape[0]), int(calibrated.shape[1])],
+        "sample_stride": int(inputs["stride"]),
+        "sample_side": int(inputs["sample_side"]),
     }
 
 
@@ -414,6 +514,7 @@ def _calibrated_crosscheck(
     min_star_ratio: float,
     max_rank_fraction: float,
     enabled: bool,
+    sample_input_cache: dict[Any, Any] | None = None,
 ) -> dict[str, Any]:
     scout_rows = _frame_quality_rows(scout)
     frames_by_id = _plan_frames_by_id(plan)
@@ -458,6 +559,7 @@ def _calibrated_crosscheck(
                     policy=policy,
                     threshold_sigma=float(scout.get("threshold_sigma") or 5.0),
                     max_stars=int(scout.get("max_stars") or 300),
+                    sample_input_cache=sample_input_cache,
                 )
             )
         except Exception as exc:
@@ -513,10 +615,12 @@ def _calibrated_crosscheck(
         },
     ]
     raw_passed = all(item["passed"] for item in checks)
+    cache_stats = _sample_cache_stats(sample_input_cache)
     return {
         "status": "passed" if raw_passed else "failed",
         "available": True,
         "passed": raw_passed,
+        "sample_input_cache": dict(cache_stats),
         "master_cache": {
             "cache_dir": cache_set.get("cache_dir"),
             "cache_key": cache_set.get("cache_key"),
@@ -564,6 +668,7 @@ def _cuda_calibrated_crosscheck(
     reference_frame_id: str,
     min_star_ratio: float,
     max_rank_fraction: float,
+    sample_input_cache: dict[Any, Any] | None = None,
 ) -> dict[str, Any]:
     available, reason = _cuda_reference_health_available()
     if not available:
@@ -617,6 +722,7 @@ def _cuda_calibrated_crosscheck(
                     policy=policy,
                     threshold_sigma=float(scout.get("threshold_sigma") or 5.0),
                     max_stars=int(scout.get("max_stars") or 300),
+                    sample_input_cache=sample_input_cache,
                 )
             )
         except Exception as exc:
@@ -685,6 +791,7 @@ def _cuda_calibrated_crosscheck(
         "available": True,
         "passed": raw_passed,
         "enforced": False,
+        "sample_input_cache": dict(_sample_cache_stats(sample_input_cache)),
         "master_cache": {
             "cache_dir": cache_set.get("cache_dir"),
             "cache_key": cache_set.get("cache_key"),
@@ -870,6 +977,12 @@ def build_resident_reference_health(
             },
         },
     ]
+    cuda_health_available, cuda_health_reason = _cuda_reference_health_available()
+    sample_input_cache: dict[Any, Any] | None = (
+        {"_stats": _sample_cache_stats({})} if cuda_health_available else None
+    )
+    if sample_input_cache is not None:
+        sample_input_cache["_stats"]["availability_reason"] = cuda_health_reason
     calibrated = _calibrated_crosscheck(
         plan,
         scout,
@@ -879,6 +992,7 @@ def build_resident_reference_health(
         min_star_ratio=float(calibrated_min_star_ratio),
         max_rank_fraction=float(calibrated_max_rank_fraction),
         enabled=enabled,
+        sample_input_cache=sample_input_cache,
     )
     cuda_calibrated = _cuda_calibrated_crosscheck(
         plan,
@@ -888,6 +1002,7 @@ def build_resident_reference_health(
         reference_frame_id=reference_frame_id,
         min_star_ratio=float(cuda_calibrated_min_star_ratio),
         max_rank_fraction=float(cuda_calibrated_max_rank_fraction),
+        sample_input_cache=sample_input_cache,
     )
     calibrated_checks = calibrated.get("checks") if isinstance(calibrated.get("checks"), list) else []
     effective_checks = list(checks)
@@ -945,6 +1060,22 @@ def build_resident_reference_health(
                 else None
             ),
             "cuda_calibrated_available": bool(cuda_calibrated.get("available")),
+            "sample_input_cache_enabled": bool(sample_input_cache is not None),
+            "sample_input_cache_hits": (
+                _sample_cache_stats(sample_input_cache).get("hits")
+                if sample_input_cache is not None
+                else 0
+            ),
+            "sample_input_cache_misses": (
+                _sample_cache_stats(sample_input_cache).get("misses")
+                if sample_input_cache is not None
+                else 0
+            ),
+            "sample_input_cache_stored_bytes": (
+                _sample_cache_stats(sample_input_cache).get("stored_bytes")
+                if sample_input_cache is not None
+                else 0
+            ),
             "cuda_calibrated_reference_frame_id": (
                 cuda_calibrated.get("summary", {}).get("cuda_calibrated_reference_frame_id")
                 if isinstance(cuda_calibrated.get("summary"), dict)

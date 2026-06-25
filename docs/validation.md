@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 643.
+- Gate: S2-Gate 644.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853`.
+  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853\candidate_default_strict`.
-- GLASS elapsed time: `11.895962899900042 s`.
+  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\candidate_sample_reuse_strict`.
+- GLASS elapsed time: `11.457953899982385 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `91.84132543059464x`.
+- Speedup: `95.35219023718358x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -144,6 +144,11 @@ Current Phase 2 latest mainline acceptance:
   `stack_engine.pipeline_contract_dq_ledger_ready=true`,
   `stack_engine.phase2_stack_engine_default_gap_count=0`, and
   `stack_engine.surface_count=4`.
+- Gate644 makes resident reference health reuse strided sampled light/bias/dark
+  /flat inputs between CPU calibrated checks and CUDA calibrated diagnostics.
+  Latest evidence records `sample_input_cache_hits=64`,
+  `sample_input_cache_misses=64`, `sample_input_cache_stored_bytes=9437184`,
+  and a resident reference-health stage time of `0.4174907000269741 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
@@ -152,12 +157,12 @@ Current Phase 2 latest mainline acceptance:
   `frame_accounting_resident_dq_lifecycle_contract`.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate642: passed with candidate/baseline
-  elapsed ratio `1.0034555130975373` and no failed checks.
+- Resident regression gate versus Gate643: passed with candidate/baseline
+  elapsed ratio `0.9631800297627578` and no failed checks.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853\gate643_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\gate644_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate643_stackengine_dq_postcondition\runs_20260625_170853\gate643_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\gate644_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 
