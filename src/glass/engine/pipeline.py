@@ -238,6 +238,8 @@ def _stack_engine_master_streaming_contract(
     tile_contracts: list[dict[str, Any]],
     tile_count: int,
     output_path: Path,
+    dq_path: Path | None,
+    dq_summary: dict[str, int] | None,
 ) -> dict[str, Any]:
     failed_tile_contracts = [item for item in tile_contracts if not bool(item.get("passed"))]
     expected_pixels = int(width) * int(height)
@@ -279,6 +281,19 @@ def _stack_engine_master_streaming_contract(
             "written_master_path_exists",
             output_path.exists(),
             {"path": str(output_path)},
+        ),
+        _contract_check(
+            "written_master_dq_path_exists_when_requested",
+            dq_path is None or dq_path.exists(),
+            {"path": None if dq_path is None else str(dq_path), "requested": dq_path is not None},
+        ),
+        _contract_check(
+            "master_dq_summary_present_when_requested",
+            dq_path is None or bool(dq_summary),
+            {
+                "requested": dq_path is not None,
+                "dq_summary": dict(dq_summary or {}),
+            },
         ),
         _contract_check(
             "written_master_is_finite",
@@ -517,11 +532,13 @@ def _stack_mean_master_with_engine(
     tile_size: int,
     header: dict[str, Any],
     subtract_path: str | None = None,
+    dq_path: Path | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     if not paths:
         raise ValueError("cannot stack an empty frame list")
     policy = header.pop("_calibration_policy", None)
     rejection = _master_rejection_policy(policy if isinstance(policy, CalibrationPolicy) else None)
+    write_master_dq = dq_path is not None
     with ExitStack() as stack:
         sources = {
             f"frame-{index}": stack.enter_context(FitsImageSource(path))
@@ -533,12 +550,12 @@ def _stack_mean_master_with_engine(
             combine=CombinePolicy(method="mean", accumulator_dtype="float64"),
             rejection=rejection,
             output_maps=OutputMapPolicy(
-                coverage=False,
+                coverage=write_master_dq,
                 weight=False,
                 variance=False,
-                low_rejection=False,
-                high_rejection=False,
-                dq=False,
+                low_rejection=write_master_dq,
+                high_rejection=write_master_dq,
+                dq=write_master_dq,
             ),
             metadata={"stage": "master_calibration"},
         )
@@ -556,7 +573,18 @@ def _stack_mean_master_with_engine(
         dq_provenance = _initial_stack_engine_master_dq_provenance()
         tile_contracts: list[dict[str, Any]] = []
         tile_count = 0
-        with FitsTileWriter(out_path, width=width, height=height, header=header) as writer:
+        dq_summary: dict[str, int] = {}
+        if dq_path is not None:
+            dq_path.parent.mkdir(parents=True, exist_ok=True)
+        with ExitStack() as writer_stack:
+            writer = writer_stack.enter_context(FitsTileWriter(out_path, width=width, height=height, header=header))
+            dq_writer = (
+                writer_stack.enter_context(
+                    FitsTileWriter(dq_path, width=width, height=height, header=dq_header("master_calibration"))
+                )
+                if dq_path is not None
+                else None
+            )
             for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
                 window = TileWindow(tile.y0, tile.y1, tile.x0, tile.x1)
                 tile_sources = {
@@ -571,6 +599,15 @@ def _stack_mean_master_with_engine(
                     ).astype(np.float32)
                 writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, data)
                 stats.update(data)
+                if dq_writer is not None:
+                    tile_dq = (
+                        tile_result.dq_mask.copy()
+                        if tile_result.dq_mask is not None
+                        else DQMask.empty(data.shape)
+                    )
+                    tile_dq.mark(DQFlag.NO_DATA, ~np.isfinite(data))
+                    write_dq_tile(dq_writer, tile, tile_dq)
+                    add_summary_counts(dq_summary, tile_dq.summary())
                 _accumulate_stack_engine_master_tile(
                     metrics=metrics,
                     dq_provenance=dq_provenance,
@@ -580,6 +617,10 @@ def _stack_mean_master_with_engine(
                     output_tile=data,
                 )
                 tile_count += 1
+        if dq_path is not None:
+            dq_provenance["output_dq_summary"] = dict(dq_summary)
+            metrics["master_dq_path"] = str(dq_path)
+            metrics["master_dq_summary"] = dict(dq_summary)
         metrics["streaming_tile_contract_count"] = len(tile_contracts)
         metrics["streaming_tile_contract_failed_count"] = len(
             [item for item in tile_contracts if not bool(item.get("passed"))]
@@ -593,6 +634,8 @@ def _stack_mean_master_with_engine(
             tile_contracts=tile_contracts,
             tile_count=tile_count,
             output_path=out_path,
+            dq_path=dq_path,
+            dq_summary=dq_summary if dq_path is not None else None,
         )
         dq_provenance["result_contract"] = result_contract
         dq_provenance["streaming_tile_contracts"] = tile_contracts
@@ -610,6 +653,7 @@ def _stack_mean_master(
     use_stack_engine: bool = True,
     policy: CalibrationPolicy | None = None,
     allow_legacy_fallback: bool | None = None,
+    dq_path: Path | None = None,
 ) -> tuple[dict[str, float], str, str | None, dict[str, Any]]:
     header = dict(header)
     if policy is not None:
@@ -621,7 +665,14 @@ def _stack_mean_master(
     )
     if use_stack_engine:
         try:
-            stats, metrics = _stack_mean_master_with_engine(paths, out_path, tile_size, header, subtract_path)
+            stats, metrics = _stack_mean_master_with_engine(
+                paths,
+                out_path,
+                tile_size,
+                header,
+                subtract_path,
+                dq_path=dq_path,
+            )
             return (
                 stats,
                 "stack_engine_cpu",
@@ -783,6 +834,7 @@ def _stack_normalized_flat_master(
     header: dict[str, Any],
     subtract_path: str | None,
     policy: CalibrationPolicy,
+    dq_path: Path | None = None,
 ) -> tuple[dict[str, float], list[dict[str, Any]], str, str | None, dict[str, Any]]:
     import numpy as np
 
@@ -800,18 +852,19 @@ def _stack_normalized_flat_master(
                 f"flat-{index}": stack.enter_context(_NormalizedFlatSource(path, scalars[index], subtract_path))
                 for index, path in enumerate(paths)
             }
+            write_master_dq = dq_path is not None
             request = StackRequest(
                 frame_ids=tuple(sources.keys()),
                 source_kind="flat",
                 combine=CombinePolicy(method="mean", accumulator_dtype="float64"),
                 rejection=_master_rejection_policy(policy),
                 output_maps=OutputMapPolicy(
-                    coverage=False,
+                    coverage=write_master_dq,
                     weight=False,
                     variance=False,
-                    low_rejection=False,
-                    high_rejection=False,
-                    dq=False,
+                    low_rejection=write_master_dq,
+                    high_rejection=write_master_dq,
+                    dq=write_master_dq,
                 ),
                 metadata={"stage": "master_flat", "normalization": "per_flat"},
             )
@@ -828,7 +881,18 @@ def _stack_normalized_flat_master(
             dq_provenance = _initial_stack_engine_master_dq_provenance()
             tile_contracts: list[dict[str, Any]] = []
             tile_count = 0
-            with FitsTileWriter(out_path, width=width, height=height, header=header) as writer:
+            dq_summary: dict[str, int] = {}
+            if dq_path is not None:
+                dq_path.parent.mkdir(parents=True, exist_ok=True)
+            with ExitStack() as writer_stack:
+                writer = writer_stack.enter_context(FitsTileWriter(out_path, width=width, height=height, header=header))
+                dq_writer = (
+                    writer_stack.enter_context(
+                        FitsTileWriter(dq_path, width=width, height=height, header=dq_header("master_calibration"))
+                    )
+                    if dq_path is not None
+                    else None
+                )
                 for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
                     window = TileWindow(tile.y0, tile.y1, tile.x0, tile.x1)
                     tile_sources = {
@@ -842,6 +906,15 @@ def _stack_normalized_flat_master(
                     ).astype(np.float32)
                     writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, tile_data)
                     stats.update(tile_data)
+                    if dq_writer is not None:
+                        tile_dq = (
+                            tile_result.dq_mask.copy()
+                            if tile_result.dq_mask is not None
+                            else DQMask.empty(tile_data.shape)
+                        )
+                        tile_dq.mark(DQFlag.NO_DATA, ~np.isfinite(tile_data))
+                        write_dq_tile(dq_writer, tile, tile_dq)
+                        add_summary_counts(dq_summary, tile_dq.summary())
                     _accumulate_stack_engine_master_tile(
                         metrics=metrics,
                         dq_provenance=dq_provenance,
@@ -851,6 +924,10 @@ def _stack_normalized_flat_master(
                         output_tile=tile_data,
                     )
                     tile_count += 1
+            if dq_path is not None:
+                dq_provenance["output_dq_summary"] = dict(dq_summary)
+                metrics["master_dq_path"] = str(dq_path)
+                metrics["master_dq_summary"] = dict(dq_summary)
             metrics["streaming_tile_contract_count"] = len(tile_contracts)
             metrics["streaming_tile_contract_failed_count"] = len(
                 [item for item in tile_contracts if not bool(item.get("passed"))]
@@ -864,6 +941,8 @@ def _stack_normalized_flat_master(
                 tile_contracts=tile_contracts,
                 tile_count=tile_count,
                 output_path=out_path,
+                dq_path=dq_path,
+                dq_summary=dq_summary if dq_path is not None else None,
             )
             dq_provenance["result_contract"] = result_contract
             dq_provenance["streaming_tile_contracts"] = tile_contracts
@@ -1103,8 +1182,10 @@ def run_calibration_stages(
         policy.flat_floor = float(flat_floor)
     master_dir = out / "calib_cache" / "masters"
     calibrated_dir = out / "calib_cache" / "calibrated"
+    dq_dir = out / "calib_cache" / "dq"
     master_dir.mkdir(parents=True, exist_ok=True)
     calibrated_dir.mkdir(parents=True, exist_ok=True)
+    dq_dir.mkdir(parents=True, exist_ok=True)
 
     master_metadata: dict[str, Any] = {}
 
@@ -1114,15 +1195,19 @@ def run_calibration_stages(
             if group_type != "bias":
                 continue
             path = master_dir / f"master_bias_{group_id}.fits"
+            dq_path = dq_dir / f"dq_master_bias_{group_id}.fits"
             stats, tile_stack_mode, fallback_reason, stack_metrics = _stack_mean_master(
                 _paths_for_group(group, frames),
                 path,
                 tile_size,
                 {"IMAGETYP": "master_bias"},
                 policy=policy,
+                dq_path=dq_path,
             )
             master_metadata[group_id] = {
                 "path": str(path),
+                "dq_mask_path": str(dq_path),
+                "dq_summary": stack_metrics.get("master_dq_summary") if isinstance(stack_metrics, dict) else None,
                 "stats": stats,
                 "type": "bias",
                 "streaming": True,
@@ -1155,6 +1240,7 @@ def run_calibration_stages(
                 else None
             )
             path = master_dir / f"master_dark_{group_id}.fits"
+            dq_path = dq_dir / f"dq_master_dark_{group_id}.fits"
             stats, tile_stack_mode, fallback_reason, stack_metrics = _stack_mean_master(
                 _paths_for_group(group, frames),
                 path,
@@ -1162,9 +1248,12 @@ def run_calibration_stages(
                 {"IMAGETYP": "master_dark", "EXPTIME": group.get("exposure_s")},
                 subtract_path=bias_path,
                 policy=policy,
+                dq_path=dq_path,
             )
             master_metadata[group_id] = {
                 "path": str(path),
+                "dq_mask_path": str(dq_path),
+                "dq_summary": stack_metrics.get("master_dq_summary") if isinstance(stack_metrics, dict) else None,
                 "stats": stats,
                 "type": "dark",
                 "exposure_s": group.get("exposure_s"),
@@ -1201,6 +1290,7 @@ def run_calibration_stages(
                 else None
             )
             path = master_dir / f"master_flat_{group_id}.fits"
+            dq_path = dq_dir / f"dq_master_flat_{group_id}.fits"
             stats, per_flat_normalization, raw_tile_stack_mode, raw_fallback_reason, raw_stack_metrics = _stack_normalized_flat_master(
                 _paths_for_group(group, frames),
                 path,
@@ -1210,9 +1300,12 @@ def run_calibration_stages(
                 {"IMAGETYP": "master_flat", "FILTER": group.get("filter")},
                 subtract_path=bias_path,
                 policy=policy,
+                dq_path=dq_path,
             )
             master_metadata[group_id] = {
                 "path": str(path),
+                "dq_mask_path": str(dq_path),
+                "dq_summary": raw_stack_metrics.get("master_dq_summary") if isinstance(raw_stack_metrics, dict) else None,
                 "stats": stats,
                 "type": "flat",
                 "filter": group.get("filter"),

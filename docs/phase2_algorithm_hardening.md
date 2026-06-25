@@ -1026,6 +1026,63 @@ Interpretation:
   frames and light integration now have explicit streaming sinks and
   result-contract provenance.
 
+### S2-Gate 671: Master Calibration DQ Artifacts
+
+Gate671 closes the next DQ/mask gap on the CPU/tile calibration surface. Gates
+669 and 670 made StackEngine execution streamable, but master bias/dark/flat
+records still carried DQ evidence only in JSON provenance. Gate671 writes an
+actual master DQ FITS artifact for each CPU/tile master frame and binds that
+artifact into `calibration_artifacts.json`.
+
+Implementation:
+
+- `_stack_mean_master_with_engine` and `_stack_normalized_flat_master` accept an
+  optional `dq_path`. When present, their StackEngine tile requests include DQ,
+  coverage, and low/high rejection maps so each tile can write a DQ mask.
+- `run_calibration_stages` now passes default DQ paths for master bias, dark,
+  and flat:
+  - `calib_cache/dq/dq_master_bias_<group>.fits`
+  - `calib_cache/dq/dq_master_dark_<group>.fits`
+  - `calib_cache/dq/dq_master_flat_<group>.fits`
+- Master records now include `dq_mask_path` and `dq_summary`, and the same
+  summary is mirrored through `stack_engine_metrics.master_dq_summary` and
+  `stack_engine_dq_provenance.output_dq_summary`.
+- `stack_engine_master_streaming_result_contract` now verifies requested master
+  DQ path existence and DQ-summary presence.
+
+Validation:
+
+- Focused master/calibration tests:
+  `4 passed`, covering direct master DQ writing, synthetic calibration artifact
+  paths/summaries, min/max rejection, and StackEngine contract acceptance.
+- Synthetic CPU calibration:
+  `C:\glass_runs\phase2_s2_gate671_master_dq_artifacts\runs_20260626_050000\synthetic_cpu_calibration`.
+  It generated three master DQ FITS files, one each for bias, dark, and flat.
+  Each master recorded `dq_summary={"valid": 1024}`, matching
+  `stack_engine_dq_provenance.output_dq_summary`, and a passing
+  `stack_engine_master_streaming_result_contract`.
+- Calibration-only StackEngine contract:
+  `C:\glass_runs\phase2_s2_gate671_master_dq_artifacts\runs_20260626_050000\synthetic_stack_engine_contract.json`.
+  Status passed and `strict_native_stack_engine_ready=true`.
+- Real 200-light resident guard:
+  `C:\glass_runs\phase2_s2_gate671_master_dq_artifacts\runs_20260626_050000\resident_default_guard`.
+  This gate does not change resident CUDA code, but the guard confirms the
+  main high-VRAM path still runs and preserves outputs.
+- Gate671 versus Gate670 resident regression:
+  `C:\glass_runs\phase2_s2_gate671_master_dq_artifacts\runs_20260626_050000\gate671_vs_gate670_regression.json`.
+  Status passed; failed checks `[]`; total elapsed ratio `0.9480347464554004`;
+  artifact, frame-accounting, frame-signature, registration, output, and
+  numerical-drift difference counts were all zero.
+- Full pytest: `1410 passed in 63.10 s`.
+
+Interpretation:
+
+- This is a DQ/mask pipeline-contract gate, not a resident CUDA speed
+  optimization. It turns master-frame DQ from implicit provenance into
+  inspectable FITS artifacts for the portable CPU/tile path.
+- Resident CUDA master-cache artifacts are unchanged and remain covered by the
+  resident calibration contracts.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

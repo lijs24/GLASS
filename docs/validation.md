@@ -445,6 +445,19 @@ Current Phase 2 latest mainline acceptance:
   passed regression against Gate669 with elapsed ratio `1.0081524547892338`,
   no failed checks, and zero artifact/frame/registration or output
   differences. Full pytest passed with `1410 passed in 62.66 s`.
+- Gate671 writes explicit master DQ FITS artifacts for CPU/tile master bias,
+  dark, and flat frames. The synthetic calibration run at
+  `C:\glass_runs\phase2_s2_gate671_master_dq_artifacts\runs_20260626_050000\synthetic_cpu_calibration`
+  wrote three `dq_master_*.fits` files alongside four calibrated-light DQ
+  files. Each master recorded `dq_summary={"valid": 1024}`, matching
+  `stack_engine_dq_provenance.output_dq_summary`, and passed
+  `stack_engine_master_streaming_result_contract`. The calibration-only
+  StackEngine contract passed with `strict_native_stack_engine_ready=true`.
+  The real 200-light resident guard at
+  `C:\glass_runs\phase2_s2_gate671_master_dq_artifacts\runs_20260626_050000\resident_default_guard`
+  passed regression against Gate670 with elapsed ratio `0.9480347464554004`,
+  no failed checks, and zero artifact/frame/registration or output
+  differences. Full pytest passed with `1410 passed in 63.10 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

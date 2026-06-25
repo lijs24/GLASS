@@ -29,6 +29,13 @@ immediately to the master FITS, and then discarded. Master artifacts record
 calibration formulas while removing full-frame `StackEngineResult`
 materialization from the master-frame pipeline.
 
+As of S2-Gate 671, the same CPU/tile master calibration path writes an explicit
+master DQ FITS artifact for each master bias, dark, and flat. Master records in
+`calibration_artifacts.json` include `dq_mask_path` and `dq_summary`, and the
+summary is mirrored in StackEngine DQ provenance. The DQ mask marks no-data
+pixels and pixels touched by low/high rejection according to GLASS DQ flag
+semantics; this makes master-frame DQ inspectable instead of JSON-only.
+
 Both tile-mode and resident-mode `glass run` honor `--flat-floor`, and the
 effective value is written into `calibration_artifacts.json` or
 `resident_artifacts.json`. This is scientifically important for real flat

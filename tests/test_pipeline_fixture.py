@@ -335,6 +335,7 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert len(list((run / "calib_cache" / "masters").glob("*.fits"))) >= 3
     assert len(list((run / "calib_cache" / "calibrated").glob("*.fits"))) == 3
     assert len(list((run / "calib_cache" / "dq").glob("dq_calibrated_*.fits"))) == 3
+    assert len(list((run / "calib_cache" / "dq").glob("dq_master_*.fits"))) >= 3
     import json
 
     artifacts = json.loads((run / "calibration_artifacts.json").read_text(encoding="utf-8"))
@@ -345,6 +346,20 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert all(master["tile_size"] == 9 for master in artifacts["masters"].values())
     assert all(master["stack_engine_dq_provenance"]["schema_version"] == 1 for master in artifacts["masters"].values())
     assert all(master["stack_engine_dq_provenance"]["input_samples"] > 0 for master in artifacts["masters"].values())
+    assert all(Path(master["dq_mask_path"]).exists() for master in artifacts["masters"].values())
+    assert all("valid" in master["dq_summary"] for master in artifacts["masters"].values())
+    assert all(
+        master["stack_engine_metrics"]["master_dq_path"] == master["dq_mask_path"]
+        for master in artifacts["masters"].values()
+    )
+    assert all(
+        master["stack_engine_metrics"]["master_dq_summary"] == master["dq_summary"]
+        for master in artifacts["masters"].values()
+    )
+    assert all(
+        master["stack_engine_dq_provenance"]["output_dq_summary"] == master["dq_summary"]
+        for master in artifacts["masters"].values()
+    )
     assert all(
         master["stack_engine_metrics"]["execution_path"] == "stack_engine_master_streaming_tile_sink"
         for master in artifacts["masters"].values()
@@ -491,10 +506,16 @@ def test_stack_engine_master_matches_legacy_streaming(tmp_path: Path):
     write_fits_data(subtract, np.ones((5, 7), dtype=np.float32))
     legacy = tmp_path / "legacy.fits"
     stack_engine = tmp_path / "stack_engine.fits"
+    stack_engine_dq = tmp_path / "dq_stack_engine.fits"
 
     legacy_stats = _stream_mean_master(paths, legacy, tile_size=3, header={}, subtract_path=str(subtract))
     stack_stats, mode, fallback_reason, metrics = _stack_mean_master(
-        paths, stack_engine, tile_size=3, header={}, subtract_path=str(subtract)
+        paths,
+        stack_engine,
+        tile_size=3,
+        header={},
+        subtract_path=str(subtract),
+        dq_path=stack_engine_dq,
     )
 
     assert mode == "stack_engine_cpu"
@@ -506,6 +527,10 @@ def test_stack_engine_master_matches_legacy_streaming(tmp_path: Path):
     assert metrics["streaming_tile_contract_failed_count"] == 0
     assert metrics["dq_provenance"]["result_contract"]["contract_type"] == "stack_engine_master_streaming_result_contract"
     assert metrics["dq_provenance"]["result_contract"]["passed"] is True
+    assert stack_engine_dq.exists()
+    assert metrics["master_dq_path"] == str(stack_engine_dq)
+    assert metrics["master_dq_summary"]["valid"] == 35
+    assert metrics["dq_provenance"]["output_dq_summary"] == metrics["master_dq_summary"]
     assert np.allclose(read_fits_data(stack_engine), read_fits_data(legacy))
     assert stack_stats["mean"] == legacy_stats["mean"]
 
