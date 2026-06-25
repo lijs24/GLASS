@@ -12982,6 +12982,7 @@ def run_resident_calibration_integration(
                 registration_results=group_registration_results,
                 registration_quality_decisions=group_registration_quality_decisions_for_mask,
                 manual_excluded_frame_ids=group_manual_excluded_frame_ids,
+                frame_weight_by_id=frame_weights,
                 weighting_frame_results=weighting_frame_results,
                 local_norm_frame_results=local_norm_frame_results,
                 filter_name=filter_name,

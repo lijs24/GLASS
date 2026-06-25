@@ -2455,6 +2455,81 @@ Interpretation:
   resident integration. The next substantive gate should target one of those
   two paths while preserving this A/B contract.
 
+### S2-Gate 691: Resident Frame-Index Alignment Contract
+
+Gate691 hardens the resident CUDA frame-level mask contract around the stack
+frame index. Gate690 fixed a completion-queue risk where frame weights could be
+written in completion order instead of resident stack index order. Gate691 turns
+that invariant into a runtime-validated artifact so future read/upload
+orchestration changes cannot silently misalign frame IDs, integration weights,
+manual exclusions, registration status, and frame-mask rows.
+
+Implementation:
+
+- `resident_frame_masks.json` group rows now include `frame_index`.
+- The resident frame-mask summary now records active, masked, and unknown
+  zero-weight frame indices alongside frame IDs.
+- `build_resident_frame_mask_contract` accepts `frame_weight_by_id` and compares
+  every `frame_weights[index]` entry against the corresponding
+  `frame_weights_by_id[frame_id]` value.
+- The new `frame_index_alignment_contract` records:
+  - whether alignment was checked;
+  - the index origin (`resident_stack_frame_index`);
+  - mismatch and missing frame IDs;
+  - mismatch and missing frame indices;
+  - pass/fail status.
+- `validate_resident_frame_mask_contract` now raises on any frame-weight index
+  mismatch or missing weight-map entry.
+- Resident CUDA passes its `frame_weights` map into the contract builder by
+  default.
+
+Validation:
+
+- Focused contract and resident CUDA regression tests passed:
+  `6 passed in 0.48 s`.
+- Ruff on touched files passed.
+- Full pytest passed:
+  `1435 passed in 66.84 s`.
+- Real 200-light candidate:
+  `C:\glass_runs\phase2_s2_gate691_frame_index_alignment\runs_20260627_030000\frame_index_contract`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate691_frame_index_alignment\gate691_mainline_audit.json`.
+- Resident regression gate versus Gate690 passed:
+  `C:\glass_runs\phase2_s2_gate691_frame_index_alignment\gate691_regression_gate.json`;
+  failed checks `[]`, elapsed ratio `0.9972782917458977`.
+- Phase 2 mainline A/B versus Gate690 passed:
+  `C:\glass_runs\phase2_s2_gate691_frame_index_alignment\gate691_phase2_mainline_ab.json`;
+  failed checks `[]`, active/masked frames `193 / 7`, tracked map count `6`,
+  hash mismatches `0`.
+- The real candidate's `resident_frame_masks.json` recorded
+  `frame_index_alignment_contract.checked=true`,
+  `passed=true`, `weight_mismatch_frame_count=0`, and
+  `weight_missing_frame_count=0`.
+
+Timing and telemetry:
+
+- Candidate total elapsed: `12.359771899762563 s`.
+- Baseline-to-candidate elapsed ratio: `0.9972782917458977`.
+- Resident components:
+  - light read/upload/calibrate `3.3616618000669405 s`;
+  - registration/warp `0.2609440995147452 s`;
+  - local normalization `0.3568277000449598 s`;
+  - integration `3.2981458000140265 s`;
+  - output write `0.2789147000294179 s`.
+
+Interpretation:
+
+- This is a resident pipeline correctness gate, not a release handoff or a
+  cosmetic report-only gate.
+- It directly protects the current high-throughput native completion path,
+  where out-of-order file completion is expected and frame-index alignment must
+  be explicit.
+- Output FITS maps remained hash-stable versus Gate690, so the new contract did
+  not alter science pixels.
+- The next performance gate can safely continue on read/upload/calibration
+  overlap or resident integration reducer work with a stronger frame-index
+  invariant in place.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

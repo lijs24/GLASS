@@ -4789,10 +4789,24 @@ def test_cli_resident_cuda_run_active_registered_inline_cosmetic_cuda_skips_excl
     pipeline = artifact["resident_io_pipeline"]
     rows = [row for row in source_dq["rows"] if row.get("inline_source_dq")]
     skipped = [row for row in rows if row["status"] == "skipped_admission_policy"]
+    frame_mask_rows = {row["frame_id"]: row for row in frame_masks["groups"][0]["rows"]}
+    alignment = frame_masks["summary"]["frame_index_alignment_contract"]
 
     assert {row["status"] for row in registration["results"]} == {"reference", "excluded"}
     assert frame_masks["summary"]["active_frame_count"] == 1
     assert frame_masks["summary"]["masked_frame_count"] == 1
+    assert frame_masks["summary"]["active_frame_ids"] == ["F000004"]
+    assert frame_masks["summary"]["masked_frame_ids"] == ["F000005"]
+    assert alignment["checked"] is True
+    assert alignment["passed"] is True
+    assert alignment["weight_mismatch_frame_count"] == 0
+    assert frame_mask_rows["F000004"]["frame_index"] == 0
+    assert frame_mask_rows["F000004"]["mask_status"] == "active"
+    assert frame_mask_rows["F000004"]["frame_weight_matches_map"] is True
+    assert frame_mask_rows["F000005"]["frame_index"] == 1
+    assert frame_mask_rows["F000005"]["mask_status"] == "masked"
+    assert frame_mask_rows["F000005"]["manual_excluded"] is True
+    assert frame_mask_rows["F000005"]["frame_weight_matches_map"] is True
     assert source_dq["passed"] is True
     assert source_dq["status_counts"]["skipped_admission_policy"] == 1
     assert source_dq["status_counts"]["no_invalid_samples"] == 1

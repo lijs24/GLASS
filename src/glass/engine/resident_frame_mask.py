@@ -30,6 +30,16 @@ def _float_or_nan(value: Any) -> float:
         return float("nan")
 
 
+def _weights_match(left: float, right: float) -> bool:
+    left_finite = bool(np.isfinite(left))
+    right_finite = bool(np.isfinite(right))
+    if left_finite != right_finite:
+        return False
+    if not left_finite and not right_finite:
+        return True
+    return abs(float(left) - float(right)) <= 1.0e-6
+
+
 def _by_frame(rows: Iterable[Any] | Mapping[str, Any] | None) -> dict[str, Any]:
     if rows is None:
         return {}
@@ -50,6 +60,7 @@ def build_resident_frame_mask_contract(
     registration_results: Iterable[Any] | Mapping[str, Any] | None = None,
     registration_quality_decisions: Iterable[Mapping[str, Any]] | Mapping[str, Any] | None = None,
     manual_excluded_frame_ids: Iterable[str] | None = None,
+    frame_weight_by_id: Mapping[str, float] | None = None,
     weighting_frame_results: Iterable[Mapping[str, Any]] | Mapping[str, Any] | None = None,
     local_norm_frame_results: Iterable[Mapping[str, Any]] | Mapping[str, Any] | None = None,
     filter_name: str | None = None,
@@ -72,16 +83,38 @@ def build_resident_frame_mask_contract(
     weighting_by_id = _by_frame(weighting_frame_results)
     local_norm_by_id = _by_frame(local_norm_frame_results)
     manual_excluded = {str(frame_id) for frame_id in (manual_excluded_frame_ids or [])}
+    weight_by_id = {str(key): _float_or_nan(value) for key, value in (frame_weight_by_id or {}).items()}
+    weight_alignment_checked = frame_weight_by_id is not None
 
     rows: list[dict[str, Any]] = []
     unknown_zero_weight_frame_ids: list[str] = []
+    unknown_zero_weight_frame_indices: list[int] = []
     masked_frame_ids: list[str] = []
+    masked_frame_indices: list[int] = []
     active_frame_ids: list[str] = []
+    active_frame_indices: list[int] = []
+    weight_mismatch_frame_ids: list[str] = []
+    weight_mismatch_frame_indices: list[int] = []
+    weight_missing_frame_ids: list[str] = []
+    weight_missing_frame_indices: list[int] = []
     category_counts: Counter[str] = Counter()
 
-    for frame_id_raw, weight_raw in zip(frame_ids, frame_weights, strict=True):
+    for frame_index, (frame_id_raw, weight_raw) in enumerate(zip(frame_ids, frame_weights, strict=True)):
         frame_id = str(frame_id_raw)
         weight = _float_or_nan(weight_raw)
+        map_weight = weight_by_id.get(frame_id)
+        weight_map_present = frame_id in weight_by_id
+        weight_matches_map = None
+        if weight_alignment_checked:
+            if not weight_map_present or map_weight is None:
+                weight_missing_frame_ids.append(frame_id)
+                weight_missing_frame_indices.append(frame_index)
+                weight_matches_map = False
+            else:
+                weight_matches_map = _weights_match(weight, map_weight)
+                if not weight_matches_map:
+                    weight_mismatch_frame_ids.append(frame_id)
+                    weight_mismatch_frame_indices.append(frame_index)
         active = bool(np.isfinite(weight) and weight > 0.0)
         categories: list[str] = []
         reasons: list[str] = []
@@ -146,23 +179,34 @@ def build_resident_frame_mask_contract(
 
         if active:
             active_frame_ids.append(frame_id)
+            active_frame_indices.append(frame_index)
             mask_status = "active"
             auditable = True
         else:
             masked_frame_ids.append(frame_id)
+            masked_frame_indices.append(frame_index)
             mask_status = "masked"
             auditable = bool(reasons)
             if not auditable:
                 unknown_zero_weight_frame_ids.append(frame_id)
+                unknown_zero_weight_frame_indices.append(frame_index)
 
         for category in categories:
             category_counts[category] += 1
 
         rows.append(
             {
+                "frame_index": frame_index,
                 "frame_id": frame_id,
                 "filter": filter_name,
                 "integration_weight": None if not np.isfinite(weight) else float(weight),
+                "frame_weight_map_value": (
+                    None
+                    if not weight_alignment_checked or map_weight is None or not np.isfinite(map_weight)
+                    else float(map_weight)
+                ),
+                "frame_weight_map_present": weight_map_present if weight_alignment_checked else None,
+                "frame_weight_matches_map": weight_matches_map,
                 "mask_status": mask_status,
                 "auditable": auditable,
                 "mask_categories": categories,
@@ -183,11 +227,32 @@ def build_resident_frame_mask_contract(
         "masked_frame_count": len(masked_frame_ids),
         "unknown_zero_weight_frame_count": len(unknown_zero_weight_frame_ids),
         "active_frame_ids": active_frame_ids,
+        "active_frame_indices": active_frame_indices,
         "masked_frame_ids": masked_frame_ids,
+        "masked_frame_indices": masked_frame_indices,
         "unknown_zero_weight_frame_ids": unknown_zero_weight_frame_ids,
+        "unknown_zero_weight_frame_indices": unknown_zero_weight_frame_indices,
+        "frame_index_alignment_contract": {
+            "checked": weight_alignment_checked,
+            "index_origin": "resident_stack_frame_index",
+            "frame_id_order": "light_group_order",
+            "frame_weight_order": "resident_stack_frame_index",
+            "frame_weight_by_id_source": "resident_cuda_frame_weights_map"
+            if weight_alignment_checked
+            else "not_provided",
+            "weight_mismatch_frame_count": len(weight_mismatch_frame_ids),
+            "weight_mismatch_frame_ids": weight_mismatch_frame_ids,
+            "weight_mismatch_frame_indices": weight_mismatch_frame_indices,
+            "weight_missing_frame_count": len(weight_missing_frame_ids),
+            "weight_missing_frame_ids": weight_missing_frame_ids,
+            "weight_missing_frame_indices": weight_missing_frame_indices,
+            "passed": not weight_mismatch_frame_ids and not weight_missing_frame_ids,
+        },
         "mask_category_counts": dict(sorted(category_counts.items())),
         "status_counts": dict(Counter(row["mask_status"] for row in rows)),
-        "passed": not unknown_zero_weight_frame_ids,
+        "passed": not unknown_zero_weight_frame_ids
+        and not weight_mismatch_frame_ids
+        and not weight_missing_frame_ids,
     }
     return {
         "schema_version": 1,
@@ -213,6 +278,17 @@ def validate_resident_frame_mask_contract(contract: Mapping[str, Any]) -> None:
     if unknown:
         joined = ", ".join(str(frame_id) for frame_id in unknown)
         raise RuntimeError(f"resident frame mask contract found unaudited zero-weight frames: {joined}")
+    alignment = summary.get("frame_index_alignment_contract")
+    if isinstance(alignment, Mapping) and not alignment.get("passed", True):
+        mismatch = alignment.get("weight_mismatch_frame_ids") or []
+        missing = alignment.get("weight_missing_frame_ids") or []
+        details = []
+        if mismatch:
+            details.append("mismatched weights for " + ", ".join(str(frame_id) for frame_id in mismatch))
+        if missing:
+            details.append("missing weight-map entries for " + ", ".join(str(frame_id) for frame_id in missing))
+        message = "; ".join(details) if details else "frame-weight index alignment failed"
+        raise RuntimeError(f"resident frame mask contract frame-index alignment failed: {message}")
 
 
 def summarize_resident_frame_mask_contracts(groups: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
@@ -222,6 +298,12 @@ def summarize_resident_frame_mask_contracts(groups: Iterable[Mapping[str, Any]])
     active_frame_ids: list[str] = []
     masked_frame_ids: list[str] = []
     unknown_zero_weight_frame_ids: list[str] = []
+    unknown_zero_weight_frame_indices: list[int] = []
+    weight_mismatch_frame_ids: list[str] = []
+    weight_mismatch_frame_indices: list[int] = []
+    weight_missing_frame_ids: list[str] = []
+    weight_missing_frame_indices: list[int] = []
+    alignment_checked = False
     frame_count = 0
     for group in group_list:
         summary = group.get("summary") if isinstance(group.get("summary"), Mapping) else {}
@@ -231,6 +313,24 @@ def summarize_resident_frame_mask_contracts(groups: Iterable[Mapping[str, Any]])
         unknown_zero_weight_frame_ids.extend(
             str(value) for value in summary.get("unknown_zero_weight_frame_ids") or []
         )
+        unknown_zero_weight_frame_indices.extend(
+            int(value) for value in summary.get("unknown_zero_weight_frame_indices") or []
+        )
+        alignment = summary.get("frame_index_alignment_contract")
+        if isinstance(alignment, Mapping):
+            alignment_checked = alignment_checked or bool(alignment.get("checked"))
+            weight_mismatch_frame_ids.extend(
+                str(value) for value in alignment.get("weight_mismatch_frame_ids") or []
+            )
+            weight_mismatch_frame_indices.extend(
+                int(value) for value in alignment.get("weight_mismatch_frame_indices") or []
+            )
+            weight_missing_frame_ids.extend(
+                str(value) for value in alignment.get("weight_missing_frame_ids") or []
+            )
+            weight_missing_frame_indices.extend(
+                int(value) for value in alignment.get("weight_missing_frame_indices") or []
+            )
         category_counts.update(summary.get("mask_category_counts") or {})
         status_counts.update(summary.get("status_counts") or {})
     return {
@@ -242,7 +342,26 @@ def summarize_resident_frame_mask_contracts(groups: Iterable[Mapping[str, Any]])
         "active_frame_ids": active_frame_ids,
         "masked_frame_ids": masked_frame_ids,
         "unknown_zero_weight_frame_ids": unknown_zero_weight_frame_ids,
+        "unknown_zero_weight_frame_indices": unknown_zero_weight_frame_indices,
+        "frame_index_alignment_contract": {
+            "checked": alignment_checked,
+            "index_origin": "resident_stack_frame_index",
+            "frame_id_order": "light_group_order",
+            "frame_weight_order": "resident_stack_frame_index",
+            "frame_weight_by_id_source": "resident_cuda_frame_weights_map"
+            if alignment_checked
+            else "not_provided",
+            "weight_mismatch_frame_count": len(weight_mismatch_frame_ids),
+            "weight_mismatch_frame_ids": weight_mismatch_frame_ids,
+            "weight_mismatch_frame_indices": weight_mismatch_frame_indices,
+            "weight_missing_frame_count": len(weight_missing_frame_ids),
+            "weight_missing_frame_ids": weight_missing_frame_ids,
+            "weight_missing_frame_indices": weight_missing_frame_indices,
+            "passed": not weight_mismatch_frame_ids and not weight_missing_frame_ids,
+        },
         "mask_category_counts": dict(sorted(category_counts.items())),
         "status_counts": dict(sorted(status_counts.items())),
-        "passed": not unknown_zero_weight_frame_ids,
+        "passed": not unknown_zero_weight_frame_ids
+        and not weight_mismatch_frame_ids
+        and not weight_missing_frame_ids,
     }

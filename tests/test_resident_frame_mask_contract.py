@@ -46,7 +46,10 @@ def test_resident_frame_mask_contract_classifies_quality_and_manual_excludes() -
 
     assert contract["summary"]["passed"] is True
     assert contract["summary"]["active_frame_ids"] == ["F001"]
+    assert contract["summary"]["active_frame_indices"] == [0]
     assert contract["summary"]["masked_frame_ids"] == ["F002", "F003"]
+    assert contract["summary"]["masked_frame_indices"] == [1, 2]
+    assert [row["frame_index"] for row in contract["rows"]] == [0, 1, 2]
     assert rows["F002"]["mask_categories"] == ["registration_quality", "registration"]
     assert rows["F002"]["mask_reasons"][0].startswith("registration_quality:")
     assert rows["F003"]["mask_categories"] == ["manual_exclude", "registration"]
@@ -68,7 +71,30 @@ def test_resident_frame_mask_contract_rejects_unaudited_zero_weight() -> None:
 
     assert contract["summary"]["passed"] is False
     assert contract["summary"]["unknown_zero_weight_frame_ids"] == ["F002"]
+    assert contract["summary"]["unknown_zero_weight_frame_indices"] == [1]
     with pytest.raises(RuntimeError, match="F002"):
+        validate_resident_frame_mask_contract(contract)
+
+
+def test_resident_frame_mask_contract_rejects_weight_index_drift() -> None:
+    contract = build_resident_frame_mask_contract(
+        frame_ids=["F001", "F002"],
+        frame_weights=[0.0, 1.0],
+        frame_weight_by_id={"F001": 1.0, "F002": 0.0},
+        registration_results=[
+            {"frame_id": "F001", "status": "excluded"},
+            {"frame_id": "F002", "status": "excluded"},
+        ],
+        manual_excluded_frame_ids=["F002"],
+    )
+
+    alignment = contract["summary"]["frame_index_alignment_contract"]
+
+    assert contract["summary"]["passed"] is False
+    assert alignment["checked"] is True
+    assert alignment["weight_mismatch_frame_ids"] == ["F001", "F002"]
+    assert alignment["weight_mismatch_frame_indices"] == [0, 1]
+    with pytest.raises(RuntimeError, match="frame-index alignment failed"):
         validate_resident_frame_mask_contract(contract)
 
 
@@ -91,6 +117,7 @@ def test_resident_frame_mask_summary_merges_groups() -> None:
     assert summary["masked_frame_count"] == 1
     assert summary["mask_category_counts"] == {"registration": 1}
     assert summary["passed"] is True
+    assert summary["frame_index_alignment_contract"]["passed"] is True
 
 
 def test_frame_accounting_promotes_resident_quality_mask_to_quality_rejected(tmp_path: Path) -> None:

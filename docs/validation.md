@@ -720,6 +720,19 @@ Current Phase 2 latest mainline acceptance:
   `3.2566704000346363 s`, and output write `0.28603319998364896 s`. Final
   validation also fixed resident CUDA completion-queue frame-weight alignment:
   weights are now written by stack frame index rather than completion order.
+- Gate691 promotes that frame-index invariant into the resident frame-mask
+  runtime contract. The real 200-light candidate at
+  `C:\glass_runs\phase2_s2_gate691_frame_index_alignment\runs_20260627_030000\frame_index_contract`
+  passed the mainline audit, resident regression versus Gate690, and the Phase
+  2 mainline A/B gate. The candidate recorded `193 / 7` active/masked frames,
+  elapsed ratio `0.9972782917458977`, six tracked maps, zero hash mismatches,
+  and `resident_frame_masks.json` reported
+  `frame_index_alignment_contract.checked=true`, `passed=true`,
+  `weight_mismatch_frame_count=0`, and `weight_missing_frame_count=0`.
+  Component timing was light read/upload/calibrate `3.3616618000669405 s`,
+  registration/warp `0.2609440995147452 s`, local normalization
+  `0.3568277000449598 s`, integration `3.2981458000140265 s`, and output
+  write `0.2789147000294179 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
