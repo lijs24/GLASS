@@ -5,7 +5,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from glass.cpu.cosmetic import detect_isolated_cosmetic_defects
+from glass.cpu.cosmetic import detect_isolated_cosmetic_defects, detect_star_protected_cosmetic_defects
 from glass.engine.contracts import DQFlag, DQMask
 from glass.io.fits_io import read_fits_data
 
@@ -125,6 +125,65 @@ def source_invalid_mask_from_inline_cosmetic(
             "inline_source_dq_applies_replacement": False,
             "hot_sigma": float(hot_sigma),
             "cold_sigma": float(cold_sigma),
+            "cosmetic_metrics": dict(result.metrics),
+        }
+    )
+    return invalid_mask, info
+
+
+def source_invalid_mask_from_star_protected_inline_cosmetic(
+    data: Any,
+    *,
+    height: int,
+    width: int,
+    hot_sigma: float = 8.0,
+    cold_sigma: float = 8.0,
+    star_threshold_sigma: float = 5.0,
+    star_protection_radius_px: float = 3.0,
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    """Build an inline source-DQ mask with catalog-shaped star protection."""
+
+    shape = (int(height), int(width))
+    array = np.asarray(data)
+    if array.shape != shape:
+        return None, {
+            "supported": False,
+            "reason": "inline_star_cosmetic_source_shape_not_image",
+            "shape": list(array.shape),
+            "expected_shape": list(shape),
+            "invalid_samples": 0,
+            "flag_counts": {},
+            "source_model": "inline_star_protected_cosmetic_source_dq",
+        }
+    if not np.issubdtype(array.dtype, np.number):
+        return None, {
+            "supported": False,
+            "reason": "inline_star_cosmetic_source_not_numeric",
+            "shape": list(array.shape),
+            "dtype": str(array.dtype),
+            "invalid_samples": 0,
+            "flag_counts": {},
+            "source_model": "inline_star_protected_cosmetic_source_dq",
+        }
+
+    result = detect_star_protected_cosmetic_defects(
+        np.asarray(array, dtype=np.float32),
+        hot_sigma=float(hot_sigma),
+        cold_sigma=float(cold_sigma),
+        star_threshold_sigma=float(star_threshold_sigma),
+        star_protection_radius_px=float(star_protection_radius_px),
+    )
+    invalid_mask, info = source_invalid_mask_from_dq_mask(result.dq_mask, height=height, width=width)
+    info.update(
+        {
+            "source_model": "inline_star_protected_cosmetic_source_dq",
+            "inline_source_dq": True,
+            "inline_source_dq_detector": "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects",
+            "inline_source_dq_applies_replacement": False,
+            "hot_sigma": float(hot_sigma),
+            "cold_sigma": float(cold_sigma),
+            "star_threshold_sigma": float(star_threshold_sigma),
+            "star_protection_radius_px": float(star_protection_radius_px),
             "cosmetic_metrics": dict(result.metrics),
         }
     )

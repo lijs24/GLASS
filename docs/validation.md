@@ -320,6 +320,13 @@ Current Phase 2 latest mainline acceptance:
   `58.88x` versus the `1092.541 s` black-box timing, and the Gate660-vs-Gate659
   conservative compare is bit-identical over the coverage-masked master
   (`RMS=0.0`, max absolute difference `0.0`).
+- Gate661 adds the first star-protected inline cosmetic source-DQ CPU baseline
+  and opt-in `--resident-inline-source-dq cosmetic_star`. Focused synthetic
+  validation proves a compact PSF-like star core is protected while an isolated
+  hot pixel remains masked, and strategy/CLI tests prove the audit surface is
+  recorded. This is a science-contract baseline for the next resident CUDA
+  source-DQ gate; the latest real 200-light mainline acceptance remains
+  Gate660 until the GPU implementation is validated.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

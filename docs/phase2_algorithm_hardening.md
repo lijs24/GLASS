@@ -801,6 +801,55 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 661: Star-Protected Inline Cosmetic Source-DQ Baseline
+
+Gate661 returns from release/report evidence work to the DQ/mask science model.
+Gate658-660 proved that inline cosmetic CUDA source-DQ can be resident,
+auditable, admission-aware, and fast, but the detector itself was still a
+global/isolated threshold model. Gate661 adds the first star-catalog-protected
+CPU baseline and wires it as an explicit resident inline mode so future CUDA
+work has a stable scientific target.
+
+Implementation:
+
+- Added `glass.cpu.cosmetic.detect_star_protected_cosmetic_defects`.
+- The detector first runs the existing isolated hot/cold candidate model, then
+  builds a protection mask from GLASS CPU star detections.
+- Catalog protection is shape-guarded:
+  - candidate stars must have at least `3` positive pixels;
+  - candidate stars with sharpness above `0.95` are rejected as likely
+    one-sample spikes;
+  - protected pixels clear `HOT_PIXEL`, `COLD_PIXEL`, and
+    `COSMETIC_CORRECTED` bits and restore original source values.
+- Added
+  `glass.engine.resident_source_dq.source_invalid_mask_from_star_protected_inline_cosmetic`.
+- Added opt-in `--resident-inline-source-dq cosmetic_star` for `glass run` and
+  `glass audit`; defaults remain unchanged.
+- `resident_source_dq_strategy.json` and `resident_artifacts.json` record
+  `glass.cpu.cosmetic.detect_star_protected_cosmetic_defects` when this mode is
+  selected.
+
+Validation:
+
+- Focused synthetic result validation:
+  `python -m pytest -q tests/test_resident_source_dq.py tests/test_resident_source_dq_strategy.py tests/test_cli_smoke.py::test_run_resident_inline_source_dq_accepts_star_protected_mode`
+  plus the focused resident CUDA `cosmetic_star` smoke passed with
+  `23 passed`.
+- The synthetic fixture contains one compact PSF-like star core and one isolated
+  hot pixel. The plain isolated detector marks both; the star-protected detector
+  keeps the compact star unmasked while still marking the isolated hot pixel.
+- Full-project pytest passed with `1391 passed in 61.73 s`.
+
+Interpretation:
+
+- This gate is a substantive science-contract step, not a report-only handoff.
+- `cosmetic_star` is intentionally CPU-controlled and opt-in. It is not yet the
+  resident high-throughput CUDA detector and is not promoted to the default
+  science route.
+- The next substantive gate should port this protected detector to the resident
+  GPU path by keeping star catalogs and candidate masks on device, then run the
+  200-light A/B against Gate660/Gate659 and the black-box reference.
+
 ### S2-Gate 660: Active-Registered Inline Cosmetic CUDA Source-DQ Admission
 
 Gate660 tightens the Gate659 conservative inline cosmetic CUDA path by making

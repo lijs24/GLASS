@@ -3891,6 +3891,91 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_source_dq_without_cache(t
     )
 
 
+def test_cli_resident_cuda_run_applies_inline_star_protected_cosmetic_source_dq(
+    tmp_path: Path,
+):
+    cuda_module_or_skip()
+    dataset = _two_light_cosmetic_cache_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "rdq_inline_cosmetic_star"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-inline-source-dq",
+            "cosmetic_star",
+            "--resident-inline-source-dq-hot-sigma",
+            "2.0",
+            "--resident-inline-source-dq-cold-sigma",
+            "8.0",
+            "--resident-runtime-preset",
+            "manual",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-output-maps",
+            "audit",
+        ]
+    ) == 0
+
+    resident = read_json(run / "resident_artifacts.json")
+    artifact = resident["artifacts"][0]
+    source_dq = artifact["source_dq_summary"]
+    strategy = read_json(run / "resident_source_dq_strategy.json")
+    timing = read_json(run / "run_timing.json")
+
+    assert source_dq["passed"] is True
+    assert source_dq["input_invalid_samples_before_rejection"] == 1
+    assert source_dq["source_dq_flag_counts"] == {"cosmetic_corrected": 1, "hot_pixel": 1}
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq"] == "cosmetic_star"
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector"] == (
+        "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
+    )
+    assert strategy["inline_source_dq"]["enabled"] is True
+    assert strategy["inline_source_dq"]["mode"] == "cosmetic_star"
+    assert strategy["inline_source_dq"]["detector"] == (
+        "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
+    )
+    assert timing["resident_inline_source_dq"] == "cosmetic_star"
+    applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
+    assert applied_rows[0]["inline_source_dq_detector"] == (
+        "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
+    )
+    assert any(
+        item["source_model"] == "inline_star_protected_cosmetic_source_dq"
+        for item in applied_rows[0]["component_summaries"]
+    )
+
+
 def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_mask_upload(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_cosmetic_cache_dataset(tmp_path)

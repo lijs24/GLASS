@@ -7073,24 +7073,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-inline-source-dq",
-        choices=["off", "cosmetic", "cosmetic_cuda"],
+        choices=["off", "cosmetic", "cosmetic_star", "cosmetic_cuda"],
         default="off",
         help=(
-            "resident source-DQ in-memory detector; cosmetic uses the CPU baseline mask, while cosmetic_cuda "
-            "uses resident histogram robust stats plus CUDA threshold application without a calibrated cache"
+            "resident source-DQ in-memory detector; cosmetic uses the CPU baseline mask, cosmetic_star "
+            "adds CPU star-catalog protection, and cosmetic_cuda uses resident histogram robust stats plus "
+            "CUDA threshold application without a calibrated cache"
         ),
     )
     run.add_argument(
         "--resident-inline-source-dq-hot-sigma",
         type=float,
         default=8.0,
-        help="hot-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_cuda",
+        help="hot-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_star/cosmetic_cuda",
     )
     run.add_argument(
         "--resident-inline-source-dq-cold-sigma",
         type=float,
         default=8.0,
-        help="cold-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_cuda",
+        help="cold-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_star/cosmetic_cuda",
     )
     run.add_argument(
         "--resident-inline-source-dq-policy",
@@ -7778,25 +7779,25 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--resident-mainline-min-source-dq-applied-samples", type=int, default=0)
     audit.add_argument(
         "--resident-inline-source-dq",
-        choices=["off", "cosmetic", "cosmetic_cuda"],
+        choices=["off", "cosmetic", "cosmetic_star", "cosmetic_cuda"],
         default="off",
         help=(
-            "resident source-DQ in-memory detector for audit; cosmetic uses the CPU baseline mask, while "
-            "cosmetic_cuda uses resident histogram robust stats plus CUDA threshold application without materializing "
-            "a calibrated cache"
+            "resident source-DQ in-memory detector for audit; cosmetic uses the CPU baseline mask, "
+            "cosmetic_star adds CPU star-catalog protection, and cosmetic_cuda uses resident histogram robust "
+            "stats plus CUDA threshold application without materializing a calibrated cache"
         ),
     )
     audit.add_argument(
         "--resident-inline-source-dq-hot-sigma",
         type=float,
         default=8.0,
-        help="hot-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_cuda mode",
+        help="hot-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_star/cosmetic_cuda mode",
     )
     audit.add_argument(
         "--resident-inline-source-dq-cold-sigma",
         type=float,
         default=8.0,
-        help="cold-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_cuda mode",
+        help="cold-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_star/cosmetic_cuda mode",
     )
     audit.add_argument(
         "--resident-inline-source-dq-policy",

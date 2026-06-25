@@ -78,6 +78,7 @@ from glass.engine.resident_source_dq import (
     inline_cosmetic_thresholds_from_resident_stack,
     source_invalid_mask_from_array,
     source_invalid_mask_from_inline_cosmetic,
+    source_invalid_mask_from_star_protected_inline_cosmetic,
     source_invalid_mask_from_sidecar_path,
     summarize_resident_source_dq_execution_groups,
     validate_resident_source_dq_execution_group,
@@ -3798,6 +3799,16 @@ def _resident_source_invalid_mask_from_frame(
                 cold_sigma=resident_inline_source_dq_cold_sigma,
             )
         )
+    elif resident_inline_source_dq == "cosmetic_star":
+        components.append(
+            source_invalid_mask_from_star_protected_inline_cosmetic(
+                data,
+                height=height,
+                width=width,
+                hot_sigma=resident_inline_source_dq_hot_sigma,
+                cold_sigma=resident_inline_source_dq_cold_sigma,
+            )
+        )
     sidecar_record = _resident_source_dq_sidecar_record(frame, plan_root, calibration_dq_sidecars)
     if sidecar_record is not None:
         sidecar_path = Path(sidecar_record["path"])
@@ -7147,8 +7158,8 @@ def run_resident_calibration_integration(
         raise ValueError("integration_rejection_max_fraction must be between 0 and 1")
     if resident_output_maps not in _RESIDENT_OUTPUT_MAP_POLICIES:
         raise ValueError("resident_output_maps must be audit, science, or minimal")
-    if resident_inline_source_dq not in {"off", "cosmetic", "cosmetic_cuda"}:
-        raise ValueError("resident_inline_source_dq must be off, cosmetic, or cosmetic_cuda")
+    if resident_inline_source_dq not in {"off", "cosmetic", "cosmetic_star", "cosmetic_cuda"}:
+        raise ValueError("resident_inline_source_dq must be off, cosmetic, cosmetic_star, or cosmetic_cuda")
     if resident_inline_source_dq_hot_sigma <= 0.0:
         raise ValueError("resident_inline_source_dq_hot_sigma must be positive")
     if resident_inline_source_dq_cold_sigma <= 0.0:
@@ -14067,6 +14078,8 @@ def run_resident_calibration_integration(
                         "resident_inline_source_dq_detector": (
                             "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
                             if resident_inline_source_dq == "cosmetic_cuda"
+                            else "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
+                            if resident_inline_source_dq == "cosmetic_star"
                             else "glass.cpu.cosmetic.detect_isolated_cosmetic_defects"
                             if resident_inline_source_dq == "cosmetic"
                             else None

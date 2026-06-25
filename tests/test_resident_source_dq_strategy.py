@@ -76,3 +76,18 @@ def test_resident_source_dq_strategy_blocks_unknown_shapes(tmp_path: Path) -> No
     assert strategy["reason"] == "unknown_light_shapes"
     assert strategy["recommended_route"] == "blocked_unknown_shape"
     assert strategy["unknown_shape_frame_ids"] == ["L001"]
+
+
+def test_resident_source_dq_strategy_records_star_protected_inline_detector(tmp_path: Path) -> None:
+    strategy = build_resident_source_dq_strategy(
+        _plan(),
+        tmp_path / "run",
+        free_bytes=10_000,
+        resident_inline_source_dq="cosmetic_star",
+    )
+
+    inline = strategy["inline_source_dq"]
+    assert inline["enabled"] is True
+    assert inline["mode"] == "cosmetic_star"
+    assert inline["detector"] == "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
+    assert inline["materializes_calibrated_dq_cache"] is False

@@ -3,6 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from glass.cpu.cosmetic import (
+    detect_isolated_cosmetic_defects,
+    detect_star_protected_cosmetic_defects,
+)
 from glass.engine.contracts import DQFlag
 from glass.engine.resident_source_dq import (
     apply_resident_inline_cosmetic_thresholds_batch,
@@ -15,6 +19,7 @@ from glass.engine.resident_source_dq import (
     source_invalid_mask_from_array,
     source_invalid_mask_from_dq_mask,
     source_invalid_mask_from_inline_cosmetic,
+    source_invalid_mask_from_star_protected_inline_cosmetic,
     source_invalid_mask_from_sidecar_path,
     summarize_resident_source_dq_execution_groups,
 )
@@ -105,6 +110,75 @@ def test_source_invalid_mask_from_inline_cosmetic_protects_star_like_structure()
     assert info["flag_counts"]["cosmetic_corrected"] == 1
     assert info["cosmetic_metrics"]["candidate_hot_pixels"] >= 2
     assert info["cosmetic_metrics"]["protected_hot_pixels"] >= 1
+
+
+def test_star_protected_cosmetic_detector_keeps_compact_star_but_flags_hot_pixel():
+    data = np.full((15, 15), 100.0, dtype=np.float32)
+    data[2, 2] = 900.0
+    data[7, 7] = 700.0
+    data[7, 6] = 180.0
+    data[7, 8] = 180.0
+    data[6, 7] = 180.0
+    data[8, 7] = 180.0
+
+    isolated = detect_isolated_cosmetic_defects(
+        data,
+        hot_sigma=2.0,
+        cold_sigma=2.0,
+        min_neighbor_support=6,
+    )
+    protected = detect_star_protected_cosmetic_defects(
+        data,
+        hot_sigma=2.0,
+        cold_sigma=2.0,
+        min_neighbor_support=6,
+        star_threshold_sigma=2.0,
+        star_protection_radius_px=2.2,
+    )
+
+    assert isolated.dq_mask.has_flag(DQFlag.HOT_PIXEL)[2, 2]
+    assert isolated.dq_mask.has_flag(DQFlag.HOT_PIXEL)[7, 7]
+    assert protected.dq_mask.has_flag(DQFlag.HOT_PIXEL)[2, 2]
+    assert not protected.dq_mask.has_flag(DQFlag.HOT_PIXEL)[7, 7]
+    assert protected.data[7, 7] == pytest.approx(700.0)
+    assert protected.metrics["star_count"] >= 1
+    assert protected.metrics["star_protected_hot_pixels"] >= 1
+    assert protected.metrics["hot_pixels"] == 1
+
+
+def test_source_invalid_mask_from_star_protected_inline_cosmetic_records_star_model():
+    data = np.full((15, 15), 100.0, dtype=np.float32)
+    data[2, 2] = 900.0
+    data[7, 7] = 700.0
+    data[7, 6] = 180.0
+    data[7, 8] = 180.0
+    data[6, 7] = 180.0
+    data[8, 7] = 180.0
+
+    mask, info = source_invalid_mask_from_star_protected_inline_cosmetic(
+        data,
+        height=15,
+        width=15,
+        hot_sigma=2.0,
+        cold_sigma=2.0,
+        star_threshold_sigma=2.0,
+        star_protection_radius_px=2.2,
+    )
+
+    assert mask is not None
+    assert int(mask[2, 2]) == 1
+    assert int(mask[7, 7]) == 0
+    assert info["source_model"] == "inline_star_protected_cosmetic_source_dq"
+    assert info["inline_source_dq"] is True
+    assert info["inline_source_dq_detector"] == (
+        "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
+    )
+    assert info["inline_source_dq_applies_replacement"] is False
+    assert info["invalid_samples"] == 1
+    assert info["flag_counts"]["hot_pixel"] == 1
+    assert info["flag_counts"]["cosmetic_corrected"] == 1
+    assert info["cosmetic_metrics"]["star_protection_enabled"] is True
+    assert info["cosmetic_metrics"]["star_protected_hot_pixels"] >= 1
 
 
 def test_inline_cosmetic_thresholds_match_cpu_baseline_scalar_thresholds():

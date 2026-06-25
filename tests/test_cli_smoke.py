@@ -692,6 +692,22 @@ def test_run_resident_inline_source_dq_explicit_fraction_overrides_policy() -> N
     assert resolution["policy_default_max_invalid_fraction"] == pytest.approx(0.0003)
 
 
+def test_run_resident_inline_source_dq_accepts_star_protected_mode() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-inline-source-dq",
+            "cosmetic_star",
+        ]
+    )
+
+    assert args.resident_inline_source_dq == "cosmetic_star"
+
+
 def test_run_resident_registration_auto_keeps_tile_path_off() -> None:
     args = _parse_cli(["run", "--plan", "plan.json", "--out", "run", "--backend", "cpu"])
 
