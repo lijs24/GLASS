@@ -425,6 +425,7 @@ def test_resident_runtime_preset_throughput_v4_native_completion_applies_default
     assert args.resident_native_completion_calibration == "on"
     assert args.resident_native_completion_wave_fill_us == 250
     assert args.resident_native_completion_wave_fill_mode == "single_wait"
+    assert args.resident_native_read_backend == "auto"
     assert args.resident_native_completion_queue_buffer_frames is None
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v4-native-completion"
     assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_read"] == "on"
@@ -433,6 +434,7 @@ def test_resident_runtime_preset_throughput_v4_native_completion_applies_default
         args._resident_runtime_preset_effective["applied"]["resident_native_completion_calibration"]
         == "on"
     )
+    assert args._resident_runtime_preset_effective["applied"]["resident_native_read_backend"] == "auto"
 
 
 def test_resident_runtime_preset_defaults_to_throughput_v4_native_completion() -> None:
@@ -450,6 +452,7 @@ def test_resident_runtime_preset_defaults_to_throughput_v4_native_completion() -
     assert args.resident_native_completion_calibration == "on"
     assert args.resident_native_completion_wave_fill_us == 250
     assert args.resident_native_completion_wave_fill_mode == "single_wait"
+    assert args.resident_native_read_backend == "auto"
     assert args.resident_native_completion_queue_buffer_frames is None
     assert args.resident_native_queue_read == "on"
     assert args.resident_native_queue_drain_mode == "thread"
@@ -460,6 +463,7 @@ def test_resident_runtime_preset_defaults_to_throughput_v4_native_completion() -
         args._resident_runtime_preset_effective["applied"]["resident_native_completion_calibration"]
         == "on"
     )
+    assert args._resident_runtime_preset_effective["applied"]["resident_native_read_backend"] == "auto"
 
 
 def test_resident_runtime_preset_respects_explicit_completion_wave_fill_mode() -> None:
@@ -519,6 +523,33 @@ def test_resident_runtime_preset_respects_explicit_completion_wave_fill_us() -> 
             "resident_native_completion_wave_fill_us"
         ]
         == 25
+    )
+
+
+def test_resident_runtime_preset_respects_explicit_native_read_backend() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "throughput-v4-native-completion",
+            "--resident-native-read-backend",
+            "win32_sequential_scan",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_native_read_backend == "win32_sequential_scan"
+    assert "resident_native_read_backend" not in args._resident_runtime_preset_effective["applied"]
+    assert (
+        args._resident_runtime_preset_effective["explicit_overrides"][
+            "resident_native_read_backend"
+        ]
+        == "win32_sequential_scan"
     )
 
 

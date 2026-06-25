@@ -455,6 +455,19 @@ high-rejection, and DQ FITS outputs. Gate682 remains the timing baseline:
 Gate683 completed in `11.860965099884197 s` versus Gate682
 `11.735124099999666 s`, elapsed ratio `1.0107234485815566`.
 
+S2-Gate 684 formalizes native raw-FITS read backend selection for resident
+native calibration. `--resident-native-read-backend` accepts `auto`,
+`std_ifstream`, or `win32_sequential_scan`; the default throughput-v4 preset
+records `auto`, and `auto` resolves to `std_ifstream`. The Windows sequential
+reader remains an explicit A/B backend. The real 200-light warm default run
+`C:\glass_runs\phase2_s2_gate684_native_read_backend_policy\runs_20260626_211500\default_auto_std_warm`
+reported `native_path_calibration_read_backend_policy=auto` and
+`native_path_calibration_read_backend=std_ifstream`, passed mainline and
+regression gates against Gate682, and produced bitwise-identical master,
+weight, coverage, low-rejection, high-rejection, and DQ FITS outputs. Runtime
+compare selected Gate684 at `11.66652269999031 s` versus Gate682
+`11.735124099999666 s`, elapsed ratio `0.9941541819732985`.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

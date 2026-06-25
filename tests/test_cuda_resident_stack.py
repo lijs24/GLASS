@@ -355,11 +355,36 @@ def test_resident_stack_calibrates_u16be_paths_completion_queue_on_gpu_like_cpu(
     assert timing["native_path_host_buffer_pinned"] is True
     assert timing["raw_h2d_bytes"] == 2 * 4 * 5 * 2
     assert timing["native_path_read_bytes"] == 2 * 4 * 5 * 2
-    expected_read_backend = "win32_sequential_scan" if os.name == "nt" else "std_ifstream"
-    assert timing["native_path_read_backend"] == expected_read_backend
-    assert timing["native_completion_read_backend"] == expected_read_backend
+    assert timing["native_path_read_backend_policy"] == "auto"
+    assert timing["native_completion_read_backend_policy"] == "auto"
+    assert timing["native_path_read_backend"] == "std_ifstream"
+    assert timing["native_completion_read_backend"] == "std_ifstream"
     assert np.allclose(master, cpu_master, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, np.full((4, 5), len(paths), dtype=np.float32))
+    if os.name == "nt":
+        win32_policy = asdict(policy)
+        win32_policy["native_completion_read_backend"] = "win32_sequential_scan"
+        win32_stack = module.ResidentCalibratedStack(len(paths), 4, 5)
+        win32_stack.set_calibration_masters(bias=bias, dark=dark, flat=flat)
+        win32_timing = win32_stack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed(
+            [0, 1],
+            paths,
+            [spec.data_offset for spec in specs],
+            [spec.width * spec.height * 2 for spec in specs],
+            [60.0, 60.0],
+            [60.0, 60.0],
+            2,
+            4,
+            2,
+            win32_policy,
+        )
+        win32_master, win32_weight_map = win32_stack.integrate_mean()
+        assert win32_timing["native_path_read_backend_policy"] == "win32_sequential_scan"
+        assert win32_timing["native_completion_read_backend_policy"] == "win32_sequential_scan"
+        assert win32_timing["native_path_read_backend"] == "win32_sequential_scan"
+        assert win32_timing["native_completion_read_backend"] == "win32_sequential_scan"
+        assert np.allclose(win32_master, cpu_master, rtol=1e-5, atol=1e-5)
+        assert np.allclose(win32_weight_map, np.full((4, 5), len(paths), dtype=np.float32))
 
 
 def test_resident_stack_tile_local_mean_matches_cpu_reference():

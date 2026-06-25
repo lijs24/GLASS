@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from threading import Event
 
@@ -7744,12 +7743,11 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     assert io_pipeline["native_completion_calibration_completion_count"] == 2
     assert io_pipeline["native_completion_calibration_worker_count"] >= 1
     assert io_pipeline["native_completion_calibration_queue_buffer_count"] >= 2
-    expected_read_backend = "win32_sequential_scan" if os.name == "nt" else "std_ifstream"
-    assert io_pipeline["native_path_calibration_read_backend"] == expected_read_backend
-    assert (
-        artifact["resident_light_pipeline_profile"]["native_completion"]["read_backend"]
-        == expected_read_backend
-    )
+    assert io_pipeline["native_path_calibration_read_backend_policy"] == "auto"
+    assert io_pipeline["native_path_calibration_read_backend"] == "std_ifstream"
+    native_completion_profile = artifact["resident_light_pipeline_profile"]["native_completion"]
+    assert native_completion_profile["read_backend_policy"] == "auto"
+    assert native_completion_profile["read_backend"] == "std_ifstream"
     assert io_pipeline["native_completion_queue_buffer_policy_source"] == "runtime_auto_base"
     assert io_pipeline["native_completion_queue_buffer_base_frames"] >= 2
     assert io_pipeline["native_completion_queue_buffer_requested_frames"] is None

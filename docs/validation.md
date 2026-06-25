@@ -636,6 +636,19 @@ Current Phase 2 latest mainline acceptance:
   versus Gate682 `11.735124099999666 s`, elapsed ratio
   `1.0107234485815566`. Direct SHA256 comparison showed bitwise-identical
   master, weight, coverage, low-rejection, high-rejection, and DQ maps.
+- Gate684 formalizes the native read backend as a resident execution policy.
+  `--resident-native-read-backend` accepts `auto`, `std_ifstream`, or
+  `win32_sequential_scan`; the default throughput-v4 preset records `auto`,
+  which resolves to `std_ifstream`. The real 200-light warm default run at
+  `C:\glass_runs\phase2_s2_gate684_native_read_backend_policy\runs_20260626_211500\default_auto_std_warm`
+  recorded `native_path_calibration_read_backend_policy=auto` and
+  `native_path_calibration_read_backend=std_ifstream`. Phase 2 mainline and
+  regression gates passed with failed checks `[]`, input lights `200`, and
+  active/masked frames `193 / 7`. Runtime compare selected Gate684 as best
+  observed: `11.66652269999031 s` versus Gate682 `11.735124099999666 s`,
+  elapsed ratio `0.9941541819732985`. Direct SHA256 comparison showed
+  bitwise-identical master, weight, coverage, low-rejection, high-rejection,
+  and DQ maps.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

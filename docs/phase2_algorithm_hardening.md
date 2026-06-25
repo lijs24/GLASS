@@ -1915,6 +1915,95 @@ Interpretation:
   the resident registration/warp orchestration path, where the evidence shows
   larger remaining gains than switching the raw-read syscall wrapper alone.
 
+### S2-Gate 684: Native Read Backend Policy
+
+Gate684 turns the Gate683 Windows raw-read experiment into an explicit resident
+native calibration policy. The native completion path now accepts a requested
+raw FITS payload backend: `auto`, `std_ifstream`, or `win32_sequential_scan`.
+The default `throughput-v4-native-completion` preset records
+`resident_native_read_backend=auto`, and `auto` resolves to the portable
+`std_ifstream` backend. The Windows sequential backend remains available as an
+explicit A/B path, but it is no longer the implicit Windows default.
+
+Implementation:
+
+- Refactored native raw FITS reads into a portable `std_ifstream` helper plus
+  the Gate683 Windows `CreateFileW + FILE_FLAG_SEQUENTIAL_SCAN` helper.
+- Added native completion policy dispatch for
+  `native_completion_read_backend`.
+- Added CLI/audit flag:
+  `--resident-native-read-backend auto|std_ifstream|win32_sequential_scan`.
+- Added run timing and resident I/O/profile fields:
+  - `resident_native_read_backend`;
+  - `native_path_calibration_read_backend_policy`;
+  - `resident_light_pipeline_profile.native_completion.read_backend_policy`.
+- Added tests proving:
+  - the default preset applies `auto`;
+  - explicit `win32_sequential_scan` is preserved as a user override;
+  - default native completion resolves to `std_ifstream`;
+  - explicit Win32 sequential still produces CPU-parity calibrated output on
+    Windows.
+
+Validation:
+
+- Native CUDA extension build:
+  `cmake --build build --target _glass_cuda_native --config Release` under the
+  Visual Studio 2022 developer environment.
+- Focused tests passed:
+  `6 passed in 2.24 s`.
+- Ruff on touched Python files passed.
+- Real 200-light default candidate:
+  `C:\glass_runs\phase2_s2_gate684_native_read_backend_policy\runs_20260626_211500\default_auto_std_warm`.
+- Runtime compare:
+  `C:\glass_runs\phase2_s2_gate684_native_read_backend_policy\gate684_runtime_compare.json`.
+  Best label `gate684_auto_std`, best elapsed `11.66652269999031 s`.
+- Regression gate versus Gate682 passed:
+  `C:\glass_runs\phase2_s2_gate684_native_read_backend_policy\gate684_regression_gate.json`.
+  Failed checks `[]`, elapsed ratio `0.9941541819732985`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate684_native_read_backend_policy\gate684_mainline_audit.json`.
+  Failed checks `[]`, input lights `200`, active/masked frames `193 / 7`.
+- Direct FITS SHA256 comparison against Gate682 passed:
+  `C:\glass_runs\phase2_s2_gate684_native_read_backend_policy\gate684_output_hash_compare.json`.
+  Master, weight, coverage, low-rejection, high-rejection, and DQ maps were
+  bitwise identical.
+
+Timing and telemetry:
+
+- Gate684 warm default:
+  - `resident_native_read_backend=auto`;
+  - `native_path_calibration_read_backend_policy=auto`;
+  - `native_path_calibration_read_backend=std_ifstream`;
+  - total elapsed `11.66652269999031 s`;
+  - `resident_light_read_upload_calibrate=3.229484500014223 s`;
+  - `resident_integration=3.3092179000377655 s`;
+  - consumer waves `153`, multi-frame waves `44`, max wave frames `4`.
+- Gate682 baseline:
+  - total elapsed `11.735124099999666 s`;
+  - `resident_light_read_upload_calibrate=3.2267182000214234 s`;
+  - consumer waves `157`, multi-frame waves `40`, max wave frames `3`.
+- Gate683 Win32 sequential:
+  - total elapsed `11.860965099884197 s`;
+  - `native_path_calibration_read_backend=win32_sequential_scan`;
+  - consumer waves `184`, multi-frame waves `14`.
+- A cold `auto -> std_ifstream` run in the same gate completed in
+  `34.373473399784416 s` with aggregate worker read time
+  `361.414487 s`. The immediate warm rerun returned to the 12-second class, so
+  that cold run is recorded as external I/O/cache state evidence, not as a
+  promoted performance result.
+
+Interpretation:
+
+- This is a default-path execution-policy gate, not a new image algorithm.
+- The default path now preserves the faster/stabler portable reader observed in
+  Gate682 while keeping Gate683's Windows reader available for future A/B
+  experiments.
+- The policy makes backend selection auditable in `run_timing.json`,
+  `resident_artifacts.json`, and the light-pipeline profile.
+- The next substantive optimization should use this policy to run clean I/O
+  matrices before implementing deeper multi-buffer overlap or moving additional
+  registration/warp orchestration onto resident CUDA.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

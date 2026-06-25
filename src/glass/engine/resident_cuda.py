@@ -7159,6 +7159,7 @@ def run_resident_calibration_integration(
     resident_native_completion_wave_fill_us: int = 0,
     resident_native_completion_wave_fill_mode: str = "multi_wait",
     resident_native_completion_queue_buffer_frames: int | None = None,
+    resident_native_read_backend: str = "auto",
     resident_native_batch_read: str = "off",
     resident_native_queue_read: str = "off",
     resident_native_queue_drain_mode: str | None = None,
@@ -7389,6 +7390,10 @@ def run_resident_calibration_integration(
         and int(resident_native_completion_queue_buffer_frames) < 1
     ):
         raise ValueError("resident_native_completion_queue_buffer_frames must be at least 1")
+    if resident_native_read_backend not in {"auto", "std_ifstream", "win32_sequential_scan"}:
+        raise ValueError(
+            "resident_native_read_backend must be auto, std_ifstream, or win32_sequential_scan"
+        )
     if ram_budget_gb is not None and float(ram_budget_gb) <= 0.0:
         raise ValueError("ram_budget_gb must be positive when provided")
     if resident_native_batch_read not in {"off", "on"}:
@@ -8134,6 +8139,7 @@ def run_resident_calibration_integration(
             native_path_calibration_file_read_s = 0.0
             native_path_calibration_total_s = 0.0
             native_path_calibration_read_backend: str | None = None
+            native_path_calibration_read_backend_policy = str(resident_native_read_backend)
             native_path_calibration_host_buffer_bytes = 0
             native_path_calibration_wave_h2d_elapsed_s = 0.0
             native_path_calibration_host_buffer_model: str | None = None
@@ -8509,6 +8515,9 @@ def run_resident_calibration_integration(
                                 native_completion_policy[
                                     "native_completion_consumer_wave_fill_mode"
                                 ] = str(native_completion_wave_fill_mode)
+                                native_completion_policy["native_completion_read_backend"] = str(
+                                    resident_native_read_backend
+                                )
                                 calibration_timing = (
                                     stack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed(
                                         batch_indices,
@@ -13506,6 +13515,7 @@ def run_resident_calibration_integration(
                 "native_path_calibration_file_read_s": float(native_path_calibration_file_read_s),
                 "native_path_calibration_total_s": float(native_path_calibration_total_s),
                 "native_path_calibration_read_backend": native_path_calibration_read_backend,
+                "native_path_calibration_read_backend_policy": native_path_calibration_read_backend_policy,
                 "native_path_calibration_host_buffer_bytes": int(native_path_calibration_host_buffer_bytes),
                 "native_path_calibration_wave_h2d_elapsed_s": float(
                     native_path_calibration_wave_h2d_elapsed_s

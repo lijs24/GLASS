@@ -2395,14 +2395,11 @@ RawFitsReadTiming read_raw_fits_bytes_into_ptr_win32_sequential(
 }
 #endif
 
-RawFitsReadTiming read_raw_fits_bytes_into_ptr(
+RawFitsReadTiming read_raw_fits_bytes_into_ptr_ifstream(
     const std::string& path,
     unsigned long long data_offset,
     std::size_t byte_count,
     unsigned char* out) {
-#ifdef _WIN32
-  return read_raw_fits_bytes_into_ptr_win32_sequential(path, data_offset, byte_count, out);
-#else
   using Clock = std::chrono::steady_clock;
   const auto total_start = Clock::now();
   const auto open_start = Clock::now();
@@ -2438,7 +2435,33 @@ RawFitsReadTiming read_raw_fits_bytes_into_ptr(
   timing.bytes_read = static_cast<unsigned long long>(byte_count);
   timing.backend = "std_ifstream";
   return timing;
+}
+
+RawFitsReadTiming read_raw_fits_bytes_into_ptr(
+    const std::string& path,
+    unsigned long long data_offset,
+    std::size_t byte_count,
+    unsigned char* out,
+    const std::string& backend_policy) {
+  if (backend_policy == "auto" || backend_policy == "std_ifstream") {
+    return read_raw_fits_bytes_into_ptr_ifstream(path, data_offset, byte_count, out);
+  }
+  if (backend_policy == "win32_sequential_scan") {
+#ifdef _WIN32
+    return read_raw_fits_bytes_into_ptr_win32_sequential(path, data_offset, byte_count, out);
+#else
+    throw std::runtime_error("win32_sequential_scan raw FITS read backend is only available on Windows");
 #endif
+  }
+  throw std::invalid_argument("unknown raw FITS read backend policy: " + backend_policy);
+}
+
+RawFitsReadTiming read_raw_fits_bytes_into_ptr(
+    const std::string& path,
+    unsigned long long data_offset,
+    std::size_t byte_count,
+    unsigned char* out) {
+  return read_raw_fits_bytes_into_ptr(path, data_offset, byte_count, out, "auto");
 }
 
 py::dict read_simple_fits_raw_batch_into_u8(
@@ -7350,6 +7373,14 @@ class ResidentCalibratedStack {
       throw std::invalid_argument(
           "native_completion_consumer_wave_fill_mode must be multi_wait or single_wait");
     }
+    const std::string read_backend_policy =
+        dict_string(policy, "native_completion_read_backend", "auto");
+    if (read_backend_policy != "auto" &&
+        read_backend_policy != "std_ifstream" &&
+        read_backend_policy != "win32_sequential_scan") {
+      throw std::invalid_argument(
+          "native_completion_read_backend must be auto, std_ifstream, or win32_sequential_scan");
+    }
     const std::string consumer_wave_fill_policy =
         consumer_wave_fill_wait_us <= 0
             ? "disabled"
@@ -7391,11 +7422,13 @@ class ResidentCalibratedStack {
       out["native_path_read_total_s"] = 0.0;
       out["native_path_read_bytes"] = 0;
       out["native_path_read_backend"] = "none";
+      out["native_path_read_backend_policy"] = read_backend_policy;
       out["native_completion_read_file_open_s"] = 0.0;
       out["native_completion_read_file_read_s"] = 0.0;
       out["native_completion_read_total_s"] = 0.0;
       out["native_completion_read_bytes"] = 0;
       out["native_completion_read_backend"] = "none";
+      out["native_completion_read_backend_policy"] = read_backend_policy;
       out["native_completion_submit_count"] = 0;
       out["native_completion_count"] = 0;
       out["native_completion_out_of_order_count"] = 0;
@@ -7664,7 +7697,8 @@ class ResidentCalibratedStack {
                   paths[job.frame_offset],
                   data_offsets[job.frame_offset],
                   raw_frame_bytes,
-                  host_buffers[job.buffer_index].get());
+                  host_buffers[job.buffer_index].get(),
+                  read_backend_policy);
             } catch (const std::exception& exc) {
               result.error = exc.what();
             } catch (...) {
@@ -7922,11 +7956,13 @@ class ResidentCalibratedStack {
     out["native_path_read_total_s"] = native_total_read_s;
     out["native_path_read_bytes"] = native_bytes_read;
     out["native_path_read_backend"] = native_read_backend.empty() ? "unknown" : native_read_backend;
+    out["native_path_read_backend_policy"] = read_backend_policy;
     out["native_completion_read_file_open_s"] = native_open_s;
     out["native_completion_read_file_read_s"] = native_read_s;
     out["native_completion_read_total_s"] = native_total_read_s;
     out["native_completion_read_bytes"] = native_bytes_read;
     out["native_completion_read_backend"] = native_read_backend.empty() ? "unknown" : native_read_backend;
+    out["native_completion_read_backend_policy"] = read_backend_policy;
     out["native_completion_submit_count"] = submit_count;
     out["native_completion_count"] = completion_count;
     out["native_completion_out_of_order_count"] = out_of_order_count;
