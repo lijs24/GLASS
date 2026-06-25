@@ -495,6 +495,20 @@ coverage, low-rejection, high-rejection, and DQ maps versus Gate685 while
 reducing resident integration from `3.3138477000175044 s` to
 `3.2561724999686703 s` in the recorded run.
 
+S2-Gate 687 refines the same guarded path by splitting final accumulation after
+`allow_rejection` is known. When the guard disables rejection, the resident
+hardened CUDA kernel now accumulates all finite valid samples without per-sample
+low/high threshold checks. When rejection is allowed, the kernel runs the same
+threshold tests as before without the redundant runtime `allow_rejection`
+condition. Native profiles record
+`rejection_guard_no_reject_accumulation_branch_enabled=true` and
+`rejection_guard_no_reject_accumulation_model=
+skip_threshold_checks_when_rejection_guard_disallows_or_no_candidates`. The real
+200-light Gate687 run produced byte-identical master, weight, coverage,
+low-rejection, high-rejection, and DQ maps versus Gate686 while reducing
+resident integration from `3.2561724999686703 s` to `3.234628599951975 s` in the
+recorded run.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

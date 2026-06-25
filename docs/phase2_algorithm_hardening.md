@@ -2178,6 +2178,90 @@ Interpretation:
   segmented order-statistic reducer that reduces per-thread local-memory
   pressure and global frame-axis rescans without changing CPU-baseline parity.
 
+### S2-Gate 687: No-Rejection Accumulation Branch
+
+Gate687 keeps working on the same resident hardened winsorized CUDA reducer, but
+only in the exact case where the existing rejection guard has already decided
+that no samples may be rejected. Before this gate, the final accumulation loop
+still evaluated `allow_rejection && value < low_threshold` and
+`allow_rejection && value > high_threshold` for every valid sample. The new
+branch separates the no-rejection path and accumulates finite samples without
+threshold checks.
+
+Implementation:
+
+- In `glass_integrate_resident_hardened_winsorized_sigma_f32_kernel`, split the
+  final accumulation into:
+  - a no-rejection branch for `allow_rejection=false`;
+  - a rejection branch for `allow_rejection=true`.
+- The no-rejection branch preserves the same sample order and weighting used by
+  the previous guarded loop:
+  - unit-positive reuse and mask branches accumulate unit weights;
+  - weighted fallback accumulates `value * weight` in frame-axis order.
+- The rejection branch keeps the same low/high threshold semantics while
+  removing the now-constant `allow_rejection` condition from each sample test.
+- Native profiles now record:
+  - `rejection_guard_no_reject_accumulation_branch_enabled=true`;
+  - `rejection_guard_no_reject_accumulation_model=
+    skip_threshold_checks_when_rejection_guard_disallows_or_no_candidates`.
+
+Validation:
+
+- Native CUDA extension build:
+  `cmake --build build --target _glass_cuda_native --config Release` under the
+  Visual Studio 2022 developer environment.
+- Focused CUDA hardened winsorized tests:
+  `20 passed, 57 deselected in 3.11 s`.
+- Focused resident CLI hardened tests:
+  `2 passed in 0.90 s`.
+- Ruff on touched Python tests passed.
+- Full pytest passed:
+  `1426 passed in 66.99 s`.
+- Real 200-light default candidate:
+  `C:\glass_runs\phase2_s2_gate687_no_reject_accumulation_branch\runs_20260627_000000\default_no_reject_branch`.
+- Runtime compare:
+  `C:\glass_runs\phase2_s2_gate687_no_reject_accumulation_branch\gate687_runtime_compare.json`.
+  Gate687 recorded total elapsed `12.207209800020792 s` versus Gate686
+  `12.344183000386693 s`.
+- Regression gate versus Gate686 passed:
+  `C:\glass_runs\phase2_s2_gate687_no_reject_accumulation_branch\gate687_regression_gate.json`.
+  Failed checks `[]`, elapsed ratio `0.9889038261696533`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate687_no_reject_accumulation_branch\gate687_mainline_audit.json`.
+  Failed checks `[]`, input lights `200`, active frames `193`.
+- Direct FITS SHA256 and array comparisons against Gate686 passed:
+  `C:\glass_runs\phase2_s2_gate687_no_reject_accumulation_branch\gate687_output_hash_compare.json`;
+  `C:\glass_runs\phase2_s2_gate687_no_reject_accumulation_branch\gate687_output_array_compare.json`.
+  Master, weight, coverage, low-rejection, high-rejection, and DQ maps were
+  byte-identical and array-identical.
+
+Timing and telemetry:
+
+- Gate686 baseline:
+  - total elapsed `12.344183000386693 s`;
+  - resident integration `3.2561724999686703 s`;
+  - native hardened total `3.256090199924074 s`;
+  - native kernel sync `3.1232872 s`.
+- Gate687 candidate:
+  - total elapsed `12.207209800020792 s`;
+  - resident integration `3.234628599951975 s`;
+  - native hardened total `3.2345450000138953 s`;
+  - native kernel sync `3.1146121 s`;
+  - `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`;
+  - `rejection_guard_no_reject_accumulation_branch_enabled=true`.
+
+Interpretation:
+
+- This is an exact default-path kernel cleanup with byte-identical output on the
+  real 200-light benchmark.
+- The measured integration ratio is `0.9933836736177514` versus Gate686, while
+  total elapsed ratio is `0.9889038261696533`; single-run storage/cache variance
+  still affects the total.
+- The remaining large integration cost is still median/IQR order-statistic work
+  and repeated frame-axis scans. Further meaningful gains should come from a
+  deterministic cooperative or segmented reducer, or from native H2D/calibrate
+  overlap if reducer work becomes too large for one gate.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

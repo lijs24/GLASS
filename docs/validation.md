@@ -674,6 +674,18 @@ Current Phase 2 latest mainline acceptance:
   lights `200`, and active/masked frames `193 / 7`. Direct SHA256 and array
   comparisons showed byte-identical and array-identical master, weight,
   coverage, low-rejection, high-rejection, and DQ maps.
+- Gate687 adds a no-rejection final accumulation branch to the resident
+  hardened winsorized CUDA reducer. The real 200-light run at
+  `C:\glass_runs\phase2_s2_gate687_no_reject_accumulation_branch\runs_20260627_000000\default_no_reject_branch`
+  recorded
+  `rejection_guard_no_reject_accumulation_branch_enabled=true`, native kernel
+  sync `3.1146121 s`, resident integration `3.234628599951975 s`, and total
+  elapsed `12.207209800020792 s`. Runtime compare selected Gate687 over
+  Gate686 (`12.344183000386693 s`), elapsed ratio `0.9889038261696533`.
+  Phase 2 mainline and regression gates passed with failed checks `[]`, input
+  lights `200`, and active/masked frames `193 / 7`. Direct SHA256 and array
+  comparisons showed byte-identical and array-identical master, weight,
+  coverage, low-rejection, high-rejection, and DQ maps.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

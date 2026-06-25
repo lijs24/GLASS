@@ -4002,6 +4002,10 @@ def test_resident_stack_hardened_winsorized_sigma_honors_rejection_guard():
     assert timing["native_profile"]["rejection_guard_early_disallow_model"] == (
         "break_reject_count_when_fraction_or_min_samples_already_fails"
     )
+    assert timing["native_profile"]["rejection_guard_no_reject_accumulation_branch_enabled"] is True
+    assert timing["native_profile"]["rejection_guard_no_reject_accumulation_model"] == (
+        "skip_threshold_checks_when_rejection_guard_disallows_or_no_candidates"
+    )
     assert np.all(coverage == 4)
     assert np.sum(high_reject) == 0
 

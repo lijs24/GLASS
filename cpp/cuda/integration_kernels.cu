@@ -2507,14 +2507,53 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   float coverage = 0.0f;
   float low_reject = 0.0f;
   float high_reject = 0.0f;
-  if (ReuseLocalUnitSamples || ReuseSelectedUnitSamples) {
+  if (!allow_rejection) {
+    if (ReuseLocalUnitSamples || ReuseSelectedUnitSamples) {
+      for (int i = 0; i < count; ++i) {
+        const float value = ReuseLocalUnitSamples ? ordered_values.get(i) : values[i];
+        sum += value;
+        weight_sum += 1.0f;
+        coverage += 1.0f;
+      }
+    } else if (UnitPositiveWeights || UnitPositiveWeightMask) {
+      const std::size_t loop_count = UnitPositiveWeights ? active_frame_count : frame_count;
+      for (std::size_t sample_pos = 0; sample_pos < loop_count; ++sample_pos) {
+        const std::size_t frame =
+            UnitPositiveWeights ? static_cast<std::size_t>(active_indices[sample_pos]) : sample_pos;
+        if (UnitPositiveWeightMask && unit_positive_weight_mask[frame] == 0) {
+          continue;
+        }
+        const float value = stack[frame * pixels_per_frame + pixel];
+        if (!isfinite(value)) {
+          continue;
+        }
+        sum += value;
+        weight_sum += 1.0f;
+        coverage += 1.0f;
+      }
+    } else {
+      for (std::size_t frame = 0; frame < frame_count; ++frame) {
+        const float weight = weights[frame];
+        if (weight <= 0.0f || !isfinite(weight)) {
+          continue;
+        }
+        const float value = stack[frame * pixels_per_frame + pixel];
+        if (!isfinite(value)) {
+          continue;
+        }
+        sum += value * weight;
+        weight_sum += weight;
+        coverage += 1.0f;
+      }
+    }
+  } else if (ReuseLocalUnitSamples || ReuseSelectedUnitSamples) {
     for (int i = 0; i < count; ++i) {
       const float value = ReuseLocalUnitSamples ? ordered_values.get(i) : values[i];
-      if (allow_rejection && value < low_threshold) {
+      if (value < low_threshold) {
         low_reject += 1.0f;
         continue;
       }
-      if (allow_rejection && value > high_threshold) {
+      if (value > high_threshold) {
         high_reject += 1.0f;
         continue;
       }
@@ -2534,11 +2573,11 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
       if (!isfinite(value)) {
         continue;
       }
-      if (allow_rejection && value < low_threshold) {
+      if (value < low_threshold) {
         low_reject += 1.0f;
         continue;
       }
-      if (allow_rejection && value > high_threshold) {
+      if (value > high_threshold) {
         high_reject += 1.0f;
         continue;
       }
@@ -2556,11 +2595,11 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
       if (!isfinite(value)) {
         continue;
       }
-      if (allow_rejection && value < low_threshold) {
+      if (value < low_threshold) {
         low_reject += 1.0f;
         continue;
       }
-      if (allow_rejection && value > high_threshold) {
+      if (value > high_threshold) {
         high_reject += 1.0f;
         continue;
       }
