@@ -801,6 +801,80 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 650: Resident Component Stage Ledger
+
+Gate650 fixes a concrete resume/audit contract gap exposed by the Gate649 real
+200-light run. `run_state.json` already records resident component progress such
+as `resident_light_calibration`, `resident_registration`,
+`resident_local_normalization`, and `resident_integration`, but
+`resident_stage_ledger.json` still treated `resident_calibration` as
+`not_started` and appended `resident_light_calibration` as a zero-artifact
+stage. That made the ledger less useful as the boundary for future resident
+checkpoint/reentry work.
+
+Implementation:
+
+- Canonicalized `resident_light_calibration` to the resident ledger stage
+  `resident_calibration`.
+- Let `run_state.artifacts` drive known resident stage completion when the
+  artifact stage is defined in `RESIDENT_STAGE_ARTIFACTS`.
+- Kept the overlap guard: a stray file such as `calibration_artifacts.json`
+  alone still does not start a stage.
+- Prevented auxiliary artifact stages such as `resident_calibration_contract`
+  from being appended as standalone zero-artifact stages.
+- Added `glass resident-stage-ledger --run RUN [--out OUT] [--fail-on-missing]`
+  so the component ledger can be regenerated and used as a direct local gate,
+  instead of being visible only through `glass resume`.
+
+Focused validation:
+
+- Ruff over `src/glass/cli.py`, `src/glass/engine/resident_stage_ledger.py`, and
+  `tests/test_resident_stage_ledger.py`: passed.
+- Focused tests:
+  `tests/test_resident_stage_ledger.py`,
+  `tests/test_resident_resume.py`, and
+  `tests/test_resident_reentry_boundary.py`: `13 passed`.
+- Tests cover the artifact-overlap guard, component-stage canonicalization,
+  auxiliary artifact-stage suppression, and the new CLI writer.
+
+Real 200-light artifact replay:
+
+- Replay root:
+  `C:\glass_runs\phase2_s2_gate650_component_stage_ledger\runs_20260625_220000\gate649_component_ledger_replay`.
+- Source evidence: the Gate649 real 200-light run artifacts from
+  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\candidate_from_calibration_boundary`.
+- Old Gate649 ledger behavior:
+  `resident_calibration=not_started`,
+  `resident_light_calibration` present as a zero-artifact complete stage,
+  `complete_stage_count=16`, `expected_artifact_count=24`,
+  `missing_artifact_count=0`.
+- Gate650 ledger behavior:
+  `resident_calibration=complete`,
+  `resident_light_calibration` absent,
+  `resident_calibration_contract` absent as a standalone stage,
+  `complete_stage_count=18`, `expected_artifact_count=27`,
+  `missing_artifact_count=0`, `can_noop_resume=true`.
+- New CLI command:
+  `glass resident-stage-ledger --run C:\glass_runs\phase2_s2_gate650_component_stage_ledger\runs_20260625_220000\gate649_component_ledger_replay --out C:\glass_runs\phase2_s2_gate650_component_stage_ledger\runs_20260625_220000\gate650_component_stage_ledger_cli.json --fail-on-missing`
+  returned exit code `0`.
+- `glass resume --run` on the same replay bundle returned
+  `resume_action=noop_complete` and repeated no pipeline stages.
+- Phase 2 mainline audit against the full Gate649 real run passed with
+  `200` lights, `193` active frames, `7` masked frames, and
+  `95.12553269140832x` speedup versus the black-box reference.
+
+Interpretation:
+
+- This is a resident resume/checkpoint framework gate, not a speedup gate.
+- The change removes a real contradiction between `run_state.json` and
+  `resident_stage_ledger.json`, making the ledger a stronger boundary for
+  future calibration/admission split and partial reentry work.
+- Pixel math, frame admission, registration, warp, LN, DQ, rejection, and
+  output maps are unchanged.
+- The next substantive gate should use this cleaner component ledger to split
+  the resident monolithic stage further or attack the measured hot components:
+  `light_read_upload_calibrate` and `resident_integration`.
+
 ### S2-Gate 649: Resident Calibration Boundary Reentry
 
 Gate649 turns the Gate648 resident calibration boundary from audit evidence

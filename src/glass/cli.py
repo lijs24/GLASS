@@ -61,7 +61,10 @@ from glass.engine.resident_reentry_boundary import (
     build_resident_reentry_boundary,
     write_resident_reentry_boundary,
 )
-from glass.engine.resident_stage_ledger import write_resident_stage_ledger
+from glass.engine.resident_stage_ledger import (
+    build_resident_stage_ledger,
+    write_resident_stage_ledger,
+)
 from glass.engine.resident_source_dq_strategy import build_resident_source_dq_strategy
 from glass.engine.warp import warp_registered_frames
 from glass.engine.resume import resume_summary
@@ -5308,6 +5311,26 @@ def cmd_resident_calibration_artifacts(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_resident_stage_ledger(args: argparse.Namespace) -> int:
+    payload = build_resident_stage_ledger(args.run)
+    out = Path(args.out) if args.out else Path(args.run) / "resident_stage_ledger.json"
+    write_json(out, payload)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "resident_run": payload.get("resident_run"),
+            "complete_stage_count": summary.get("complete_stage_count"),
+            "expected_artifact_count": summary.get("expected_artifact_count"),
+            "missing_artifact_count": summary.get("missing_artifact_count"),
+            "can_noop_resume": summary.get("can_noop_resume"),
+            "out": str(out),
+        }
+    )
+    has_missing = bool(summary.get("missing_artifact_count"))
+    return 0 if not has_missing or not args.fail_on_missing else 2
+
+
 def cmd_resident_reentry_boundary(args: argparse.Namespace) -> int:
     payload = build_resident_reentry_boundary(args.run)
     out = Path(args.out) if args.out else Path(args.run) / "resident_reentry_boundary.json"
@@ -10172,6 +10195,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="output calibration_artifacts JSON; defaults to RUN/calibration_artifacts.json",
     )
     resident_calibration_artifacts.set_defaults(func=cmd_resident_calibration_artifacts)
+
+    resident_stage_ledger = sub.add_parser(
+        "resident-stage-ledger",
+        help="write resident CUDA stage-ledger evidence from cached run artifacts",
+    )
+    resident_stage_ledger.add_argument(
+        "--run",
+        required=True,
+        help="GLASS resident run directory",
+    )
+    resident_stage_ledger.add_argument(
+        "--out",
+        help="output stage-ledger JSON; defaults to RUN/resident_stage_ledger.json",
+    )
+    resident_stage_ledger.add_argument(
+        "--fail-on-missing",
+        action="store_true",
+        help="return exit code 2 when started resident stages are missing required artifacts",
+    )
+    resident_stage_ledger.set_defaults(func=cmd_resident_stage_ledger)
 
     resident_reentry_boundary = sub.add_parser(
         "resident-reentry-boundary",

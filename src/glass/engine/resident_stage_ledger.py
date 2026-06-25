@@ -50,6 +50,9 @@ RESIDENT_STAGE_ARTIFACTS: dict[str, tuple[str, ...]] = {
 }
 
 RESIDENT_STAGE_ORDER: tuple[str, ...] = tuple(RESIDENT_STAGE_ARTIFACTS)
+RESIDENT_STAGE_ALIASES: dict[str, str] = {
+    "resident_light_calibration": "resident_calibration",
+}
 
 
 def _read_json_if_exists(path: Path) -> dict[str, Any]:
@@ -92,7 +95,25 @@ def _state_completed_stages(state: dict[str, Any]) -> set[str]:
     completed = state.get("completed_stages")
     if not isinstance(completed, list):
         return set()
-    return {str(stage) for stage in completed if str(stage)}
+    return {_canonical_stage(str(stage)) for stage in completed if str(stage)}
+
+
+def _canonical_stage(stage: str) -> str:
+    return RESIDENT_STAGE_ALIASES.get(stage, stage)
+
+
+def _state_artifact_stages(state: dict[str, Any]) -> set[str]:
+    artifacts = state.get("artifacts")
+    if not isinstance(artifacts, list):
+        return set()
+    stages: set[str] = set()
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        stage = artifact.get("stage")
+        if isinstance(stage, str) and stage:
+            stages.add(_canonical_stage(stage))
+    return stages
 
 
 def _artifact_rows(run: Path, stage: str, started: bool) -> list[dict[str, Any]]:
@@ -139,6 +160,7 @@ def build_resident_stage_ledger(
     timing_payload = _dict_from_timing(timing, run)
     timing_rows = _timing_by_stage(timing_payload)
     completed_stages = _state_completed_stages(state_payload)
+    artifact_stages = _state_artifact_stages(state_payload)
     failed_stage = state_payload.get("failed_stage")
     resident_run = (
         timing_payload.get("memory_mode") == "resident"
@@ -146,9 +168,13 @@ def build_resident_stage_ledger(
         or _state_mentions_resident(state_payload)
     )
     stage_names = list(RESIDENT_STAGE_ORDER)
-    for stage in list(timing_rows) + sorted(completed_stages):
-        if stage.startswith("resident_") and stage not in stage_names:
-            stage_names.append(stage)
+    known_artifact_stages = {
+        stage for stage in artifact_stages if stage in RESIDENT_STAGE_ARTIFACTS
+    }
+    for stage in list(timing_rows) + sorted(completed_stages | known_artifact_stages):
+        canonical_stage = _canonical_stage(stage)
+        if canonical_stage.startswith("resident_") and canonical_stage not in stage_names:
+            stage_names.append(canonical_stage)
 
     stage_rows: list[dict[str, Any]] = []
     expected_artifacts: list[dict[str, Any]] = []
@@ -156,7 +182,7 @@ def build_resident_stage_ledger(
     for index, stage in enumerate(stage_names):
         timing_row = timing_rows.get(stage, {})
         timing_status = timing_row.get("status")
-        started = stage in completed_stages or stage in timing_rows
+        started = stage in completed_stages or stage in artifact_stages or stage in timing_rows
         artifacts = _artifact_rows(run, stage, started)
         required = [row for row in artifacts if row["required_for_resume"]]
         missing = [row for row in required if not row["exists"]]

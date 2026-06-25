@@ -106,9 +106,9 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 649.
+- Gate: S2-Gate 650.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000`.
+  `C:\glass_runs\phase2_s2_gate650_component_stage_ledger\runs_20260625_220000`.
 - GLASS run:
   `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\candidate_from_calibration_boundary`.
 - GLASS elapsed time: `11.485255000297911 s`.
@@ -182,6 +182,17 @@ Current Phase 2 latest mainline acceptance:
   final `resume_action=noop_complete`. Latest ledger evidence records `16`
   started stages, `16` complete stages, `24` expected artifact rows, `0`
   missing artifact rows, and `can_noop_resume=true`.
+- Gate650 fixes the resident component-stage ledger used by resume and future
+  checkpoint boundaries. The Gate649 real run had contradictory ledger evidence:
+  `resident_calibration=not_started` while `run_state.json` contained
+  `resident_light_calibration` and resident calibration artifacts. The Gate650
+  replay canonicalizes `resident_light_calibration` to `resident_calibration`,
+  suppresses auxiliary artifact stages such as
+  `resident_calibration_contract`, and records `resident_calibration=complete`,
+  `18` complete stages, `27` expected artifact rows, `0` missing artifact rows,
+  and `can_noop_resume=true`. The new `glass resident-stage-ledger` command
+  returned exit code `0` with `--fail-on-missing`, and `glass resume` on the
+  replay bundle returned `resume_action=noop_complete`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
@@ -195,7 +206,7 @@ Current Phase 2 latest mainline acceptance:
 - Acceptance audit:
   `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\gate649_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\gate649_phase2_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate650_component_stage_ledger\runs_20260625_220000\gate650_phase2_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 
