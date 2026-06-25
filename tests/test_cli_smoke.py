@@ -10,6 +10,7 @@ from glass.cli import _apply_resident_runtime_preset
 from glass.cli import _resolve_execution_defaults
 from glass.cli import _resolve_resident_integration_rejection_default
 from glass.cli import _resolve_resident_fits_read_mode_default
+from glass.cli import _resolve_resident_inline_source_dq_admission_policy
 from glass.cli import _resolve_resident_inline_source_dq_policy
 from glass.cli import _resolve_resident_local_normalization_default
 from glass.cli import _resolve_resident_registration_default
@@ -766,6 +767,72 @@ def test_run_non_star_inline_source_dq_does_not_promote_catalog_determinism() ->
     assert resolution["source"] == "not_applicable"
     assert args.resident_star_catalog_deterministic is False
     assert args.resident_source_dq_star_catalog_deterministic is False
+
+
+def test_run_inline_cuda_source_dq_defaults_to_active_registered_admission() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-inline-source-dq",
+            "cosmetic_star_cuda",
+        ]
+    )
+
+    resolution = _resolve_resident_inline_source_dq_admission_policy(args)
+
+    assert resolution["requested"] == "all"
+    assert resolution["effective"] == "active_registered"
+    assert resolution["explicit"] is False
+    assert resolution["source"] == "cuda_inline_default"
+    assert args.resident_inline_source_dq_admission == "active_registered"
+
+
+def test_run_inline_cuda_source_dq_explicit_all_admission_is_preserved() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-inline-source-dq",
+            "cosmetic_cuda",
+            "--resident-inline-source-dq-admission",
+            "all",
+        ]
+    )
+
+    resolution = _resolve_resident_inline_source_dq_admission_policy(args)
+
+    assert resolution["requested"] == "all"
+    assert resolution["effective"] == "all"
+    assert resolution["explicit"] is True
+    assert resolution["source"] == "explicit"
+    assert args.resident_inline_source_dq_admission == "all"
+
+
+def test_run_non_cuda_source_dq_keeps_legacy_all_admission_default() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-inline-source-dq",
+            "cosmetic_star",
+        ]
+    )
+
+    resolution = _resolve_resident_inline_source_dq_admission_policy(args)
+
+    assert resolution["effective"] == "all"
+    assert resolution["source"] == "legacy_default"
+    assert args.resident_inline_source_dq_admission == "all"
 
 
 def test_run_resident_registration_auto_keeps_tile_path_off() -> None:

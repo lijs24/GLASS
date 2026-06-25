@@ -350,7 +350,9 @@ RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS = {
     "diagnostic": 0.02,
 }
 DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION = "all"
+DEFAULT_RESIDENT_INLINE_CUDA_SOURCE_DQ_ADMISSION = "active_registered"
 RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS = ("all", "active_registered")
+RESIDENT_INLINE_SOURCE_DQ_CUDA_MODES = ("cosmetic_cuda", "cosmetic_star_cuda")
 
 
 class RegistrationAdmissionBlocked(RuntimeError):
@@ -991,6 +993,46 @@ def _resolve_resident_inline_source_dq_policy(args: argparse.Namespace) -> dict[
     return resolution
 
 
+def _resolve_resident_inline_source_dq_admission_policy(args: argparse.Namespace) -> dict[str, object]:
+    inline_mode = str(getattr(args, "resident_inline_source_dq", "off") or "off")
+    requested = str(
+        getattr(args, "resident_inline_source_dq_admission", DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION)
+        or DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION
+    )
+    if requested not in RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS:
+        choices = ", ".join(RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS)
+        raise ValueError(f"resident_inline_source_dq_admission must be one of: {choices}")
+    explicit = _explicit_option(args, "--resident-inline-source-dq-admission")
+    if explicit:
+        effective = requested
+        source = "explicit"
+        reason = "user_selected_admission"
+    elif inline_mode in RESIDENT_INLINE_SOURCE_DQ_CUDA_MODES:
+        effective = DEFAULT_RESIDENT_INLINE_CUDA_SOURCE_DQ_ADMISSION
+        source = "cuda_inline_default"
+        reason = "deferred_cuda_source_dq_should_follow_active_registered_frame_mask"
+    else:
+        effective = requested
+        source = "legacy_default"
+        reason = "non_cuda_inline_source_dq_or_disabled"
+    args.resident_inline_source_dq_admission = effective
+    resolution = {
+        "schema_version": 1,
+        "mode": inline_mode,
+        "requested": requested,
+        "effective": effective,
+        "explicit": explicit,
+        "source": source,
+        "reason": reason,
+        "default": DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
+        "cuda_default": DEFAULT_RESIDENT_INLINE_CUDA_SOURCE_DQ_ADMISSION,
+        "cuda_modes": list(RESIDENT_INLINE_SOURCE_DQ_CUDA_MODES),
+        "escape_hatch": "--resident-inline-source-dq-admission all",
+    }
+    args._resident_inline_source_dq_admission_effective = resolution
+    return resolution
+
+
 def _resolve_resident_source_dq_star_catalog_policy(args: argparse.Namespace) -> dict[str, object]:
     inline_mode = str(getattr(args, "resident_inline_source_dq", "off") or "off")
     global_catalog_flag = bool(getattr(args, "resident_star_catalog_deterministic", False))
@@ -1082,6 +1124,9 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     policy_resolution = getattr(args, "_resident_inline_source_dq_policy_effective", None)
     if isinstance(policy_resolution, dict):
         timing["resident_inline_source_dq_policy_effective"] = policy_resolution
+    admission_resolution = getattr(args, "_resident_inline_source_dq_admission_effective", None)
+    if isinstance(admission_resolution, dict):
+        timing["resident_inline_source_dq_admission_effective"] = admission_resolution
     source_dq_catalog_policy = getattr(args, "_resident_source_dq_star_catalog_policy", None)
     if isinstance(source_dq_catalog_policy, dict):
         timing["resident_source_dq_star_catalog_policy"] = source_dq_catalog_policy
@@ -1783,6 +1828,9 @@ def _write_resident_source_dq_strategy(
             "resident_inline_source_dq_admission",
             DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
         ),
+        resident_inline_source_dq_admission_policy_source=(
+            getattr(args, "_resident_inline_source_dq_admission_effective", {}) or {}
+        ).get("source"),
         resident_star_catalog_deterministic=bool(
             getattr(args, "resident_source_dq_star_catalog_deterministic", False)
         ),
@@ -3036,6 +3084,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     _resolve_resident_local_normalization_default(args, command="audit")
     _resolve_resident_warp_interpolation_default(args, command="audit")
     _resolve_resident_inline_source_dq_policy(args)
+    _resolve_resident_inline_source_dq_admission_policy(args)
     _resolve_resident_source_dq_star_catalog_policy(args)
     _write_run_command(out, args)
     if args.backend == "cuda" and not capabilities["cuda_available"]:
@@ -3188,6 +3237,9 @@ def cmd_audit(args: argparse.Namespace) -> int:
                     args.resident_inline_source_dq_max_invalid_fraction
                 ),
                 resident_inline_source_dq_admission=args.resident_inline_source_dq_admission,
+                resident_inline_source_dq_admission_policy_source=(
+                    args._resident_inline_source_dq_admission_effective.get("source")
+                ),
                 resident_source_dq_star_catalog_deterministic=(
                     args.resident_source_dq_star_catalog_deterministic
                 ),
@@ -3310,6 +3362,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     _resolve_resident_local_normalization_default(args, command="run")
     _resolve_resident_warp_interpolation_default(args, command="run")
     _resolve_resident_inline_source_dq_policy(args)
+    _resolve_resident_inline_source_dq_admission_policy(args)
     _resolve_resident_source_dq_star_catalog_policy(args)
     _seed_run_inputs(Path(args.out), args.plan)
     _write_run_command(Path(args.out), args)
@@ -3491,6 +3544,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                     args.resident_inline_source_dq_max_invalid_fraction
                 ),
                 resident_inline_source_dq_admission=args.resident_inline_source_dq_admission,
+                resident_inline_source_dq_admission_policy_source=(
+                    args._resident_inline_source_dq_admission_effective.get("source")
+                ),
                 resident_source_dq_star_catalog_deterministic=(
                     args.resident_source_dq_star_catalog_deterministic
                 ),
@@ -7179,8 +7235,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS,
         default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
         help=(
-            "cosmetic_cuda/cosmetic_star_cuda admission policy: all preserves legacy behavior; "
-            "active_registered applies deferred masks only to currently positive-weight registered frames"
+            "cosmetic_cuda/cosmetic_star_cuda admission policy: by default these CUDA modes resolve to "
+            "active_registered; explicit all preserves legacy behavior; active_registered applies deferred "
+            "masks only to currently positive-weight registered frames"
         ),
     )
     run.add_argument(
@@ -7892,8 +7949,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS,
         default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
         help=(
-            "cosmetic_cuda/cosmetic_star_cuda admission policy for audit: all preserves legacy behavior; "
-            "active_registered applies deferred masks only to currently positive-weight registered frames"
+            "cosmetic_cuda/cosmetic_star_cuda admission policy for audit: by default these CUDA modes resolve "
+            "to active_registered; explicit all preserves legacy behavior; active_registered applies deferred "
+            "masks only to currently positive-weight registered frames"
         ),
     )
     audit.add_argument(

@@ -801,6 +801,80 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
+
+Gate667 promotes the Gate660 active-registered admission policy from a manual
+flag into the default semantics for opt-in CUDA inline source-DQ routes. This
+keeps deferred source-DQ masks aligned with the current registered/positive
+frame set instead of spending source-DQ work on frames that registration or
+manual exclusion has already removed from integration. The change applies only
+to `cosmetic_cuda` and `cosmetic_star_cuda`; CPU inline source-DQ modes keep the
+legacy `all` admission default, and explicit
+`--resident-inline-source-dq-admission all` remains the compatibility escape
+hatch.
+
+Implementation:
+
+- Added a resident inline source-DQ admission resolver.
+- When `--resident-inline-source-dq cosmetic_cuda` or
+  `--resident-inline-source-dq cosmetic_star_cuda` is selected without an
+  explicit admission flag, GLASS now resolves admission to
+  `active_registered`.
+- Explicit `--resident-inline-source-dq-admission all` is preserved and
+  recorded as `source=explicit`.
+- Non-CUDA inline source-DQ modes keep `all` with `source=legacy_default`.
+- `run_timing.json`, `resident_artifacts.json`, and
+  `resident_source_dq_strategy.json` record the effective admission policy and
+  source.
+
+Validation:
+
+- Focused tests:
+  `5 passed`, covering CUDA default admission, explicit `all` preservation,
+  non-CUDA legacy default, strategy artifact fields, and a resident CUDA
+  `cosmetic_star_cuda` smoke without the manual admission flag.
+- Ruff on touched files: passed.
+- Full pytest: `1408 passed in 62.60 s`.
+- Real 200-light candidate without `--resident-star-catalog-deterministic` and
+  without `--resident-inline-source-dq-admission`:
+  `C:\glass_runs\phase2_s2_gate667_cuda_source_dq_active_default\runs_20260626_020000\star_cuda_default_admission`.
+- Candidate elapsed:
+  `19.542332700220868 s`, or `55.906376007386875x` versus the
+  `1092.541 s` black-box reference.
+- Candidate resident calibration/integration stage:
+  `17.822304400033318 s`.
+- Candidate records:
+  - `resident_inline_source_dq_admission_effective.source=cuda_inline_default`;
+  - `requested=all`, `effective=active_registered`, `explicit=false`;
+  - `escape_hatch=--resident-inline-source-dq-admission all`;
+  - `resident_inline_source_dq_star_catalog_deterministic=true` from the
+    Gate666 `cosmetic_star_cuda_default` catalog policy.
+- Source-DQ totals match Gate666:
+  - invalid/applied samples: `147013 / 147013`;
+  - status counts: `applied=10`, `skipped_high_invalid_fraction=183`,
+    `skipped_admission_policy=7`;
+  - source counts:
+    `resident_post_registration_pre_warp_cosmetic_star_cuda=192`,
+    `resident_post_registration_pre_warp_cosmetic_star_cuda_flush=8`.
+- Regression against Gate666:
+  `C:\glass_runs\phase2_s2_gate667_cuda_source_dq_active_default\runs_20260626_020000\gate667_vs_gate666_regression.json`.
+  It passed with elapsed ratio `1.001834568712481`,
+  `artifact_difference_count=0`, `frame_accounting_difference_count=0`,
+  `frame_signature_difference_count=0`, `registration_difference_count=0`,
+  `output_difference_count=0`, and `output_numerical_drift_count=0`.
+
+Interpretation:
+
+- This is a DQ/mask pipeline default-semantics gate, not report plumbing.
+- Opt-in CUDA source-DQ now defaults to the same admission model that Gate660
+  validated on real data, which removes another manual flag from the
+  repeat-safe positive source-DQ path.
+- The default science route still keeps resident source-DQ `off`; this gate
+  only changes behavior after a CUDA inline source-DQ detector is selected.
+- The next substantive gate should return to either source-DQ science-policy
+  promotion checks or the larger resident execution bottlenecks in
+  integration/rejection and read/upload/calibrate overlap.
+
 ### S2-Gate 666: Default Deterministic Star CUDA Source-DQ Catalog
 
 Gate666 promotes the Gate665 deterministic catalog fix from a manual flag into

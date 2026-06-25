@@ -102,6 +102,8 @@ def test_resident_source_dq_strategy_records_cuda_star_protected_inline_detector
         free_bytes=10_000,
         resident_inline_source_dq="cosmetic_star_cuda",
         resident_inline_source_dq_max_invalid_fraction=0.001,
+        resident_inline_source_dq_admission="active_registered",
+        resident_inline_source_dq_admission_policy_source="cuda_inline_default",
     )
 
     inline = strategy["inline_source_dq"]
@@ -118,6 +120,8 @@ def test_resident_source_dq_strategy_records_cuda_star_protected_inline_detector
         "resident_cuda_star_grid_top_nms_candidates_deterministic"
     )
     assert inline["high_fraction_guard_enabled"] is True
+    assert inline["admission"] == "active_registered"
+    assert inline["admission_policy_source"] == "cuda_inline_default"
     assert inline["count_only_preflight"] == (
         "ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frame"
     )

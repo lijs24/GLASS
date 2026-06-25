@@ -63,6 +63,7 @@ def build_resident_source_dq_strategy(
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
     resident_inline_source_dq_admission: str = "all",
+    resident_inline_source_dq_admission_policy_source: str | None = None,
     resident_star_catalog_deterministic: bool | None = None,
     resident_star_catalog_policy_source: str | None = None,
     artifact_type: str = "resident_source_dq_strategy",
@@ -215,6 +216,9 @@ def build_resident_source_dq_strategy(
         "cold_sigma": float(resident_inline_source_dq_cold_sigma),
         "max_invalid_fraction": float(resident_inline_source_dq_max_invalid_fraction),
         "admission": str(resident_inline_source_dq_admission),
+        "admission_policy_source": str(
+            resident_inline_source_dq_admission_policy_source or "unspecified"
+        ),
         "admission_semantics": (
             "all resident frames are eligible for inline cosmetic source-DQ"
             if str(resident_inline_source_dq_admission) == "all"

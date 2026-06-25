@@ -383,6 +383,22 @@ Current Phase 2 latest mainline acceptance:
   `skipped_admission_policy=7`), and passed regression versus Gate665 run A
   with elapsed ratio `0.9818901907545167`, zero artifact/frame/registration
   differences, zero output differences, and zero numerical drift.
+- Gate667 makes `active_registered` the default admission semantics for opt-in
+  CUDA inline source-DQ routes while preserving explicit
+  `--resident-inline-source-dq-admission all` as a compatibility escape hatch.
+  The real 200-light candidate omitted both
+  `--resident-star-catalog-deterministic` and
+  `--resident-inline-source-dq-admission`; it still recorded
+  `resident_inline_source_dq_admission_effective.source=cuda_inline_default`,
+  `requested=all`, `effective=active_registered`, `explicit=false`, and the
+  Gate666 deterministic catalog policy. The run at
+  `C:\glass_runs\phase2_s2_gate667_cuda_source_dq_active_default\runs_20260626_020000\star_cuda_default_admission`
+  completed in `19.542332700220868 s` (`55.906376007386875x` versus
+  `1092.541 s`), matched Gate666 source-DQ totals (`147013` invalid/applied,
+  status counts `applied=10`, `skipped_high_invalid_fraction=183`,
+  `skipped_admission_policy=7`), and passed regression versus Gate666 with
+  elapsed ratio `1.001834568712481`, zero artifact/frame/registration
+  differences, zero output differences, and zero numerical drift.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

@@ -7168,6 +7168,7 @@ def run_resident_calibration_integration(
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
     resident_inline_source_dq_admission: str = "all",
+    resident_inline_source_dq_admission_policy_source: str | None = None,
     resident_source_dq_star_catalog_deterministic: bool | None = None,
     resident_source_dq_star_catalog_policy_source: str | None = None,
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
@@ -14129,6 +14130,9 @@ def run_resident_calibration_integration(
                         "resident_inline_source_dq": resident_inline_source_dq,
                         "resident_inline_source_dq_policy": str(resident_inline_source_dq_policy),
                         "resident_inline_source_dq_admission": str(resident_inline_source_dq_admission),
+                        "resident_inline_source_dq_admission_policy_source": str(
+                            resident_inline_source_dq_admission_policy_source or "unspecified"
+                        ),
                         "resident_inline_source_dq_deferred_target_scope": (
                             "registered_active_positive_weight"
                             if resident_inline_source_dq_admission == "active_registered"
