@@ -63,7 +63,8 @@ def build_resident_source_dq_strategy(
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
     resident_inline_source_dq_admission: str = "all",
-    resident_star_catalog_deterministic: bool = False,
+    resident_star_catalog_deterministic: bool | None = None,
+    resident_star_catalog_policy_source: str | None = None,
     artifact_type: str = "resident_source_dq_strategy",
 ) -> dict[str, Any]:
     plan_payload, plan_path = _load_plan(plan)
@@ -123,6 +124,19 @@ def build_resident_source_dq_strategy(
         recommended_route = "generate_calibration_cache_allowed"
     else:
         recommended_route = "resident_in_vram_mask_streaming"
+    inline_mode = str(resident_inline_source_dq)
+    if inline_mode == "cosmetic_star_cuda":
+        if resident_star_catalog_deterministic is None:
+            source_dq_star_catalog_deterministic = True
+            source_dq_star_catalog_policy_source = "cosmetic_star_cuda_default"
+        else:
+            source_dq_star_catalog_deterministic = bool(resident_star_catalog_deterministic)
+            source_dq_star_catalog_policy_source = str(
+                resident_star_catalog_policy_source or "explicit_source_dq_star_catalog_policy"
+            )
+    else:
+        source_dq_star_catalog_deterministic = False
+        source_dq_star_catalog_policy_source = None
 
     disk_cache = {
         "passed": cache_passed,
@@ -152,44 +166,49 @@ def build_resident_source_dq_strategy(
         ),
     }
     inline_source_dq = {
-        "mode": str(resident_inline_source_dq),
-        "enabled": str(resident_inline_source_dq) != "off",
+        "mode": inline_mode,
+        "enabled": inline_mode != "off",
         "policy": str(resident_inline_source_dq_policy),
         "detector": (
             "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
-            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
+            if inline_mode == "cosmetic_star_cuda"
             else
             "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
-            if str(resident_inline_source_dq) == "cosmetic_cuda"
+            if inline_mode == "cosmetic_cuda"
             else "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
-            if str(resident_inline_source_dq) == "cosmetic_star"
+            if inline_mode == "cosmetic_star"
             else "glass.cpu.cosmetic.detect_isolated_cosmetic_defects"
-            if str(resident_inline_source_dq) == "cosmetic"
+            if inline_mode == "cosmetic"
             else None
         ),
         "threshold_source": (
             "cuda_resident_histogram_median_mad_scalar"
-            if str(resident_inline_source_dq) in {"cosmetic_cuda", "cosmetic_star_cuda"}
+            if inline_mode in {"cosmetic_cuda", "cosmetic_star_cuda"}
             else None
         ),
         "detector_execution": (
             "cuda_star_catalog_protected_isolated_threshold_apply"
-            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
+            if inline_mode == "cosmetic_star_cuda"
             else "cuda_isolated_threshold_apply"
-            if str(resident_inline_source_dq) == "cosmetic_cuda"
+            if inline_mode == "cosmetic_cuda"
             else None
         ),
         "star_catalog_deterministic": (
-            bool(resident_star_catalog_deterministic)
-            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
+            bool(source_dq_star_catalog_deterministic)
+            if inline_mode == "cosmetic_star_cuda"
+            else None
+        ),
+        "star_catalog_policy_source": (
+            source_dq_star_catalog_policy_source
+            if inline_mode == "cosmetic_star_cuda"
             else None
         ),
         "star_catalog_source": (
             "resident_cuda_star_grid_top_nms_candidates_deterministic"
-            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
-            and bool(resident_star_catalog_deterministic)
+            if inline_mode == "cosmetic_star_cuda"
+            and bool(source_dq_star_catalog_deterministic)
             else "resident_cuda_star_grid_top_nms_candidates"
-            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
+            if inline_mode == "cosmetic_star_cuda"
             else None
         ),
         "hot_sigma": float(resident_inline_source_dq_hot_sigma),

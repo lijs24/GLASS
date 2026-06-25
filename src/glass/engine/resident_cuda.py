@@ -7168,6 +7168,8 @@ def run_resident_calibration_integration(
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
     resident_inline_source_dq_admission: str = "all",
+    resident_source_dq_star_catalog_deterministic: bool | None = None,
+    resident_source_dq_star_catalog_policy_source: str | None = None,
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
     resident_fits_read_mode: str = "astropy",
     resident_fits_read_mode_resolution: dict[str, Any] | None = None,
@@ -7203,6 +7205,25 @@ def run_resident_calibration_integration(
         raise ValueError("resident_inline_source_dq_max_invalid_fraction must be non-negative")
     if resident_inline_source_dq_admission not in {"all", "active_registered"}:
         raise ValueError("resident_inline_source_dq_admission must be all or active_registered")
+    if resident_inline_source_dq == "cosmetic_star_cuda":
+        if resident_source_dq_star_catalog_deterministic is None:
+            source_dq_star_catalog_deterministic = True
+            source_dq_star_catalog_policy_source = (
+                "resident_star_catalog_deterministic_flag"
+                if bool(resident_star_catalog_deterministic)
+                else "cosmetic_star_cuda_default"
+            )
+        else:
+            source_dq_star_catalog_deterministic = bool(
+                resident_source_dq_star_catalog_deterministic
+            )
+            source_dq_star_catalog_policy_source = str(
+                resident_source_dq_star_catalog_policy_source
+                or "explicit_source_dq_star_catalog_policy"
+            )
+    else:
+        source_dq_star_catalog_deterministic = False
+        source_dq_star_catalog_policy_source = None
     if resident_winsorized_mode not in _RESIDENT_WINSORIZED_MODES:
         raise ValueError("resident_winsorized_mode must be auto, fast_approx, or hardened_cpu_parity")
     if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
@@ -8750,7 +8771,7 @@ def run_resident_calibration_integration(
                                 resident_inline_source_dq=resident_inline_source_dq,
                                 resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
                                 resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
-                                resident_star_catalog_deterministic=bool(resident_star_catalog_deterministic),
+                                resident_star_catalog_deterministic=bool(source_dq_star_catalog_deterministic),
                             )
                             if resident_inline_source_dq in {"cosmetic_cuda", "cosmetic_star_cuda"}
                             else {}
@@ -8781,7 +8802,7 @@ def run_resident_calibration_integration(
                                     resident_inline_source_dq=resident_inline_source_dq,
                                     resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
                                     resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
-                                    resident_star_catalog_deterministic=bool(resident_star_catalog_deterministic),
+                                    resident_star_catalog_deterministic=bool(source_dq_star_catalog_deterministic),
                                 )
                             if threshold_info is not None:
                                 threshold_item = {
@@ -8960,7 +8981,7 @@ def run_resident_calibration_integration(
                             resident_inline_source_dq=resident_inline_source_dq,
                             resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
                             resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
-                            resident_star_catalog_deterministic=bool(resident_star_catalog_deterministic),
+                            resident_star_catalog_deterministic=bool(source_dq_star_catalog_deterministic),
                         )
                         if threshold_info is not None:
                             threshold_item = {
@@ -14136,14 +14157,19 @@ def run_resident_calibration_integration(
                             else None
                         ),
                         "resident_inline_source_dq_star_catalog_deterministic": (
-                            bool(resident_star_catalog_deterministic)
+                            bool(source_dq_star_catalog_deterministic)
+                            if resident_inline_source_dq == "cosmetic_star_cuda"
+                            else None
+                        ),
+                        "resident_inline_source_dq_star_catalog_policy_source": (
+                            source_dq_star_catalog_policy_source
                             if resident_inline_source_dq == "cosmetic_star_cuda"
                             else None
                         ),
                         "resident_inline_source_dq_star_catalog_source": (
                             "resident_cuda_star_grid_top_nms_candidates_deterministic"
                             if resident_inline_source_dq == "cosmetic_star_cuda"
-                            and bool(resident_star_catalog_deterministic)
+                            and bool(source_dq_star_catalog_deterministic)
                             else "resident_cuda_star_grid_top_nms_candidates"
                             if resident_inline_source_dq == "cosmetic_star_cuda"
                             else None

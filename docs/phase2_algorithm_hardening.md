@@ -801,6 +801,81 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 666: Default Deterministic Star CUDA Source-DQ Catalog
+
+Gate666 promotes the Gate665 deterministic catalog fix from a manual flag into
+the default semantics of the opt-in `cosmetic_star_cuda` source-DQ route. The
+global resident registration catalog flag remains unchanged: this gate only
+changes the source-DQ catalog policy used by the star-protected inline
+cosmetic CUDA detector.
+
+Implementation:
+
+- Added a CLI source-DQ star-catalog policy resolver.
+- `--resident-inline-source-dq cosmetic_star_cuda` now defaults to
+  deterministic source-DQ star catalogs even when
+  `--resident-star-catalog-deterministic` is not supplied.
+- The global registration catalog determinism flag is not promoted by this
+  policy; non-source-DQ registration behavior remains controlled by the
+  existing flag and registration defaults.
+- `run_timing.json`, `resident_artifacts.json`, and
+  `resident_source_dq_strategy.json` record:
+  - `resident_source_dq_star_catalog_policy`;
+  - `resident_source_dq_star_catalog_deterministic`;
+  - `resident_inline_source_dq_star_catalog_policy_source`;
+  - deterministic catalog source provenance.
+- Programmatic strategy construction also defaults `cosmetic_star_cuda` to the
+  deterministic source-DQ catalog while retaining an explicit false override
+  for diagnostic A/B tests.
+
+Validation:
+
+- Focused tests:
+  `5 passed`, covering CLI default policy, non-star non-promotion, strategy
+  defaults, explicit strategy override, and the resident CUDA
+  `cosmetic_star_cuda` smoke without the manual deterministic flag.
+- Ruff on touched files: passed.
+- Full pytest: `1405 passed in 61.22 s`.
+- Real 200-light candidate without `--resident-star-catalog-deterministic`:
+  `C:\glass_runs\phase2_s2_gate666_star_cuda_default_deterministic\runs_20260626_010500\star_cuda_default_det`.
+- Candidate elapsed:
+  `19.5065466001397 s`, or `56.00894009563822x` versus the
+  `1092.541 s` black-box reference.
+- Candidate resident calibration/integration stage:
+  `17.784652900067158 s`.
+- Candidate records:
+  - `resident_source_dq_star_catalog_policy.source=cosmetic_star_cuda_default`;
+  - `global_resident_star_catalog_deterministic=false`;
+  - `resident_inline_source_dq_star_catalog_deterministic=true`;
+  - `resident_cuda_star_grid_top_nms_candidates_deterministic`.
+- Source-DQ totals match Gate665:
+  - invalid/applied samples: `147013 / 147013`;
+  - status counts: `applied=10`, `skipped_high_invalid_fraction=183`,
+    `skipped_admission_policy=7`;
+  - source counts:
+    `resident_post_registration_pre_warp_cosmetic_star_cuda=192`,
+    `resident_post_registration_pre_warp_cosmetic_star_cuda_flush=8`.
+- Regression against Gate665 deterministic run A:
+  `C:\glass_runs\phase2_s2_gate666_star_cuda_default_deterministic\runs_20260626_010500\gate666_vs_gate665_regression.json`.
+  It passed with elapsed ratio `0.9818901907545167`,
+  `artifact_difference_count=0`, `frame_accounting_difference_count=0`,
+  `frame_signature_difference_count=0`, `registration_difference_count=0`,
+  `output_difference_count=0`, and `output_numerical_drift_count=0`.
+
+Interpretation:
+
+- This is a DQ/mask pipeline default-semantics gate, not a report-only gate.
+- `cosmetic_star_cuda` remains opt-in and is still not promoted to the default
+  science route, but once selected it now uses the repeat-safe deterministic
+  source-DQ catalog by default.
+- This removes a user-facing footgun from the positive real-data source-DQ path
+  and keeps the result bitwise identical to Gate665's manually deterministic
+  path.
+- The next substantive gate should either evaluate science-policy promotion of
+  star-protected source-DQ against the default route, or return to execution
+  bottlenecks such as resident integration/rejection and read/upload/calibrate
+  overlap.
+
 ### S2-Gate 665: Deterministic Resident Star-Protected Source-DQ Catalog
 
 Gate665 closes the real repeat-determinism gap left by Gate664's opt-in

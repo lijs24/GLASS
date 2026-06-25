@@ -991,6 +991,35 @@ def _resolve_resident_inline_source_dq_policy(args: argparse.Namespace) -> dict[
     return resolution
 
 
+def _resolve_resident_source_dq_star_catalog_policy(args: argparse.Namespace) -> dict[str, object]:
+    inline_mode = str(getattr(args, "resident_inline_source_dq", "off") or "off")
+    global_catalog_flag = bool(getattr(args, "resident_star_catalog_deterministic", False))
+    if inline_mode == "cosmetic_star_cuda":
+        deterministic = True
+        source = (
+            "resident_star_catalog_deterministic_flag"
+            if global_catalog_flag
+            else "cosmetic_star_cuda_default"
+        )
+        source_dq_star_catalog_source = "resident_cuda_star_grid_top_nms_candidates_deterministic"
+    else:
+        deterministic = False
+        source = "not_applicable"
+        source_dq_star_catalog_source = None
+    resolution = {
+        "schema_version": 1,
+        "mode": inline_mode,
+        "deterministic": bool(deterministic),
+        "source": source,
+        "global_resident_star_catalog_deterministic": global_catalog_flag,
+        "star_catalog_source": source_dq_star_catalog_source,
+        "scope": "resident_inline_source_dq",
+    }
+    args.resident_source_dq_star_catalog_deterministic = bool(deterministic)
+    args._resident_source_dq_star_catalog_policy = resolution
+    return resolution
+
+
 def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) -> None:
     resolution = getattr(args, "_execution_default_resolution", None)
     if isinstance(resolution, dict):
@@ -1053,6 +1082,12 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     policy_resolution = getattr(args, "_resident_inline_source_dq_policy_effective", None)
     if isinstance(policy_resolution, dict):
         timing["resident_inline_source_dq_policy_effective"] = policy_resolution
+    source_dq_catalog_policy = getattr(args, "_resident_source_dq_star_catalog_policy", None)
+    if isinstance(source_dq_catalog_policy, dict):
+        timing["resident_source_dq_star_catalog_policy"] = source_dq_catalog_policy
+        timing["resident_source_dq_star_catalog_deterministic"] = source_dq_catalog_policy.get(
+            "deterministic"
+        )
     preset = getattr(args, "_resident_runtime_preset_effective", None)
     if isinstance(preset, dict):
         timing["resident_runtime_preset_effective"] = preset
@@ -1749,8 +1784,11 @@ def _write_resident_source_dq_strategy(
             DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
         ),
         resident_star_catalog_deterministic=bool(
-            getattr(args, "resident_star_catalog_deterministic", False)
+            getattr(args, "resident_source_dq_star_catalog_deterministic", False)
         ),
+        resident_star_catalog_policy_source=(
+            getattr(args, "_resident_source_dq_star_catalog_policy", {}) or {}
+        ).get("source"),
     )
     strategy_path = _resident_source_dq_strategy_path(run)
     write_json(strategy_path, strategy)
@@ -2998,6 +3036,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     _resolve_resident_local_normalization_default(args, command="audit")
     _resolve_resident_warp_interpolation_default(args, command="audit")
     _resolve_resident_inline_source_dq_policy(args)
+    _resolve_resident_source_dq_star_catalog_policy(args)
     _write_run_command(out, args)
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
@@ -3149,6 +3188,12 @@ def cmd_audit(args: argparse.Namespace) -> int:
                     args.resident_inline_source_dq_max_invalid_fraction
                 ),
                 resident_inline_source_dq_admission=args.resident_inline_source_dq_admission,
+                resident_source_dq_star_catalog_deterministic=(
+                    args.resident_source_dq_star_catalog_deterministic
+                ),
+                resident_source_dq_star_catalog_policy_source=(
+                    args._resident_source_dq_star_catalog_policy.get("source")
+                ),
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
@@ -3265,6 +3310,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     _resolve_resident_local_normalization_default(args, command="run")
     _resolve_resident_warp_interpolation_default(args, command="run")
     _resolve_resident_inline_source_dq_policy(args)
+    _resolve_resident_source_dq_star_catalog_policy(args)
     _seed_run_inputs(Path(args.out), args.plan)
     _write_run_command(Path(args.out), args)
     if args.memory_mode == "resident":
@@ -3445,6 +3491,12 @@ def cmd_run(args: argparse.Namespace) -> int:
                     args.resident_inline_source_dq_max_invalid_fraction
                 ),
                 resident_inline_source_dq_admission=args.resident_inline_source_dq_admission,
+                resident_source_dq_star_catalog_deterministic=(
+                    args.resident_source_dq_star_catalog_deterministic
+                ),
+                resident_source_dq_star_catalog_policy_source=(
+                    args._resident_source_dq_star_catalog_policy.get("source")
+                ),
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,

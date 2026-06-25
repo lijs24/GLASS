@@ -4149,7 +4149,6 @@ def test_cli_resident_cuda_run_accepts_inline_star_protected_cosmetic_cuda_sourc
             "8.0",
             "--resident-inline-source-dq-max-invalid-fraction",
             "0.01",
-            "--resident-star-catalog-deterministic",
             "--resident-runtime-preset",
             "manual",
             "--until-stage",
@@ -4195,6 +4194,9 @@ def test_cli_resident_cuda_run_accepts_inline_star_protected_cosmetic_cuda_sourc
         "cuda_star_catalog_protected_isolated_threshold_apply"
     )
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_star_catalog_deterministic"] is True
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_star_catalog_policy_source"] == (
+        "cosmetic_star_cuda_default"
+    )
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_star_catalog_source"] == (
         "resident_cuda_star_grid_top_nms_candidates_deterministic"
     )
@@ -4207,10 +4209,13 @@ def test_cli_resident_cuda_run_accepts_inline_star_protected_cosmetic_cuda_sourc
         "cuda_star_catalog_protected_isolated_threshold_apply"
     )
     assert strategy["inline_source_dq"]["star_catalog_deterministic"] is True
+    assert strategy["inline_source_dq"]["star_catalog_policy_source"] == "cosmetic_star_cuda_default"
     assert strategy["inline_source_dq"]["star_catalog_source"] == (
         "resident_cuda_star_grid_top_nms_candidates_deterministic"
     )
     assert timing["resident_inline_source_dq"] == "cosmetic_star_cuda"
+    assert timing["resident_source_dq_star_catalog_deterministic"] is True
+    assert timing["resident_source_dq_star_catalog_policy"]["source"] == "cosmetic_star_cuda_default"
     rows = source_dq["rows"]
     assert rows
     assert any(

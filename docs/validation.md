@@ -368,6 +368,21 @@ Current Phase 2 latest mainline acceptance:
   drift, and elapsed ratio `0.9935515642728923`. Run times were
   `19.866321900160983 s` and `19.738215200253762 s`, about `55x` faster than
   the `1092.541 s` black-box timing.
+- Gate666 makes that deterministic catalog the default semantics of the
+  opt-in `cosmetic_star_cuda` source-DQ route without promoting the global
+  registration catalog flag. The real 200-light candidate omitted
+  `--resident-star-catalog-deterministic` and still recorded
+  `resident_source_dq_star_catalog_policy.source=cosmetic_star_cuda_default`,
+  `global_resident_star_catalog_deterministic=false`,
+  `resident_inline_source_dq_star_catalog_deterministic=true`, and
+  `resident_cuda_star_grid_top_nms_candidates_deterministic`. The run at
+  `C:\glass_runs\phase2_s2_gate666_star_cuda_default_deterministic\runs_20260626_010500\star_cuda_default_det`
+  completed in `19.5065466001397 s` (`56.00894009563822x` versus
+  `1092.541 s`), matched Gate665 source-DQ totals (`147013` invalid/applied,
+  status counts `applied=10`, `skipped_high_invalid_fraction=183`,
+  `skipped_admission_policy=7`), and passed regression versus Gate665 run A
+  with elapsed ratio `0.9818901907545167`, zero artifact/frame/registration
+  differences, zero output differences, and zero numerical drift.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

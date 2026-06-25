@@ -13,6 +13,7 @@ from glass.cli import _resolve_resident_fits_read_mode_default
 from glass.cli import _resolve_resident_inline_source_dq_policy
 from glass.cli import _resolve_resident_local_normalization_default
 from glass.cli import _resolve_resident_registration_default
+from glass.cli import _resolve_resident_source_dq_star_catalog_policy
 from glass.cli import _resolve_resident_warp_interpolation_default
 from glass.cli import _write_resident_reference_admission
 from glass.cli import ResidentReferenceAdmissionBlocked
@@ -722,6 +723,49 @@ def test_run_resident_inline_source_dq_accepts_star_protected_cuda_mode() -> Non
     )
 
     assert args.resident_inline_source_dq == "cosmetic_star_cuda"
+
+
+def test_run_resident_inline_star_cuda_source_dq_defaults_to_deterministic_catalog() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-inline-source-dq",
+            "cosmetic_star_cuda",
+        ]
+    )
+
+    resolution = _resolve_resident_source_dq_star_catalog_policy(args)
+
+    assert resolution["deterministic"] is True
+    assert resolution["source"] == "cosmetic_star_cuda_default"
+    assert args.resident_star_catalog_deterministic is False
+    assert args.resident_source_dq_star_catalog_deterministic is True
+    assert resolution["star_catalog_source"] == "resident_cuda_star_grid_top_nms_candidates_deterministic"
+
+
+def test_run_non_star_inline_source_dq_does_not_promote_catalog_determinism() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-inline-source-dq",
+            "cosmetic_cuda",
+        ]
+    )
+
+    resolution = _resolve_resident_source_dq_star_catalog_policy(args)
+
+    assert resolution["deterministic"] is False
+    assert resolution["source"] == "not_applicable"
+    assert args.resident_star_catalog_deterministic is False
+    assert args.resident_source_dq_star_catalog_deterministic is False
 
 
 def test_run_resident_registration_auto_keeps_tile_path_off() -> None:

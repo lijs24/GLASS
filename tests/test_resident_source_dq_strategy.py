@@ -102,7 +102,6 @@ def test_resident_source_dq_strategy_records_cuda_star_protected_inline_detector
         free_bytes=10_000,
         resident_inline_source_dq="cosmetic_star_cuda",
         resident_inline_source_dq_max_invalid_fraction=0.001,
-        resident_star_catalog_deterministic=True,
     )
 
     inline = strategy["inline_source_dq"]
@@ -114,6 +113,7 @@ def test_resident_source_dq_strategy_records_cuda_star_protected_inline_detector
     assert inline["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
     assert inline["detector_execution"] == "cuda_star_catalog_protected_isolated_threshold_apply"
     assert inline["star_catalog_deterministic"] is True
+    assert inline["star_catalog_policy_source"] == "cosmetic_star_cuda_default"
     assert inline["star_catalog_source"] == (
         "resident_cuda_star_grid_top_nms_candidates_deterministic"
     )
@@ -122,3 +122,21 @@ def test_resident_source_dq_strategy_records_cuda_star_protected_inline_detector
         "ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frame"
     )
     assert inline["materializes_calibrated_dq_cache"] is False
+
+
+def test_resident_source_dq_strategy_allows_explicit_nondeterministic_star_cuda_catalog(
+    tmp_path: Path,
+) -> None:
+    strategy = build_resident_source_dq_strategy(
+        _plan(),
+        tmp_path / "run",
+        free_bytes=10_000,
+        resident_inline_source_dq="cosmetic_star_cuda",
+        resident_star_catalog_deterministic=False,
+        resident_star_catalog_policy_source="explicit_test_override",
+    )
+
+    inline = strategy["inline_source_dq"]
+    assert inline["star_catalog_deterministic"] is False
+    assert inline["star_catalog_policy_source"] == "explicit_test_override"
+    assert inline["star_catalog_source"] == "resident_cuda_star_grid_top_nms_candidates"
