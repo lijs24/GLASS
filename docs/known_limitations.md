@@ -30,6 +30,12 @@ Current code is intentionally gated:
   large same-shape mono datasets. It currently performs calibration, resident
   similarity-triangle registration, Lanczos3 matrix warp, local normalization,
   and mean/sigma/winsorized integration for the default high-VRAM path.
+  S2-Gate 673 writes `resident_memory_lifecycle.json`, which records the
+  declared raw-staging -> calibrated-resident -> registration/LN/integration
+  release chain and estimated byte counts. This artifact is not yet a live CUDA
+  allocator trace: raw FITS frames are still streamed through reusable buffers
+  rather than preloaded all at once, while calibrated light frames are the
+  primary resident stack.
   S2-Gate 616 sets the default resident matrix-warp chunk capacity to `8`
   frames after real 200-light probes showed larger chunks used much more VRAM
   and slowed the current Lanczos3 batch kernel; explicit chunk-capacity

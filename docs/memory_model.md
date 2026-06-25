@@ -72,6 +72,17 @@ The logical data chain is therefore:
 
 `raw input -> calibrated -> aligned -> local-normalized -> integrated output`
 
+Resident CUDA runs now write `resident_memory_lifecycle.json` as the runtime
+evidence surface for this chain. The artifact is derived from run-local GLASS
+artifacts and records, per output group, the estimated raw host/device staging
+surface, master calibration surfaces, calibrated resident stack,
+registration/warp workspace, local-normalization surface, and integration
+output workspace. Each row declares its residence type and release point. This
+is intentionally an estimated lifecycle contract rather than a live CUDA
+allocator trace: it proves the declared stage handoff and provides a stable
+target for future allocator telemetry, but it must not be read as exact peak
+VRAM measurement.
+
 At steady state the planner should keep only the active source layer, the target
 layer being produced, and stage scratch buffers. Brief two-layer residency is
 allowed because every transition needs a source and a destination. Additional

@@ -3110,9 +3110,11 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     registration = read_json(run / "registration_results.json")
     state = read_json(run / "run_state.json")
     resident = read_json(run / "resident_artifacts.json")
+    run_timing = read_json(run / "run_timing.json")
     calibration = read_json(run / "calibration_artifacts.json")
     frame_accounting = read_json(run / "frame_accounting.json")
     resident_dq_lifecycle = read_json(run / "resident_dq_lifecycle.json")
+    resident_memory_lifecycle = read_json(run / "resident_memory_lifecycle.json")
     resident_result_contract = read_json(run / "resident_result_contract.json")
     resident_calibration_contract = read_json(run / "resident_calibration_contract.json")
     local_norm_contract = read_json(run / "local_norm_contract.json")
@@ -3136,6 +3138,28 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert resident_dq_lifecycle["summary"]["passed"] is True
     assert integration["resident_dq_lifecycle_summary"] == resident_dq_lifecycle["summary"]
     assert any(item["stage"] == "resident_dq_lifecycle" for item in state["artifacts"])
+    assert resident_memory_lifecycle["artifact_type"] == "resident_memory_lifecycle"
+    assert resident_memory_lifecycle["passed"] is True
+    assert resident_memory_lifecycle["summary"]["group_count"] == 1
+    assert resident_memory_lifecycle["summary"]["raw_all_frames_resident"] is False
+    assert resident_memory_lifecycle["summary"]["calibrated_stack_resident"] is True
+    assert resident_memory_lifecycle["summary"]["registered_cache_materialized_on_disk"] is False
+    assert resident_memory_lifecycle["summary"]["max_estimated_peak_bytes"] == resident["artifacts"][0][
+        "memory_estimate"
+    ]["estimated_peak_bytes"]
+    assert run_timing["resident_memory_lifecycle_path"] == "resident_memory_lifecycle.json"
+    assert run_timing["resident_memory_lifecycle_summary"]["max_estimated_peak_bytes"] == (
+        resident_memory_lifecycle["summary"]["max_estimated_peak_bytes"]
+    )
+    lifecycle_group = resident_memory_lifecycle["groups"][0]
+    assert lifecycle_group["frame_count"] == len(resident["artifacts"][0]["frame_ids"])
+    lifecycle_surfaces = {row["name"]: row for row in lifecycle_group["surfaces"]}
+    assert lifecycle_surfaces["source_light_decode_host_prefetch"]["residence"] == "transient"
+    assert lifecycle_surfaces["raw_light_device_upload_buffer"]["release_after"] == "calibrated_frame_store"
+    assert lifecycle_surfaces["calibrated_resident_stack"]["residence"] == "resident_until_integration"
+    assert lifecycle_surfaces["calibrated_resident_stack"]["release_after"] == "resident_integration_complete"
+    assert lifecycle_surfaces["integration_output_workspace"]["estimated_bytes"] > 0
+    assert any(item["stage"] == "resident_memory_lifecycle" for item in state["artifacts"])
     assert frame_accounting["sources"]["resident_dq_lifecycle"] is True
     assert frame_accounting["summary"]["resident_dq_lifecycle_present"] is True
     assert frame_accounting["summary"]["resident_dq_lifecycle_rows"] == resident_dq_lifecycle["summary"]["frame_count"]

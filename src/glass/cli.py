@@ -34,6 +34,10 @@ from glass.engine.resident_mainline_framework import (
     DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_SCOPE,
     write_resident_mainline_framework,
 )
+from glass.engine.resident_memory_lifecycle import (
+    materialize_resident_memory_lifecycle,
+    write_resident_memory_lifecycle,
+)
 from glass.engine.resident_reference_scout import (
     DEFAULT_REFERENCE_SCOUT_BACKEND,
     DEFAULT_REFERENCE_SCOUT_MAX_FRAMES,
@@ -2563,6 +2567,30 @@ def _write_resident_component_timing_artifact(
     return component_path
 
 
+def _write_resident_memory_lifecycle_artifact(
+    run: Path,
+    state,
+    timing: dict[str, Any],
+) -> Path:
+    lifecycle_path = write_resident_memory_lifecycle(run, timing=timing)
+    payload = read_json(lifecycle_path)
+    if isinstance(payload, dict):
+        materialize_resident_memory_lifecycle(timing, payload)
+        _write_timing(run, timing)
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_memory_lifecycle",
+            path=str(lifecycle_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    if "resident_memory_lifecycle" not in state.completed_stages:
+        state.completed_stages.append("resident_memory_lifecycle")
+    return lifecycle_path
+
+
 def _write_run_report(
     run: Path,
     report_path: Path,
@@ -3313,6 +3341,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
         _write_resident_component_timing_artifact(out, state, timing)
+        _write_resident_memory_lifecycle_artifact(out, state, timing)
         postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
         _write_resident_stage_ledger_artifact(out, state, timing)
         failed_exit = _print_resident_postcondition_failure(
@@ -3641,6 +3670,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
         _write_resident_component_timing_artifact(out, state, timing)
+        _write_resident_memory_lifecycle_artifact(out, state, timing)
         postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
         _write_resident_stage_ledger_artifact(out, state, timing)
         write_run_state(args.out, state)

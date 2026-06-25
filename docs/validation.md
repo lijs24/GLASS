@@ -473,6 +473,18 @@ Current Phase 2 latest mainline acceptance:
   was rejected: it failed `runtime_within_threshold` at elapsed ratio
   `1.17939080551414`, mainly because light read/upload/calibrate increased to
   `4.3863005000166595 s`. Full pytest passed with `1411 passed in 64.01 s`.
+- Gate673 adds a resident memory lifecycle artifact to the default resident
+  CUDA path. The real 200-light run at
+  `C:\glass_runs\phase2_s2_gate673_memory_lifecycle\runs_20260626_070000\default_with_lifecycle`
+  wrote `resident_memory_lifecycle.json` and recorded one passing group with
+  estimated calibrated-stack residency `45.93372344970703 GiB`, estimated peak
+  `49.608429938554764 GiB`, `raw_all_frames_resident=false`,
+  `calibrated_stack_resident=true`, and
+  `registered_cache_materialized_on_disk=false`. The regression against Gate672
+  passed with elapsed ratio `0.9911025449355981`, no failed checks, `193/7`
+  active/masked frames, and zero artifact/frame/registration/output/numerical
+  drift. The Phase 2 mainline audit and StackEngine resident contract both
+  passed, and full pytest passed with `1414 passed in 64.50 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

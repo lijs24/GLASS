@@ -1157,6 +1157,74 @@ Interpretation:
   winsorized reducer or a measured overlap issue, not blindly increase prefetch
   depth.
 
+### S2-Gate 673: Resident Memory Lifecycle Artifact
+
+Gate673 turns the resident all-VRAM dataflow into a first-class runtime
+artifact. The goal is not to claim that every raw FITS frame is resident at
+once; the current implementation streams raw frames through reusable host and
+device staging buffers, keeps calibrated frames resident, and then consumes
+that resident stack through registration, local normalization, and integration.
+The new artifact records that chain explicitly so future performance gates can
+prove they improved residency or release behavior instead of relying on timing
+alone.
+
+Implementation:
+
+- Added `resident_memory_lifecycle.json` for resident CUDA runs.
+- The artifact is derived only from run-local GLASS artifacts:
+  `resident_artifacts.json`, `calibration_artifacts.json`, and
+  `run_timing.json`.
+- For each resident output group it records the estimated surfaces in the
+  raw decode/prefetch, H2D calibration, master calibration, calibrated
+  resident stack, registration/warp workspace, local-normalization, and
+  integration output phases.
+- Each surface records memory space, residence type, estimated bytes,
+  frame count, release point, evidence source, and limitations.
+- `run_timing.json` now carries `resident_memory_lifecycle_path` and a summary,
+  and `run_state.json` registers a `resident_memory_lifecycle` artifact.
+- The lifecycle is deliberately an estimated runtime contract, not a CUDA
+  allocator trace. It distinguishes transient raw staging from the resident
+  calibrated stack and records that the current path does not materialize a
+  registered disk cache.
+
+Validation:
+
+- CPU-only lifecycle builder tests cover the declared raw -> calibrated ->
+  integration release chain, JSON writing, and missing-artifact failure.
+- Resident CUDA smoke now asserts that `resident_memory_lifecycle.json` is
+  written automatically, registered in `run_state.json`, summarized in
+  `run_timing.json`, and consistent with `resident_artifacts.json`.
+- Full pytest: `1414 passed in 64.50 s`.
+- Real 200-light resident default run:
+  `C:\glass_runs\phase2_s2_gate673_memory_lifecycle\runs_20260626_070000\default_with_lifecycle`.
+  It wrote `resident_memory_lifecycle.json` with one passing group, estimated
+  calibrated resident stack `45.93372344970703 GiB`, estimated peak
+  `49.608429938554764 GiB`, `raw_all_frames_resident=false`,
+  `calibrated_stack_resident=true`, and
+  `registered_cache_materialized_on_disk=false`.
+- Gate673 versus Gate672 resident regression:
+  `C:\glass_runs\phase2_s2_gate673_memory_lifecycle\runs_20260626_070000\gate673_vs_gate672_regression.json`.
+  Status passed; failed checks `[]`; elapsed ratio `0.9911025449355981`;
+  active/masked frames `193/7`; artifact, frame-accounting, frame-signature,
+  registration, output, and numerical-drift difference counts were all zero.
+- Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate673_memory_lifecycle\runs_20260626_070000\gate673_phase2_mainline_audit.json`.
+  Status passed with `200` input lights and `193` active frames.
+- StackEngine resident contract:
+  `C:\glass_runs\phase2_s2_gate673_memory_lifecycle\runs_20260626_070000\gate673_stack_engine_contract_resident.json`.
+  Status passed with `expected_integration_engine=cuda_resident_stack`,
+  `pipeline_contract_dq_ledger_ready=true`, and
+  `default_promotion_ready=true`.
+
+Interpretation:
+
+- This is a resident memory-model hardening gate. It gives the project a
+  machine-readable baseline for the user's intended staged GPU residency model:
+  raw input -> calibrated resident stack -> registration/LN/integration ->
+  output maps.
+- It does not change CUDA kernels, registration math, calibration math,
+  rejection math, frame admission, or runtime defaults.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual
