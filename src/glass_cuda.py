@@ -2987,6 +2987,127 @@ class ResidentCalibratedStack:
         )
         return dict(result)
 
+    @staticmethod
+    def _flatten_star_catalog_batch(
+        star_xs_batch: Any,
+        star_ys_batch: Any,
+        star_protection_radii: Any,
+    ) -> tuple[np.ndarray, np.ndarray, list[int], list[int], list[float]]:
+        xs_items = list(star_xs_batch)
+        ys_items = list(star_ys_batch)
+        radii = [float(value) for value in list(star_protection_radii)]
+        if len(xs_items) != len(ys_items) or len(xs_items) != len(radii):
+            raise ValueError(
+                "star_xs_batch, star_ys_batch, and star_protection_radii must have the same length"
+            )
+        offsets: list[int] = []
+        counts: list[int] = []
+        flat_xs: list[np.ndarray] = []
+        flat_ys: list[np.ndarray] = []
+        offset = 0
+        for xs_raw, ys_raw in zip(xs_items, ys_items, strict=True):
+            xs = np.ascontiguousarray(np.asarray(xs_raw, dtype=np.float32).reshape((-1,)))
+            ys = np.ascontiguousarray(np.asarray(ys_raw, dtype=np.float32).reshape((-1,)))
+            if xs.shape != ys.shape:
+                raise ValueError("each star_xs/star_ys pair must have the same length")
+            offsets.append(offset)
+            counts.append(int(xs.size))
+            offset += int(xs.size)
+            if xs.size:
+                flat_xs.append(xs)
+                flat_ys.append(ys)
+        if flat_xs:
+            xs_flat = np.ascontiguousarray(np.concatenate(flat_xs).astype(np.float32, copy=False))
+            ys_flat = np.ascontiguousarray(np.concatenate(flat_ys).astype(np.float32, copy=False))
+        else:
+            xs_flat = np.ascontiguousarray(np.empty((0,), dtype=np.float32))
+            ys_flat = np.ascontiguousarray(np.empty((0,), dtype=np.float32))
+        return xs_flat, ys_flat, offsets, counts, radii
+
+    def apply_star_protected_isolated_cosmetic_threshold_mask_frames(
+        self,
+        indices: list[int],
+        low_thresholds: list[float],
+        high_thresholds: list[float],
+        medians: list[float],
+        sigmas: list[float],
+        star_xs_batch: Any,
+        star_ys_batch: Any,
+        star_protection_radii: Any,
+        structure_sigma: float = 1.5,
+        min_neighbor_support: int = 2,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "apply_star_protected_isolated_cosmetic_threshold_mask_frames"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frames "
+                "is not available"
+            )
+        xs_flat, ys_flat, offsets, counts, radii = self._flatten_star_catalog_batch(
+            star_xs_batch,
+            star_ys_batch,
+            star_protection_radii,
+        )
+        result = dict(
+            self._impl.apply_star_protected_isolated_cosmetic_threshold_mask_frames(
+                [int(index) for index in indices],
+                [float(value) for value in low_thresholds],
+                [float(value) for value in high_thresholds],
+                [float(value) for value in medians],
+                [float(value) for value in sigmas],
+                xs_flat,
+                ys_flat,
+                offsets,
+                counts,
+                radii,
+                float(structure_sigma),
+                int(min_neighbor_support),
+            )
+        )
+        result["frames"] = [dict(frame) for frame in list(result.get("frames") or [])]
+        return result
+
+    def count_star_protected_isolated_cosmetic_threshold_mask_frames(
+        self,
+        indices: list[int],
+        low_thresholds: list[float],
+        high_thresholds: list[float],
+        medians: list[float],
+        sigmas: list[float],
+        star_xs_batch: Any,
+        star_ys_batch: Any,
+        star_protection_radii: Any,
+        structure_sigma: float = 1.5,
+        min_neighbor_support: int = 2,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "count_star_protected_isolated_cosmetic_threshold_mask_frames"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frames "
+                "is not available"
+            )
+        xs_flat, ys_flat, offsets, counts, radii = self._flatten_star_catalog_batch(
+            star_xs_batch,
+            star_ys_batch,
+            star_protection_radii,
+        )
+        result = dict(
+            self._impl.count_star_protected_isolated_cosmetic_threshold_mask_frames(
+                [int(index) for index in indices],
+                [float(value) for value in low_thresholds],
+                [float(value) for value in high_thresholds],
+                [float(value) for value in medians],
+                [float(value) for value in sigmas],
+                xs_flat,
+                ys_flat,
+                offsets,
+                counts,
+                radii,
+                float(structure_sigma),
+                int(min_neighbor_support),
+            )
+        )
+        result["frames"] = [dict(frame) for frame in list(result.get("frames") or [])]
+        return result
+
     def apply_isolated_cosmetic_threshold_mask_frames(
         self,
         indices: list[int],

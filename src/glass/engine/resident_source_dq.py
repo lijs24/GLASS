@@ -1442,11 +1442,17 @@ def apply_resident_inline_cosmetic_thresholds_batch(
     star_protected_detector_name = (
         "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
     )
-    if any(
+    any_star_protected_detector = any(
         str(dict(item["threshold_info"]).get("inline_source_dq_detector") or "")
         == star_protected_detector_name
         for item in items
-    ):
+    )
+    use_star_protected_detector = bool(items) and all(
+        str(dict(item["threshold_info"]).get("inline_source_dq_detector") or "")
+        == star_protected_detector_name
+        for item in items
+    )
+    if any_star_protected_detector and not use_star_protected_detector:
         return [
             apply_resident_inline_cosmetic_thresholds(
                 stack,
@@ -1459,18 +1465,22 @@ def apply_resident_inline_cosmetic_thresholds_batch(
             )
             for item in items
         ]
-    use_isolated_detector = all(
+    use_isolated_detector = bool(items) and all(
         str(dict(item["threshold_info"]).get("inline_source_dq_detector") or "")
         == isolated_detector_name
         for item in items
     )
     batch_apply_method = (
-        "apply_isolated_cosmetic_threshold_mask_frames"
+        "apply_star_protected_isolated_cosmetic_threshold_mask_frames"
+        if use_star_protected_detector
+        else "apply_isolated_cosmetic_threshold_mask_frames"
         if use_isolated_detector
         else "apply_cosmetic_threshold_mask_frames"
     )
     batch_count_method = (
-        "count_isolated_cosmetic_threshold_mask_frames"
+        "count_star_protected_isolated_cosmetic_threshold_mask_frames"
+        if use_star_protected_detector
+        else "count_isolated_cosmetic_threshold_mask_frames"
         if use_isolated_detector
         else "count_cosmetic_threshold_mask_frames"
     )
@@ -1511,6 +1521,18 @@ def apply_resident_inline_cosmetic_thresholds_batch(
         )
         for item in items
     ]
+    star_xs_batch = [
+        np.asarray(dict(item["threshold_info"]).get("star_x", []), dtype=np.float32).reshape((-1,))
+        for item in items
+    ]
+    star_ys_batch = [
+        np.asarray(dict(item["threshold_info"]).get("star_y", []), dtype=np.float32).reshape((-1,))
+        for item in items
+    ]
+    star_protection_radii = [
+        float(dict(item["threshold_info"]).get("star_protection_radius_px") or 0.0)
+        for item in items
+    ]
     structure_sigma = float(dict(items[0]["threshold_info"]).get("structure_sigma", 1.5))
     min_neighbor_support = int(dict(items[0]["threshold_info"]).get("min_neighbor_support", 2))
     native_count_by_index: dict[int, dict[str, Any]] = {}
@@ -1519,6 +1541,19 @@ def apply_resident_inline_cosmetic_thresholds_batch(
         count_fn = getattr(stack, batch_count_method)
         native_count_batch = dict(
             count_fn(
+                indices,
+                low_thresholds,
+                high_thresholds,
+                medians,
+                sigmas,
+                star_xs_batch,
+                star_ys_batch,
+                star_protection_radii,
+                structure_sigma,
+                min_neighbor_support,
+            )
+            if use_star_protected_detector
+            else count_fn(
                 indices,
                 low_thresholds,
                 high_thresholds,
@@ -1571,45 +1606,75 @@ def apply_resident_inline_cosmetic_thresholds_batch(
         else:
             apply_items.append(item)
 
-    native_batch = (
-        dict(
+    apply_indices = [int(item["frame_index"]) for item in apply_items]
+    apply_low_thresholds = [float(dict(item["threshold_info"])["low_threshold"]) for item in apply_items]
+    apply_high_thresholds = [float(dict(item["threshold_info"])["high_threshold"]) for item in apply_items]
+    apply_medians = [
+        float(
+            dict(dict(item["threshold_info"]).get("cosmetic_metrics") or {}).get(
+                "median",
+                dict(dict(item["threshold_info"]).get("threshold_stats") or {}).get("median", 0.0),
+            )
+            or 0.0
+        )
+        for item in apply_items
+    ]
+    apply_sigmas = [
+        float(
+            dict(dict(item["threshold_info"]).get("cosmetic_metrics") or {}).get(
+                "sigma",
+                dict(dict(item["threshold_info"]).get("threshold_stats") or {}).get("sigma", 0.0),
+            )
+            or 0.0
+        )
+        for item in apply_items
+    ]
+    if not apply_items:
+        native_batch = {"frames": [], "native_method": f"ResidentCalibratedStack.{batch_apply_method}"}
+    elif use_star_protected_detector:
+        native_batch = dict(
             getattr(stack, batch_apply_method)(
-                [int(item["frame_index"]) for item in apply_items],
-                [float(dict(item["threshold_info"])["low_threshold"]) for item in apply_items],
-                [float(dict(item["threshold_info"])["high_threshold"]) for item in apply_items],
+                apply_indices,
+                apply_low_thresholds,
+                apply_high_thresholds,
+                apply_medians,
+                apply_sigmas,
                 [
-                    float(
-                        dict(dict(item["threshold_info"]).get("cosmetic_metrics") or {}).get(
-                            "median",
-                            dict(dict(item["threshold_info"]).get("threshold_stats") or {}).get("median", 0.0),
-                        )
-                        or 0.0
-                    )
+                    np.asarray(dict(item["threshold_info"]).get("star_x", []), dtype=np.float32).reshape((-1,))
                     for item in apply_items
                 ],
                 [
-                    float(
-                        dict(dict(item["threshold_info"]).get("cosmetic_metrics") or {}).get(
-                            "sigma",
-                            dict(dict(item["threshold_info"]).get("threshold_stats") or {}).get("sigma", 0.0),
-                        )
-                        or 0.0
-                    )
+                    np.asarray(dict(item["threshold_info"]).get("star_y", []), dtype=np.float32).reshape((-1,))
+                    for item in apply_items
+                ],
+                [
+                    float(dict(item["threshold_info"]).get("star_protection_radius_px") or 0.0)
                     for item in apply_items
                 ],
                 structure_sigma,
                 min_neighbor_support,
             )
-            if use_isolated_detector
-            else getattr(stack, batch_apply_method)(
-                [int(item["frame_index"]) for item in apply_items],
-                [float(dict(item["threshold_info"])["low_threshold"]) for item in apply_items],
-                [float(dict(item["threshold_info"])["high_threshold"]) for item in apply_items],
+        )
+    elif use_isolated_detector:
+        native_batch = dict(
+            getattr(stack, batch_apply_method)(
+                apply_indices,
+                apply_low_thresholds,
+                apply_high_thresholds,
+                apply_medians,
+                apply_sigmas,
+                structure_sigma,
+                min_neighbor_support,
             )
         )
-        if apply_items
-        else {"frames": [], "native_method": f"ResidentCalibratedStack.{batch_apply_method}"}
-    )
+    else:
+        native_batch = dict(
+            getattr(stack, batch_apply_method)(
+                apply_indices,
+                apply_low_thresholds,
+                apply_high_thresholds,
+            )
+        )
     native_by_index = {
         int(frame_result.get("frame_index")): dict(frame_result)
         for frame_result in list(native_batch.get("frames") or [])

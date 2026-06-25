@@ -2206,6 +2206,237 @@ def test_resident_stack_star_protected_isolated_cosmetic_threshold_apply_keeps_s
     assert master[7, 7] == pytest.approx((50.0 + 700.0) / 2.0)
 
 
+def test_resident_stack_star_protected_isolated_cosmetic_threshold_batch_count_matches_single():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "count_star_protected_isolated_cosmetic_threshold_mask_frames"):
+        raise AssertionError(
+            "ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frames is missing"
+        )
+
+    frame = _star_protected_cosmetic_fixture()
+    stack = module.ResidentCalibratedStack(3, 15, 15)
+    stack.upload_calibrated_frame(0, np.full((15, 15), 50.0, dtype=np.float32))
+    stack.upload_calibrated_frame(1, frame)
+    stack.upload_calibrated_frame(2, frame)
+
+    result = stack.count_star_protected_isolated_cosmetic_threshold_mask_frames(
+        [1, 2],
+        [0.0, 0.0],
+        [200.0, 200.0],
+        [100.0, 100.0],
+        [50.0, 50.0],
+        [np.array([7.0], dtype=np.float32), np.array([7.0], dtype=np.float32)],
+        [np.array([7.0], dtype=np.float32), np.array([7.0], dtype=np.float32)],
+        [2.2, 2.2],
+        1.5,
+        6,
+    )
+    master, weight = stack.integrate_mean()
+
+    assert result["native_method"] == (
+        "ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frames"
+    )
+    assert result["detector_execution"] == "cuda_star_catalog_protected_isolated_threshold_count_batch"
+    assert result["frame_count"] == 2
+    assert result["batch_single_kernel_launch"] is True
+    assert result["batch_single_sync"] is True
+    assert result["star_count"] == 2
+    assert result["hot_samples"] == 2
+    assert result["cold_samples"] == 0
+    assert result["star_protected_hot_samples"] == 2
+    assert result["star_protected_cosmetic_samples"] == 2
+    assert result["cosmetic_corrected_samples"] == 2
+    assert result["invalid_samples"] == 2
+    assert result["applied"] is False
+    assert result["frames"][0]["per_frame_native_method"] == (
+        "ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    assert result["frames"][0]["star_protected_hot_samples"] == 1
+    assert weight[2, 2] == pytest.approx(3.0)
+    assert master[2, 2] == pytest.approx((50.0 + 900.0 + 900.0) / 3.0)
+    assert weight[7, 7] == pytest.approx(3.0)
+    assert master[7, 7] == pytest.approx((50.0 + 700.0 + 700.0) / 3.0)
+
+
+def test_resident_stack_star_protected_isolated_cosmetic_threshold_batch_apply_keeps_star_core():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_star_protected_isolated_cosmetic_threshold_mask_frames"):
+        raise AssertionError(
+            "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frames is missing"
+        )
+
+    frame = _star_protected_cosmetic_fixture()
+    stack = module.ResidentCalibratedStack(3, 15, 15)
+    stack.upload_calibrated_frame(0, np.full((15, 15), 50.0, dtype=np.float32))
+    stack.upload_calibrated_frame(1, frame)
+    stack.upload_calibrated_frame(2, frame)
+
+    result = stack.apply_star_protected_isolated_cosmetic_threshold_mask_frames(
+        [1, 2],
+        [0.0, 0.0],
+        [200.0, 200.0],
+        [100.0, 100.0],
+        [50.0, 50.0],
+        [np.array([7.0], dtype=np.float32), np.array([7.0], dtype=np.float32)],
+        [np.array([7.0], dtype=np.float32), np.array([7.0], dtype=np.float32)],
+        [2.2, 2.2],
+        1.5,
+        6,
+    )
+    master, weight = stack.integrate_mean()
+
+    assert result["native_method"] == (
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frames"
+    )
+    assert result["detector_execution"] == "cuda_star_catalog_protected_isolated_threshold_apply_batch"
+    assert result["frame_count"] == 2
+    assert result["batch_single_kernel_launch"] is True
+    assert result["batch_single_sync"] is True
+    assert result["star_count"] == 2
+    assert result["hot_samples"] == 2
+    assert result["cold_samples"] == 0
+    assert result["star_protected_hot_samples"] == 2
+    assert result["star_protected_cosmetic_samples"] == 2
+    assert result["cosmetic_corrected_samples"] == 2
+    assert result["invalid_samples"] == 2
+    assert result["applied"] is True
+    assert result["star_catalog_upload_bytes"] == 56
+    assert result["mask_upload_s"] == 0.0
+    assert result["frames"][0]["per_frame_native_method"] == (
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    assert result["frames"][0]["star_protected_hot_samples"] == 1
+    assert weight[2, 2] == pytest.approx(1.0)
+    assert master[2, 2] == pytest.approx(50.0)
+    assert weight[7, 7] == pytest.approx(3.0)
+    assert master[7, 7] == pytest.approx((50.0 + 700.0 + 700.0) / 3.0)
+
+
+def test_resident_stack_star_protected_isolated_cosmetic_threshold_batch_matches_single_fuzz():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_star_protected_isolated_cosmetic_threshold_mask_frames"):
+        raise AssertionError(
+            "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frames is missing"
+        )
+
+    rng = np.random.default_rng(12345)
+    frame_count = 6
+    height = 23
+    width = 29
+    frames = [
+        rng.normal(50.0, 4.0, size=(height, width)).astype(np.float32)
+        for _ in range(frame_count)
+    ]
+    for frame_index, frame in enumerate(frames):
+        frame[2 + frame_index, 3 + frame_index] = 140.0
+        frame[height - 3 - frame_index, width - 4 - frame_index] = -40.0
+        frame[10, 12 + frame_index] = 155.0
+
+    lows: list[float] = []
+    highs: list[float] = []
+    medians: list[float] = []
+    sigmas: list[float] = []
+    star_xs: list[np.ndarray] = []
+    star_ys: list[np.ndarray] = []
+    radii: list[float] = []
+    for frame_index, frame in enumerate(frames):
+        finite = frame[np.isfinite(frame)]
+        median = float(np.median(finite))
+        sigma = float(np.std(finite))
+        medians.append(median)
+        sigmas.append(sigma)
+        lows.append(float(np.float32(median - 4.0 * sigma)))
+        highs.append(float(np.float32(median + 4.0 * sigma)))
+        star_xs.append(np.asarray([12.0 + frame_index, 3.0 + frame_index], dtype=np.float32))
+        star_ys.append(np.asarray([10.0, 2.0 + frame_index], dtype=np.float32))
+        radii.append(2.25 if frame_index % 2 == 0 else 1.5)
+
+    count_stack = module.ResidentCalibratedStack(frame_count, height, width)
+    for index, frame in enumerate(frames):
+        count_stack.upload_calibrated_frame(index, frame)
+    batch_count = count_stack.count_star_protected_isolated_cosmetic_threshold_mask_frames(
+        list(range(frame_count)),
+        lows,
+        highs,
+        medians,
+        sigmas,
+        star_xs,
+        star_ys,
+        radii,
+        1.5,
+        2,
+    )
+    for index in range(frame_count):
+        single = count_stack.count_star_protected_isolated_cosmetic_threshold_mask_frame(
+            index,
+            lows[index],
+            highs[index],
+            medians[index],
+            sigmas[index],
+            star_xs[index],
+            star_ys[index],
+            radii[index],
+            1.5,
+            2,
+        )
+        batch = batch_count["frames"][index]
+        for key in (
+            "hot_samples",
+            "cold_samples",
+            "nonfinite_samples",
+            "candidate_hot_samples",
+            "candidate_cold_samples",
+            "protected_hot_samples",
+            "protected_cold_samples",
+            "star_protected_hot_samples",
+            "star_protected_cold_samples",
+            "star_protected_cosmetic_samples",
+            "invalid_samples",
+        ):
+            assert batch[key] == single[key]
+
+    single_stack = module.ResidentCalibratedStack(frame_count, height, width)
+    batch_stack = module.ResidentCalibratedStack(frame_count, height, width)
+    for index, frame in enumerate(frames):
+        single_stack.upload_calibrated_frame(index, frame)
+        batch_stack.upload_calibrated_frame(index, frame)
+    for index in range(frame_count):
+        single_stack.apply_star_protected_isolated_cosmetic_threshold_mask_frame(
+            index,
+            lows[index],
+            highs[index],
+            medians[index],
+            sigmas[index],
+            star_xs[index],
+            star_ys[index],
+            radii[index],
+            1.5,
+            2,
+        )
+    batch_stack.apply_star_protected_isolated_cosmetic_threshold_mask_frames(
+        list(range(frame_count)),
+        lows,
+        highs,
+        medians,
+        sigmas,
+        star_xs,
+        star_ys,
+        radii,
+        1.5,
+        2,
+    )
+    for index in range(frame_count):
+        single_frame = single_stack.download_frame_tile(index, 0, 0, width, height)
+        batch_frame = batch_stack.download_frame_tile(index, 0, 0, width, height)
+        assert np.array_equal(np.isnan(batch_frame), np.isnan(single_frame))
+        assert np.allclose(
+            np.nan_to_num(batch_frame, nan=-9999.0),
+            np.nan_to_num(single_frame, nan=-9999.0),
+            rtol=0.0,
+            atol=0.0,
+        )
+
+
 def test_resident_stack_isolated_cosmetic_threshold_apply_protects_star_core():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_isolated_cosmetic_threshold_mask_frame"):

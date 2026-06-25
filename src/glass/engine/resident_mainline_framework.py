@@ -156,7 +156,10 @@ def _inline_cosmetic_cuda_source_dq_checks(source_dq: dict[str, Any]) -> list[di
     inline_sources = [
         source
         for source in source_counts
-        if "cosmetic_cuda" in str(source) and "resident" in str(source)
+        if (
+            ("cosmetic_cuda" in str(source) or "cosmetic_star_cuda" in str(source))
+            and "resident" in str(source)
+        )
     ]
     route_matches = [
         route for route in execution_routes if "resident_in_memory_mask_streaming" in route

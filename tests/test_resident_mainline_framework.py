@@ -566,6 +566,34 @@ def test_resident_mainline_framework_inline_cosmetic_cuda_scope_passes(tmp_path:
     assert "resident_inline_cosmetic_cuda_streaming_route" in check_names
 
 
+def test_resident_mainline_framework_inline_cosmetic_star_cuda_scope_passes(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_minimal_green_resident_run(
+        run,
+        source_dq_invalid_samples=4,
+        source_dq_source_counts={"resident_post_registration_pre_warp_cosmetic_star_cuda": 2},
+        source_dq_execution_routes=["resident_in_memory_mask_streaming"],
+    )
+
+    payload = build_resident_mainline_framework(
+        run,
+        requested_action="strict",
+        framework_scope="inline_cosmetic_cuda_positive",
+        min_lights=3,
+        min_active_frames=3,
+        min_source_dq_invalid_samples=1,
+        min_source_dq_applied_samples=1,
+    )
+
+    assert payload["passed"] is True
+    assert payload["source_dq"]["source_counts"] == {
+        "resident_post_registration_pre_warp_cosmetic_star_cuda": 2
+    }
+    check_names = {check["name"] for check in payload["checks"]}
+    assert "resident_inline_cosmetic_cuda_source_present" in check_names
+    assert "resident_inline_cosmetic_cuda_streaming_route" in check_names
+
+
 def test_resident_mainline_framework_inline_cosmetic_cuda_scope_rejects_sidecar_only(
     tmp_path: Path,
 ) -> None:

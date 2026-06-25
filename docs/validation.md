@@ -342,6 +342,20 @@ Current Phase 2 latest mainline acceptance:
   master p99 absolute difference is `0.14057159423828125`, and coverage/weight
   changes affect about `0.147%` of pixels. It is not promoted because it is
   `14.6%` slower than Gate660 and fails deterministic equality by design.
+- Gate664 batches `cosmetic_star_cuda` resident count/apply with native
+  `ResidentCalibratedStack.*_star_protected_isolated_cosmetic_threshold_mask_frames`
+  methods. Focused CUDA validation includes batch-vs-single fuzz parity. The
+  real 200-light run at
+  `C:\glass_runs\phase2_s2_gate664_star_cuda_batch_real\runs_20260625_231500\star_cuda_batch_conservative_active_warn`
+  completed in `20.791611200082116 s`, or `52.54720230607645x` versus the
+  `1092.541 s` black-box timing. The source-DQ deferred apply substage improved
+  from Gate663 `0.7322519001318142 s` to `0.6506714000133798 s`; total runtime
+  improved by about `2.2%`. A repeat strict run completed in
+  `20.913607999915257 s`, but repeat determinism still failed due to five
+  source-DQ invalid-sample differences (`146987` versus `146992`) propagating
+  into output maps. All required contracts and runtime checks passed; this
+  opt-in source-DQ route remains unpromoted until threshold/catalog
+  repeat-determinism or a tolerance-based diagnostic acceptance rule is added.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

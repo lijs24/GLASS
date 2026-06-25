@@ -587,38 +587,75 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_records_batch_native_ro
     assert rows[1]["native"]["batch_frame_count"] == 2
 
 
-def test_apply_resident_inline_cosmetic_thresholds_batch_keeps_star_protected_per_frame():
+def test_apply_resident_inline_cosmetic_thresholds_batch_uses_star_protected_batch_native():
     class FakeResidentStack:
         def apply_isolated_cosmetic_threshold_mask_frames(self, *args: object) -> dict[str, object]:
             raise AssertionError("star-protected detector must not use isolated batch apply")
 
-        def apply_star_protected_isolated_cosmetic_threshold_mask_frame(
+        def apply_star_protected_isolated_cosmetic_threshold_mask_frame(self, *args: object) -> dict[str, object]:
+            raise AssertionError("star-protected batch detector must not fall back to per-frame apply")
+
+        def apply_star_protected_isolated_cosmetic_threshold_mask_frames(
             self,
-            frame_index: int,
-            low_threshold: float,
-            high_threshold: float,
-            median: float,
-            sigma: float,
-            star_x: np.ndarray,
-            star_y: np.ndarray,
-            star_protection_radius: float,
+            indices: list[int],
+            low_thresholds: list[float],
+            high_thresholds: list[float],
+            medians: list[float],
+            sigmas: list[float],
+            star_xs_batch: list[np.ndarray],
+            star_ys_batch: list[np.ndarray],
+            star_protection_radii: list[float],
             structure_sigma: float,
             min_neighbor_support: int,
         ) -> dict[str, object]:
-            assert frame_index == 7
-            assert low_threshold == pytest.approx(1.0)
-            assert high_threshold == pytest.approx(10.0)
-            assert median == pytest.approx(100.0)
-            assert sigma == pytest.approx(2.0)
-            assert star_x.tolist() == [5.0]
-            assert star_y.tolist() == [6.0]
-            assert star_protection_radius == pytest.approx(2.5)
+            assert indices == [7]
+            assert low_thresholds == [1.0]
+            assert high_thresholds == [10.0]
+            assert medians == [100.0]
+            assert sigmas == [2.0]
+            assert star_xs_batch[0].tolist() == [5.0]
+            assert star_ys_batch[0].tolist() == [6.0]
+            assert star_protection_radii == [2.5]
             assert structure_sigma == pytest.approx(1.5)
             assert min_neighbor_support == 6
             return {
                 "native_method": (
-                    "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+                    "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frames"
                 ),
+                "frame_count": 1,
+                "batch_single_kernel_launch": True,
+                "batch_single_sync": True,
+                "detector_execution": "cuda_star_catalog_protected_isolated_threshold_apply_batch",
+                "frames": [
+                    {
+                        "native_method": (
+                            "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frames"
+                        ),
+                        "per_frame_native_method": (
+                            "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+                        ),
+                        "batch_position": 0,
+                        "frame_index": 7,
+                        "hot_samples": 1,
+                        "cold_samples": 0,
+                        "nonfinite_samples": 0,
+                        "candidate_hot_samples": 2,
+                        "candidate_cold_samples": 0,
+                        "protected_hot_samples": 0,
+                        "protected_cold_samples": 0,
+                        "star_protected_hot_samples": 1,
+                        "star_protected_cold_samples": 0,
+                        "star_protected_cosmetic_samples": 1,
+                        "cosmetic_corrected_samples": 1,
+                        "invalid_samples": 1,
+                        "applied": True,
+                        "star_count": 1,
+                        "star_catalog_source": "host_catalog_coordinates_device_batch_applied",
+                        "batch_single_kernel_launch": True,
+                        "batch_single_sync": True,
+                        "detector_execution": "cuda_star_catalog_protected_isolated_threshold_apply_batch",
+                    }
+                ],
                 "frame_index": 7,
                 "hot_samples": 1,
                 "cold_samples": 0,
@@ -634,8 +671,7 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_keeps_star_protected_pe
                 "invalid_samples": 1,
                 "applied": True,
                 "star_count": 1,
-                "star_catalog_source": "host_catalog_coordinates_device_applied",
-                "detector_execution": "cuda_star_catalog_protected_isolated_threshold_apply",
+                "star_catalog_source": "host_catalog_coordinates_device_batch_applied",
             }
 
     rows = apply_resident_inline_cosmetic_thresholds_batch(
@@ -676,9 +712,10 @@ def test_apply_resident_inline_cosmetic_thresholds_batch_keeps_star_protected_pe
     assert rows[0]["status"] == "applied"
     assert rows[0]["source"] == "resident_calibrated_batch_input_cosmetic_star_cuda"
     assert rows[0]["native_method"] == (
-        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frames"
     )
-    assert rows[0]["detector_execution"] == "cuda_star_catalog_protected_isolated_threshold_apply"
+    assert rows[0]["detector_execution"] == "cuda_star_catalog_protected_isolated_threshold_apply_batch"
+    assert rows[0]["native"]["batch_single_kernel_launch"] is True
     assert rows[0]["star_count"] == 1
     assert rows[0]["cosmetic_metrics"]["star_protected_hot_pixels"] == 1
     assert rows[0]["cosmetic_metrics"]["star_protected_cosmetic_pixels"] == 1

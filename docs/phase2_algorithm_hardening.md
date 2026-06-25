@@ -801,6 +801,81 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 664: Batched Resident Star-Protected CUDA Source-DQ
+
+Gate664 removes Gate662/663's per-frame native dispatch fallback for
+`cosmetic_star_cuda` and routes homogeneous star-protected source-DQ batches
+through native CUDA batch count/apply methods. This is a resident GPU execution
+gate on the opt-in source-DQ path; default resident source-DQ remains `off`.
+
+Implementation:
+
+- Added native resident CUDA methods:
+  - `ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frames`;
+  - `ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frames`.
+- The batch kernels launch over `(pixel, frame)` grid dimensions, consume
+  flattened per-frame star catalogs plus offset/count/radius vectors, and return
+  per-frame hot/cold/nonfinite, neighbor-protected, and star-protected counts.
+- Added Python wrappers in `glass_cuda.ResidentCalibratedStack`.
+- Updated resident source-DQ batch dispatch so homogeneous
+  `cosmetic_star_cuda` rows use the batch native route, while mixed detector
+  batches still fall back to the existing per-frame path.
+- Updated the resident mainline framework so `cosmetic_star_cuda` source names
+  satisfy the existing inline CUDA source-DQ evidence check.
+
+Validation:
+
+- Native rebuild:
+  `python -m cmake --build build --config Release --target _glass_cuda_native`
+  through the Visual Studio Build Tools developer environment.
+- Focused validation:
+  `5 passed`, covering native batch count/apply, batch-vs-single fuzz parity,
+  engine dispatch, and strict framework acceptance for
+  `resident_post_registration_pre_warp_cosmetic_star_cuda`.
+- Real 200-light run A:
+  `C:\glass_runs\phase2_s2_gate664_star_cuda_batch_real\runs_20260625_231500\star_cuda_batch_conservative_active_warn`.
+- Real 200-light run B:
+  `C:\glass_runs\phase2_s2_gate664_star_cuda_batch_real\runs_20260625_232500\star_cuda_batch_repeat_strict`.
+- Run A elapsed:
+  `20.791611200082116 s`, or `52.54720230607645x` versus the
+  `1092.541 s` black-box reference.
+- Run B elapsed:
+  `20.913607999915257 s`, or `52.240675066895534x` versus the same reference.
+- Gate663 single-frame star-protected run elapsed:
+  `21.259431299986318 s`.
+- Targeted source-DQ deferred apply improved from Gate663
+  `0.7322519001318142 s` to Gate664 `0.6506714000133798 s` in run A.
+- Full component timing for run A:
+  - `resident_light_read_upload_calibrate=10.217619500006549 s`;
+  - `resident_registration_warp=0.26487090112641454 s`;
+  - `resident_local_normalization=0.36363069992512465 s`;
+  - `resident_integration=3.2947529000230134 s`;
+  - `resident_output_write=0.24940850003622472 s`.
+- Strict framework regeneration for run A passed with no failed checks after
+  adding `cosmetic_star_cuda` source-name recognition.
+
+Observed limits:
+
+- Batch-vs-single native fuzz parity passes on synthetic resident stacks.
+- Real Gate664 batch runs are not bit-identical to each other: run A records
+  `146987` source-DQ invalid samples and run B records `146992`.
+- The repeat regression gate passes runtime and all required contracts but
+  fails `resident_determinism_passed` due to five source-DQ sample differences
+  propagating into output maps. This points at remaining opt-in source-DQ
+  threshold/catalog nondeterminism in the full resident route, not at a default
+  science-path change.
+
+Interpretation:
+
+- Gate664 closes the native batch dispatch gap for star-protected source-DQ and
+  recovers about `11%` of that substage cost on the real 200-light run.
+- The overall 200-light gain versus Gate663 is modest, about `2.2%`, because
+  the dominant time is still read/upload/calibration and hardened integration.
+- `cosmetic_star_cuda` remains opt-in and is not promoted until the source-DQ
+  threshold/catalog path is made repeat-deterministic or the acceptance surface
+  explicitly uses a scientific tolerance instead of bit equality for this
+  diagnostic mode.
+
 ### S2-Gate 663: Real 200-Light Star-Protected CUDA Source-DQ A/B
 
 Gate663 validates the new Gate662 `cosmetic_star_cuda` path on the real M38
