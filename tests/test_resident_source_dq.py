@@ -308,6 +308,7 @@ def test_inline_star_protected_cosmetic_thresholds_from_resident_stack_records_c
             candidates_per_cell: int,
             max_candidates: int,
             min_separation_px: float,
+            deterministic: bool = False,
         ) -> dict[str, object]:
             assert frame_index == 4
             assert threshold == pytest.approx(115.0)
@@ -316,6 +317,7 @@ def test_inline_star_protected_cosmetic_thresholds_from_resident_stack_records_c
             assert candidates_per_cell == 2
             assert max_candidates == 256
             assert min_separation_px == pytest.approx(4.0)
+            assert deterministic is True
             return {
                 "x": [7.0, 2.0],
                 "y": [8.0, 3.0],
@@ -327,7 +329,7 @@ def test_inline_star_protected_cosmetic_thresholds_from_resident_stack_records_c
                 "max_output_candidates": max_candidates,
                 "min_separation_px": min_separation_px,
                 "catalog_sort_mode": "score_desc",
-                "catalog_topk_mode": "grid_nms",
+                "catalog_topk_mode": "deterministic_parallel_per_cell",
             }
 
     threshold_info = inline_star_protected_cosmetic_thresholds_from_resident_stack(
@@ -339,6 +341,7 @@ def test_inline_star_protected_cosmetic_thresholds_from_resident_stack_records_c
         cold_sigma=3.0,
         star_threshold_sigma=5.0,
         star_protection_radius_px=2.5,
+        star_catalog_deterministic=True,
     )
 
     assert threshold_info["supported"] is True
@@ -350,12 +353,18 @@ def test_inline_star_protected_cosmetic_thresholds_from_resident_stack_records_c
         "cuda_star_catalog_protected_isolated_threshold_apply"
     )
     assert threshold_info["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
-    assert threshold_info["star_catalog_source"] == "resident_cuda_star_grid_top_nms_candidates"
+    assert threshold_info["star_catalog_source"] == (
+        "resident_cuda_star_grid_top_nms_candidates_deterministic"
+    )
+    assert threshold_info["star_catalog_deterministic"] is True
     assert threshold_info["star_count"] == 2
     assert threshold_info["star_x"] == [7.0, 2.0]
     assert threshold_info["star_y"] == [8.0, 3.0]
     assert threshold_info["star_catalog"]["stored_count"] == 2
+    assert threshold_info["star_catalog"]["deterministic"] is True
+    assert threshold_info["star_catalog"]["catalog_topk_mode"] == "deterministic_parallel_per_cell"
     assert threshold_info["cosmetic_metrics"]["star_protection_enabled"] is True
+    assert threshold_info["cosmetic_metrics"]["star_catalog_deterministic"] is True
     assert threshold_info["cosmetic_metrics"]["star_count"] == 2
 
 

@@ -435,6 +435,7 @@ def inline_star_protected_cosmetic_thresholds_from_resident_stack(
     star_candidates_per_cell: int = 2,
     star_max_candidates: int = 256,
     star_min_separation_px: float = 4.0,
+    star_catalog_deterministic: bool = False,
 ) -> dict[str, Any]:
     """Compute resident CUDA thresholds plus a compact resident star catalog."""
 
@@ -453,7 +454,12 @@ def inline_star_protected_cosmetic_thresholds_from_resident_stack(
     info["detector_execution"] = "cuda_star_catalog_protected_isolated_threshold_apply"
     info["star_threshold_sigma"] = float(star_threshold_sigma)
     info["star_protection_radius_px"] = float(star_protection_radius_px)
-    info["star_catalog_source"] = "resident_cuda_star_grid_top_nms_candidates"
+    info["star_catalog_deterministic"] = bool(star_catalog_deterministic)
+    info["star_catalog_source"] = (
+        "resident_cuda_star_grid_top_nms_candidates_deterministic"
+        if bool(star_catalog_deterministic)
+        else "resident_cuda_star_grid_top_nms_candidates"
+    )
     if not info.get("supported"):
         return info
     metrics = dict(info.get("cosmetic_metrics") or {})
@@ -484,6 +490,7 @@ def inline_star_protected_cosmetic_thresholds_from_resident_stack(
             int(star_candidates_per_cell),
             int(star_max_candidates),
             float(star_min_separation_px),
+            deterministic=bool(star_catalog_deterministic),
         )
     )
     star_x = np.asarray(catalog.get("x", []), dtype=np.float32).reshape((-1,))
@@ -506,6 +513,7 @@ def inline_star_protected_cosmetic_thresholds_from_resident_stack(
                 ),
                 "max_output_candidates": int(catalog.get("max_output_candidates") or star_max_candidates),
                 "min_separation_px": float(catalog.get("min_separation_px") or star_min_separation_px),
+                "deterministic": bool(star_catalog_deterministic),
                 "catalog_sort_mode": catalog.get("catalog_sort_mode"),
                 "catalog_topk_mode": catalog.get("catalog_topk_mode"),
             },
@@ -519,6 +527,7 @@ def inline_star_protected_cosmetic_thresholds_from_resident_stack(
             "star_threshold": star_threshold,
             "star_threshold_sigma": float(star_threshold_sigma),
             "star_protection_radius_px": float(star_protection_radius_px),
+            "star_catalog_deterministic": bool(star_catalog_deterministic),
         }
     )
     info["cosmetic_metrics"] = metrics
@@ -992,6 +1001,7 @@ def apply_resident_inline_cosmetic_thresholds(
         "star_count": int(threshold_info.get("star_count") or 0),
         "star_protection_radius_px": threshold_info.get("star_protection_radius_px"),
         "star_catalog": dict(threshold_info.get("star_catalog") or {}),
+        "star_catalog_deterministic": threshold_info.get("star_catalog_deterministic"),
         "star_catalog_source": threshold_info.get("star_catalog_source"),
         "applied": False,
         "native_method": None,
@@ -1302,6 +1312,7 @@ def apply_resident_inline_cosmetic_thresholds(
                     "min_neighbor_support": row["min_neighbor_support"],
                     "star_count": row["star_count"],
                     "star_protection_radius_px": row["star_protection_radius_px"],
+                    "star_catalog_deterministic": row["star_catalog_deterministic"],
                     "star_catalog_source": row["star_catalog_source"],
                     "detector_execution": row["detector_execution"],
                     "cosmetic_metrics": metrics,
@@ -1386,6 +1397,7 @@ def build_skipped_resident_inline_cosmetic_threshold_row(
         "star_count": int(info.get("star_count") or 0),
         "star_protection_radius_px": info.get("star_protection_radius_px"),
         "star_catalog": dict(info.get("star_catalog") or {}),
+        "star_catalog_deterministic": info.get("star_catalog_deterministic"),
         "star_catalog_source": info.get("star_catalog_source"),
         "applied": False,
         "native_method": None,
@@ -1416,6 +1428,7 @@ def build_skipped_resident_inline_cosmetic_threshold_row(
                 "min_neighbor_support": int(info.get("min_neighbor_support", 2)),
                 "star_count": int(info.get("star_count") or 0),
                 "star_protection_radius_px": info.get("star_protection_radius_px"),
+                "star_catalog_deterministic": info.get("star_catalog_deterministic"),
                 "star_catalog_source": info.get("star_catalog_source"),
                 "detector_execution": str(
                     info.get("detector_execution") or "cuda_isolated_threshold_apply"

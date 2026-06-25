@@ -4149,6 +4149,7 @@ def test_cli_resident_cuda_run_accepts_inline_star_protected_cosmetic_cuda_sourc
             "8.0",
             "--resident-inline-source-dq-max-invalid-fraction",
             "0.01",
+            "--resident-star-catalog-deterministic",
             "--resident-runtime-preset",
             "manual",
             "--until-stage",
@@ -4193,6 +4194,10 @@ def test_cli_resident_cuda_run_accepts_inline_star_protected_cosmetic_cuda_sourc
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector_execution"] == (
         "cuda_star_catalog_protected_isolated_threshold_apply"
     )
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_star_catalog_deterministic"] is True
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_star_catalog_source"] == (
+        "resident_cuda_star_grid_top_nms_candidates_deterministic"
+    )
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_high_fraction_guard_enabled"] is True
     assert strategy["inline_source_dq"]["mode"] == "cosmetic_star_cuda"
     assert strategy["inline_source_dq"]["detector"] == (
@@ -4200,6 +4205,10 @@ def test_cli_resident_cuda_run_accepts_inline_star_protected_cosmetic_cuda_sourc
     )
     assert strategy["inline_source_dq"]["detector_execution"] == (
         "cuda_star_catalog_protected_isolated_threshold_apply"
+    )
+    assert strategy["inline_source_dq"]["star_catalog_deterministic"] is True
+    assert strategy["inline_source_dq"]["star_catalog_source"] == (
+        "resident_cuda_star_grid_top_nms_candidates_deterministic"
     )
     assert timing["resident_inline_source_dq"] == "cosmetic_star_cuda"
     rows = source_dq["rows"]
@@ -4214,6 +4223,7 @@ def test_cli_resident_cuda_run_accepts_inline_star_protected_cosmetic_cuda_sourc
         for row in rows
     )
     assert all(row.get("star_catalog_source") for row in rows)
+    assert all(row.get("star_catalog_deterministic") is True for row in rows)
     assert not (run / "resident_source_dq_cache_route.json").exists()
 
 

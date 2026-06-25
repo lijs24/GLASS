@@ -63,6 +63,7 @@ def build_resident_source_dq_strategy(
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
     resident_inline_source_dq_admission: str = "all",
+    resident_star_catalog_deterministic: bool = False,
     artifact_type: str = "resident_source_dq_strategy",
 ) -> dict[str, Any]:
     plan_payload, plan_path = _load_plan(plan)
@@ -176,6 +177,19 @@ def build_resident_source_dq_strategy(
             if str(resident_inline_source_dq) == "cosmetic_star_cuda"
             else "cuda_isolated_threshold_apply"
             if str(resident_inline_source_dq) == "cosmetic_cuda"
+            else None
+        ),
+        "star_catalog_deterministic": (
+            bool(resident_star_catalog_deterministic)
+            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
+            else None
+        ),
+        "star_catalog_source": (
+            "resident_cuda_star_grid_top_nms_candidates_deterministic"
+            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
+            and bool(resident_star_catalog_deterministic)
+            else "resident_cuda_star_grid_top_nms_candidates"
+            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
             else None
         ),
         "hot_sigma": float(resident_inline_source_dq_hot_sigma),

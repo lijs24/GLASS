@@ -801,6 +801,72 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 665: Deterministic Resident Star-Protected Source-DQ Catalog
+
+Gate665 closes the real repeat-determinism gap left by Gate664's opt-in
+`cosmetic_star_cuda` path. Gate664 proved the batched native source-DQ kernels
+and dispatch, but two real 200-light repeats still differed by five source-DQ
+invalid samples. The cause was that source-DQ star protection did not inherit
+the existing resident deterministic catalog control that registration already
+uses.
+
+Implementation:
+
+- Added `star_catalog_deterministic` to
+  `inline_star_protected_cosmetic_thresholds_from_resident_stack`.
+- Routed `resident_star_catalog_deterministic` from resident CUDA execution
+  into both single-frame and batch source-DQ threshold/catalog construction.
+- Passed `deterministic=True` to
+  `ResidentCalibratedStack.star_grid_top_nms_candidates` for
+  `cosmetic_star_cuda` when `--resident-star-catalog-deterministic` is set.
+- Recorded source-DQ catalog determinism in:
+  - per-frame source-DQ rows;
+  - source-DQ component summaries;
+  - `resident_io_pipeline`;
+  - `resident_source_dq_strategy.json`.
+
+Validation:
+
+- Focused validation:
+  `3 passed`, covering deterministic source-DQ threshold/catalog propagation,
+  strategy artifact fields, and a resident CUDA CLI smoke with
+  `--resident-inline-source-dq cosmetic_star_cuda --resident-star-catalog-deterministic`.
+- Real 200-light deterministic repeat A:
+  `C:\glass_runs\phase2_s2_gate665_star_cuda_deterministic_source_dq\runs_20260626_000500\det_star_cuda_a`.
+- Real 200-light deterministic repeat B:
+  `C:\glass_runs\phase2_s2_gate665_star_cuda_deterministic_source_dq\runs_20260626_000500\det_star_cuda_b`.
+- Run A elapsed:
+  `19.866321900160983 s`, or `54.99562495490026x` versus the
+  `1092.541 s` black-box reference.
+- Run B elapsed:
+  `19.738215200253762 s`, or `55.35257156005457x` versus the same reference.
+- Both runs recorded identical source-DQ counts:
+  - invalid samples: `147013`;
+  - hot pixels: `98216`;
+  - cold pixels: `48797`;
+  - status counts: `applied=10`, `skipped_high_invalid_fraction=183`,
+    `skipped_admission_policy=7`.
+- Both runs recorded:
+  `resident_inline_source_dq_star_catalog_deterministic=true` and
+  `resident_cuda_star_grid_top_nms_candidates_deterministic`.
+- Repeat `resident-regression-gate` passed with:
+  - `resident_determinism_passed=true`;
+  - `output_difference_count=0`;
+  - `output_numerical_drift_count=0`;
+  - elapsed ratio `0.9935515642728923`.
+
+Interpretation:
+
+- Gate665 is a DQ/mask pipeline hardening gate: opt-in star-protected source-DQ
+  can now use the same deterministic resident catalog control as registration.
+- This fixes the Gate664 real repeat nondeterminism without changing the
+  default source-DQ setting.
+- `cosmetic_star_cuda` remains opt-in; the remaining promotion blockers are
+  policy/science questions, not repeat nondeterminism.
+- The next substantive gates should return to default-route StackEngine
+  promotion and performance: read/upload/calibration overlap, hardened
+  winsorized integration, or DQ/mask default contract coverage.
+
 ### S2-Gate 664: Batched Resident Star-Protected CUDA Source-DQ
 
 Gate664 removes Gate662/663's per-frame native dispatch fallback for

@@ -3848,6 +3848,7 @@ def _resident_source_inline_cosmetic_thresholds_from_resident_stack(
     resident_inline_source_dq: str = "off",
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
+    resident_star_catalog_deterministic: bool = False,
 ) -> dict[str, Any] | None:
     if resident_inline_source_dq not in {"cosmetic_cuda", "cosmetic_star_cuda"}:
         return None
@@ -3859,6 +3860,7 @@ def _resident_source_inline_cosmetic_thresholds_from_resident_stack(
             width=width,
             hot_sigma=resident_inline_source_dq_hot_sigma,
             cold_sigma=resident_inline_source_dq_cold_sigma,
+            star_catalog_deterministic=bool(resident_star_catalog_deterministic),
         )
     return inline_cosmetic_thresholds_from_resident_stack(
         stack,
@@ -3879,6 +3881,7 @@ def _resident_source_inline_cosmetic_thresholds_batch_from_resident_stack(
     resident_inline_source_dq: str = "off",
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
+    resident_star_catalog_deterministic: bool = False,
 ) -> dict[int, dict[str, Any]]:
     if resident_inline_source_dq not in {"cosmetic_cuda", "cosmetic_star_cuda"}:
         return {}
@@ -3891,6 +3894,7 @@ def _resident_source_inline_cosmetic_thresholds_batch_from_resident_stack(
                 width=width,
                 hot_sigma=resident_inline_source_dq_hot_sigma,
                 cold_sigma=resident_inline_source_dq_cold_sigma,
+                star_catalog_deterministic=bool(resident_star_catalog_deterministic),
             )
             for index in frame_indices
         }
@@ -8746,6 +8750,7 @@ def run_resident_calibration_integration(
                                 resident_inline_source_dq=resident_inline_source_dq,
                                 resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
                                 resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
+                                resident_star_catalog_deterministic=bool(resident_star_catalog_deterministic),
                             )
                             if resident_inline_source_dq in {"cosmetic_cuda", "cosmetic_star_cuda"}
                             else {}
@@ -8776,6 +8781,7 @@ def run_resident_calibration_integration(
                                     resident_inline_source_dq=resident_inline_source_dq,
                                     resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
                                     resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
+                                    resident_star_catalog_deterministic=bool(resident_star_catalog_deterministic),
                                 )
                             if threshold_info is not None:
                                 threshold_item = {
@@ -8954,6 +8960,7 @@ def run_resident_calibration_integration(
                             resident_inline_source_dq=resident_inline_source_dq,
                             resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
                             resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
+                            resident_star_catalog_deterministic=bool(resident_star_catalog_deterministic),
                         )
                         if threshold_info is not None:
                             threshold_item = {
@@ -14126,6 +14133,19 @@ def run_resident_calibration_integration(
                         "resident_inline_source_dq_threshold_stats_domain": (
                             "resident_calibrated_frame"
                             if resident_inline_source_dq in {"cosmetic_cuda", "cosmetic_star_cuda"}
+                            else None
+                        ),
+                        "resident_inline_source_dq_star_catalog_deterministic": (
+                            bool(resident_star_catalog_deterministic)
+                            if resident_inline_source_dq == "cosmetic_star_cuda"
+                            else None
+                        ),
+                        "resident_inline_source_dq_star_catalog_source": (
+                            "resident_cuda_star_grid_top_nms_candidates_deterministic"
+                            if resident_inline_source_dq == "cosmetic_star_cuda"
+                            and bool(resident_star_catalog_deterministic)
+                            else "resident_cuda_star_grid_top_nms_candidates"
+                            if resident_inline_source_dq == "cosmetic_star_cuda"
                             else None
                         ),
                         "resident_inline_source_dq_detector_execution": (

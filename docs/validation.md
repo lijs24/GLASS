@@ -356,6 +356,18 @@ Current Phase 2 latest mainline acceptance:
   into output maps. All required contracts and runtime checks passed; this
   opt-in source-DQ route remains unpromoted until threshold/catalog
   repeat-determinism or a tolerance-based diagnostic acceptance rule is added.
+- Gate665 wires `--resident-star-catalog-deterministic` into the
+  `cosmetic_star_cuda` source-DQ catalog path and records the deterministic
+  source in resident artifacts and `resident_source_dq_strategy.json`. Two real
+  200-light deterministic repeats at
+  `C:\glass_runs\phase2_s2_gate665_star_cuda_deterministic_source_dq\runs_20260626_000500`
+  recorded identical source-DQ totals (`147013` invalid samples,
+  `98216` hot, `48797` cold), both passed strict
+  `inline_cosmetic_cuda_positive`, and passed `resident-regression-gate` with
+  `resident_determinism_passed=true`, zero output differences, zero numerical
+  drift, and elapsed ratio `0.9935515642728923`. Run times were
+  `19.866321900160983 s` and `19.738215200253762 s`, about `55x` faster than
+  the `1092.541 s` black-box timing.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

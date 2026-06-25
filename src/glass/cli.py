@@ -1748,6 +1748,9 @@ def _write_resident_source_dq_strategy(
             "resident_inline_source_dq_admission",
             DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
         ),
+        resident_star_catalog_deterministic=bool(
+            getattr(args, "resident_star_catalog_deterministic", False)
+        ),
     )
     strategy_path = _resident_source_dq_strategy_path(run)
     write_json(strategy_path, strategy)
