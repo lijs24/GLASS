@@ -425,6 +425,7 @@ def test_resident_runtime_preset_throughput_v4_native_completion_applies_default
     assert args.resident_native_completion_calibration == "on"
     assert args.resident_native_completion_wave_fill_us == 25
     assert args.resident_native_completion_wave_fill_mode == "single_wait"
+    assert args.resident_native_completion_queue_buffer_frames is None
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v4-native-completion"
     assert args._resident_runtime_preset_effective["applied"]["resident_native_queue_read"] == "on"
     assert args._resident_runtime_preset_effective["applied"]["resident_warp_chunk_capacity_frames"] == 8
@@ -449,6 +450,7 @@ def test_resident_runtime_preset_defaults_to_throughput_v4_native_completion() -
     assert args.resident_native_completion_calibration == "on"
     assert args.resident_native_completion_wave_fill_us == 25
     assert args.resident_native_completion_wave_fill_mode == "single_wait"
+    assert args.resident_native_completion_queue_buffer_frames is None
     assert args.resident_native_queue_read == "on"
     assert args.resident_native_queue_drain_mode == "thread"
     assert args.resident_warp_chunk_capacity_frames == 8
@@ -488,6 +490,24 @@ def test_resident_runtime_preset_respects_explicit_completion_wave_fill_mode() -
         ]
         == "multi_wait"
     )
+
+
+def test_resident_native_completion_queue_buffer_frames_arg_is_preserved() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-native-completion-queue-buffer-frames",
+            "64",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_native_completion_queue_buffer_frames == 64
 
 
 def test_resident_runtime_preset_manual_keeps_legacy_values() -> None:

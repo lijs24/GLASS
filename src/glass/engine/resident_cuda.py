@@ -7156,6 +7156,7 @@ def run_resident_calibration_integration(
     resident_native_completion_calibration: str = "off",
     resident_native_completion_wave_fill_us: int = 0,
     resident_native_completion_wave_fill_mode: str = "multi_wait",
+    resident_native_completion_queue_buffer_frames: int | None = None,
     resident_native_batch_read: str = "off",
     resident_native_queue_read: str = "off",
     resident_native_queue_drain_mode: str | None = None,
@@ -7381,6 +7382,11 @@ def run_resident_calibration_integration(
         raise ValueError("resident_native_completion_wave_fill_us must be between 0 and 10000")
     if resident_native_completion_wave_fill_mode not in {"multi_wait", "single_wait"}:
         raise ValueError("resident_native_completion_wave_fill_mode must be multi_wait or single_wait")
+    if (
+        resident_native_completion_queue_buffer_frames is not None
+        and int(resident_native_completion_queue_buffer_frames) < 1
+    ):
+        raise ValueError("resident_native_completion_queue_buffer_frames must be at least 1")
     if resident_native_batch_read not in {"off", "on"}:
         raise ValueError("resident_native_batch_read must be off or on")
     if resident_native_queue_read not in {"off", "on"}:
@@ -8132,6 +8138,28 @@ def run_resident_calibration_integration(
             native_completion_calibration_out_of_order_count = 0
             native_completion_calibration_worker_count = 0
             native_completion_calibration_queue_buffer_count = 0
+            native_completion_queue_buffer_base_frames = max(
+                int(resident_prefetch_frames),
+                int(resident_calibration_batch_frames),
+                int(resident_calibration_streams) * 2,
+            )
+            native_completion_queue_buffer_requested_frames = (
+                None
+                if resident_native_completion_queue_buffer_frames is None
+                else int(resident_native_completion_queue_buffer_frames)
+            )
+            native_completion_queue_buffer_policy_source = (
+                "explicit_cli"
+                if native_completion_queue_buffer_requested_frames is not None
+                else "runtime_auto_base"
+            )
+            native_completion_queue_buffer_planned_frames = max(
+                native_completion_queue_buffer_base_frames,
+                native_completion_queue_buffer_requested_frames or 0,
+            )
+            native_completion_queue_buffer_estimated_bytes = int(
+                native_completion_queue_buffer_planned_frames * height * width * 2
+            )
             native_completion_calibration_order_sample: list[int] = []
             native_completion_calibration_slot_release_mode: str | None = None
             native_completion_calibration_slot_reuse_count = 0
@@ -8410,11 +8438,7 @@ def run_resident_calibration_integration(
                                     resident_fits_spec_cache[str(frame["path"])] = spec
                                 batch_specs.append(spec)
                             if native_completion_calibration_enabled:
-                                native_completion_queue_buffers = max(
-                                    int(resident_prefetch_frames),
-                                    int(resident_calibration_batch_frames),
-                                    int(resident_calibration_streams) * 2,
-                                )
+                                native_completion_queue_buffers = native_completion_queue_buffer_planned_frames
                                 native_completion_workers = max(
                                     int(resident_prefetch_workers),
                                     int(resident_calibration_streams),
@@ -13440,6 +13464,26 @@ def run_resident_calibration_integration(
                 ),
                 "native_completion_calibration_queue_buffer_count": int(
                     native_completion_calibration_queue_buffer_count
+                ),
+                "native_completion_queue_buffer_policy_source": str(
+                    native_completion_queue_buffer_policy_source
+                ),
+                "native_completion_queue_buffer_base_frames": int(
+                    native_completion_queue_buffer_base_frames
+                ),
+                "native_completion_queue_buffer_requested_frames": (
+                    None
+                    if native_completion_queue_buffer_requested_frames is None
+                    else int(native_completion_queue_buffer_requested_frames)
+                ),
+                "native_completion_queue_buffer_planned_frames": int(
+                    native_completion_queue_buffer_planned_frames
+                ),
+                "native_completion_queue_buffer_estimated_bytes": int(
+                    native_completion_queue_buffer_estimated_bytes
+                ),
+                "native_completion_queue_buffer_effective_bytes": int(
+                    native_completion_calibration_queue_buffer_count * height * width * 2
                 ),
                 "native_completion_calibration_order_sample": list(
                     native_completion_calibration_order_sample

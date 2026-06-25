@@ -1110,6 +1110,11 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     timing["resident_native_completion_wave_fill_mode"] = getattr(
         args, "resident_native_completion_wave_fill_mode", "multi_wait"
     )
+    timing["resident_native_completion_queue_buffer_frames"] = getattr(
+        args,
+        "resident_native_completion_queue_buffer_frames",
+        None,
+    )
     timing["resident_native_batch_read"] = getattr(args, "resident_native_batch_read", "off")
     timing["resident_native_queue_read"] = getattr(args, "resident_native_queue_read", "off")
     timing["resident_native_queue_drain_mode"] = getattr(args, "resident_native_queue_drain_mode", None)
@@ -3254,6 +3259,9 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_native_completion_calibration=args.resident_native_completion_calibration,
                 resident_native_completion_wave_fill_us=args.resident_native_completion_wave_fill_us,
                 resident_native_completion_wave_fill_mode=args.resident_native_completion_wave_fill_mode,
+                resident_native_completion_queue_buffer_frames=(
+                    args.resident_native_completion_queue_buffer_frames
+                ),
                 resident_native_batch_read=args.resident_native_batch_read,
                 resident_native_queue_read=args.resident_native_queue_read,
                 resident_native_queue_drain_mode=args.resident_native_queue_drain_mode,
@@ -3562,6 +3570,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_native_completion_calibration=args.resident_native_completion_calibration,
                 resident_native_completion_wave_fill_us=args.resident_native_completion_wave_fill_us,
                 resident_native_completion_wave_fill_mode=args.resident_native_completion_wave_fill_mode,
+                resident_native_completion_queue_buffer_frames=(
+                    args.resident_native_completion_queue_buffer_frames
+                ),
                 resident_native_batch_read=args.resident_native_batch_read,
                 resident_native_queue_read=args.resident_native_queue_read,
                 resident_native_queue_drain_mode=args.resident_native_queue_drain_mode,
@@ -7160,6 +7171,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-native-completion-queue-buffer-frames",
+        type=int,
+        default=None,
+        help=(
+            "explicit raw FITS pinned-host completion-ring frame count for the resident native completion "
+            "calibration route; default uses max(prefetch_frames, calibration_batch_frames, streams*2)"
+        ),
+    )
+    run.add_argument(
         "--resident-native-batch-read",
         choices=["off", "on"],
         default="off",
@@ -7886,6 +7906,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["multi_wait", "single_wait"],
         default="multi_wait",
         help="resident audit completion-queue wave-fill schedule for A/B profiling",
+    )
+    audit.add_argument(
+        "--resident-native-completion-queue-buffer-frames",
+        type=int,
+        default=None,
+        help="explicit raw FITS pinned-host completion-ring frame count for audit A/B profiling",
     )
     audit.add_argument("--resident-native-batch-read", choices=["off", "on"], default="off")
     audit.add_argument("--resident-native-queue-read", choices=["off", "on"], default="off")

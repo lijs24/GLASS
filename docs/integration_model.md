@@ -400,6 +400,22 @@ should not spend more gates on simple block-size tuning. The next substantive
 integration optimization should be a deterministic cooperative/segmented
 reducer redesign or a return to H2D/read/calibration overlap.
 
+S2-Gate 680 adds an explicit resident native-completion raw FITS pinned-host
+ring control: `--resident-native-completion-queue-buffer-frames`. The default
+behavior remains the established safe base,
+`max(prefetch_frames, calibration_batch_frames, calibration_streams*2)`, which
+is 32 frames for the current throughput-v4 native-completion preset. Explicit
+requests can enlarge the planned raw-buffer ring, and resident artifacts record
+the policy source, base frames, requested frames, planned frames, actual native
+clamped frame count, and estimated/effective pinned raw bytes. On the real
+200-light benchmark, a 64-frame raw ring passed the Phase 2 mainline audit and
+regression gate with no output drift, but it was slower than the 32-frame
+default: total elapsed `12.695490699843504 s` versus
+`12.245715199969709 s`, and `light_read_upload_calibrate`
+`4.130420900066383 s` versus `3.391568800085224 s`. The control surface remains
+available for high-memory A/B runs, but 64 frames is not promoted as the
+default on this workstation.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

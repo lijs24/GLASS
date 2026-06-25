@@ -179,6 +179,28 @@ def build_resident_light_pipeline_profile(
                 resident_io_pipeline,
                 "native_completion_calibration_queue_buffer_count",
             ),
+            "queue_buffer_policy_source": resident_io_pipeline.get(
+                "native_completion_queue_buffer_policy_source"
+            ),
+            "queue_buffer_base_frames": _int_value(
+                resident_io_pipeline,
+                "native_completion_queue_buffer_base_frames",
+            ),
+            "queue_buffer_requested_frames": resident_io_pipeline.get(
+                "native_completion_queue_buffer_requested_frames"
+            ),
+            "queue_buffer_planned_frames": _int_value(
+                resident_io_pipeline,
+                "native_completion_queue_buffer_planned_frames",
+            ),
+            "queue_buffer_estimated_bytes": _int_value(
+                resident_io_pipeline,
+                "native_completion_queue_buffer_estimated_bytes",
+            ),
+            "queue_buffer_effective_bytes": _int_value(
+                resident_io_pipeline,
+                "native_completion_queue_buffer_effective_bytes",
+            ),
             "queue_buffers_per_stream": _none_if_nonpositive(
                 _fraction(
                     float(

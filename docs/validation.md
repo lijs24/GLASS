@@ -576,6 +576,22 @@ Current Phase 2 latest mainline acceptance:
   audit with `200` input lights and `193` active frames, and passed regression
   against the fresh 256-thread control with failed checks `[]` and elapsed
   ratio `1.0220616179844362`.
+- Gate680 adds explicit native-completion raw-ring capacity control for the
+  resident read/H2D/calibration pipeline. The current default run at
+  `C:\glass_runs\phase2_s2_gate680_completion_ring\runs_20260626_160000\queue32_default`
+  recorded `native_completion_queue_buffer_policy_source=runtime_auto_base`,
+  planned/effective raw buffers `32 / 32`, pinned raw bytes
+  `3945676800 / 3945676800`, total elapsed `12.245715199969709 s`, and
+  `light_read_upload_calibrate=3.391568800085224 s`. The explicit 64-buffer
+  candidate at
+  `C:\glass_runs\phase2_s2_gate680_completion_ring\runs_20260626_160000\queue64_candidate`
+  recorded `policy_source=explicit_cli`, requested/planned/effective raw buffers
+  `64 / 64 / 64`, pinned raw bytes `7891353600 / 7891353600`, total elapsed
+  `12.695490699843504 s`, and `light_read_upload_calibrate=4.130420900066383 s`.
+  The 64-buffer run passed Phase 2 mainline audit and resident regression
+  against the 32-buffer control with failed checks `[]` and elapsed ratio
+  `1.0367292144663716`, but runtime compare selected `queue32`, so 64 buffers
+  are not promoted as default.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

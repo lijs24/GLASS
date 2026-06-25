@@ -1612,6 +1612,83 @@ Interpretation:
   overlap work. Further 128/256/512 retesting is low priority unless the kernel
   algorithm itself changes.
 
+### S2-Gate 680: Native Completion Ring Capacity Control
+
+Gate680 returns to the resident read/H2D/calibration pipeline without changing
+calibration math. The current default native-completion path uses a pinned raw
+FITS completion ring sized from the runtime preset. Gate680 makes that ring
+capacity explicitly controllable and auditable so high-memory machines can test
+larger raw-payload staging without changing the resident calibrated-stack,
+registration, LN, rejection, or integration formulas.
+
+Implementation:
+
+- Added `--resident-native-completion-queue-buffer-frames` to `glass run` and
+  `glass audit`.
+- Threaded the value into `run_resident_calibration_integration`.
+- The default planned raw ring remains
+  `max(prefetch_frames, calibration_batch_frames, calibration_streams*2)`.
+  For throughput-v4 native-completion, this stays `32` frames.
+- Explicit requests can only enlarge the planned ring; they do not shrink the
+  established safe base.
+- Resident artifacts now record:
+  - `native_completion_queue_buffer_policy_source`;
+  - `native_completion_queue_buffer_base_frames`;
+  - `native_completion_queue_buffer_requested_frames`;
+  - `native_completion_queue_buffer_planned_frames`;
+  - `native_completion_queue_buffer_estimated_bytes`;
+  - `native_completion_queue_buffer_effective_bytes`.
+- `resident_light_pipeline_profile.native_completion` mirrors the same queue
+  buffer policy fields.
+
+Validation:
+
+- Focused CLI/runtime tests passed:
+  `11 passed, 81 deselected`.
+- Focused resident CUDA tests passed:
+  `2 passed, 130 deselected`.
+- Full pytest passed:
+  `1422 passed in 65.33 s`.
+- Real 200-light default 32-buffer control:
+  `C:\glass_runs\phase2_s2_gate680_completion_ring\runs_20260626_160000\queue32_default`.
+- Real 200-light 64-buffer candidate:
+  `C:\glass_runs\phase2_s2_gate680_completion_ring\runs_20260626_160000\queue64_candidate`.
+- Phase 2 mainline audit for the 64-buffer candidate passed:
+  `C:\glass_runs\phase2_s2_gate680_completion_ring\gate680_queue64_phase2_mainline_audit.json`.
+  Failed checks `[]`, input lights `200`, active frames `193`.
+- Regression of 64-buffer candidate against 32-buffer control passed:
+  `C:\glass_runs\phase2_s2_gate680_completion_ring\gate680_queue64_vs_queue32_regression.json`.
+  Failed checks `[]`, elapsed ratio `1.0367292144663716`.
+- Runtime compare:
+  `C:\glass_runs\phase2_s2_gate680_completion_ring\gate680_completion_ring_runtime_compare.json`.
+  Best label was `queue32`.
+
+Timing:
+
+- 32-buffer default:
+  - total elapsed `12.245715199969709 s`;
+  - `light_read_upload_calibrate=3.391568800085224 s`;
+  - native completion planned/effective raw buffers `32 / 32`;
+  - estimated/effective pinned raw bytes `3945676800 / 3945676800`.
+- 64-buffer candidate:
+  - total elapsed `12.695490699843504 s`;
+  - `light_read_upload_calibrate=4.130420900066383 s`;
+  - native completion planned/effective raw buffers `64 / 64`;
+  - estimated/effective pinned raw bytes `7891353600 / 7891353600`.
+
+Interpretation:
+
+- This is a substantive scheduling control surface, not a report-only gate: it
+  changes the native completion ring capacity when explicitly requested.
+- On the current RTX PRO 6000 / 200-light workload, doubling the raw pinned
+  completion ring from 32 to 64 frames increased pinned host pressure and
+  slowed the light pipeline. The default remains 32.
+- The new knob is useful for future machines/datasets where disk latency,
+  host RAM, and PCIe behavior differ, but any larger ring must pass the same
+  real-run regression before promotion.
+- The next mainline optimization should move to deeper read/H2D overlap design
+  or a cooperative/segmented reducer, not another fixed ring-size sweep.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual
