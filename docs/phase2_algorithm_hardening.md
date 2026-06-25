@@ -487,6 +487,87 @@ Interpretation:
   orchestration, a cooperative/segmented resident reducer, or deeper native
   read/H2D/calibration overlap.
 
+### S2-Gate 635: Guarded CUDA Reference Scout Default
+
+Gate 635 returns to the Phase 2 mainline by hardening the resident default
+reference-selection path rather than adding another report-only handoff. The
+previous explicit CUDA reference scout could select `F000215` on the real
+200-light M38 H-alpha run, which then failed the reference-health evidence and
+left only a tiny registration set. This gate lets `auto` attempt the CUDA
+catalog, but it must pass a CPU selection guard over the same sampled frames
+before its reference becomes official. If the guard fails, or if the CUDA
+candidate path errors, the run falls back to the CPU scout and records the CUDA
+candidate as diagnostic evidence.
+
+Code changes:
+
+- `resident_reference_scout.py` now separates row collection, reference
+  ranking, and guarded `auto` resolution.
+- `auto` with CUDA available records `attempted=cuda`, `fallback=cpu`, and a
+  `cpu_guard` block containing the CUDA candidate reference, CPU reference,
+  star-ratio evidence, rank-fraction evidence, and top candidate summaries.
+- Explicit `--resident-reference-scout-backend cuda` remains strict: it still
+  reports unavailable CUDA clearly and still relies on the existing
+  reference-health gate to block bad references.
+- CUDA candidate collection failures in `auto` no longer break the default
+  path; they fall back to the CPU scout and record
+  `cuda_reference_scout_auto_cuda_candidate_failed_cpu_fallback`.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate635_guarded_cuda_reference_scout\runs_20260625_151002\candidate_guarded_cuda_reference_scout`.
+- Evidence root:
+  `C:\glass_runs\phase2_s2_gate635_guarded_cuda_reference_scout\runs_20260625_151002`.
+- Reference scout result: requested `auto`, attempted `cuda`, effective `cpu`.
+- CUDA candidate reference: `F000215`.
+- CPU guard reference: `F000225`.
+- CPU guard evidence for `F000215`: star ratio `0.7843137254901961`, rank
+  fraction `0.4411764705882353`; guard status `fallback_to_cpu`.
+- GLASS total elapsed: `10.969763099914417 s`.
+- Resident calibration/integration stage elapsed: `9.63287049997598 s`.
+- Frame accounting: `200` lights, `193` active weighted frames, `7` masked
+  registration frames.
+- Resident regression gate versus Gate633: passed, elapsed ratio
+  `1.0218540265834237` with max allowed `1.2`.
+- Black-box reference elapsed: `1092.541 s`.
+- Acceptance speedup: `99.5956785984306x`.
+- Compare metrics at coverage >= `190`: shape match `true`, RMS
+  `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Pipeline contract: passed.
+- StackEngine contract: passed.
+- Warp quality contract: passed.
+- Acceptance audit status: passed.
+
+Validation commands:
+
+- `python -m pytest -q tests/test_cli_smoke.py -k "resident_reference_scout or
+  resident_reference_health or reference_admission"`.
+- `python -m ruff check src/glass/engine/resident_reference_scout.py
+  tests/test_cli_smoke.py`.
+- `glass run` on the real 200-light resident CUDA benchmark with the shared
+  resident master cache.
+- `glass resident-regression-gate` against the Gate633 accepted baseline.
+- `glass compare` against the established black-box FastIntegration master
+  with the same scale/offset and coverage map policy as Gate634.
+- `glass acceptance-audit` with real-data frame counts, speedup, compare, and
+  pipeline/StackEngine/warp contracts.
+
+Interpretation:
+
+- This gate directly improves default-path engineering: CUDA reference scouting
+  can now be tried automatically without letting an unsafe reference enter the
+  scientific resident registration/warp/integration path.
+- The default remains correctness-first. On the current M38 benchmark, the CUDA
+  raw-catalog candidate still fails the guard and the official reference stays
+  CPU-selected.
+- The next substantive gate should continue on mainline completeness:
+  resident registration/warp orchestration, a fully resident star/catalog
+  health model, DQ/mask contract simplification, or a cooperative resident
+  reducer for heavier stacks.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization

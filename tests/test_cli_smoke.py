@@ -1480,7 +1480,7 @@ def test_cli_resident_run_blocks_bad_cuda_reference_before_compute(
     assert not (run / "resident_memory_admission.json").exists()
 
 
-def test_resident_reference_scout_auto_keeps_cpu_until_cuda_reference_health_gate(
+def test_resident_reference_scout_auto_keeps_cuda_when_cpu_guard_passes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1500,11 +1500,117 @@ def test_resident_reference_scout_auto_keeps_cpu_until_cuda_reference_health_gat
     scout = read_json(scout_path)
 
     assert scout["catalog_backend_requested"] == "auto"
-    assert scout["catalog_backend"] == "cpu"
+    assert scout["catalog_backend"] == "cuda"
     assert scout["catalog_backend_resolution"]["cuda_status"] == "available"
-    assert scout["catalog_backend_resolution"]["reason"] == (
-        "cuda_reference_scout_requires_explicit_backend_until_real_reference_health_passes"
-    )
+    assert scout["catalog_backend_resolution"]["effective"] == "cuda"
+    assert scout["catalog_backend_resolution"]["attempted"] == "cuda"
+    assert scout["catalog_backend_resolution"]["fallback"] == "cpu"
+    assert scout["catalog_backend_resolution"]["reason"] == "cuda_reference_scout_auto_cpu_guard_passed"
+    assert scout["catalog_backend_resolution"]["cpu_guard"]["passed"] is True
+
+
+def test_resident_reference_scout_auto_falls_back_to_cpu_when_cuda_guard_misses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import glass_cuda
+
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "auto_guard_fallback_scout"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    weak_id = _light_frame_id_by_stem(plan, "light_001")
+    strong_id = _light_frame_id_by_stem(plan, "light_002")
+
+    def fake_cuda_prefers_weak(
+        data,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell,
+        max_output_candidates,
+        min_separation_px,
+    ):
+        image = np.asarray(data, dtype=np.float32)
+        is_weak = float(np.max(image)) < 2000.0
+        count = 30 if is_weak else 1
+        flux_value = float(threshold) + (100.0 if is_weak else 10.0)
+        flux = np.full((count,), flux_value, dtype=np.float32)
+        coords = np.arange(count, dtype=np.float32)
+        return {
+            "count": count,
+            "stored_count": count,
+            "grid_cols": int(grid_cols),
+            "grid_rows": int(grid_rows),
+            "candidates_per_cell": int(candidates_per_cell),
+            "grid_capacity": int(grid_cols) * int(grid_rows) * int(candidates_per_cell),
+            "max_output_candidates": int(max_output_candidates),
+            "min_separation_px": float(min_separation_px),
+            "catalog_sort_mode": "fake_cuda_prefers_weak",
+            "catalog_topk_mode": "fake_cuda_prefers_weak",
+            "x": coords,
+            "y": coords,
+            "flux": flux,
+        }
+
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: True)
+    monkeypatch.setattr(glass_cuda, "star_grid_top_nms_candidates_f32", fake_cuda_prefers_weak)
+
+    scout_path = write_resident_reference_scout(plan, run, sample_stride=1, max_frames=0, catalog_backend="auto")
+    scout = read_json(scout_path)
+    guard = scout["catalog_backend_resolution"]["cpu_guard"]
+
+    assert scout["catalog_backend_requested"] == "auto"
+    assert scout["catalog_backend"] == "cpu"
+    assert scout["reference_frame_id"] == strong_id
+    assert all(row["catalog_backend"] == "cpu" for row in scout["frame_quality"])
+    assert scout["catalog_backend_resolution"]["effective"] == "cpu"
+    assert scout["catalog_backend_resolution"]["attempted"] == "cuda"
+    assert scout["catalog_backend_resolution"]["fallback"] == "cpu"
+    assert scout["catalog_backend_resolution"]["reason"] == "cuda_reference_scout_auto_cpu_guard_fallback"
+    assert guard["passed"] is False
+    assert guard["status"] == "fallback_to_cpu"
+    assert guard["cuda_reference_frame_id"] == weak_id
+    assert guard["cpu_reference_frame_id"] == strong_id
+
+
+def test_resident_reference_scout_auto_falls_back_to_cpu_when_cuda_candidate_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import glass_cuda
+
+    dataset = tmp_path / "dataset"
+    _write_two_light_reference_scout_dataset(dataset)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "auto_cuda_error_fallback_scout"
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    strong_id = _light_frame_id_by_stem(plan, "light_002")
+
+    def failing_cuda_catalog(*_args, **_kwargs):
+        raise RuntimeError("unit-test CUDA catalog failure")
+
+    monkeypatch.setattr(glass_cuda, "cuda_available", lambda: True)
+    monkeypatch.setattr(glass_cuda, "star_grid_top_nms_candidates_f32", failing_cuda_catalog)
+
+    scout_path = write_resident_reference_scout(plan, run, sample_stride=1, max_frames=0, catalog_backend="auto")
+    scout = read_json(scout_path)
+    guard = scout["catalog_backend_resolution"]["cpu_guard"]
+
+    assert scout["catalog_backend_requested"] == "auto"
+    assert scout["catalog_backend"] == "cpu"
+    assert scout["reference_frame_id"] == strong_id
+    assert scout["catalog_backend_resolution"]["effective"] == "cpu"
+    assert scout["catalog_backend_resolution"]["attempted"] == "cuda"
+    assert scout["catalog_backend_resolution"]["reason"] == "cuda_reference_scout_auto_cuda_candidate_failed_cpu_fallback"
+    assert guard["status"] == "cuda_candidate_unavailable"
+    assert guard["cuda_error_count"] == 2
+    assert guard["cpu_reference_frame_id"] == strong_id
 
 
 def test_resident_reference_scout_explicit_cuda_backend_reports_unavailable(

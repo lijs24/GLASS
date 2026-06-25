@@ -104,19 +104,22 @@ Machine-readable speedup summary:
   frames, and `7` zero-weight frames, matching the WBPP FastIntegration accepted
   frame set used for the parity comparison.
 
-Current Phase 2 latest-HEAD acceptance:
+Current Phase 2 latest guarded-reference acceptance:
 
-- Gate: S2-Gate 634.
+- Gate: S2-Gate 635.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate634_latest_head_ab\runs_20260625_145407`.
+  `C:\glass_runs\phase2_s2_gate635_guarded_cuda_reference_scout\runs_20260625_151002`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate633_lazy_fallback\runs_20260625_144040\candidate_lazy_fallback_r2`.
-- GLASS elapsed time: `10.735156700015068 s`.
+  `C:\glass_runs\phase2_s2_gate635_guarded_cuda_reference_scout\runs_20260625_151002\candidate_guarded_cuda_reference_scout`.
+- GLASS elapsed time: `10.969763099914417 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `101.77224520611482x`.
+- Speedup: `99.5956785984306x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
+- Reference scout: `auto` attempted CUDA, selected CUDA candidate `F000215`,
+  failed the CPU guard at star ratio `0.7843137254901961` and rank fraction
+  `0.4411764705882353`, then officially fell back to CPU reference `F000225`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
@@ -124,8 +127,10 @@ Current Phase 2 latest-HEAD acceptance:
 - Pipeline contract: passed.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
+- Resident regression gate versus Gate633: passed with candidate/baseline
+  elapsed ratio `1.0218540265834237`.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate634_latest_head_ab\runs_20260625_145407\gate634_latest_head_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate635_guarded_cuda_reference_scout\runs_20260625_151002\gate635_acceptance_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

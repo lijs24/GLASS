@@ -19,6 +19,8 @@ DEFAULT_REFERENCE_SCOUT_MAX_FRAMES = 64
 DEFAULT_REFERENCE_SCOUT_THRESHOLD_SIGMA = 5.0
 DEFAULT_REFERENCE_SCOUT_MAX_STARS = 300
 DEFAULT_REFERENCE_SCOUT_BACKEND = "auto"
+AUTO_REFERENCE_SCOUT_GUARD_MIN_CPU_STAR_RATIO = 0.85
+AUTO_REFERENCE_SCOUT_GUARD_MAX_CPU_RANK_FRACTION = 0.25
 
 
 def _plan_light_frames(plan: dict[str, Any]) -> list[dict[str, Any]]:
@@ -141,18 +143,18 @@ def _resolve_catalog_backend(requested: str) -> tuple[str, dict[str, Any]]:
         if not available:
             raise RuntimeError(f"resident reference scout CUDA backend requested but unavailable: {reason}")
         return "cuda", {"requested": mode, "effective": "cuda", "cuda_status": reason}
-    return {
-        True: (
-            "cpu",
+    if available:
+        return (
+            "cuda",
             {
                 "requested": mode,
-                "effective": "cpu",
+                "effective": "cuda",
                 "cuda_status": reason,
-                "reason": "cuda_reference_scout_requires_explicit_backend_until_real_reference_health_passes",
+                "reason": "cuda_reference_scout_auto_candidate_pending_cpu_guard",
+                "fallback": "cpu",
             },
-        ),
-        False: ("cpu", {"requested": mode, "effective": "cpu", "cuda_status": reason}),
-    }[available]
+        )
+    return "cpu", {"requested": mode, "effective": "cpu", "cuda_status": reason}
 
 
 def _cuda_catalog_metrics(
@@ -338,6 +340,137 @@ def _scout_frame_quality(
     return row
 
 
+def _collect_scout_rows(
+    scouted_frames: list[dict[str, Any]],
+    *,
+    sample_stride: int,
+    sample_side: int,
+    threshold_sigma: float,
+    max_stars: int,
+    catalog_backend: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    rows: list[dict[str, Any]] = []
+    row_errors: list[dict[str, Any]] = []
+    for frame in scouted_frames:
+        try:
+            rows.append(
+                _scout_frame_quality(
+                    frame,
+                    sample_stride=max(1, int(sample_stride)),
+                    sample_side=max(1, int(sample_side)),
+                    threshold_sigma=float(threshold_sigma),
+                    max_stars=max(1, int(max_stars)),
+                    catalog_backend=catalog_backend,
+                )
+            )
+        except Exception as exc:
+            row_errors.append(
+                {
+                    "frame_id": str(frame.get("id")),
+                    "path": str(frame.get("path")),
+                    "error": str(exc),
+                }
+            )
+    return rows, row_errors
+
+
+def _select_reference(
+    rows: list[dict[str, Any]],
+    *,
+    dominant_orientation: tuple[str, str] | None,
+) -> dict[str, Any]:
+    candidates = [row for row in rows if row.get("reference_candidate")]
+    fallback_used = False
+    if not candidates:
+        candidates = rows
+        fallback_used = True
+    orientation_constraint_applied = False
+    orientation_constraint_fallback = False
+    if dominant_orientation is not None and candidates:
+        orientation_rows = [
+            row for row in candidates if tuple(row.get("orientation_key") or []) == tuple(dominant_orientation)
+        ]
+        if orientation_rows:
+            candidates = orientation_rows
+            orientation_constraint_applied = True
+        else:
+            orientation_constraint_fallback = True
+    if not candidates:
+        raise ValueError("resident reference scout could not read any light frame")
+
+    ranked = sorted(candidates, key=_reference_selection_key, reverse=True)
+    return {
+        "reference": ranked[0],
+        "ranked_candidates": ranked,
+        "reference_selection_fallback": fallback_used,
+        "orientation_constraint_applied": orientation_constraint_applied,
+        "orientation_constraint_fallback": orientation_constraint_fallback,
+    }
+
+
+def _guard_top_candidates(rows: list[dict[str, Any]], limit: int = 5) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for rank, row in enumerate(rows[: max(0, int(limit))], start=1):
+        result.append(
+            {
+                "rank": rank,
+                "frame_id": row.get("frame_id"),
+                "star_count": row.get("star_count"),
+                "quality_score": row.get("quality_score"),
+                "background_rms": row.get("background_rms"),
+            }
+        )
+    return result
+
+
+def _auto_cuda_cpu_guard(
+    *,
+    cuda_selection: dict[str, Any],
+    cpu_selection: dict[str, Any],
+) -> dict[str, Any]:
+    cuda_reference = cuda_selection["reference"]
+    cpu_reference = cpu_selection["reference"]
+    cpu_ranked = list(cpu_selection.get("ranked_candidates") or [])
+    cuda_ranked = list(cuda_selection.get("ranked_candidates") or [])
+    cuda_reference_id = str(cuda_reference.get("frame_id") or "")
+    selected_cpu_row = next((row for row in cpu_ranked if str(row.get("frame_id") or "") == cuda_reference_id), None)
+    selected_rank = cpu_ranked.index(selected_cpu_row) + 1 if selected_cpu_row in cpu_ranked else None
+    rank_fraction = (
+        (float(selected_rank) - 1.0) / float(max(len(cpu_ranked) - 1, 1))
+        if selected_rank is not None and cpu_ranked
+        else None
+    )
+    selected_star_count = int(selected_cpu_row.get("star_count") or 0) if selected_cpu_row is not None else 0
+    cpu_reference_star_count = int(cpu_reference.get("star_count") or 0)
+    star_ratio = (
+        float(selected_star_count) / float(cpu_reference_star_count)
+        if cpu_reference_star_count > 0
+        else (1.0 if selected_star_count > 0 else 0.0)
+    )
+    passed = (
+        selected_cpu_row is not None
+        and star_ratio >= AUTO_REFERENCE_SCOUT_GUARD_MIN_CPU_STAR_RATIO
+        and rank_fraction is not None
+        and rank_fraction <= AUTO_REFERENCE_SCOUT_GUARD_MAX_CPU_RANK_FRACTION
+    )
+    return {
+        "status": "passed" if passed else "fallback_to_cpu",
+        "passed": passed,
+        "cuda_reference_frame_id": cuda_reference_id,
+        "cpu_reference_frame_id": str(cpu_reference.get("frame_id") or ""),
+        "selected_cpu_rank": selected_rank,
+        "cpu_measured_frame_count": len(cpu_ranked),
+        "selected_cpu_star_count": selected_star_count,
+        "cpu_reference_star_count": cpu_reference_star_count,
+        "selected_cpu_star_ratio": star_ratio,
+        "selected_cpu_rank_fraction": rank_fraction,
+        "min_cpu_star_ratio": AUTO_REFERENCE_SCOUT_GUARD_MIN_CPU_STAR_RATIO,
+        "max_cpu_rank_fraction": AUTO_REFERENCE_SCOUT_GUARD_MAX_CPU_RANK_FRACTION,
+        "cuda_top_candidates": _guard_top_candidates(cuda_ranked),
+        "cpu_top_candidates": _guard_top_candidates(cpu_ranked),
+    }
+
+
 def build_resident_reference_scout(
     plan_path: str | Path,
     run_dir: str | Path,
@@ -358,50 +491,90 @@ def build_resident_reference_scout(
     dominant_orientation = _dominant_orientation_key(light_frames)
     scouted_frames = _sampled_light_frames(light_frames, max_frames=max_frames)
     backend, backend_resolution = _resolve_catalog_backend(catalog_backend)
-
-    rows: list[dict[str, Any]] = []
-    row_errors: list[dict[str, Any]] = []
-    for frame in scouted_frames:
+    rows, row_errors = _collect_scout_rows(
+        scouted_frames,
+        sample_stride=max(1, int(sample_stride)),
+        sample_side=max(1, int(sample_side)),
+        threshold_sigma=float(threshold_sigma),
+        max_stars=max(1, int(max_stars)),
+        catalog_backend=backend,
+    )
+    auto_guard: dict[str, Any] | None = None
+    try:
+        selection = _select_reference(rows, dominant_orientation=dominant_orientation)
+    except ValueError:
+        if str(catalog_backend or DEFAULT_REFERENCE_SCOUT_BACKEND) != "auto" or backend != "cuda":
+            raise
+        cpu_rows, cpu_errors = _collect_scout_rows(
+            scouted_frames,
+            sample_stride=max(1, int(sample_stride)),
+            sample_side=max(1, int(sample_side)),
+            threshold_sigma=float(threshold_sigma),
+            max_stars=max(1, int(max_stars)),
+            catalog_backend="cpu",
+        )
+        selection = _select_reference(cpu_rows, dominant_orientation=dominant_orientation)
+        auto_guard = {
+            "status": "cuda_candidate_unavailable",
+            "passed": False,
+            "cuda_error_count": len(row_errors),
+            "cpu_error_count": len(cpu_errors),
+            "cpu_reference_frame_id": str(selection["reference"].get("frame_id") or ""),
+        }
+        backend = "cpu"
+        rows = cpu_rows
+        row_errors = cpu_errors
+        backend_resolution = {
+            **backend_resolution,
+            "effective": "cpu",
+            "attempted": "cuda",
+            "reason": "cuda_reference_scout_auto_cuda_candidate_failed_cpu_fallback",
+        }
+    if str(catalog_backend or DEFAULT_REFERENCE_SCOUT_BACKEND) == "auto" and backend == "cuda":
+        cpu_rows, cpu_errors = _collect_scout_rows(
+            scouted_frames,
+            sample_stride=max(1, int(sample_stride)),
+            sample_side=max(1, int(sample_side)),
+            threshold_sigma=float(threshold_sigma),
+            max_stars=max(1, int(max_stars)),
+            catalog_backend="cpu",
+        )
         try:
-            rows.append(
-                _scout_frame_quality(
-                    frame,
-                    sample_stride=max(1, int(sample_stride)),
-                    sample_side=max(1, int(sample_side)),
-                    threshold_sigma=float(threshold_sigma),
-                    max_stars=max(1, int(max_stars)),
-                    catalog_backend=backend,
-                )
-            )
-        except Exception as exc:
-            row_errors.append(
-                {
-                    "frame_id": str(frame.get("id")),
-                    "path": str(frame.get("path")),
-                    "error": str(exc),
-                }
-            )
-
-    candidates = [row for row in rows if row.get("reference_candidate")]
-    fallback_used = False
-    if not candidates:
-        candidates = rows
-        fallback_used = True
-    orientation_constraint_applied = False
-    orientation_constraint_fallback = False
-    if dominant_orientation is not None and candidates:
-        orientation_rows = [
-            row for row in candidates if tuple(row.get("orientation_key") or []) == tuple(dominant_orientation)
-        ]
-        if orientation_rows:
-            candidates = orientation_rows
-            orientation_constraint_applied = True
+            cpu_selection = _select_reference(cpu_rows, dominant_orientation=dominant_orientation)
+        except ValueError:
+            auto_guard = {
+                "status": "cpu_guard_unavailable",
+                "passed": False,
+                "cuda_reference_frame_id": str(selection["reference"].get("frame_id") or ""),
+                "cpu_error_count": len(cpu_errors),
+            }
         else:
-            orientation_constraint_fallback = True
-    if not candidates:
-        raise ValueError("resident reference scout could not read any light frame")
+            auto_guard = _auto_cuda_cpu_guard(cuda_selection=selection, cpu_selection=cpu_selection)
+            if not auto_guard["passed"]:
+                backend = "cpu"
+                rows = cpu_rows
+                row_errors = cpu_errors
+                selection = cpu_selection
+                backend_resolution = {
+                    **backend_resolution,
+                    "effective": "cpu",
+                    "attempted": "cuda",
+                    "reason": "cuda_reference_scout_auto_cpu_guard_fallback",
+                }
+            else:
+                backend_resolution = {
+                    **backend_resolution,
+                    "effective": "cuda",
+                    "attempted": "cuda",
+                    "reason": "cuda_reference_scout_auto_cpu_guard_passed",
+                }
+    if auto_guard is not None:
+        backend_resolution = {**backend_resolution, "cpu_guard": auto_guard}
 
-    reference = max(candidates, key=_reference_selection_key)
+    reference = selection["reference"]
+    fallback_used = bool(selection["reference_selection_fallback"])
+    orientation_constraint_applied = bool(selection["orientation_constraint_applied"])
+    orientation_constraint_fallback = bool(selection["orientation_constraint_fallback"])
     created_at = now_iso()
     payload = {
         "schema_version": 1,
