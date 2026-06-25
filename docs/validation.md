@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 655.
+- Gate: S2-Gate 656.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate655_source_dq_registration_bridge\runs_20260625_210540`.
+  `C:\glass_runs\phase2_s2_gate656_registration_source_dq_input_audit\runs_20260625_212001`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate655_source_dq_registration_bridge\runs_20260625_210540\default_strict`.
-- GLASS elapsed time: `11.724885900155641 s`.
+  `C:\glass_runs\phase2_s2_gate656_registration_source_dq_input_audit\runs_20260625_212001\default_strict`.
+- GLASS elapsed time: `11.83883819996845 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: about `93.18x`.
+- Speedup: about `92.28x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -245,6 +245,20 @@ Current Phase 2 latest mainline acceptance:
   Its explicit `phase2-mainline-audit --fail-on-not-green` run passed, and
   regression versus Gate654 default strict passed with
   `elapsed_ratio=1.0138660524354346`.
+- Gate656 moves that bridge into `registration_results.json` itself. Resident
+  registration rows now include `source_dq_registration_input`, and the
+  top-level artifact includes `source_dq_registration_input_summary`.
+  `resident_registration_runtime_contract.json` now requires positive
+  source-DQ runs to carry this per-frame registration input audit and to match
+  source-DQ execution totals. The focused synthetic CUDA strict-positive route
+  applied `1` source-DQ sidecar sample, observed it on the `light_002`
+  registration row, and passed the new runtime checks. The latest real
+  200-light default run has zero source-DQ sidecar samples, records
+  `registration_source_dq_input_available=false`,
+  `registration_source_dq_input_row_count=200`, and
+  `registration_source_dq_input_invalid_samples=0`, passed
+  `phase2-mainline-audit --fail-on-not-green`, and passed regression versus
+  Gate655 default strict with `elapsed_ratio=1.009718840829939`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

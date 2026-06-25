@@ -801,6 +801,94 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 656: Registration Source-DQ Input Audit
+
+Gate656 moves the source-DQ/registration bridge one step closer to the actual
+registration artifact. Gate655 proved that `resident_source_dq_execution.json`
+and the runtime contract agree at group level. Gate656 makes
+`registration_results.json` carry the same catalog-input evidence: each
+registration row now has `source_dq_registration_input`, and the artifact top
+level has `source_dq_registration_input_summary`.
+
+Implementation:
+
+- Added a serialization-time resident helper that joins source-DQ rows from
+  resident artifacts onto registration result rows by `frame_id`.
+- `registration_results.json` now records per-frame source-DQ input counters:
+  invalid samples, applied invalid samples, pre-registration catalog-visible
+  invalid samples, post-registration deferred invalid samples, required invalid
+  samples not visible to registration, application-order counts, visibility
+  counts, source counts, status counts, and sidecar paths.
+- `resident_registration_runtime_contract.json` now checks positive source-DQ
+  runs at both surfaces:
+  - source-DQ execution must pass and close;
+  - registration rows must carry source-DQ input audit;
+  - registration source-DQ input totals must match
+    `resident_source_dq_execution.json`.
+- Added focused contract tests for the passing per-frame audit case and for a
+  failing positive source-DQ execution artifact without registration-row input
+  evidence.
+- Extended the CUDA synthetic source-DQ triangle test to assert both the
+  registration-row input audit and the runtime-contract checks.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Focused runtime/CLI test:
+  `tests/test_resident_registration_runtime_contract.py` and
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_triangle_source_dq_feeds_registration_runtime_contract`:
+  `9 passed`.
+- Wider DQ/source-DQ focused suite:
+  `tests/test_resident_source_dq_contract.py`,
+  `tests/test_resident_source_dq.py`,
+  `tests/test_pipeline_contract.py`, and
+  `tests/test_resident_registration_runtime_contract.py`: `75 passed`.
+
+Real 200-light validation:
+
+- Green run:
+  `C:\glass_runs\phase2_s2_gate656_registration_source_dq_input_audit\runs_20260625_212001\default_strict`.
+- `resident_registration_runtime_contract.json`: passed.
+- `registration_results.json` now contains
+  `source_dq_registration_input_summary` and per-row
+  `source_dq_registration_input` fields.
+- Frame accounting: `200` registration rows, `193` active frames, `7` masked
+  frames, and `192` warped non-reference frames.
+- Source-DQ registration input evidence on the real M38 run:
+  `source_dq_positive=false`, `registration_source_dq_input_available=false`,
+  `registration_source_dq_input_invalid_samples=0`, and
+  `registration_source_dq_input_row_count=200`. The real benchmark has no
+  nonzero source-DQ sidecars, so this validates zero-input closure and default
+  non-regression; the positive path is covered by the CUDA synthetic test.
+- Native warp evidence: `triangle_warp_batch_frame_count=192`,
+  `triangle_warp_batch_fallback_frame_count=0`,
+  `triangle_warp_batch_native_chunk_count=24`,
+  `triangle_warp_batch_native_chunk_frames=8`, and
+  `triangle_warp_batch_native_total_s=0.4884192 s`.
+- Component timing:
+  `resident_light_read_upload_calibrate=3.3925699000246823 s`,
+  `resident_registration_warp=0.26639369945041835 s`,
+  `resident_local_normalization=0.3590581000316888 s`,
+  `resident_integration=3.301900500082411 s`,
+  and `resident_output_write=0.2690196998883039 s`.
+- GLASS elapsed time: `11.83883819996845 s`.
+- `glass phase2-mainline-audit --fail-on-not-green`: passed with `200` lights,
+  `193` active frames, `7` masked frames, and no failed checks.
+- Regression versus Gate655 default strict run: passed,
+  `elapsed_ratio=1.009718840829939`, no failed checks.
+
+Interpretation:
+
+- This is a DQ/mask execution-audit gate. It does not alter registration math
+  or CUDA kernels; it makes the registration artifact itself prove what
+  source-DQ input was visible to catalog construction.
+- Future registration failures or frame exclusions can now be audited from
+  `registration_results.json` without cross-reading only group-level DQ
+  summaries.
+- The next substantive gate should either add a real nonzero DQ/mask dataset
+  path or move back to measured hot-path work in resident calibration /
+  integration.
+
 ### S2-Gate 655: Source-DQ To Registration Runtime Bridge
 
 Gate655 closes the gap between the source-DQ/mask pipeline contract and the

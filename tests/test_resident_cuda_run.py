@@ -3578,6 +3578,11 @@ def test_cli_resident_cuda_triangle_source_dq_feeds_registration_runtime_contrac
         == 0
     )
     plan_payload = read_json(plan)
+    moving_frame_id = next(
+        str(frame["id"])
+        for frame in plan_payload["frames"]
+        if Path(str(frame["path"])).name == "light_002.fits"
+    )
     plan_payload.setdefault("registration_policy", {}).update(
         {
             "cuda_triangle_tolerance_px": 1.5,
@@ -3645,17 +3650,35 @@ def test_cli_resident_cuda_triangle_source_dq_feeds_registration_runtime_contrac
     ) == 0
 
     source_dq_execution = read_json(run / "resident_source_dq_execution.json")
+    registration = read_json(run / "registration_results.json")
     contract = read_json(run / "resident_registration_runtime_contract.json")
     mainline = read_json(run / "resident_mainline_framework.json")
     contract_checks = {check["name"]: check for check in contract["checks"]}
+    registration_source_dq = registration["source_dq_registration_input_summary"]
+    registration_rows = {row["frame_id"]: row for row in registration["results"]}
+    target_registration_input = registration_rows[moving_frame_id]["source_dq_registration_input"]
 
     assert source_dq_execution["summary"]["input_invalid_samples_before_rejection"] == 1
     assert source_dq_execution["summary"]["applied_invalid_samples"] == 1
+    assert registration_source_dq["available"] is True
+    assert registration_source_dq["invalid_samples"] == 1
+    assert registration_source_dq["applied_invalid_samples"] == 1
+    assert registration_source_dq["pre_registration_catalog_visible_invalid_samples"] == 1
+    assert registration_source_dq["required_invalid_samples_not_visible_to_registration_catalog"] == 0
+    assert target_registration_input["invalid_samples"] == 1
+    assert target_registration_input["applied_invalid_samples"] == 1
+    assert target_registration_input["pre_registration_catalog_visible_invalid_samples"] == 1
+    assert target_registration_input["catalog_input_semantics"] == (
+        "source_dq_applied_before_registration_catalog"
+    )
     assert contract["passed"] is True
     assert contract["summary"]["source_dq_positive"] is True
     assert contract["summary"]["source_dq_input_invalid_samples_before_rejection"] == 1
     assert contract["summary"]["source_dq_applied_invalid_samples"] == 1
     assert contract["summary"]["source_dq_pre_registration_catalog_visible_invalid_samples"] == 1
+    assert contract["summary"]["registration_source_dq_input_available"] is True
+    assert contract["summary"]["registration_source_dq_input_invalid_samples"] == 1
+    assert contract["summary"]["registration_source_dq_input_applied_invalid_samples"] == 1
     assert (
         contract["summary"][
             "source_dq_required_invalid_samples_not_visible_to_registration_catalog"
@@ -3663,6 +3686,8 @@ def test_cli_resident_cuda_triangle_source_dq_feeds_registration_runtime_contrac
         == 0
     )
     assert contract_checks["source_dq_registration_visibility_closes"]["passed"] is True
+    assert contract_checks["registration_results_carry_source_dq_input_if_positive"]["passed"] is True
+    assert contract_checks["registration_source_dq_input_matches_execution"]["passed"] is True
     assert mainline["passed"] is True
     assert mainline["framework_scope"] == "source_dq_positive"
 

@@ -61,6 +61,75 @@ def _write_triangle_run(run: Path, *, fallback_frame_count: int = 0) -> None:
     )
 
 
+def _write_registration_source_dq_input(
+    run: Path,
+    *,
+    invalid_samples: int = 1,
+    applied_invalid_samples: int = 1,
+    pre_visible_invalid_samples: int = 1,
+    post_deferred_invalid_samples: int = 0,
+    required_not_visible_invalid_samples: int = 0,
+) -> None:
+    payload = read_json(run / "registration_results.json")
+    rows = payload["results"]
+    for row in rows:
+        frame_id = str(row["frame_id"])
+        is_target = frame_id == "F001"
+        row["source_dq_registration_input"] = {
+            "frame_id": frame_id,
+            "row_count": 1 if is_target else 0,
+            "invalid_samples": invalid_samples if is_target else 0,
+            "applied_invalid_samples": applied_invalid_samples if is_target else 0,
+            "pre_registration_catalog_visible_invalid_samples": (
+                pre_visible_invalid_samples if is_target else 0
+            ),
+            "post_registration_deferred_invalid_samples": (
+                post_deferred_invalid_samples if is_target else 0
+            ),
+            "required_invalid_samples_not_visible_to_registration_catalog": (
+                required_not_visible_invalid_samples if is_target else 0
+            ),
+            "application_order_counts": {"calibration_pre_registration": 1}
+            if is_target
+            else {},
+            "registration_catalog_visibility_counts": {
+                "pre_registration_catalog_visible": 1
+            }
+            if is_target
+            else {},
+            "status_counts": {"applied": 1} if is_target else {},
+            "source_counts": {"resident_calibrated_source_dq_sidecar": 1}
+            if is_target
+            else {},
+            "sidecar_path_count": 1 if is_target else 0,
+            "sidecar_paths": ["source_dq/F001_dq.fits"] if is_target else [],
+            "catalog_input_semantics": (
+                "source_dq_applied_before_registration_catalog"
+                if is_target
+                else "no_source_dq_rows_for_frame"
+            ),
+        }
+    payload["source_dq_registration_input_summary"] = {
+        "schema_version": 1,
+        "available": True,
+        "source_dq_row_count": 1,
+        "registration_row_count": len(rows),
+        "registration_rows_with_source_dq_input": len(rows),
+        "registration_rows_missing_source_dq_input": 0,
+        "frames_with_source_dq_rows": 1,
+        "frames_with_invalid_samples": 1 if invalid_samples else 0,
+        "invalid_samples": invalid_samples,
+        "applied_invalid_samples": applied_invalid_samples,
+        "pre_registration_catalog_visible_invalid_samples": pre_visible_invalid_samples,
+        "post_registration_deferred_invalid_samples": post_deferred_invalid_samples,
+        "required_invalid_samples_not_visible_to_registration_catalog": (
+            required_not_visible_invalid_samples
+        ),
+        "catalog_input_semantics": "source_dq_rows_joined_to_registration_results",
+    }
+    write_json(run / "registration_results.json", payload)
+
+
 def test_resident_registration_runtime_contract_passes_batched_triangle_run(tmp_path: Path) -> None:
     run = tmp_path / "run"
     _write_triangle_run(run)
@@ -134,6 +203,7 @@ def test_resident_registration_runtime_contract_passes_positive_source_dq_visibi
 ) -> None:
     run = tmp_path / "run"
     _write_triangle_run(run)
+    _write_registration_source_dq_input(run)
     write_json(
         run / "resident_source_dq_execution.json",
         {
@@ -167,6 +237,48 @@ def test_resident_registration_runtime_contract_passes_positive_source_dq_visibi
     assert payload["passed"] is True
     assert payload["summary"]["source_dq_positive"] is True
     assert payload["summary"]["source_dq_pre_registration_catalog_visible_invalid_samples"] == 1
+    assert payload["summary"]["registration_source_dq_input_available"] is True
+    assert payload["summary"]["registration_source_dq_input_invalid_samples"] == 1
+    assert payload["summary"]["registration_source_dq_input_applied_invalid_samples"] == 1
+
+
+def test_resident_registration_runtime_contract_fails_positive_source_dq_without_registration_input(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_triangle_run(run)
+    write_json(
+        run / "resident_source_dq_execution.json",
+        {
+            "artifact": "resident_source_dq_execution",
+            "summary": {
+                "passed": True,
+                "status": "passed",
+                "input_invalid_samples_before_rejection": 1,
+                "applied_invalid_samples": 1,
+            },
+            "groups": [
+                {
+                    "filter": "H",
+                    "passed": True,
+                    "input_invalid_samples_before_rejection": 1,
+                    "applied_invalid_samples": 1,
+                    "required_invalid_samples_not_visible_to_registration_catalog": 0,
+                    "pre_registration_catalog_visible_invalid_samples": 1,
+                    "post_registration_deferred_invalid_samples": 0,
+                    "application_order_counts": {"calibration_pre_registration": 1},
+                    "registration_catalog_visibility_counts": {
+                        "pre_registration_catalog_visible": 1
+                    },
+                }
+            ],
+        },
+    )
+
+    payload = build_resident_registration_runtime_contract(run)
+
+    assert payload["passed"] is False
+    assert "registration_results_carry_source_dq_input_if_positive" in payload["failed_checks"]
 
 
 def test_resident_registration_runtime_contract_fails_required_source_dq_after_registration(

@@ -215,7 +215,30 @@ def _write_minimal_green_resident_run(
                 ),
                 "sidecar_source_counts": {"synthetic": 1} if source_dq_invalid_samples else {},
                 "execution_routes": ["resident_in_memory_mask_streaming"],
-            }
+            },
+            "groups": [
+                {
+                    "filter": "H",
+                    "passed": True,
+                    "input_invalid_samples_before_rejection": int(source_dq_invalid_samples),
+                    "applied_invalid_samples": int(source_dq_applied_samples),
+                    "required_invalid_samples_not_visible_to_registration_catalog": 0,
+                    "pre_registration_catalog_visible_invalid_samples": int(
+                        source_dq_invalid_samples
+                    ),
+                    "post_registration_deferred_invalid_samples": 0,
+                    "application_order_counts": (
+                        {"calibration_pre_registration": 1}
+                        if source_dq_invalid_samples
+                        else {}
+                    ),
+                    "registration_catalog_visibility_counts": (
+                        {"pre_registration_catalog_visible": 1}
+                        if source_dq_invalid_samples
+                        else {}
+                    ),
+                }
+            ],
         },
     )
     for name in ("resident_dq_pixel_closure.json", "resident_master_cache.json"):
@@ -237,10 +260,111 @@ def _write_minimal_green_resident_run(
     write_json(
         run / "registration_results.json",
         {
+            "source_dq_registration_input_summary": {
+                "schema_version": 1,
+                "available": bool(source_dq_invalid_samples),
+                "source_dq_row_count": 1 if source_dq_invalid_samples else 0,
+                "registration_row_count": 3,
+                "registration_rows_with_source_dq_input": 3 if source_dq_invalid_samples else 0,
+                "registration_rows_missing_source_dq_input": (
+                    0 if source_dq_invalid_samples else 3
+                ),
+                "frames_with_source_dq_rows": 1 if source_dq_invalid_samples else 0,
+                "frames_with_invalid_samples": 1 if source_dq_invalid_samples else 0,
+                "invalid_samples": int(source_dq_invalid_samples),
+                "applied_invalid_samples": int(source_dq_applied_samples),
+                "pre_registration_catalog_visible_invalid_samples": int(
+                    source_dq_invalid_samples
+                ),
+                "post_registration_deferred_invalid_samples": 0,
+                "required_invalid_samples_not_visible_to_registration_catalog": 0,
+                "catalog_input_semantics": (
+                    "source_dq_rows_joined_to_registration_results"
+                    if source_dq_invalid_samples
+                    else "no_source_dq_rows_available_for_registration_results"
+                ),
+            },
             "results": [
-                {"frame_id": "F001", "status": "ok"},
-                {"frame_id": "F002", "status": "ok"},
-                {"frame_id": "F003", "status": "reference"},
+                {
+                    "frame_id": "F001",
+                    "status": "ok",
+                    "source_dq_registration_input": {
+                        "frame_id": "F001",
+                        "row_count": 1 if source_dq_invalid_samples else 0,
+                        "invalid_samples": int(source_dq_invalid_samples),
+                        "applied_invalid_samples": int(source_dq_applied_samples),
+                        "pre_registration_catalog_visible_invalid_samples": int(
+                            source_dq_invalid_samples
+                        ),
+                        "post_registration_deferred_invalid_samples": 0,
+                        "required_invalid_samples_not_visible_to_registration_catalog": 0,
+                        "application_order_counts": (
+                            {"calibration_pre_registration": 1}
+                            if source_dq_invalid_samples
+                            else {}
+                        ),
+                        "registration_catalog_visibility_counts": (
+                            {"pre_registration_catalog_visible": 1}
+                            if source_dq_invalid_samples
+                            else {}
+                        ),
+                        "status_counts": {"applied": 1} if source_dq_invalid_samples else {},
+                        "source_counts": (
+                            {"resident_calibrated_source_dq_sidecar": 1}
+                            if source_dq_invalid_samples
+                            else {}
+                        ),
+                        "sidecar_path_count": 1 if source_dq_invalid_samples else 0,
+                        "sidecar_paths": ["source_dq/F001_dq.fits"]
+                        if source_dq_invalid_samples
+                        else [],
+                        "catalog_input_semantics": (
+                            "source_dq_applied_before_registration_catalog"
+                            if source_dq_invalid_samples
+                            else "no_source_dq_rows_for_frame"
+                        ),
+                    },
+                },
+                {
+                    "frame_id": "F002",
+                    "status": "ok",
+                    "source_dq_registration_input": {
+                        "frame_id": "F002",
+                        "row_count": 0,
+                        "invalid_samples": 0,
+                        "applied_invalid_samples": 0,
+                        "pre_registration_catalog_visible_invalid_samples": 0,
+                        "post_registration_deferred_invalid_samples": 0,
+                        "required_invalid_samples_not_visible_to_registration_catalog": 0,
+                        "application_order_counts": {},
+                        "registration_catalog_visibility_counts": {},
+                        "status_counts": {},
+                        "source_counts": {},
+                        "sidecar_path_count": 0,
+                        "sidecar_paths": [],
+                        "catalog_input_semantics": "no_source_dq_rows_for_frame",
+                    },
+                },
+                {
+                    "frame_id": "F003",
+                    "status": "reference",
+                    "source_dq_registration_input": {
+                        "frame_id": "F003",
+                        "row_count": 0,
+                        "invalid_samples": 0,
+                        "applied_invalid_samples": 0,
+                        "pre_registration_catalog_visible_invalid_samples": 0,
+                        "post_registration_deferred_invalid_samples": 0,
+                        "required_invalid_samples_not_visible_to_registration_catalog": 0,
+                        "application_order_counts": {},
+                        "registration_catalog_visibility_counts": {},
+                        "status_counts": {},
+                        "source_counts": {},
+                        "sidecar_path_count": 0,
+                        "sidecar_paths": [],
+                        "catalog_input_semantics": "no_source_dq_rows_for_frame",
+                    },
+                },
             ]
         },
     )

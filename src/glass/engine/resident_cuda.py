@@ -3503,6 +3503,162 @@ def _resident_source_dq_changes_samples(source_dq_summary: dict[str, Any] | None
     return False
 
 
+def _source_dq_row_application_order(row: dict[str, Any]) -> str:
+    order = row.get("application_order")
+    if order is not None and str(order):
+        return str(order)
+    source = str(row.get("source") or "")
+    if source.startswith("resident_post_registration_pre_warp"):
+        return "post_registration_pre_warp"
+    if source.startswith("resident_calibrated"):
+        return "calibration_pre_registration"
+    return "unspecified"
+
+
+def _source_dq_row_registration_catalog_visible(row: dict[str, Any]) -> bool:
+    if row.get("registration_catalog_visible") is not None:
+        return bool(row.get("registration_catalog_visible"))
+    return _source_dq_row_application_order(row) == "calibration_pre_registration"
+
+
+def _source_dq_row_registration_catalog_visibility_required(row: dict[str, Any]) -> bool:
+    if row.get("registration_catalog_visibility_required") is not None:
+        return bool(row.get("registration_catalog_visibility_required"))
+    return not bool(row.get("inline_source_dq"))
+
+
+def _empty_registration_source_dq_input(frame_id: str) -> dict[str, Any]:
+    return {
+        "frame_id": str(frame_id),
+        "row_count": 0,
+        "invalid_samples": 0,
+        "applied_invalid_samples": 0,
+        "pre_registration_catalog_visible_invalid_samples": 0,
+        "post_registration_deferred_invalid_samples": 0,
+        "required_invalid_samples_not_visible_to_registration_catalog": 0,
+        "application_order_counts": {},
+        "registration_catalog_visibility_counts": {},
+        "status_counts": {},
+        "source_counts": {},
+        "sidecar_path_count": 0,
+        "sidecar_paths": [],
+        "catalog_input_semantics": "no_source_dq_rows_for_frame",
+    }
+
+
+def _merge_counter(target: dict[str, int], key: Any, increment: int = 1) -> None:
+    key_text = str(key or "unknown")
+    target[key_text] = int(target.get(key_text, 0)) + int(increment)
+
+
+def _resident_registration_source_dq_input_audit(
+    registration_rows: list[dict[str, Any]],
+    resident_artifacts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Attach source-DQ catalog-input provenance to registration result rows."""
+
+    source_rows: list[dict[str, Any]] = []
+    for artifact in resident_artifacts:
+        summary = artifact.get("source_dq_summary") if isinstance(artifact, dict) else None
+        rows = summary.get("rows") if isinstance(summary, dict) else None
+        if isinstance(rows, list):
+            source_rows.extend(row for row in rows if isinstance(row, dict))
+
+    by_frame: dict[str, dict[str, Any]] = {}
+    for row in source_rows:
+        frame_id = str(row.get("frame_id") or "")
+        if not frame_id:
+            continue
+        frame_summary = by_frame.setdefault(frame_id, _empty_registration_source_dq_input(frame_id))
+        frame_summary["row_count"] = int(frame_summary["row_count"]) + 1
+        invalid = int(row.get("invalid_samples") or 0)
+        applied_invalid = invalid if bool(row.get("applied")) else 0
+        frame_summary["invalid_samples"] = int(frame_summary["invalid_samples"]) + invalid
+        frame_summary["applied_invalid_samples"] = (
+            int(frame_summary["applied_invalid_samples"]) + applied_invalid
+        )
+        application_order = _source_dq_row_application_order(row)
+        registration_visible = _source_dq_row_registration_catalog_visible(row)
+        visibility_key = (
+            "pre_registration_catalog_visible" if registration_visible else "not_catalog_visible"
+        )
+        _merge_counter(frame_summary["application_order_counts"], application_order)
+        _merge_counter(frame_summary["registration_catalog_visibility_counts"], visibility_key)
+        _merge_counter(frame_summary["status_counts"], row.get("status"))
+        _merge_counter(frame_summary["source_counts"], row.get("source"))
+        if registration_visible:
+            frame_summary["pre_registration_catalog_visible_invalid_samples"] = (
+                int(frame_summary["pre_registration_catalog_visible_invalid_samples"]) + invalid
+            )
+        else:
+            frame_summary["post_registration_deferred_invalid_samples"] = (
+                int(frame_summary["post_registration_deferred_invalid_samples"]) + invalid
+            )
+        if (
+            invalid > 0
+            and _source_dq_row_registration_catalog_visibility_required(row)
+            and not registration_visible
+        ):
+            frame_summary["required_invalid_samples_not_visible_to_registration_catalog"] = (
+                int(frame_summary["required_invalid_samples_not_visible_to_registration_catalog"])
+                + invalid
+            )
+        sidecar_paths = set(str(path) for path in frame_summary.get("sidecar_paths") or [])
+        sidecar_paths.update(str(path) for path in list(row.get("sidecar_paths") or []))
+        frame_summary["sidecar_paths"] = sorted(sidecar_paths)
+        frame_summary["sidecar_path_count"] = len(sidecar_paths)
+        frame_summary["catalog_input_semantics"] = (
+            "source_dq_applied_before_registration_catalog"
+            if registration_visible
+            else "source_dq_not_visible_to_registration_catalog"
+        )
+
+    rows_with_audit = 0
+    for registration_row in registration_rows:
+        frame_id = str(registration_row.get("frame_id") or "")
+        if not frame_id:
+            continue
+        frame_summary = by_frame.get(frame_id, _empty_registration_source_dq_input(frame_id))
+        registration_row["source_dq_registration_input"] = frame_summary
+        rows_with_audit += 1
+
+    positive_frame_summaries = [
+        summary for summary in by_frame.values() if int(summary.get("invalid_samples") or 0) > 0
+    ]
+    summary = {
+        "schema_version": 1,
+        "available": bool(source_rows),
+        "source_dq_row_count": len(source_rows),
+        "registration_row_count": len(registration_rows),
+        "registration_rows_with_source_dq_input": rows_with_audit if source_rows else 0,
+        "registration_rows_missing_source_dq_input": 0 if source_rows else len(registration_rows),
+        "frames_with_source_dq_rows": len(by_frame),
+        "frames_with_invalid_samples": len(positive_frame_summaries),
+        "invalid_samples": sum(int(row.get("invalid_samples") or 0) for row in source_rows),
+        "applied_invalid_samples": sum(
+            int(row.get("invalid_samples") or 0) for row in source_rows if bool(row.get("applied"))
+        ),
+        "pre_registration_catalog_visible_invalid_samples": sum(
+            int(summary.get("pre_registration_catalog_visible_invalid_samples") or 0)
+            for summary in by_frame.values()
+        ),
+        "post_registration_deferred_invalid_samples": sum(
+            int(summary.get("post_registration_deferred_invalid_samples") or 0)
+            for summary in by_frame.values()
+        ),
+        "required_invalid_samples_not_visible_to_registration_catalog": sum(
+            int(summary.get("required_invalid_samples_not_visible_to_registration_catalog") or 0)
+            for summary in by_frame.values()
+        ),
+        "catalog_input_semantics": (
+            "source_dq_rows_joined_to_registration_results"
+            if source_rows
+            else "no_source_dq_rows_available_for_registration_results"
+        ),
+    }
+    return {"summary": summary, "rows_by_frame_id": by_frame}
+
+
 def _resident_source_dq_calibration_artifact_candidates(
     plan: dict[str, Any],
     *,
@@ -15391,6 +15547,11 @@ def run_resident_calibration_integration(
                     if registration.get("quality_reference_status") is not None
                 }
             )
+            registration_result_rows = [asdict(result) for result in registration_results]
+            source_dq_registration_input = _resident_registration_source_dq_input_audit(
+                registration_result_rows,
+                resident_artifacts,
+            )
             write_json(
                 run / "registration_results.json",
                 {
@@ -15417,7 +15578,8 @@ def run_resident_calibration_integration(
                     else None,
                     "quality_reference_statuses": quality_reference_statuses,
                     "transform_model": resident_registration,
-                    "results": registration_results,
+                    "source_dq_registration_input_summary": source_dq_registration_input["summary"],
+                    "results": registration_result_rows,
                     "warnings": [
                         (
                             "resident registration consumed external matrices; non-translation matrices are applied "

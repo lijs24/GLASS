@@ -51,6 +51,69 @@ def _registration_rows(run: Path) -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
+def _registration_source_dq_input_state(
+    run: Path,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    path = run / "registration_results.json"
+    payload = _json_object(path)
+    summary = (
+        payload.get("source_dq_registration_input_summary")
+        if isinstance(payload.get("source_dq_registration_input_summary"), dict)
+        else {}
+    )
+    row_inputs = [
+        row.get("source_dq_registration_input")
+        for row in rows
+        if isinstance(row.get("source_dq_registration_input"), dict)
+    ]
+    row_invalid = sum(int(item.get("invalid_samples") or 0) for item in row_inputs)
+    row_applied = sum(int(item.get("applied_invalid_samples") or 0) for item in row_inputs)
+    row_pre_visible = sum(
+        int(item.get("pre_registration_catalog_visible_invalid_samples") or 0)
+        for item in row_inputs
+    )
+    row_post_deferred = sum(
+        int(item.get("post_registration_deferred_invalid_samples") or 0) for item in row_inputs
+    )
+    row_required_not_visible = sum(
+        int(item.get("required_invalid_samples_not_visible_to_registration_catalog") or 0)
+        for item in row_inputs
+    )
+    return {
+        "path": str(path),
+        "exists": bool(payload),
+        "available": bool(summary.get("available")),
+        "summary_present": bool(summary),
+        "row_input_count": len(row_inputs),
+        "registration_row_count": len(rows),
+        "registration_rows_with_source_dq_input": int(
+            summary.get("registration_rows_with_source_dq_input") or 0
+        ),
+        "registration_rows_missing_source_dq_input": int(
+            summary.get("registration_rows_missing_source_dq_input") or 0
+        ),
+        "source_dq_row_count": int(summary.get("source_dq_row_count") or 0),
+        "frames_with_invalid_samples": int(summary.get("frames_with_invalid_samples") or 0),
+        "invalid_samples": int(summary.get("invalid_samples") or 0),
+        "applied_invalid_samples": int(summary.get("applied_invalid_samples") or 0),
+        "pre_registration_catalog_visible_invalid_samples": int(
+            summary.get("pre_registration_catalog_visible_invalid_samples") or 0
+        ),
+        "post_registration_deferred_invalid_samples": int(
+            summary.get("post_registration_deferred_invalid_samples") or 0
+        ),
+        "required_invalid_samples_not_visible_to_registration_catalog": int(
+            summary.get("required_invalid_samples_not_visible_to_registration_catalog") or 0
+        ),
+        "row_invalid_samples": row_invalid,
+        "row_applied_invalid_samples": row_applied,
+        "row_pre_registration_catalog_visible_invalid_samples": row_pre_visible,
+        "row_post_registration_deferred_invalid_samples": row_post_deferred,
+        "row_required_invalid_samples_not_visible_to_registration_catalog": row_required_not_visible,
+    }
+
+
 def _component_elapsed(run: Path, source_key: str) -> float | None:
     payload = _json_object(run / "resident_component_timing.json")
     rows = payload.get("components") if isinstance(payload.get("components"), list) else []
@@ -168,6 +231,7 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
     rows = _registration_rows(run)
     frame_masks = _frame_mask_summary(run)
     source_dq = _source_dq_execution_state(run)
+    registration_source_dq = _registration_source_dq_input_state(run, rows)
     mode = _registration_mode(artifact, timing).lower()
     applicable = mode == TRIANGLE_RUNTIME_MODE
 
@@ -390,6 +454,79 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
             },
             "Non-inline source-DQ invalid samples must be visible before resident registration catalogs are built.",
         ),
+        _check(
+            "registration_results_carry_source_dq_input_if_positive",
+            not applicable
+            or not source_dq_positive
+            or (
+                registration_source_dq["available"]
+                and registration_source_dq["row_input_count"] == len(rows)
+                and registration_source_dq["registration_rows_missing_source_dq_input"] == 0
+            ),
+            {
+                "applicable": applicable,
+                "source_dq_positive": source_dq_positive,
+                "available": registration_source_dq["available"],
+                "row_input_count": registration_source_dq["row_input_count"],
+                "registration_row_count": len(rows),
+                "registration_rows_with_source_dq_input": registration_source_dq[
+                    "registration_rows_with_source_dq_input"
+                ],
+                "registration_rows_missing_source_dq_input": registration_source_dq[
+                    "registration_rows_missing_source_dq_input"
+                ],
+            },
+            "Positive source-DQ resident registration runs must expose per-frame catalog-input evidence.",
+        ),
+        _check(
+            "registration_source_dq_input_matches_execution",
+            not applicable
+            or not source_dq_positive
+            or (
+                registration_source_dq["invalid_samples"]
+                == source_dq["input_invalid_samples_before_rejection"]
+                and registration_source_dq["applied_invalid_samples"]
+                == source_dq["applied_invalid_samples"]
+                and registration_source_dq["pre_registration_catalog_visible_invalid_samples"]
+                == source_dq["pre_registration_catalog_visible_invalid_samples"]
+                and registration_source_dq[
+                    "required_invalid_samples_not_visible_to_registration_catalog"
+                ]
+                == source_dq["required_invalid_samples_not_visible_to_registration_catalog"]
+                and registration_source_dq["row_invalid_samples"]
+                == registration_source_dq["invalid_samples"]
+            ),
+            {
+                "applicable": applicable,
+                "source_dq_positive": source_dq_positive,
+                "source_dq_input_invalid_samples_before_rejection": source_dq[
+                    "input_invalid_samples_before_rejection"
+                ],
+                "source_dq_applied_invalid_samples": source_dq["applied_invalid_samples"],
+                "source_dq_pre_registration_catalog_visible_invalid_samples": source_dq[
+                    "pre_registration_catalog_visible_invalid_samples"
+                ],
+                "source_dq_required_invalid_samples_not_visible_to_registration_catalog": source_dq[
+                    "required_invalid_samples_not_visible_to_registration_catalog"
+                ],
+                "registration_invalid_samples": registration_source_dq["invalid_samples"],
+                "registration_applied_invalid_samples": registration_source_dq[
+                    "applied_invalid_samples"
+                ],
+                "registration_pre_registration_catalog_visible_invalid_samples": (
+                    registration_source_dq[
+                        "pre_registration_catalog_visible_invalid_samples"
+                    ]
+                ),
+                "registration_required_invalid_samples_not_visible_to_registration_catalog": (
+                    registration_source_dq[
+                        "required_invalid_samples_not_visible_to_registration_catalog"
+                    ]
+                ),
+                "registration_row_invalid_samples": registration_source_dq["row_invalid_samples"],
+            },
+            "Registration artifact source-DQ input totals must match resident source-DQ execution.",
+        ),
     ]
     failed_checks = [str(check["name"]) for check in checks if not check["passed"]]
     passed = not failed_checks
@@ -426,6 +563,22 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
             "source_dq_required_invalid_samples_not_visible_to_registration_catalog": source_dq[
                 "required_invalid_samples_not_visible_to_registration_catalog"
             ],
+            "registration_source_dq_input_available": registration_source_dq["available"],
+            "registration_source_dq_input_row_count": registration_source_dq["row_input_count"],
+            "registration_source_dq_input_invalid_samples": registration_source_dq[
+                "invalid_samples"
+            ],
+            "registration_source_dq_input_applied_invalid_samples": registration_source_dq[
+                "applied_invalid_samples"
+            ],
+            "registration_source_dq_input_pre_registration_catalog_visible_invalid_samples": (
+                registration_source_dq["pre_registration_catalog_visible_invalid_samples"]
+            ),
+            "registration_source_dq_input_required_invalid_samples_not_visible_to_registration_catalog": (
+                registration_source_dq[
+                    "required_invalid_samples_not_visible_to_registration_catalog"
+                ]
+            ),
             "triangle_warp_batch_frame_count": warped_frame_count,
             "triangle_warp_batch_fallback_frame_count": fallback_frame_count,
             "triangle_warp_batch_native_chunk_count": native_chunk_count,
@@ -440,6 +593,9 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
             "resident_artifacts": str(run / "resident_artifacts.json"),
             "resident_registration_object_present": bool(registration),
             "registration_results": str(run / "registration_results.json"),
+            "registration_source_dq_input_summary_present": registration_source_dq[
+                "summary_present"
+            ],
             "resident_frame_masks": str(run / "resident_frame_masks.json"),
             "resident_component_timing": str(run / "resident_component_timing.json"),
             "resident_source_dq_execution": source_dq["path"],
