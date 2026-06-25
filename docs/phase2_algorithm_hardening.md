@@ -801,6 +801,87 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 641: Resident Mainline Framework Postcondition
+
+Gate641 is a self-review and framework-completeness gate that moves the
+Phase 2 mainline checks into the resident execution path itself. It deliberately
+does not optimize a small kernel or add another release handoff. Instead,
+resident `run` and resident `audit` now write a compact postcondition artifact
+after the local-normalization, pipeline, StackEngine, and warp contracts have
+been generated.
+
+Implementation:
+
+- Added `src/glass/engine/resident_mainline_framework.py`.
+- Added `resident_mainline_framework.json` as a resident postcondition
+  artifact built from the same GLASS-owned contract surface as
+  `phase2-mainline-audit`.
+- Added `--resident-mainline-framework-gate off|warn|strict` to `glass run`
+  and `glass audit`.
+- Default `warn` mode writes the artifact and records a run-state warning if
+  the postcondition is not green.
+- Explicit `strict` mode sets `failed_stage=resident_mainline_framework` and
+  returns a failed resident run when the mainline framework closes incorrectly.
+- Added per-run thresholds:
+  `--resident-mainline-min-lights`,
+  `--resident-mainline-min-active-frames`, and
+  `--resident-mainline-max-masked-frames`.
+- Refactored resident postconditions so `audit` now follows the same
+  local-normalization, pipeline, StackEngine, warp-quality, and mainline
+  framework contract chain as `run`.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Resident mainline framework tests: `5 passed`.
+- Focused mainline/CLI resident tests: `29 passed, 60 deselected`.
+- The source-DQ cache resident smoke expectation was updated so the new
+  `resident_mainline_framework` stage is part of the default resident timing
+  sequence.
+
+Real 200-light strict validation:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate641_mainline_framework\runs_20260625_1641\candidate_mainline_framework_strict`.
+- Command added:
+  `--resident-mainline-framework-gate strict`,
+  `--resident-mainline-min-lights 200`,
+  `--resident-mainline-min-active-frames 190`, and
+  `--resident-mainline-max-masked-frames 10`.
+- `resident_mainline_framework.json`: passed, blocking false, no failed checks.
+- GLASS total elapsed: `11.873292400152422 s`.
+- Resident calibration/integration stage: `9.586103999987245 s`.
+- Resident integration component: `3.241891600075178 s`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames, and `11898681600` lifecycle source input samples.
+- Resident regression gate versus Gate640: passed, elapsed ratio
+  `0.9981213621153441`, no failed checks.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed with speedup `92.0166844359004x` versus the
+  `1092.541 s` black-box reference.
+- Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate641_mainline_framework\runs_20260625_1641\gate641_mainline_audit.json`,
+  status passed with no failed checks.
+
+Validation:
+
+- Full pytest: `1345 passed in 58.46 s`.
+
+Interpretation:
+
+- This gate makes the mainline framework harder to regress during ordinary
+  resident execution: missing contracts, output maps, frame-accounting/DQ
+  mismatches, or wrong default route can now fail the same run in `strict`
+  mode.
+- The science path is unchanged: calibration, registration, warp, local
+  normalization, rejection, DQ semantics, and CUDA kernels were not modified.
+- The largest measured stage is still resident calibration/integration, so the
+  next substantive gate should return to execution work there, or broaden
+  nonzero source-DQ/mask behavior with synthetic plus real validation.
+
 ### S2-Gate 640: Reference Health CPU Scout Reuse
 
 Gate640 returns to the default resident CUDA execution path. Gate639's

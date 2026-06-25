@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 640.
+- Gate: S2-Gate 641.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859`.
+  `C:\glass_runs\phase2_s2_gate641_mainline_framework\runs_20260625_1641`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859\candidate_reference_health_reuse`.
-- GLASS elapsed time: `11.895640000118874 s`.
+  `C:\glass_runs\phase2_s2_gate641_mainline_framework\runs_20260625_1641\candidate_mainline_framework_strict`.
+- GLASS elapsed time: `11.873292400152422 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `91.8438184064987x`.
+- Speedup: `92.0166844359004x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -132,6 +132,9 @@ Current Phase 2 latest mainline acceptance:
 - Phase 2 mainline audit: passed. The run satisfies the resident CUDA default
   route, required contract, DQ/mask lifecycle, output-map, timing, acceptance,
   and compare checks.
+- Resident mainline framework postcondition: passed in strict mode. The run
+  wrote `resident_mainline_framework.json`, included the stage in
+  `run_timing.json`, and added it to `run_state.json` completed stages.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
@@ -140,12 +143,12 @@ Current Phase 2 latest mainline acceptance:
   `frame_accounting_resident_dq_lifecycle_contract`.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate639: passed with candidate/baseline
-  elapsed ratio `0.9757562912341817` and no failed checks.
+- Resident regression gate versus Gate640: passed with candidate/baseline
+  elapsed ratio `0.9981213621153441` and no failed checks.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859\gate640_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate641_mainline_framework\runs_20260625_1641\gate641_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate640_reference_health_reuse\runs_20260625_161859\gate640_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate641_mainline_framework\runs_20260625_1641\gate641_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

@@ -20,6 +20,10 @@ from glass.engine.quality import measure_calibrated_quality
 from glass.engine.registration import register_calibrated_frames
 from glass.engine.resident_calibration_artifacts import build_resident_calibration_artifacts
 from glass.engine.resident_cuda import build_resident_memory_admission, run_resident_calibration_integration
+from glass.engine.resident_mainline_framework import (
+    DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_GATE,
+    write_resident_mainline_framework,
+)
 from glass.engine.resident_reference_scout import (
     DEFAULT_REFERENCE_SCOUT_BACKEND,
     DEFAULT_REFERENCE_SCOUT_MAX_FRAMES,
@@ -1551,6 +1555,62 @@ def _write_resident_registration_health_failed_state(
     write_run_state(run, state)
 
 
+def _resident_mainline_framework_message(payload: dict[str, Any]) -> str:
+    failed = payload.get("failed_checks") if isinstance(payload.get("failed_checks"), list) else []
+    failed_text = ", ".join(str(item) for item in failed) if failed else "unknown"
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    return (
+        "resident mainline framework postcondition failed"
+        f": failed_checks={failed_text}, "
+        f"lights={summary.get('input_light_frames')}, "
+        f"active={summary.get('active_frames')}, masked={summary.get('masked_frames')}"
+    )
+
+
+def _write_resident_mainline_framework(
+    run: Path,
+    args: argparse.Namespace,
+    state,
+) -> Path | None:
+    action = getattr(
+        args,
+        "resident_mainline_framework_gate",
+        DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_GATE,
+    )
+    if action == "off":
+        return None
+    path = write_resident_mainline_framework(
+        run,
+        requested_action=action,
+        min_lights=getattr(args, "resident_mainline_min_lights", 1),
+        min_active_frames=getattr(args, "resident_mainline_min_active_frames", 1),
+        max_masked_frames=getattr(args, "resident_mainline_max_masked_frames", 1_000_000),
+    )
+    payload = read_json(path)
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_mainline_framework",
+            path=str(path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    if payload.get("passed") is True and "resident_mainline_framework" not in state.completed_stages:
+        state.completed_stages.append("resident_mainline_framework")
+    elif action == "strict":
+        state.current_stage = "resident_mainline_framework"
+        state.failed_stage = "resident_mainline_framework"
+        message = _resident_mainline_framework_message(payload)
+        if message not in state.errors:
+            state.errors.append(message)
+    else:
+        message = _resident_mainline_framework_message(payload)
+        if message not in state.warnings:
+            state.warnings.append(message)
+    return path
+
+
 def _write_resident_source_dq_strategy(
     run: Path,
     args: argparse.Namespace,
@@ -1927,6 +1987,91 @@ def _timed_stage(run: Path, timing: dict, stage: str, fn):
     timing["stages"].append(record)
     _write_timing(run, timing)
     return result
+
+
+def _write_resident_postcondition_artifacts(
+    run: Path,
+    args: argparse.Namespace,
+    state,
+    timing: dict,
+) -> dict[str, Path | None]:
+    paths: dict[str, Path | None] = {
+        "local_norm_contract": None,
+        "pipeline_contract": None,
+        "stack_engine_contract": None,
+        "warp_quality_contract": None,
+        "resident_mainline_framework": None,
+    }
+    if (run / "local_norm_results.json").exists():
+        paths["local_norm_contract"] = _timed_stage(
+            run,
+            timing,
+            "local_norm_contract",
+            lambda: _write_default_local_norm_contract_artifact(run, state),
+        )
+    if (run / "integration_results.json").exists() and (run / "resident_artifacts.json").exists():
+        paths["pipeline_contract"] = _timed_stage(
+            run,
+            timing,
+            "pipeline_contract",
+            lambda: _write_default_pipeline_contract_artifact(run, state),
+        )
+    if paths["pipeline_contract"] is not None and state.failed_stage is None:
+        paths["stack_engine_contract"] = _timed_stage(
+            run,
+            timing,
+            "stack_engine_contract",
+            lambda: _write_default_stack_engine_contract_artifact(
+                run,
+                state,
+                expected_integration_engine="cuda_resident_stack",
+            ),
+        )
+    if paths["stack_engine_contract"] is not None and state.failed_stage is None:
+        paths["warp_quality_contract"] = _timed_stage(
+            run,
+            timing,
+            "warp_quality_contract",
+            lambda: _write_default_warp_quality_contract_artifact(run, state),
+        )
+    if (
+        paths["stack_engine_contract"] is not None
+        and state.failed_stage is None
+        and getattr(args, "resident_mainline_framework_gate", DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_GATE)
+        != "off"
+    ):
+        paths["resident_mainline_framework"] = _timed_stage(
+            run,
+            timing,
+            "resident_mainline_framework",
+            lambda: _write_resident_mainline_framework(run, args, state),
+        )
+    return paths
+
+
+def _print_resident_postcondition_failure(
+    *,
+    run: Path,
+    state,
+    paths: dict[str, Path | None],
+) -> int | None:
+    failed_stage = state.failed_stage
+    if failed_stage not in {
+        "pipeline_contract",
+        "stack_engine_contract",
+        "warp_quality_contract",
+        "resident_mainline_framework",
+    }:
+        return None
+    console.print(
+        {
+            "status": "failed",
+            "stage": failed_stage,
+            "run": str(run),
+            "artifact": str(paths.get(failed_stage)) if paths.get(failed_stage) else None,
+        }
+    )
+    return 2
 
 
 def _registration_admission_blocked_message(payload: dict[str, Any]) -> str | None:
@@ -2582,6 +2727,15 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 _write_resident_registration_health_failed_state(out, state, exc)
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
+        postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
+        failed_exit = _print_resident_postcondition_failure(
+            run=out,
+            state=state,
+            paths=postcondition_paths,
+        )
+        if failed_exit is not None:
+            write_run_state(out, state)
+            return failed_exit
     elif plan.executable:
         try:
             state = _run_full_pipeline(
@@ -2885,76 +3039,15 @@ def cmd_run(args: argparse.Namespace) -> int:
                 _write_resident_registration_health_failed_state(out, state, exc)
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
-        if (out / "local_norm_results.json").exists():
-            _timed_stage(
-                out,
-                timing,
-                "local_norm_contract",
-                lambda: _write_default_local_norm_contract_artifact(out, state),
-            )
-        pipeline_contract_path = None
-        if (out / "integration_results.json").exists() and (out / "resident_artifacts.json").exists():
-            pipeline_contract_path = _timed_stage(
-                out,
-                timing,
-                "pipeline_contract",
-                lambda: _write_default_pipeline_contract_artifact(out, state),
-            )
-        stack_engine_contract_path = None
-        if pipeline_contract_path is not None and state.failed_stage is None:
-            stack_engine_contract_path = _timed_stage(
-                out,
-                timing,
-                "stack_engine_contract",
-                lambda: _write_default_stack_engine_contract_artifact(
-                    out,
-                    state,
-                    expected_integration_engine="cuda_resident_stack",
-                ),
-            )
-        warp_quality_contract_path = None
-        if stack_engine_contract_path is not None and state.failed_stage is None:
-            warp_quality_contract_path = _timed_stage(
-                out,
-                timing,
-                "warp_quality_contract",
-                lambda: _write_default_warp_quality_contract_artifact(out, state),
-            )
+        postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
         write_run_state(args.out, state)
-        if state.failed_stage == "pipeline_contract":
-            console.print(
-                {
-                    "status": "failed",
-                    "stage": "pipeline_contract",
-                    "run": str(out),
-                    "pipeline_contract": str(pipeline_contract_path) if pipeline_contract_path else None,
-                }
-            )
-            return 2
-        if state.failed_stage == "stack_engine_contract":
-            console.print(
-                {
-                    "status": "failed",
-                    "stage": "stack_engine_contract",
-                    "run": str(out),
-                    "stack_engine_contract": str(stack_engine_contract_path)
-                    if stack_engine_contract_path
-                    else None,
-                }
-            )
-            return 2
-        if state.failed_stage == "warp_quality_contract":
-            console.print(
-                {
-                    "status": "failed",
-                    "stage": "warp_quality_contract",
-                    "run": str(out),
-                    "warp_quality_contract": str(warp_quality_contract_path)
-                    if warp_quality_contract_path
-                    else None,
-                }
-            )
-            return 2
+        failed_exit = _print_resident_postcondition_failure(
+            run=out,
+            state=state,
+            paths=postcondition_paths,
+        )
+        if failed_exit is not None:
+            return failed_exit
         console.print(f"Resident CUDA run complete through {state.current_stage}: {args.out}")
         return 0
     implemented_stages = {
@@ -6357,6 +6450,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-mainline-framework-gate",
+        choices=["off", "warn", "strict"],
+        default=DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_GATE,
+        help="write a resident mainline framework postcondition; strict fails the run when it is not green",
+    )
+    run.add_argument("--resident-mainline-min-lights", type=int, default=1)
+    run.add_argument("--resident-mainline-min-active-frames", type=int, default=1)
+    run.add_argument("--resident-mainline-max-masked-frames", type=int, default=1_000_000)
+    run.add_argument(
         "--resident-winsorized-mode",
         choices=["auto", "fast_approx", "hardened_cpu_parity"],
         default="auto",
@@ -6961,6 +7063,15 @@ def build_parser() -> argparse.ArgumentParser:
             "and DQ, minimal writes only the master"
         ),
     )
+    audit.add_argument(
+        "--resident-mainline-framework-gate",
+        choices=["off", "warn", "strict"],
+        default=DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_GATE,
+        help="write a resident mainline framework postcondition; strict fails the run when it is not green",
+    )
+    audit.add_argument("--resident-mainline-min-lights", type=int, default=1)
+    audit.add_argument("--resident-mainline-min-active-frames", type=int, default=1)
+    audit.add_argument("--resident-mainline-max-masked-frames", type=int, default=1_000_000)
     audit.add_argument(
         "--resident-inline-source-dq",
         choices=["off", "cosmetic", "cosmetic_cuda"],

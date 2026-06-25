@@ -4282,10 +4282,11 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
         "resident_source_dq_cache_calibration",
         "resident_calibration_integration",
         "local_norm_contract",
-        "pipeline_contract",
-        "stack_engine_contract",
-        "warp_quality_contract",
-    ]
+            "pipeline_contract",
+            "stack_engine_contract",
+            "warp_quality_contract",
+            "resident_mainline_framework",
+        ]
     assert "resident_source_dq_cache_calibration" in state["completed_stages"]
     assert any(item["stage"] == "resident_source_dq_strategy" for item in state["artifacts"])
     assert any(item["stage"] == "resident_source_dq_cache" for item in state["artifacts"])
