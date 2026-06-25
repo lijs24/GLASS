@@ -6956,6 +6956,7 @@ def run_resident_calibration_integration(
     resident_calibration_release_mode: str = "sync",
     resident_native_completion_calibration: str = "off",
     resident_native_completion_wave_fill_us: int = 0,
+    resident_native_completion_wave_fill_mode: str = "multi_wait",
     resident_native_batch_read: str = "off",
     resident_native_queue_read: str = "off",
     resident_native_queue_drain_mode: str | None = None,
@@ -7144,6 +7145,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_native_completion_calibration must be off or on")
     if resident_native_completion_wave_fill_us < 0 or resident_native_completion_wave_fill_us > 10000:
         raise ValueError("resident_native_completion_wave_fill_us must be between 0 and 10000")
+    if resident_native_completion_wave_fill_mode not in {"multi_wait", "single_wait"}:
+        raise ValueError("resident_native_completion_wave_fill_mode must be multi_wait or single_wait")
     if resident_native_batch_read not in {"off", "on"}:
         raise ValueError("resident_native_batch_read must be off or on")
     if resident_native_queue_read not in {"off", "on"}:
@@ -7676,6 +7679,9 @@ def run_resident_calibration_integration(
             native_completion_wave_fill_env = str(
                 os.environ.get("GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US", "")
             ).strip()
+            native_completion_wave_fill_mode_env = str(
+                os.environ.get("GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_MODE", "")
+            ).strip().lower()
             native_completion_wave_fill_wait_us = int(resident_native_completion_wave_fill_us)
             native_completion_wave_fill_source = (
                 "cli" if native_completion_wave_fill_wait_us > 0 else "default_disabled"
@@ -7693,6 +7699,17 @@ def run_resident_calibration_integration(
                         "GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US must be between 0 and 10000"
                     )
                 native_completion_wave_fill_source = "env"
+            native_completion_wave_fill_mode = str(resident_native_completion_wave_fill_mode)
+            native_completion_wave_fill_mode_source = "cli"
+            if native_completion_wave_fill_mode_env:
+                if native_completion_wave_fill_mode_env not in {"multi_wait", "single_wait"}:
+                    raise ValueError(
+                        "GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_MODE must be "
+                        "multi_wait or single_wait"
+                    )
+                if native_completion_wave_fill_mode == "multi_wait":
+                    native_completion_wave_fill_mode = native_completion_wave_fill_mode_env
+                    native_completion_wave_fill_mode_source = "env"
             native_path_calibration_policy = (
                 "env_enabled"
                 if native_path_calibration_env in {"1", "true", "yes", "on"}
@@ -7833,6 +7850,7 @@ def run_resident_calibration_integration(
             native_completion_calibration_slot_reuse_wait_s = 0.0
             native_completion_calibration_final_h2d_collect_count = 0
             native_completion_calibration_consumer_schedule_mode: str | None = None
+            native_completion_calibration_consumer_wave_fill_mode: str | None = None
             native_completion_calibration_consumer_wave_fill_policy: str | None = None
             native_completion_calibration_consumer_wave_fill_wait_us = 0
             native_completion_calibration_consumer_wave_fill_wait_count = 0
@@ -8113,6 +8131,9 @@ def run_resident_calibration_integration(
                                 native_completion_policy[
                                     "native_completion_consumer_wave_fill_wait_us"
                                 ] = int(native_completion_wave_fill_wait_us)
+                                native_completion_policy[
+                                    "native_completion_consumer_wave_fill_mode"
+                                ] = str(native_completion_wave_fill_mode)
                                 calibration_timing = (
                                     stack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed(
                                         batch_indices,
@@ -8173,6 +8194,16 @@ def run_resident_calibration_integration(
                                 if timing_consumer_schedule_mode:
                                     native_completion_calibration_consumer_schedule_mode = (
                                         timing_consumer_schedule_mode
+                                    )
+                                timing_wave_fill_mode = str(
+                                    calibration_timing.get(
+                                        "native_completion_consumer_wave_fill_mode", ""
+                                    )
+                                    or ""
+                                )
+                                if timing_wave_fill_mode:
+                                    native_completion_calibration_consumer_wave_fill_mode = (
+                                        timing_wave_fill_mode
                                     )
                                 timing_wave_fill_policy = str(
                                     calibration_timing.get(
@@ -13119,6 +13150,15 @@ def run_resident_calibration_integration(
                 ),
                 "native_completion_calibration_consumer_schedule_mode": (
                     native_completion_calibration_consumer_schedule_mode
+                ),
+                "native_completion_calibration_consumer_wave_fill_mode": (
+                    native_completion_calibration_consumer_wave_fill_mode
+                ),
+                "native_completion_calibration_consumer_wave_fill_mode_requested": (
+                    native_completion_wave_fill_mode
+                ),
+                "native_completion_calibration_consumer_wave_fill_mode_source": (
+                    native_completion_wave_fill_mode_source
                 ),
                 "native_completion_calibration_consumer_wave_fill_policy": (
                     native_completion_calibration_consumer_wave_fill_policy

@@ -341,6 +341,7 @@ def test_resident_stack_calibrates_u16be_paths_completion_queue_on_gpu_like_cpu(
     assert timing["worker_count"] == 2
     assert timing["native_completion_slot_release_mode"] == "event_query_deferred_reuse"
     assert timing["native_completion_consumer_schedule_mode"] == "completion_lane_wave_drain"
+    assert timing["native_completion_consumer_wave_fill_mode"] == "multi_wait"
     assert timing["native_completion_consumer_wave_fill_policy"] == "disabled"
     assert timing["native_completion_consumer_wave_fill_wait_us"] == 0
     assert timing["native_completion_consumer_wave_count"] >= 1

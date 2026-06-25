@@ -403,6 +403,7 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_warp_chunk_capacity_frames": 8,
         "resident_native_completion_calibration": "on",
         "resident_native_completion_wave_fill_us": 25,
+        "resident_native_completion_wave_fill_mode": "single_wait",
     },
 }
 DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v4-native-completion"
@@ -440,6 +441,7 @@ RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_calibration_release_mode": "--resident-calibration-release-mode",
     "resident_native_completion_calibration": "--resident-native-completion-calibration",
     "resident_native_completion_wave_fill_us": "--resident-native-completion-wave-fill-us",
+    "resident_native_completion_wave_fill_mode": "--resident-native-completion-wave-fill-mode",
     "resident_native_batch_read": "--resident-native-batch-read",
     "resident_native_queue_read": "--resident-native-queue-read",
     "resident_native_queue_drain_mode": "--resident-native-queue-drain-mode",
@@ -952,6 +954,9 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     )
     timing["resident_native_completion_wave_fill_us"] = getattr(
         args, "resident_native_completion_wave_fill_us", 0
+    )
+    timing["resident_native_completion_wave_fill_mode"] = getattr(
+        args, "resident_native_completion_wave_fill_mode", "multi_wait"
     )
     timing["resident_native_batch_read"] = getattr(args, "resident_native_batch_read", "off")
     timing["resident_native_queue_read"] = getattr(args, "resident_native_queue_read", "off")
@@ -2496,6 +2501,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_native_completion_calibration=args.resident_native_completion_calibration,
                 resident_native_completion_wave_fill_us=args.resident_native_completion_wave_fill_us,
+                resident_native_completion_wave_fill_mode=args.resident_native_completion_wave_fill_mode,
                 resident_native_batch_read=args.resident_native_batch_read,
                 resident_native_queue_read=args.resident_native_queue_read,
                 resident_native_queue_drain_mode=args.resident_native_queue_drain_mode,
@@ -2777,6 +2783,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_native_completion_calibration=args.resident_native_completion_calibration,
                 resident_native_completion_wave_fill_us=args.resident_native_completion_wave_fill_us,
+                resident_native_completion_wave_fill_mode=args.resident_native_completion_wave_fill_mode,
                 resident_native_batch_read=args.resident_native_batch_read,
                 resident_native_queue_read=args.resident_native_queue_read,
                 resident_native_queue_drain_mode=args.resident_native_queue_drain_mode,
@@ -6172,6 +6179,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-native-completion-wave-fill-mode",
+        choices=["multi_wait", "single_wait"],
+        default="multi_wait",
+        help=(
+            "completion-queue wave-fill schedule: multi_wait preserves the established repeated wait-for-fill "
+            "behavior; single_wait performs at most one bounded wait per wave for A/B profiling"
+        ),
+    )
+    run.add_argument(
         "--resident-native-batch-read",
         choices=["off", "on"],
         default="off",
@@ -6843,6 +6859,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="microseconds to wait for extra completion-queue frames before draining an audit calibration wave",
+    )
+    audit.add_argument(
+        "--resident-native-completion-wave-fill-mode",
+        choices=["multi_wait", "single_wait"],
+        default="multi_wait",
+        help="resident audit completion-queue wave-fill schedule for A/B profiling",
     )
     audit.add_argument("--resident-native-batch-read", choices=["off", "on"], default="off")
     audit.add_argument("--resident-native-queue-read", choices=["off", "on"], default="off")

@@ -113,6 +113,9 @@ def test_light_pipeline_profile_exposes_native_completion_lane_fill() -> None:
             "native_completion_calibration_consumer_wave_count": 41,
             "native_completion_calibration_consumer_max_wave_frames": 8,
             "native_completion_calibration_consumer_multi_frame_wave_count": 33,
+            "native_completion_calibration_consumer_wave_fill_mode": "single_wait",
+            "native_completion_calibration_consumer_wave_fill_mode_requested": "single_wait",
+            "native_completion_calibration_consumer_wave_fill_mode_source": "cli",
             "native_completion_calibration_consumer_wave_fill_policy": "timed_wait_25us",
             "native_completion_calibration_consumer_wave_fill_source": "cli",
             "native_completion_calibration_consumer_wave_fill_wait_us": 25,
@@ -132,7 +135,11 @@ def test_light_pipeline_profile_exposes_native_completion_lane_fill() -> None:
     assert native["queue_buffers_per_stream"] == 4.0
     assert native["consumer_lane_fill_ratio"] == 200 / (41 * 8)
     assert native["consumer_multi_frame_wave_fraction"] == 33 / 41
+    assert native["consumer_wave_fill_mode"] == "single_wait"
+    assert native["consumer_wave_fill_mode_requested"] == "single_wait"
+    assert native["consumer_wave_fill_mode_source"] == "cli"
     assert native["consumer_wave_fill_wait_s"] == 0.288
     assert profile["knobs"]["native_completion_calibration_enabled"] is True
     assert profile["knobs"]["native_completion_consumer_lane_fill_ratio"] == 200 / (41 * 8)
+    assert profile["knobs"]["native_completion_consumer_wave_fill_mode"] == "single_wait"
     assert profile["recommendation"] == "improve_native_completion_wave_fill_before_adding_lanes"

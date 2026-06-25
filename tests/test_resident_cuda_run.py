@@ -7186,6 +7186,9 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     assert io_pipeline["calibration_wave_release_mode"] == "native_completion_queue_event_gated_slot_reuse"
     assert io_pipeline["native_completion_calibration_slot_release_mode"] == "event_query_deferred_reuse"
     assert io_pipeline["native_completion_calibration_consumer_schedule_mode"] == "completion_lane_wave_drain"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode"] == "multi_wait"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_requested"] == "multi_wait"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_source"] == "cli"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_policy"] == "timed_wait_25us"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_source"] == "env"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_wait_us"] == 25
@@ -7244,6 +7247,8 @@ def test_cli_resident_cuda_native_completion_runtime_preset_is_cli_opt_in(
             "off",
             "--resident-fits-read-mode",
             "native_u16_gpu",
+            "--resident-native-completion-wave-fill-mode",
+            "single_wait",
             "--flat-floor",
             "0.05",
         ]
@@ -7254,6 +7259,10 @@ def test_cli_resident_cuda_native_completion_runtime_preset_is_cli_opt_in(
     assert io_pipeline["native_completion_calibration_policy"] == "cli_enabled"
     assert io_pipeline["native_completion_calibration_enabled"] is True
     assert io_pipeline["native_completion_calibration_reason"] == "cli_enabled"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode"] == "single_wait"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_requested"] == "single_wait"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_source"] == "cli"
+    assert io_pipeline["native_completion_calibration_consumer_wave_fill_policy"] == "single_wait_25us"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_source"] == "cli"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_wait_us"] == 25
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_requested_wait_us"] == 25

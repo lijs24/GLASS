@@ -281,6 +281,70 @@ Decision:
 - The next real optimization should improve native completion wave-fill or
   overlap before adding lanes, or return to the hardened reducer kernel itself.
 
+### S2-Gate 632: Single-Wait Native Completion Default
+
+Gate 632 implements the next native-completion scheduler step from Gate631:
+keep the 4-lane default, but reduce repeated condition-variable waits inside
+each completion wave.
+
+Implementation:
+
+- Added `--resident-native-completion-wave-fill-mode` with choices:
+  - `single_wait`: at most one bounded wait per completion wave;
+  - `multi_wait`: the previous repeated wait-for-fill behavior.
+- Added `GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_MODE` for explicit
+  experiments when CLI mode remains at the default.
+- Native timing payloads now record
+  `native_completion_consumer_wave_fill_mode`.
+- `resident_io_pipeline` records the actual mode, requested mode, and source.
+- `resident_light_pipeline_profile.native_completion` and profile `knobs`
+  expose the wave-fill mode.
+- Promoted `single_wait` as the default mode for
+  `throughput-v4-native-completion`; explicit
+  `--resident-native-completion-wave-fill-mode multi_wait` remains the
+  compatibility A/B fallback.
+
+Real 200-light validation:
+
+- Run root:
+  `C:\glass_runs\phase2_s2_gate632_single_wait\runs_20260625_142431`.
+- Summary:
+  `C:\glass_runs\phase2_s2_gate632_single_wait\runs_20260625_142431\gate632_single_wait_summary.json`.
+- First pair:
+  - `multi_wait`: total `11.097 s`, native H2D+calibration `1.963 s`,
+    wait count `135`;
+  - `single_wait`: total `10.730 s`, native H2D+calibration `1.912 s`,
+    wait count `94`.
+- Repeat pair:
+  - `multi_wait`: total `10.825 s`, native H2D+calibration `1.966 s`,
+    wait count `139`;
+  - `single_wait`: total `10.687 s`, native H2D+calibration `1.977 s`,
+    wait count `94`.
+- Post-promotion default run:
+  - actual mode `single_wait`;
+  - total `10.820 s`;
+  - native H2D+calibration `1.967 s`;
+  - wait count `93`.
+- Mean ratios for the two explicit pairs:
+  - total elapsed: `0.976989`;
+  - native H2D+calibration: `0.990062`;
+  - wait-count: `0.686131`.
+- Regression gates:
+  - explicit pair 1: passed, elapsed ratio `0.9669097248119599`;
+  - explicit pair 2: passed, elapsed ratio `0.9873223661024512`;
+  - post-promotion default versus old `multi_wait`: passed, elapsed ratio
+    `0.9750197625770799`.
+- All runs preserved `193 / 7` active/masked frame accounting.
+
+Decision:
+
+- Promote `single_wait` as the default wave-fill mode for the resident
+  `throughput-v4-native-completion` preset.
+- Keep `multi_wait` as an explicit CLI fallback for hardware or disk
+  configurations where repeated fill waits are helpful.
+- The next larger bottleneck remains the resident hardened winsorized reducer
+  kernel or a deeper native read/H2D overlap redesign.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization

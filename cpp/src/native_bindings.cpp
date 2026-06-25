@@ -1023,6 +1023,13 @@ int dict_int(const py::dict& dict, const char* key, int fallback) {
   return py::cast<int>(dict[key]);
 }
 
+std::string dict_string(const py::dict& dict, const char* key, const char* fallback) {
+  if (!dict.contains(key)) {
+    return std::string(fallback);
+  }
+  return py::cast<std::string>(dict[key]);
+}
+
 using Clock = std::chrono::steady_clock;
 
 double seconds_since(const Clock::time_point& start) {
@@ -6351,10 +6358,18 @@ class ResidentCalibratedStack {
       throw std::invalid_argument(
           "native_completion_consumer_wave_fill_wait_us must be between 0 and 10000");
     }
+    const std::string consumer_wave_fill_mode =
+        dict_string(policy, "native_completion_consumer_wave_fill_mode", "multi_wait");
+    if (consumer_wave_fill_mode != "multi_wait" && consumer_wave_fill_mode != "single_wait") {
+      throw std::invalid_argument(
+          "native_completion_consumer_wave_fill_mode must be multi_wait or single_wait");
+    }
     const std::string consumer_wave_fill_policy =
-        consumer_wave_fill_wait_us > 0
-            ? "timed_wait_" + std::to_string(consumer_wave_fill_wait_us) + "us"
-            : "disabled";
+        consumer_wave_fill_wait_us <= 0
+            ? "disabled"
+            : consumer_wave_fill_mode == "single_wait"
+            ? "single_wait_" + std::to_string(consumer_wave_fill_wait_us) + "us"
+            : "timed_wait_" + std::to_string(consumer_wave_fill_wait_us) + "us";
     const auto indices = parse_index_sequence(indices_obj, "indices");
     const auto paths = py::cast<std::vector<std::string>>(paths_obj);
     const auto data_offsets = py::cast<std::vector<unsigned long long>>(data_offsets_obj);
@@ -6398,6 +6413,7 @@ class ResidentCalibratedStack {
       out["native_completion_slot_reuse_wait_s"] = 0.0;
       out["native_completion_final_h2d_collect_count"] = 0;
       out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
+      out["native_completion_consumer_wave_fill_mode"] = consumer_wave_fill_mode;
       out["native_completion_consumer_wave_fill_policy"] = consumer_wave_fill_policy;
       out["native_completion_consumer_wave_fill_wait_us"] = consumer_wave_fill_wait_us;
       out["native_completion_consumer_wave_fill_wait_count"] = 0;
@@ -6684,23 +6700,44 @@ class ResidentCalibratedStack {
             completion_wave.push_back(std::move(completions.front()));
             completions.pop_front();
           }
-          while (consumer_wave_fill_wait_us > 0 &&
-                 completion_wave.size() < lane_count &&
-                 submit_count > completion_count + static_cast<unsigned long long>(completion_wave.size())) {
-            const auto fill_wait_start = Clock::now();
-            const bool filled = completion_condition.wait_for(
-                lock,
-                std::chrono::microseconds(consumer_wave_fill_wait_us),
-                [&]() { return closing || !completions.empty(); });
-            consumer_wave_fill_wait_s += seconds_since(fill_wait_start);
-            ++consumer_wave_fill_wait_count;
-            if (!filled && completions.empty()) {
-              ++consumer_wave_fill_timeout_count;
-              break;
+          if (consumer_wave_fill_mode == "single_wait") {
+            if (consumer_wave_fill_wait_us > 0 &&
+                completion_wave.size() < lane_count &&
+                submit_count > completion_count + static_cast<unsigned long long>(completion_wave.size())) {
+              const auto fill_wait_start = Clock::now();
+              const bool filled = completion_condition.wait_for(
+                  lock,
+                  std::chrono::microseconds(consumer_wave_fill_wait_us),
+                  [&]() { return closing || !completions.empty(); });
+              consumer_wave_fill_wait_s += seconds_since(fill_wait_start);
+              ++consumer_wave_fill_wait_count;
+              if (!filled && completions.empty()) {
+                ++consumer_wave_fill_timeout_count;
+              }
+              while (!completions.empty() && completion_wave.size() < lane_count) {
+                completion_wave.push_back(std::move(completions.front()));
+                completions.pop_front();
+              }
             }
-            while (!completions.empty() && completion_wave.size() < lane_count) {
-              completion_wave.push_back(std::move(completions.front()));
-              completions.pop_front();
+          } else {
+            while (consumer_wave_fill_wait_us > 0 &&
+                   completion_wave.size() < lane_count &&
+                   submit_count > completion_count + static_cast<unsigned long long>(completion_wave.size())) {
+              const auto fill_wait_start = Clock::now();
+              const bool filled = completion_condition.wait_for(
+                  lock,
+                  std::chrono::microseconds(consumer_wave_fill_wait_us),
+                  [&]() { return closing || !completions.empty(); });
+              consumer_wave_fill_wait_s += seconds_since(fill_wait_start);
+              ++consumer_wave_fill_wait_count;
+              if (!filled && completions.empty()) {
+                ++consumer_wave_fill_timeout_count;
+                break;
+              }
+              while (!completions.empty() && completion_wave.size() < lane_count) {
+                completion_wave.push_back(std::move(completions.front()));
+                completions.pop_front();
+              }
             }
           }
         }
@@ -6889,6 +6926,7 @@ class ResidentCalibratedStack {
     out["native_completion_slot_reuse_wait_s"] = slot_reuse_wait_s;
     out["native_completion_final_h2d_collect_count"] = final_h2d_collect_count;
     out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
+    out["native_completion_consumer_wave_fill_mode"] = consumer_wave_fill_mode;
     out["native_completion_consumer_wave_fill_policy"] = consumer_wave_fill_policy;
     out["native_completion_consumer_wave_fill_wait_us"] = consumer_wave_fill_wait_us;
     out["native_completion_consumer_wave_fill_wait_count"] = consumer_wave_fill_wait_count;

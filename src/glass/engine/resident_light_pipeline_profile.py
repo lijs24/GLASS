@@ -219,6 +219,15 @@ def build_resident_light_pipeline_profile(
             "consumer_wave_fill_policy": resident_io_pipeline.get(
                 "native_completion_calibration_consumer_wave_fill_policy"
             ),
+            "consumer_wave_fill_mode": resident_io_pipeline.get(
+                "native_completion_calibration_consumer_wave_fill_mode"
+            ),
+            "consumer_wave_fill_mode_requested": resident_io_pipeline.get(
+                "native_completion_calibration_consumer_wave_fill_mode_requested"
+            ),
+            "consumer_wave_fill_mode_source": resident_io_pipeline.get(
+                "native_completion_calibration_consumer_wave_fill_mode_source"
+            ),
             "consumer_wave_fill_source": resident_io_pipeline.get(
                 "native_completion_calibration_consumer_wave_fill_source"
             ),
@@ -324,6 +333,9 @@ def build_resident_light_pipeline_profile(
                 "native_completion_calibration_queue_buffer_count",
             ),
             "native_completion_consumer_lane_fill_ratio": native_completion_lane_fill_ratio,
+            "native_completion_consumer_wave_fill_mode": resident_io_pipeline.get(
+                "native_completion_calibration_consumer_wave_fill_mode"
+            ),
             "prefetch_ready_queue_callback_count": _int_value(
                 resident_io_pipeline,
                 "prefetch_ready_queue_callback_count",

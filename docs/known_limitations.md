@@ -88,7 +88,12 @@ Current code is intentionally gated:
   `resident_light_pipeline_profile.native_completion` now records lane-fill,
   queue-buffer, worker, wave-fill, and slot-reuse metrics so the next
   substantive improvement can target wave-fill/overlap instead of blindly
-  increasing lane count.
+  increasing lane count. Gate632 keeps the 4-lane default but changes the
+  default wave-fill mode to `single_wait`, reducing repeated completion-queue
+  condition-variable waits on the real 200-light benchmark while preserving
+  output parity. The previous `multi_wait` behavior remains available through
+  `--resident-native-completion-wave-fill-mode multi_wait` for hardware or disk
+  configurations where repeated fill waits are beneficial.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must
