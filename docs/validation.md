@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 659.
+- Gate: S2-Gate 660.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate659_conservative_cosmetic_cuda\runs_20260625_220000`.
+  `C:\glass_runs\phase2_s2_gate660_active_registered_source_dq\runs_20260625_223412`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate659_conservative_cosmetic_cuda\runs_20260625_220000\inline_cosmetic_cuda_conservative_policy_strict`.
-- GLASS elapsed time: `18.47093429986853 s`.
+  `C:\glass_runs\phase2_s2_gate660_active_registered_source_dq\runs_20260625_223412\active_registered_conservative_policy_strict`.
+- GLASS elapsed time: `18.553858600207604 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: about `59.15x`.
+- Speedup: about `58.88x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -307,6 +307,19 @@ Current Phase 2 latest mainline acceptance:
   `1.2427406311035156`, and RMS is `0.5331775153760971`. This keeps positive
   real-data source-DQ execution while reducing Gate658 policy drift
   substantially; it is still opt-in pending a star-aware detector.
+- Gate660 adds `--resident-inline-source-dq-admission active_registered` and
+  makes deferred inline cosmetic CUDA source-DQ respect the registration/current
+  positive-weight frame set before native batch application. The real 200-light
+  strict run used the Gate659 conservative profile plus active admission,
+  passed `framework_scope=inline_cosmetic_cuda_positive`, and passed
+  `phase2-mainline-audit --fail-on-not-green`. Evidence records `200`
+  deferred candidates, `193` active targets, `7` skipped-admission masked
+  frames, status counts `applied=10`, `skipped_high_invalid_fraction=183`, and
+  `skipped_admission_policy=7`. Active/all-frame invalid and applied samples
+  are `147179`, GLASS `total_elapsed_s=18.553858600207604`, speedup is about
+  `58.88x` versus the `1092.541 s` black-box timing, and the Gate660-vs-Gate659
+  conservative compare is bit-identical over the coverage-masked master
+  (`RMS=0.0`, max absolute difference `0.0`).
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

@@ -62,6 +62,7 @@ def build_resident_source_dq_strategy(
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
+    resident_inline_source_dq_admission: str = "all",
     artifact_type: str = "resident_source_dq_strategy",
 ) -> dict[str, Any]:
     plan_payload, plan_path = _load_plan(plan)
@@ -171,6 +172,13 @@ def build_resident_source_dq_strategy(
         "hot_sigma": float(resident_inline_source_dq_hot_sigma),
         "cold_sigma": float(resident_inline_source_dq_cold_sigma),
         "max_invalid_fraction": float(resident_inline_source_dq_max_invalid_fraction),
+        "admission": str(resident_inline_source_dq_admission),
+        "admission_semantics": (
+            "all resident frames are eligible for inline cosmetic source-DQ"
+            if str(resident_inline_source_dq_admission) == "all"
+            else "deferred cosmetic CUDA source-DQ is applied only to frames still admitted "
+            "by registration/current positive-weight frame state"
+        ),
         "high_fraction_guard_enabled": bool(
             str(resident_inline_source_dq) == "cosmetic_cuda"
             and float(resident_inline_source_dq_max_invalid_fraction) > 0.0

@@ -4161,6 +4161,8 @@ def test_cli_resident_cuda_run_defers_inline_cosmetic_cuda_source_dq_until_after
             "8.0",
             "--resident-inline-source-dq-max-invalid-fraction",
             "0",
+            "--resident-inline-source-dq-admission",
+            "active_registered",
             "--resident-runtime-preset",
             "manual",
             "--until-stage",
@@ -4214,6 +4216,8 @@ def test_cli_resident_cuda_run_defers_inline_cosmetic_cuda_source_dq_until_after
 
     registration = read_json(run / "registration_results.json")
     resident = read_json(run / "resident_artifacts.json")
+    strategy = read_json(run / "resident_source_dq_strategy.json")
+    timing = read_json(run / "run_timing.json")
     artifact = resident["artifacts"][0]
     source_dq = artifact["source_dq_summary"]
     pipeline = artifact["resident_io_pipeline"]
@@ -4224,10 +4228,19 @@ def test_cli_resident_cuda_run_defers_inline_cosmetic_cuda_source_dq_until_after
     assert moving["transform_model"] == "similarity_cuda_triangle"
     assert source_dq["passed"] is True
     assert pipeline["resident_inline_source_dq_application_order"] == "post_registration_pre_warp"
+    assert pipeline["resident_inline_source_dq_admission"] == "active_registered"
+    assert pipeline["resident_inline_source_dq_deferred_target_scope"] == (
+        "registered_active_positive_weight"
+    )
     assert pipeline["resident_inline_source_dq_deferred_until_stage"] == "resident_registration_complete"
     assert pipeline["resident_inline_source_dq_deferred_frame_count"] == 2
+    assert pipeline["resident_inline_source_dq_deferred_candidate_frame_count"] == 2
+    assert pipeline["resident_inline_source_dq_deferred_target_frame_count"] == 2
+    assert pipeline["resident_inline_source_dq_deferred_skipped_admission_frame_count"] == 0
     assert pipeline["resident_inline_source_dq_deferred_applied_frame_count"] == 0
     assert pipeline["resident_inline_source_dq_deferred_pending_frame_count"] == 0
+    assert strategy["inline_source_dq"]["admission"] == "active_registered"
+    assert timing["resident_inline_source_dq_admission"] == "active_registered"
     assert source_dq["input_invalid_samples_before_rejection"] == 0
     assert source_dq["status_counts"]["no_invalid_samples"] == 2
     assert rows
@@ -4239,6 +4252,93 @@ def test_cli_resident_cuda_run_defers_inline_cosmetic_cuda_source_dq_until_after
     }
     assert {row["detector_execution"] for row in rows} == {"cuda_isolated_threshold_apply_batch"}
     assert all(str(row["source"]).startswith("resident_post_registration_pre_warp") for row in rows)
+
+
+def test_cli_resident_cuda_run_active_registered_inline_cosmetic_cuda_skips_excluded_frame(
+    tmp_path: Path,
+):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "rdq_inline_cosmetic_cuda_active_registered_exclude"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_triangle_tolerance_px": 1.5,
+            "cuda_triangle_descriptor_radius": 0.08,
+            "cuda_triangle_neighbors": 5,
+            "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine": True,
+            "cuda_triangle_pixel_refine_coarse_stride": 1,
+            "cuda_triangle_pixel_refine_final_stride": 1,
+            "cuda_triangle_min_pixel_ncc": 0.1,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    state = run_resident_calibration_integration(
+        plan,
+        run,
+        integration_weighting="none",
+        integration_rejection="none",
+        resident_registration="similarity_cuda_triangle",
+        resident_star_threshold=30.0,
+        resident_star_max_candidates=16,
+        resident_star_tolerance_px=1.5,
+        resident_star_grid_cols=4,
+        resident_star_grid_rows=4,
+        resident_star_catalog_deterministic=True,
+        resident_triangle_grid_top_per_cell=2,
+        resident_triangle_nms_scan_candidates=96,
+        resident_triangle_nms_min_separation_px=2.0,
+        resident_triangle_pixel_refine_final_stride=2,
+        resident_triangle_pixel_refine_fast_coarse=True,
+        resident_triangle_min_agreement_score=0.01,
+        resident_triangle_agreement_rms_scale=200.0,
+        reference_frame_id="light_001",
+        exclude_frame_ids=["light_002"],
+        local_normalization="off",
+        resident_prefetch_frames=2,
+        resident_prefetch_workers=2,
+        resident_h2d_mode="pinned_ring",
+        resident_calibration_batch_frames=2,
+        resident_calibration_streams=2,
+        resident_inline_source_dq="cosmetic_cuda",
+        resident_inline_source_dq_hot_sigma=2.0,
+        resident_inline_source_dq_cold_sigma=8.0,
+        resident_inline_source_dq_max_invalid_fraction=0.0,
+        resident_inline_source_dq_admission="active_registered",
+    )
+    assert state.failed_stage is None
+
+    registration = read_json(run / "registration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    frame_masks = read_json(run / "resident_frame_masks.json")
+    artifact = resident["artifacts"][0]
+    source_dq = artifact["source_dq_summary"]
+    pipeline = artifact["resident_io_pipeline"]
+    rows = [row for row in source_dq["rows"] if row.get("inline_source_dq")]
+    skipped = [row for row in rows if row["status"] == "skipped_admission_policy"]
+
+    assert {row["status"] for row in registration["results"]} == {"reference", "excluded"}
+    assert frame_masks["summary"]["active_frame_count"] == 1
+    assert frame_masks["summary"]["masked_frame_count"] == 1
+    assert source_dq["passed"] is True
+    assert source_dq["status_counts"]["skipped_admission_policy"] == 1
+    assert source_dq["status_counts"]["no_invalid_samples"] == 1
+    assert len(skipped) == 1
+    assert skipped[0]["admission_policy"] == "active_registered"
+    assert skipped[0]["admission_reason"] == "manual_exclude"
+    assert skipped[0]["applied"] is False
+    assert pipeline["resident_inline_source_dq_admission"] == "active_registered"
+    assert pipeline["resident_inline_source_dq_deferred_candidate_frame_count"] == 2
+    assert pipeline["resident_inline_source_dq_deferred_target_frame_count"] == 1
+    assert pipeline["resident_inline_source_dq_deferred_skipped_admission_frame_count"] == 1
+    assert pipeline["resident_inline_source_dq_deferred_pending_frame_count"] == 0
 
 
 def test_cli_resident_cuda_run_consumes_two_phase_cosmetic_calibration_cache(tmp_path: Path):

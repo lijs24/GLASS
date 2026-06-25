@@ -1090,6 +1090,115 @@ def apply_resident_inline_cosmetic_thresholds(
     return row
 
 
+def build_skipped_resident_inline_cosmetic_threshold_row(
+    *,
+    frame_index: int,
+    frame_id: str,
+    threshold_info: dict[str, Any],
+    source: str,
+    admission_policy: str,
+    admission_reason: str,
+) -> dict[str, Any]:
+    info = dict(threshold_info)
+    metrics = dict(info.get("cosmetic_metrics") or {})
+    row: dict[str, Any] = {
+        "schema_version": 1,
+        "frame_id": str(frame_id),
+        "frame_index": int(frame_index),
+        "source": str(source),
+        "application_order": "calibration_pre_registration",
+        "registration_catalog_visibility": "pre_registration_catalog_visible",
+        "registration_catalog_visible": True,
+        "registration_catalog_visibility_required": False,
+        "supported": bool(info.get("supported")),
+        "reason": str(admission_reason),
+        "invalid_samples": 0,
+        "flagged_samples": 0,
+        "nonfinite_samples": 0,
+        "flag_counts": {},
+        "source_model": str(info.get("source_model") or "inline_structure_cosmetic_cuda_thresholds"),
+        "inline_source_dq": bool(info.get("inline_source_dq")),
+        "inline_source_dq_detector": str(
+            info.get("inline_source_dq_detector")
+            or "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+        ),
+        "inline_source_dq_applies_replacement": bool(
+            info.get("inline_source_dq_applies_replacement")
+        ),
+        "threshold_source": str(info.get("threshold_source") or "cpu_median_mad_scalar"),
+        "threshold_stats": dict(info.get("threshold_stats") or {}),
+        "threshold_stats_native_method": info.get("threshold_stats_native_method"),
+        "threshold_stats_domain": info.get("threshold_stats_domain"),
+        "threshold_stats_execution": info.get("threshold_stats_execution"),
+        "threshold_stats_materializes_host_frame": info.get("threshold_stats_materializes_host_frame"),
+        "threshold_stats_sample_count": info.get("threshold_stats_sample_count"),
+        "threshold_stats_sample_download_bytes": info.get("threshold_stats_sample_download_bytes"),
+        "threshold_stats_bin_count": info.get("threshold_stats_bin_count"),
+        "threshold_stats_histogram_download_bytes": info.get(
+            "threshold_stats_histogram_download_bytes"
+        ),
+        "threshold_stats_histogram_approximation": info.get(
+            "threshold_stats_histogram_approximation"
+        ),
+        "threshold_stats_batch_native_method": info.get("threshold_stats_batch_native_method"),
+        "threshold_stats_batch_frame_count": info.get("threshold_stats_batch_frame_count"),
+        "threshold_stats_batch_total_s": info.get("threshold_stats_batch_total_s"),
+        "threshold_stats_batch_device_alloc_s": info.get("threshold_stats_batch_device_alloc_s"),
+        "threshold_stats_batch_histogram_download_bytes": info.get(
+            "threshold_stats_batch_histogram_download_bytes"
+        ),
+        "threshold_stats_batch_minmax_partial_download_bytes": info.get(
+            "threshold_stats_batch_minmax_partial_download_bytes"
+        ),
+        "threshold_stats_batch_reuses_device_work_buffers": info.get(
+            "threshold_stats_batch_reuses_device_work_buffers"
+        ),
+        "detector_execution": str(info.get("detector_execution") or "cuda_isolated_threshold_apply"),
+        "hot_sigma": float(info.get("hot_sigma") or 0.0),
+        "cold_sigma": float(info.get("cold_sigma") or 0.0),
+        "low_threshold": float(info.get("low_threshold", float("-inf"))),
+        "high_threshold": float(info.get("high_threshold", float("inf"))),
+        "cosmetic_metrics": metrics,
+        "structure_sigma": float(info.get("structure_sigma", 1.5)),
+        "min_neighbor_support": int(info.get("min_neighbor_support", 2)),
+        "applied": False,
+        "native_method": None,
+        "status": "skipped_admission_policy",
+        "admission_policy": str(admission_policy),
+        "admission_reason": str(admission_reason),
+        "component_summaries": [
+            {
+                "source_model": str(info.get("source_model") or "inline_structure_cosmetic_cuda_thresholds"),
+                "supported": bool(info.get("supported")),
+                "reason": str(admission_reason),
+                "invalid_samples": 0,
+                "flagged_samples": 0,
+                "nonfinite_samples": 0,
+                "inline_source_dq": bool(info.get("inline_source_dq")),
+                "inline_source_dq_detector": str(
+                    info.get("inline_source_dq_detector")
+                    or "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+                ),
+                "inline_source_dq_applies_replacement": False,
+                "hot_sigma": float(info.get("hot_sigma") or 0.0),
+                "cold_sigma": float(info.get("cold_sigma") or 0.0),
+                "low_threshold": float(info.get("low_threshold", float("-inf"))),
+                "high_threshold": float(info.get("high_threshold", float("inf"))),
+                "threshold_source": str(info.get("threshold_source") or "cpu_median_mad_scalar"),
+                "threshold_stats": dict(info.get("threshold_stats") or {}),
+                "structure_sigma": float(info.get("structure_sigma", 1.5)),
+                "min_neighbor_support": int(info.get("min_neighbor_support", 2)),
+                "detector_execution": str(
+                    info.get("detector_execution") or "cuda_isolated_threshold_apply"
+                ),
+                "cosmetic_metrics": metrics,
+                "admission_policy": str(admission_policy),
+            }
+        ],
+    }
+    return row
+
+
 def apply_resident_inline_cosmetic_thresholds_batch(
     stack: Any,
     *,

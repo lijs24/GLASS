@@ -349,6 +349,8 @@ RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS = {
     "conservative": 0.0003,
     "diagnostic": 0.02,
 }
+DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION = "all"
+RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS = ("all", "active_registered")
 
 
 class RegistrationAdmissionBlocked(RuntimeError):
@@ -1043,6 +1045,11 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     timing["resident_inline_source_dq_max_invalid_fraction"] = getattr(
         args, "resident_inline_source_dq_max_invalid_fraction", None
     )
+    timing["resident_inline_source_dq_admission"] = getattr(
+        args,
+        "resident_inline_source_dq_admission",
+        DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
+    )
     policy_resolution = getattr(args, "_resident_inline_source_dq_policy_effective", None)
     if isinstance(policy_resolution, dict):
         timing["resident_inline_source_dq_policy_effective"] = policy_resolution
@@ -1735,6 +1742,11 @@ def _write_resident_source_dq_strategy(
         resident_inline_source_dq_cold_sigma=getattr(args, "resident_inline_source_dq_cold_sigma", 8.0),
         resident_inline_source_dq_max_invalid_fraction=getattr(
             args, "resident_inline_source_dq_max_invalid_fraction", 0.0001
+        ),
+        resident_inline_source_dq_admission=getattr(
+            args,
+            "resident_inline_source_dq_admission",
+            DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
         ),
     )
     strategy_path = _resident_source_dq_strategy_path(run)
@@ -3133,6 +3145,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_inline_source_dq_max_invalid_fraction=(
                     args.resident_inline_source_dq_max_invalid_fraction
                 ),
+                resident_inline_source_dq_admission=args.resident_inline_source_dq_admission,
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
@@ -3428,6 +3441,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_inline_source_dq_max_invalid_fraction=(
                     args.resident_inline_source_dq_max_invalid_fraction
                 ),
+                resident_inline_source_dq_admission=args.resident_inline_source_dq_admission,
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
@@ -7098,6 +7112,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-inline-source-dq-admission",
+        choices=RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS,
+        default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
+        help=(
+            "cosmetic_cuda admission policy: all preserves legacy behavior; "
+            "active_registered applies deferred masks only to currently positive-weight registered frames"
+        ),
+    )
+    run.add_argument(
         "--resident-output-maps",
         choices=["audit", "science", "minimal"],
         default="audit",
@@ -7792,6 +7815,15 @@ def build_parser() -> argparse.ArgumentParser:
             "for cosmetic_cuda audit runs, skip applying a threshold mask to any frame when the "
             "count-only preflight would invalidate more than this fraction of samples; overrides "
             "--resident-inline-source-dq-policy; set 0 to disable"
+        ),
+    )
+    audit.add_argument(
+        "--resident-inline-source-dq-admission",
+        choices=RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS,
+        default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
+        help=(
+            "cosmetic_cuda admission policy for audit: all preserves legacy behavior; "
+            "active_registered applies deferred masks only to currently positive-weight registered frames"
         ),
     )
     audit.add_argument(

@@ -70,6 +70,7 @@ from glass.engine.resident_source_dq import (
     apply_resident_inline_cosmetic_thresholds,
     apply_resident_inline_cosmetic_thresholds_batch,
     apply_resident_source_invalid_mask,
+    build_skipped_resident_inline_cosmetic_threshold_row,
     build_resident_source_dq_execution_group,
     build_resident_source_dq_summary,
     combine_source_invalid_masks,
@@ -7129,6 +7130,7 @@ def run_resident_calibration_integration(
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
     resident_inline_source_dq_max_invalid_fraction: float = 0.0001,
+    resident_inline_source_dq_admission: str = "all",
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_AUTO_MODE,
     resident_fits_read_mode: str = "astropy",
     resident_fits_read_mode_resolution: dict[str, Any] | None = None,
@@ -7153,6 +7155,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_inline_source_dq_cold_sigma must be positive")
     if resident_inline_source_dq_max_invalid_fraction < 0.0:
         raise ValueError("resident_inline_source_dq_max_invalid_fraction must be non-negative")
+    if resident_inline_source_dq_admission not in {"all", "active_registered"}:
+        raise ValueError("resident_inline_source_dq_admission must be all or active_registered")
     if resident_winsorized_mode not in _RESIDENT_WINSORIZED_MODES:
         raise ValueError("resident_winsorized_mode must be auto, fast_approx, or hardened_cpu_parity")
     if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
@@ -7628,7 +7632,10 @@ def run_resident_calibration_integration(
             deferred_inline_cosmetic_cuda_by_index: dict[int, dict[str, Any]] = {}
             deferred_inline_cosmetic_cuda_stats: dict[str, float | int] = {
                 "deferred_frame_count": 0,
+                "candidate_frame_count": 0,
+                "target_frame_count": 0,
                 "applied_frame_count": 0,
+                "skipped_admission_frame_count": 0,
                 "apply_s": 0.0,
             }
 
@@ -7642,6 +7649,25 @@ def run_resident_calibration_integration(
                     **item,
                     "deferred_until_stage": "resident_registration_complete",
                 }
+
+            def _inline_cosmetic_cuda_admission(frame_index: int, frame_id: str) -> tuple[bool, str]:
+                if resident_inline_source_dq_admission == "all":
+                    return True, "all_frames"
+                frame = light_frames[int(frame_index)]
+                if _matches_any_token(frame, excluded_tokens):
+                    return False, "manual_exclude"
+                if int(frame_index) < len(frame_weight_values):
+                    weight = float(frame_weight_values[int(frame_index)])
+                    if not np.isfinite(weight) or weight <= 0.0:
+                        return False, "non_positive_integration_weight"
+                registration_status = None
+                for result in reversed(registration_results):
+                    if str(result.frame_id) == str(frame_id):
+                        registration_status = str(result.status)
+                        break
+                if registration_status is not None and registration_status not in {"ok", "reference"}:
+                    return False, f"registration_status:{registration_status}"
+                return True, "registered_active"
 
             def _apply_deferred_inline_cosmetic_cuda_source_dq(
                 stack_obj: Any,
@@ -7657,13 +7683,47 @@ def run_resident_calibration_integration(
                         pending_items.append(item)
                 if not pending_items:
                     return
-                apply_start = perf_counter()
-                rows = apply_resident_inline_cosmetic_thresholds_batch(
-                    stack_obj,
-                    items=pending_items,
-                    source=source,
-                    max_invalid_fraction=resident_inline_source_dq_max_invalid_fraction,
+                target_items: list[dict[str, Any]] = []
+                skipped_rows: list[dict[str, Any]] = []
+                for item in pending_items:
+                    frame_index = int(item["frame_index"])
+                    frame_id = str(item["frame_id"])
+                    admitted, admission_reason = _inline_cosmetic_cuda_admission(frame_index, frame_id)
+                    if admitted:
+                        target_items.append(item)
+                        continue
+                    skipped_rows.append(
+                        build_skipped_resident_inline_cosmetic_threshold_row(
+                            frame_index=frame_index,
+                            frame_id=frame_id,
+                            threshold_info=dict(item["threshold_info"]),
+                            source=source,
+                            admission_policy=resident_inline_source_dq_admission,
+                            admission_reason=admission_reason,
+                        )
+                    )
+                deferred_inline_cosmetic_cuda_stats["candidate_frame_count"] = (
+                    int(deferred_inline_cosmetic_cuda_stats["candidate_frame_count"]) + len(pending_items)
                 )
+                deferred_inline_cosmetic_cuda_stats["target_frame_count"] = (
+                    int(deferred_inline_cosmetic_cuda_stats["target_frame_count"]) + len(target_items)
+                )
+                deferred_inline_cosmetic_cuda_stats["skipped_admission_frame_count"] = (
+                    int(deferred_inline_cosmetic_cuda_stats["skipped_admission_frame_count"])
+                    + len(skipped_rows)
+                )
+                apply_start = perf_counter()
+                rows = (
+                    apply_resident_inline_cosmetic_thresholds_batch(
+                        stack_obj,
+                        items=target_items,
+                        source=source,
+                        max_invalid_fraction=resident_inline_source_dq_max_invalid_fraction,
+                    )
+                    if target_items
+                    else []
+                )
+                rows.extend(skipped_rows)
                 deferred_inline_cosmetic_cuda_stats["apply_s"] = (
                     float(deferred_inline_cosmetic_cuda_stats["apply_s"]) + perf_counter() - apply_start
                 )
@@ -13998,6 +14058,12 @@ def run_resident_calibration_integration(
                         "fits_header_spec_cache_hit_count": int(per_frame_fits_header_cache_hits),
                         "resident_inline_source_dq": resident_inline_source_dq,
                         "resident_inline_source_dq_policy": str(resident_inline_source_dq_policy),
+                        "resident_inline_source_dq_admission": str(resident_inline_source_dq_admission),
+                        "resident_inline_source_dq_deferred_target_scope": (
+                            "registered_active_positive_weight"
+                            if resident_inline_source_dq_admission == "active_registered"
+                            else "all_deferred_frames"
+                        ),
                         "resident_inline_source_dq_detector": (
                             "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
                             if resident_inline_source_dq == "cosmetic_cuda"
@@ -14031,8 +14097,17 @@ def run_resident_calibration_integration(
                         "resident_inline_source_dq_deferred_frame_count": int(
                             deferred_inline_cosmetic_cuda_stats["deferred_frame_count"]
                         ),
+                        "resident_inline_source_dq_deferred_candidate_frame_count": int(
+                            deferred_inline_cosmetic_cuda_stats["candidate_frame_count"]
+                        ),
+                        "resident_inline_source_dq_deferred_target_frame_count": int(
+                            deferred_inline_cosmetic_cuda_stats["target_frame_count"]
+                        ),
                         "resident_inline_source_dq_deferred_applied_frame_count": int(
                             deferred_inline_cosmetic_cuda_stats["applied_frame_count"]
+                        ),
+                        "resident_inline_source_dq_deferred_skipped_admission_frame_count": int(
+                            deferred_inline_cosmetic_cuda_stats["skipped_admission_frame_count"]
                         ),
                         "resident_inline_source_dq_deferred_pending_frame_count": len(
                             deferred_inline_cosmetic_cuda_by_index

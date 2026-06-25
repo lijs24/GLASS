@@ -801,6 +801,66 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 660: Active-Registered Inline Cosmetic CUDA Source-DQ Admission
+
+Gate660 tightens the Gate659 conservative inline cosmetic CUDA path by making
+deferred source-DQ application frame-admission aware. Gate659 already reduced
+source-DQ drift, but its final deferred flush still evaluated every resident
+frame, including frames already masked from integration by registration quality.
+Gate660 adds an explicit opt-in admission policy that applies deferred cosmetic
+CUDA source-DQ only to frames that are still registered/currently positive
+weighted, while writing auditable skipped rows for masked frames.
+
+Implementation:
+
+- Added `--resident-inline-source-dq-admission` to `glass run` and
+  `glass audit`.
+- Supported policies:
+  - `all`: legacy behavior, every deferred frame remains eligible.
+  - `active_registered`: deferred cosmetic CUDA source-DQ applies only to
+    frames still admitted by registration/current positive-weight state.
+- The resident CUDA deferred apply path now filters candidates before native
+  batch threshold application, so inactive frames do not merely disappear from
+  summaries; they avoid the native apply path and receive
+  `status=skipped_admission_policy` rows.
+- `run_timing.json`, `resident_source_dq_strategy.json`, and
+  `resident_artifacts.json` record the admission policy and deferred candidate,
+  target, and skipped-admission frame counts.
+- Added focused resident CUDA tests for normal deferred application and for a
+  manual-exclude frame that is skipped by `active_registered` admission.
+
+Real 200-light validation:
+
+- Green run:
+  `C:\glass_runs\phase2_s2_gate660_active_registered_source_dq\runs_20260625_223412\active_registered_conservative_policy_strict`.
+- Command matched Gate659 conservative validation and added
+  `--resident-inline-source-dq-admission active_registered`.
+- `resident_mainline_framework.json`: passed with
+  `framework_scope=inline_cosmetic_cuda_positive`.
+- `phase2-mainline-audit --fail-on-not-green`: passed with `200` lights,
+  `193` active frames, and `7` masked frames.
+- GLASS `total_elapsed_s`: `18.553858600207604 s`, about `58.88x` faster than
+  the `1092.541 s` black-box reference timing.
+- Resident calibration/integration stage: `16.83023530000355 s`.
+- Source-DQ status counts:
+  `applied=10`, `skipped_high_invalid_fraction=183`,
+  `skipped_admission_policy=7`.
+- Deferred admission counts:
+  `candidate=200`, `target=193`, `skipped_admission=7`.
+- Source-DQ active/all-frame invalid and applied samples:
+  `147179`.
+- Compared against Gate659 conservative master at coverage >= `190`: shape
+  match true, compared pixels `60105945`, coverage fraction
+  `0.9749355243693554`, max absolute difference `0.0`, RMS `0.0`.
+
+Interpretation:
+
+- Gate660 removes unnecessary DQ execution from masked frames without changing
+  the integrated science output relative to Gate659 conservative.
+- This is still not a true star-aware detector. It is an execution/admission
+  hardening step that makes the current opt-in detector safer and more
+  auditable before deeper star/structure-aware masking work.
+
 ### S2-Gate 659: Conservative Cosmetic CUDA Source-DQ Policy Profile
 
 Gate659 takes the Gate658 inline cosmetic CUDA source-DQ path from a manually
