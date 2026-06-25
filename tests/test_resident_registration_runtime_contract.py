@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from glass.engine.resident_registration_runtime_contract import (
+    build_resident_registration_runtime_contract,
+    write_resident_registration_runtime_contract,
+)
+from glass.io.json_io import read_json, write_json
+
+
+def _write_triangle_run(run: Path, *, fallback_frame_count: int = 0) -> None:
+    write_json(
+        run / "resident_artifacts.json",
+        {
+            "artifacts": [
+                {
+                    "resident_registration": {"mode": "similarity_cuda_triangle"},
+                    "timing_s": {"resident_registration_warp": 0.25},
+                    "triangle_catalog_batch": True,
+                    "triangle_descriptor_generation_batch": True,
+                    "triangle_descriptor_fit_batch": True,
+                    "triangle_warp_batch": True,
+                    "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+                    "triangle_warp_batch_dispatch": "chunked",
+                    "triangle_warp_batch_frame_count": 2,
+                    "triangle_warp_batch_fallback_frame_count": fallback_frame_count,
+                    "triangle_warp_batch_native_chunk_count": 1,
+                    "triangle_warp_batch_native_chunk_frames": 2,
+                    "triangle_warp_batch_native_total_s": 0.2,
+                    "warp_coverage": {
+                        "available": True,
+                        "frame_count": 3,
+                        "warped_frame_count": 2,
+                    },
+                }
+            ]
+        },
+    )
+    write_json(
+        run / "registration_results.json",
+        {
+            "results": [
+                {"frame_id": "F001", "status": "ok"},
+                {"frame_id": "F002", "status": "ok"},
+                {"frame_id": "F003", "status": "reference"},
+                {"frame_id": "F004", "status": "excluded"},
+            ]
+        },
+    )
+    write_json(
+        run / "resident_frame_masks.json",
+        {
+            "summary": {
+                "passed": True,
+                "frame_count": 4,
+                "active_frame_count": 3,
+                "masked_frame_count": 1,
+            }
+        },
+    )
+
+
+def test_resident_registration_runtime_contract_passes_batched_triangle_run(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_triangle_run(run)
+
+    payload = build_resident_registration_runtime_contract(run)
+
+    assert payload["passed"] is True
+    assert payload["applicable"] is True
+    assert payload["summary"]["expected_warped_frame_count"] == 2
+    assert payload["summary"]["warp_frames_per_s"] == 8.0
+    checks = {check["name"]: check for check in payload["checks"]}
+    assert checks["triangle_warp_batch_has_no_fallback"]["passed"] is True
+
+
+def test_resident_registration_runtime_contract_fails_native_warp_fallback(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_triangle_run(run, fallback_frame_count=1)
+
+    path = write_resident_registration_runtime_contract(run)
+    payload = read_json(path)
+
+    assert payload["passed"] is False
+    assert "triangle_warp_batch_has_no_fallback" in payload["failed_checks"]
+
+
+def test_resident_registration_runtime_contract_allows_minimal_output_without_coverage(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_triangle_run(run)
+    artifact = read_json(run / "resident_artifacts.json")
+    artifact["artifacts"][0]["warp_coverage"] = {
+        "available": False,
+        "frame_count": 0,
+        "warped_frame_count": 2,
+    }
+    write_json(run / "resident_artifacts.json", artifact)
+
+    payload = build_resident_registration_runtime_contract(run)
+
+    assert payload["passed"] is True
+    assert payload["summary"]["warp_coverage_required"] is False
+
+
+def test_resident_registration_runtime_contract_allows_fused_deferred_warp_path(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_triangle_run(run)
+    artifact = read_json(run / "resident_artifacts.json")
+    artifact["artifacts"][0].update(
+        {
+            "triangle_warp_batch": False,
+            "triangle_warp_batch_mode": "fused_matrix_deferred",
+            "triangle_warp_batch_frame_count": 0,
+            "triangle_warp_batch_native_chunk_count": 0,
+            "triangle_warp_batch_native_chunk_frames": 0,
+            "warp_coverage": {"available": False, "frame_count": 0, "warped_frame_count": 0},
+        }
+    )
+    write_json(run / "resident_artifacts.json", artifact)
+
+    payload = build_resident_registration_runtime_contract(run)
+
+    assert payload["passed"] is True
+    assert payload["summary"]["triangle_native_batch_required"] is False
+
+
+def test_resident_registration_runtime_contract_is_not_applicable_for_non_triangle_path(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    write_json(
+        run / "resident_artifacts.json",
+        {"artifacts": [{"resident_registration": {"mode": "off"}}]},
+    )
+
+    payload = build_resident_registration_runtime_contract(run)
+
+    assert payload["passed"] is True
+    assert payload["applicable"] is False
+    assert payload["summary"]["registration_mode"] == "off"

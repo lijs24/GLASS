@@ -42,6 +42,7 @@ RESIDENT_STAGE_ARTIFACTS: dict[str, tuple[str, ...]] = {
         "frame_accounting.json",
     ),
     "resident_registration_health": ("resident_registration_health.json",),
+    "resident_registration_runtime_contract": ("resident_registration_runtime_contract.json",),
     "local_norm_contract": ("local_norm_contract.json",),
     "pipeline_contract": ("pipeline_contract.json",),
     "stack_engine_contract": ("stack_engine_contract.json",),

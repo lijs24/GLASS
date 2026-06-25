@@ -57,6 +57,9 @@ from glass.engine.resident_registration_health import (
     build_resident_registration_health,
     resolve_resident_registration_health_action,
 )
+from glass.engine.resident_registration_runtime_contract import (
+    write_resident_registration_runtime_contract,
+)
 from glass.engine.resident_resume import (
     is_resident_run,
     write_resident_resume_preflight,
@@ -1906,6 +1909,27 @@ def _write_default_warp_quality_contract_artifact(run: Path, state) -> Path | No
     return warp_quality_path
 
 
+def _write_default_resident_registration_runtime_contract_artifact(run: Path, state) -> Path:
+    contract_path = write_resident_registration_runtime_contract(run)
+    payload = read_json(contract_path)
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_registration_runtime_contract",
+            path=str(contract_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    if "resident_registration_runtime_contract" not in state.completed_stages:
+        state.completed_stages.append("resident_registration_runtime_contract")
+    if payload.get("passed") is not True and payload.get("applicable") is True:
+        state.current_stage = "resident_registration_runtime_contract"
+        state.failed_stage = "resident_registration_runtime_contract"
+        state.errors.append("resident registration runtime contract failed")
+    return contract_path
+
+
 def _write_default_local_norm_contract_artifact(run: Path, state) -> Path | None:
     if not (run / "local_norm_results.json").exists():
         return None
@@ -2067,6 +2091,7 @@ def _write_resident_postcondition_artifacts(
         "pipeline_contract": None,
         "stack_engine_contract": None,
         "warp_quality_contract": None,
+        "resident_registration_runtime_contract": None,
         "resident_mainline_framework": None,
         "resident_reentry_boundary": None,
     }
@@ -2113,6 +2138,13 @@ def _write_resident_postcondition_artifacts(
             "warp_quality_contract",
             lambda: _write_default_warp_quality_contract_artifact(run, state),
         )
+    if paths["warp_quality_contract"] is not None and state.failed_stage is None:
+        paths["resident_registration_runtime_contract"] = _timed_stage(
+            run,
+            timing,
+            "resident_registration_runtime_contract",
+            lambda: _write_default_resident_registration_runtime_contract_artifact(run, state),
+        )
     if (
         paths["stack_engine_contract"] is not None
         and state.failed_stage is None
@@ -2139,6 +2171,7 @@ def _print_resident_postcondition_failure(
         "pipeline_contract",
         "stack_engine_contract",
         "warp_quality_contract",
+        "resident_registration_runtime_contract",
         "resident_mainline_framework",
     }:
         return None

@@ -4292,21 +4292,24 @@ def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
         "resident_calibration_integration",
         "resident_reentry_boundary",
         "local_norm_contract",
-        "pipeline_contract",
-        "stack_engine_contract",
-        "warp_quality_contract",
-        "resident_mainline_framework",
-    ]
+            "pipeline_contract",
+            "stack_engine_contract",
+            "warp_quality_contract",
+            "resident_registration_runtime_contract",
+            "resident_mainline_framework",
+        ]
     assert "resident_source_dq_cache_calibration" in state["completed_stages"]
     assert any(item["stage"] == "resident_source_dq_strategy" for item in state["artifacts"])
     assert any(item["stage"] == "resident_source_dq_cache" for item in state["artifacts"])
     assert any(item["stage"] == "stack_engine_contract" for item in state["artifacts"])
     assert any(item["stage"] == "warp_quality_contract" for item in state["artifacts"])
+    assert any(item["stage"] == "resident_registration_runtime_contract" for item in state["artifacts"])
     assert any(item["stage"] == "resident_mainline_framework" for item in state["artifacts"])
     assert any(item["stage"] == "resident_reentry_boundary" for item in state["artifacts"])
     assert (run / "resident_reentry_boundary.json").exists()
     assert (run / "stack_engine_contract.json").exists()
     assert (run / "warp_quality_contract.json").exists()
+    assert (run / "resident_registration_runtime_contract.json").exists()
     assert (run / "resident_mainline_framework.json").exists()
     assert warp_quality["passed"] is True
     assert warp_quality["contract_surface"] == "resident_in_vram"

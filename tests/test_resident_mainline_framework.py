@@ -13,6 +13,9 @@ from glass.engine.resident_mainline_framework import (
     build_resident_mainline_framework,
     write_resident_mainline_framework,
 )
+from glass.engine.resident_registration_runtime_contract import (
+    write_resident_registration_runtime_contract,
+)
 from glass.io.json_io import read_json, write_json
 from glass.models import PipelineArtifact, now_iso
 
@@ -158,6 +161,22 @@ def _write_minimal_green_resident_run(
                         "resident_integration": 1.0,
                         "output_write": 0.1,
                     },
+                    "triangle_catalog_batch": True,
+                    "triangle_descriptor_generation_batch": True,
+                    "triangle_descriptor_fit_batch": True,
+                    "triangle_warp_batch": True,
+                    "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+                    "triangle_warp_batch_dispatch": "chunked",
+                    "triangle_warp_batch_frame_count": 2,
+                    "triangle_warp_batch_fallback_frame_count": 0,
+                    "triangle_warp_batch_native_chunk_count": 1,
+                    "triangle_warp_batch_native_chunk_frames": 2,
+                    "triangle_warp_batch_native_total_s": 0.08,
+                    "warp_coverage": {
+                        "available": True,
+                        "frame_count": 3,
+                        "warped_frame_count": 2,
+                    },
                 }
             ]
         },
@@ -167,7 +186,10 @@ def _write_minimal_green_resident_run(
     write_json(run / "resident_component_timing.json", component_timing)
     materialize_resident_component_timing(timing, component_timing)
     write_json(run / "run_timing.json", timing)
-    write_json(run / "resident_frame_masks.json", {"summary": {"passed": True, "active_frame_count": 3, "masked_frame_count": 0}})
+    write_json(
+        run / "resident_frame_masks.json",
+        {"summary": {"passed": True, "frame_count": 3, "active_frame_count": 3, "masked_frame_count": 0}},
+    )
     write_json(
         run / "resident_dq_lifecycle.json",
         {"summary": {"passed": True, "status": "passed", "frame_count": 3, "active_frame_count": 3, "masked_frame_count": 0}},
@@ -207,12 +229,22 @@ def _write_minimal_green_resident_run(
         "integration_results.json",
         "calibration_artifacts.json",
         "frame_quality.json",
-        "registration_results.json",
         "resident_registration_quality.json",
         "local_norm_results.json",
         "resident_stage_ledger.json",
     ):
         write_json(run / name, {"passed": True, "status": "passed"})
+    write_json(
+        run / "registration_results.json",
+        {
+            "results": [
+                {"frame_id": "F001", "status": "ok"},
+                {"frame_id": "F002", "status": "ok"},
+                {"frame_id": "F003", "status": "reference"},
+            ]
+        },
+    )
+    write_resident_registration_runtime_contract(run)
     return maps
 
 

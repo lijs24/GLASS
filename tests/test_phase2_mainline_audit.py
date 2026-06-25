@@ -7,6 +7,9 @@ from glass.engine.resident_component_timing import (
     build_resident_component_timing,
     materialize_resident_component_timing,
 )
+from glass.engine.resident_registration_runtime_contract import (
+    write_resident_registration_runtime_contract,
+)
 from glass.io.json_io import read_json, write_json
 from glass.report.phase2_mainline_audit import build_phase2_mainline_audit
 
@@ -97,6 +100,22 @@ def _write_green_run(run: Path) -> None:
                         "resident_integration": 3.28,
                         "output_write": 0.25,
                     },
+                    "triangle_catalog_batch": True,
+                    "triangle_descriptor_generation_batch": True,
+                    "triangle_descriptor_fit_batch": True,
+                    "triangle_warp_batch": True,
+                    "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+                    "triangle_warp_batch_dispatch": "chunked",
+                    "triangle_warp_batch_frame_count": 192,
+                    "triangle_warp_batch_fallback_frame_count": 0,
+                    "triangle_warp_batch_native_chunk_count": 24,
+                    "triangle_warp_batch_native_chunk_frames": 8,
+                    "triangle_warp_batch_native_total_s": 0.49,
+                    "warp_coverage": {
+                        "available": True,
+                        "frame_count": 193,
+                        "warped_frame_count": 192,
+                    },
                 }
             ],
         },
@@ -106,7 +125,17 @@ def _write_green_run(run: Path) -> None:
     write_json(run / "resident_component_timing.json", component_timing)
     materialize_resident_component_timing(timing, component_timing)
     write_json(run / "run_timing.json", timing)
-    write_json(run / "resident_frame_masks.json", {"summary": {"passed": True, "active_frame_count": 193, "masked_frame_count": 7}})
+    write_json(
+        run / "resident_frame_masks.json",
+        {
+            "summary": {
+                "passed": True,
+                "frame_count": 200,
+                "active_frame_count": 193,
+                "masked_frame_count": 7,
+            }
+        },
+    )
     write_json(
         run / "resident_reference_health.json",
         {
@@ -149,13 +178,23 @@ def _write_green_run(run: Path) -> None:
         "integration_results.json",
         "calibration_artifacts.json",
         "frame_quality.json",
-        "registration_results.json",
         "resident_registration_quality.json",
         "local_norm_results.json",
         "resident_reference_scout.json",
         "resident_stage_ledger.json",
     ):
         write_json(run / name, {"passed": True, "status": "passed"})
+    write_json(
+        run / "registration_results.json",
+        {
+            "results": [
+                *({"frame_id": f"F{i:03d}", "status": "ok"} for i in range(1, 193)),
+                {"frame_id": "F193", "status": "reference"},
+                *({"frame_id": f"F{i:03d}", "status": "excluded"} for i in range(194, 201)),
+            ]
+        },
+    )
+    write_resident_registration_runtime_contract(run)
 
 
 def _write_acceptance_and_compare(tmp_path: Path, run: Path) -> tuple[Path, Path]:

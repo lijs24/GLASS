@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 652.
+- Gate: S2-Gate 654.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate652_component_timing_surface\runs_20260626_000000`.
+  `C:\glass_runs\phase2_s2_gate654_registration_runtime_contract\runs_20260625_205406`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate652_component_timing_surface\runs_20260626_000000\candidate_component_timing_replay`.
-- GLASS elapsed time: `11.485255000297911 s`.
+  `C:\glass_runs\phase2_s2_gate654_registration_runtime_contract\runs_20260625_205406\default_strict_final`.
+- GLASS elapsed time: `11.564531499985605 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `95.12553269140832x`.
+- Speedup: about `94.47x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -223,6 +223,14 @@ Current Phase 2 latest mainline acceptance:
   regression gate passed with elapsed ratio `0.9981548371313056`. The 10us
   wave-fill candidate was not promoted because the total-time improvement was
   only about `0.18%`.
+- Gate654 adds `resident_registration_runtime_contract.json` as a required
+  default-run artifact. Latest evidence proves `200` registration rows,
+  `193/7` active/masked frames, `192` warped non-reference frames,
+  `triangle_warp_batch_fallback_frame_count=0`, `24` native warp chunks of
+  `8` frames, and `warp_frames_per_s=731.4935008091869`. The explicit
+  `phase2-mainline-audit --fail-on-not-green` run passed, and regression
+  versus Gate653 default 25us passed with
+  `elapsed_ratio=1.027729761074061`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

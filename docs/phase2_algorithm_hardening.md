@@ -801,6 +801,79 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 654: Resident Registration Runtime Contract
+
+Gate654 converts the resident registration/warp fast path from scattered
+runtime fields into a required default-run contract. The goal is not another
+handoff report: strict resident runs now fail unless they prove that the
+default `similarity_cuda_triangle` route produced registration rows matching
+frame masks, used batched triangle catalog/descriptor work, used native batched
+matrix warp, avoided warp fallback, and closed the active/reference/warped
+frame accounting.
+
+Implementation:
+
+- Added `src/glass/engine/resident_registration_runtime_contract.py`.
+- Resident postconditions now write
+  `resident_registration_runtime_contract.json` after
+  `warp_quality_contract.json` and before `resident_mainline_framework.json`.
+- The contract reads the real resident schema under
+  `resident_artifacts.artifacts[0].resident_registration`, while retaining
+  compatibility with older top-level fixture fields.
+- `phase2-mainline-audit` now treats
+  `resident_registration_runtime_contract.json` as a required core artifact and
+  adds `resident_registration_runtime_contract_passed`.
+- `resident_stage_ledger.json` now includes the contract as a resident stage
+  artifact, so resume/audit can detect missing registration-runtime evidence.
+
+Focused validation:
+
+- Ruff over the touched implementation and focused tests: passed.
+- Focused tests:
+  `tests/test_resident_registration_runtime_contract.py`,
+  `tests/test_phase2_mainline_audit.py`, and
+  `tests/test_resident_mainline_framework.py`: `20 passed`.
+
+Real 200-light validation:
+
+- Green run:
+  `C:\glass_runs\phase2_s2_gate654_registration_runtime_contract\runs_20260625_205406\default_strict_final`.
+- The first attempted run exposed a contract schema bug: the runtime fields
+  were read from the resident artifact top level, while real runs store them in
+  the nested `resident_registration` object. The bug was fixed before rerunning
+  the gate.
+- `resident_registration_runtime_contract.json`: passed, applicable, no failed
+  checks.
+- Frame accounting: `200` registration rows, `193` active frames, `7` masked
+  frames, and `192` warped non-reference frames.
+- Native warp evidence: `triangle_warp_batch_frame_count=192`,
+  `triangle_warp_batch_fallback_frame_count=0`,
+  `triangle_warp_batch_native_chunk_count=24`,
+  `triangle_warp_batch_native_chunk_frames=8`.
+- Registration/warp timing:
+  `registration_warp_component_elapsed_s=0.2624766997760162 s`,
+  `triangle_warp_batch_native_total_s=0.4868998 s`,
+  `warp_frames_per_s=731.4935008091869`.
+- `glass phase2-mainline-audit --fail-on-not-green`: passed with `200` lights,
+  `193` active frames, `7` masked frames, and no failed checks.
+- Regression versus Gate653 default 25us run: passed,
+  `elapsed_ratio=1.027729761074061`, no failed checks.
+- GLASS elapsed time: `11.564531499985605 s`, within the Phase 2 regression
+  budget and explained by normal 200-light run variance plus the added JSON
+  contract stage.
+
+Interpretation:
+
+- This gate gives future registration/warp optimization a hard acceptance
+  surface: if a candidate silently drops out of batched CUDA catalog/descriptor
+  or native warp execution, strict mainline validation fails immediately.
+- The new artifact improves default-path completeness and resume/audit
+  coverage without changing image math, frame admission, DQ semantics, or
+  output pixels.
+- The next substantive gate should use this guardrail to modify execution, not
+  evidence plumbing: either reduce resident registration/warp orchestration or
+  start the next DQ/mask pipeline step under nonzero source-DQ inputs.
+
 ### S2-Gate 653: Resident Runtime State Sync
 
 Gate653 fixes a runtime strict-gate bug exposed by the Gate652 component-ledger

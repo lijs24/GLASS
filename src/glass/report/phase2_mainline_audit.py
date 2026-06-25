@@ -26,6 +26,7 @@ REQUIRED_CORE_ARTIFACTS = (
     "resident_master_cache.json",
     "resident_stage_ledger.json",
     "resident_component_timing.json",
+    "resident_registration_runtime_contract.json",
     "resident_result_contract.json",
     "pipeline_contract.json",
     "stack_engine_contract.json",
@@ -97,6 +98,25 @@ def _artifact_passed(run: Path, name: str) -> dict[str, Any]:
         "status": status,
         "passed": passed,
         "artifact_type": payload.get("artifact_type") or payload.get("audit_type") or payload.get("artifact"),
+    }
+
+
+def _registration_runtime_state(run: Path) -> dict[str, Any]:
+    name = "resident_registration_runtime_contract.json"
+    path = run / name
+    payload = _json_if_exists(path)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    return {
+        "path": str(path),
+        "exists": path.exists(),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "applicable": payload.get("applicable"),
+        "artifact_type": payload.get("artifact_type"),
+        "failed_checks": (
+            list(payload.get("failed_checks")) if isinstance(payload.get("failed_checks"), list) else []
+        ),
+        "summary": summary,
     }
 
 
@@ -335,6 +355,7 @@ def build_phase2_mainline_audit(
         "resident_source_dq_execution.json",
         "resident_dq_pixel_closure.json",
         "resident_master_cache.json",
+        "resident_registration_runtime_contract.json",
     )
     contract_state = {name: _artifact_passed(run_root, name) for name in contract_names}
     failed_contracts = [
@@ -346,6 +367,7 @@ def build_phase2_mainline_audit(
     output_maps = _output_map_state(run_root, resident_artifact)
     timing_state = _timing_components(run_root, timing, resident_artifact)
     stage_ledger_state = _stage_ledger_state(run_root)
+    registration_runtime = _registration_runtime_state(run_root)
 
     default_route_evidence = {
         "backend": timing.get("backend"),
@@ -502,6 +524,12 @@ def build_phase2_mainline_audit(
             stage_ledger_state,
         ),
         _check(
+            "resident_registration_runtime_contract_passed",
+            registration_runtime["exists"] is True and registration_runtime["passed"] is True,
+            registration_runtime,
+            "Default resident CUDA runs must prove batched triangle registration and native matrix warp without fallback.",
+        ),
+        _check(
             "resident_output_maps_present",
             not output_maps["missing_fields"],
             output_maps,
@@ -624,6 +652,7 @@ def build_phase2_mainline_audit(
             "comparison": comparison_summary,
             "largest_stage": timing_state["largest_stage"],
             "largest_resident_component": timing_state["largest_resident_component"],
+            "resident_registration_runtime": registration_runtime,
         },
         "checks": checks,
         "next_priorities": next_priorities,
