@@ -13,7 +13,16 @@ def _write_run(
     elapsed: float,
     master_bytes: bytes = b"same",
     frame_index_alignment: bool = True,
+    component_elapsed: dict[str, float] | None = None,
 ) -> None:
+    component_elapsed = {
+        "light_read_upload_calibrate": 3.0,
+        "resident_registration_warp": 0.5,
+        "resident_local_normalization": 0.4,
+        "resident_integration": 2.0,
+        "output_write": 0.1,
+        **(component_elapsed or {}),
+    }
     integration = root / "integration"
     integration.mkdir(parents=True)
     (integration / "resident_master_H.fits").write_bytes(master_bytes)
@@ -39,14 +48,32 @@ def _write_run(
             "components": [
                 {
                     "component": "resident_light_read_upload_calibrate",
-                    "elapsed_s": 3.0,
+                    "elapsed_s": component_elapsed["light_read_upload_calibrate"],
                     "required": True,
                     "status": "ok",
                 },
                 {
-                    "component": "resident_integration",
-                    "elapsed_s": 2.0,
+                    "component": "resident_registration_warp",
+                    "elapsed_s": component_elapsed["resident_registration_warp"],
                     "required": True,
+                    "status": "ok",
+                },
+                {
+                    "component": "resident_local_normalization",
+                    "elapsed_s": component_elapsed["resident_local_normalization"],
+                    "required": False,
+                    "status": "ok",
+                },
+                {
+                    "component": "resident_integration",
+                    "elapsed_s": component_elapsed["resident_integration"],
+                    "required": True,
+                    "status": "ok",
+                },
+                {
+                    "component": "resident_output_write",
+                    "elapsed_s": component_elapsed["output_write"],
+                    "required": False,
                     "status": "ok",
                 },
             ],
@@ -59,9 +86,11 @@ def _write_run(
             "artifacts": [
                 {
                     "timing_s": {
-                        "light_read_upload_calibrate": 3.0,
-                        "resident_integration": 2.0,
-                        "output_write": 0.1,
+                        "light_read_upload_calibrate": component_elapsed["light_read_upload_calibrate"],
+                        "resident_registration_warp": component_elapsed["resident_registration_warp"],
+                        "resident_local_normalization": component_elapsed["resident_local_normalization"],
+                        "resident_integration": component_elapsed["resident_integration"],
+                        "output_write": component_elapsed["output_write"],
                     },
                     "dq_provenance_summary": {
                         "frame_count": 200,
@@ -113,6 +142,35 @@ def test_phase2_mainline_ab_passes_for_matching_maps(tmp_path: Path) -> None:
     assert payload["summary"]["largest_component"]["component"] == "resident_light_read_upload_calibrate"
     assert payload["map_comparison"]["all_hashes_match"] is True
     assert payload["summary"]["frame_index_alignment_passed"] is True
+    assert payload["summary"]["component_ratio_failed_count"] == 0
+    assert payload["summary"]["worst_component_ratio_name"] == "light_read_upload_calibrate"
+
+
+def test_phase2_mainline_ab_fails_component_ratio_regression(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _write_run(baseline, elapsed=10.0)
+    _write_run(
+        candidate,
+        elapsed=10.5,
+        component_elapsed={"resident_integration": 3.2},
+    )
+
+    payload = build_phase2_mainline_ab(
+        baseline,
+        candidate,
+        max_elapsed_ratio=1.1,
+        component_ratio_budgets={"resident_integration": 1.5},
+        min_active_frame_count=190,
+    )
+
+    assert payload["passed"] is False
+    assert "component_ratios_within_budget" in [
+        check["name"] for check in payload["failed_checks"]
+    ]
+    failed = payload["component_ratio_budget"]["failed_rows"]
+    assert failed[0]["component"] == "resident_integration"
+    assert failed[0]["ratio"] == 1.6
 
 
 def test_phase2_mainline_ab_fails_without_candidate_frame_index_alignment(tmp_path: Path) -> None:
@@ -164,6 +222,8 @@ def test_phase2_mainline_ab_cli_writes_artifacts_and_exit_code(tmp_path: Path) -
             str(markdown),
             "--max-elapsed-ratio",
             "1.1",
+            "--component-ratio-budget",
+            "resident_integration=1.5",
             "--fail-on-failed",
         ]
     )

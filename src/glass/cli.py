@@ -6813,11 +6813,38 @@ def cmd_phase2_mainline_audit(args: argparse.Namespace) -> int:
     return 0 if payload.get("passed") or not args.fail_on_not_green else 2
 
 
+def _parse_component_ratio_budgets(tokens: list[str] | None) -> dict[str, float]:
+    budgets: dict[str, float] = {}
+    for token in tokens or []:
+        if "=" not in token:
+            raise SystemExit(
+                "--component-ratio-budget must use COMPONENT=RATIO, "
+                f"got {token!r}"
+            )
+        component, value_text = token.split("=", 1)
+        component = component.strip()
+        if not component:
+            raise SystemExit("--component-ratio-budget component name cannot be empty")
+        try:
+            value = float(value_text)
+        except ValueError as exc:
+            raise SystemExit(
+                "--component-ratio-budget ratio must be numeric, "
+                f"got {value_text!r}"
+            ) from exc
+        if value <= 0.0:
+            raise SystemExit("--component-ratio-budget ratio must be positive")
+        budgets[component] = value
+    return budgets
+
+
 def cmd_phase2_mainline_ab(args: argparse.Namespace) -> int:
     payload = build_phase2_mainline_ab(
         args.baseline_run,
         args.candidate_run,
         max_elapsed_ratio=args.max_elapsed_ratio,
+        max_component_ratio=args.max_component_ratio,
+        component_ratio_budgets=_parse_component_ratio_budgets(args.component_ratio_budget),
         min_active_frame_count=args.min_active_frame_count,
         require_hash_match=not args.allow_hash_drift,
     )
@@ -6829,6 +6856,10 @@ def cmd_phase2_mainline_ab(args: argparse.Namespace) -> int:
             "passed": payload.get("passed"),
             "elapsed_ratio": payload.get("summary", {}).get("elapsed_ratio"),
             "largest_component": payload.get("summary", {}).get("largest_component"),
+            "worst_component_ratio": payload.get("summary", {}).get("worst_component_ratio"),
+            "component_ratio_failed_count": payload.get("summary", {}).get(
+                "component_ratio_failed_count"
+            ),
             "failed_checks": [item.get("name") for item in payload.get("failed_checks", [])],
             "out": args.out,
             "markdown": args.markdown,
@@ -6991,6 +7022,24 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_mainline_ab.add_argument("--out", required=True, help="output Phase 2 mainline A/B JSON")
     phase2_mainline_ab.add_argument("--markdown", help="optional output Markdown summary")
     phase2_mainline_ab.add_argument("--max-elapsed-ratio", type=float, default=1.15)
+    phase2_mainline_ab.add_argument(
+        "--max-component-ratio",
+        type=float,
+        help=(
+            "optional uniform max ratio for tracked component timings; "
+            "defaults to built-in per-component Phase 2 budgets"
+        ),
+    )
+    phase2_mainline_ab.add_argument(
+        "--component-ratio-budget",
+        action="append",
+        default=[],
+        metavar="COMPONENT=RATIO",
+        help=(
+            "override one component timing budget, for example "
+            "resident_integration=1.15; may be repeated"
+        ),
+    )
     phase2_mainline_ab.add_argument("--min-active-frame-count", type=int, default=190)
     phase2_mainline_ab.add_argument(
         "--allow-hash-drift",

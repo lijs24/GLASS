@@ -2589,6 +2589,81 @@ Interpretation:
   implementation or resident integration reducer itself, while using Gate692's
   A/B contract to enforce frame-index correctness and output-map stability.
 
+### S2-Gate 693: Component-Budget Mainline A/B
+
+Gate693 keeps the work on the Phase 2 mainline by making real 200-light A/B
+validation sensitive to stage-level regressions, not only total elapsed time.
+The previous A/B gate could pass when the total run stayed within budget even
+if one required resident component silently regressed. That made it harder to
+protect the two current hot areas: resident read/upload/calibration and
+resident integration.
+
+Implementation:
+
+- `glass phase2-mainline-ab` now includes component-ratio budgets.
+- Built-in tracked budgets are:
+  - `light_read_upload_calibrate <= 1.50x`;
+  - `resident_registration_warp <= 1.50x`;
+  - `resident_local_normalization <= 1.50x`;
+  - `resident_integration <= 1.25x`;
+  - `output_write <= 2.00x`.
+- Added `--max-component-ratio` for a uniform override.
+- Added repeatable `--component-ratio-budget COMPONENT=RATIO` overrides for
+  individual components.
+- Added the hard A/B check `component_ratios_within_budget`.
+- Added component-ratio rows and the worst component ratio to JSON and
+  Markdown output.
+- Extended `resident_runtime_compare` to carry
+  `resident_local_normalization` through timing deltas and Markdown tables.
+
+Validation:
+
+- Focused tests passed:
+  `8 passed in 0.35 s`.
+- Ruff on touched files passed.
+- Full pytest passed:
+  `1437 passed in 66.75 s`.
+- Real 200-light candidate:
+  `C:\glass_runs\phase2_s2_gate693_component_budget\runs_20260627_040000\component_budget_candidate`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate693_component_budget\gate693_phase2_mainline_audit.json`.
+- Phase 2 mainline A/B versus Gate692 passed:
+  `C:\glass_runs\phase2_s2_gate693_component_budget\gate693_phase2_mainline_ab.json`;
+  failed checks `[]`, active/masked frames `193 / 7`, tracked map count `6`,
+  hash mismatches `0`, frame-index alignment `passed`, component budget
+  failures `0`.
+
+Real 200-light component ratios versus Gate692:
+
+| Component | Baseline s | Candidate s | Ratio | Budget |
+| --- | ---: | ---: | ---: | ---: |
+| light read/upload/calibrate | `3.0809543000068516` | `3.1031843000091612` | `1.0072152968975425` | `1.50` |
+| resident registration/warp | `0.2612904004054144` | `0.2666722999420017` | `1.0205973871532854` | `1.50` |
+| resident local normalization | `0.3862151000648737` | `0.38270870002452284` | `0.9909211213135843` | `1.50` |
+| resident integration | `3.266167899942957` | `3.2597308000549674` | `0.9980291583025778` | `1.25` |
+| output write | `0.21337409992702305` | `0.224569599959068` | `1.0524688799431325` | `2.00` |
+
+Candidate timing:
+
+- Total elapsed: `11.782868800219148 s`.
+- Baseline-to-candidate elapsed ratio: `1.0237357465792638`.
+- Largest candidate component: `resident_integration`,
+  `3.2597308000549674 s`.
+- Worst component ratio: `output_write`, `1.0524688799431325`.
+- Native completion remained enabled with `32` queue buffers and `16`
+  workers.
+
+Interpretation:
+
+- This is a mainline validation hardening gate tied to real execution, not a
+  release handoff.
+- The next substantive implementation should target the two largest absolute
+  resident costs:
+  - `resident_integration` at about `3.26 s`;
+  - `light_read_upload_calibrate` at about `3.10 s`.
+- Future optimizer gates should use this A/B surface so a total-time win cannot
+  hide a component regression, missing maps, hash drift, or frame-index drift.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

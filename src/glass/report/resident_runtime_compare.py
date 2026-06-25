@@ -18,6 +18,7 @@ TIMING_KEYS = [
     "light_read_supply_overlap_saved",
     "light_h2d_calibrate_store",
     "resident_registration_warp",
+    "resident_local_normalization",
     "resident_integration",
     "output_write",
     "gc",
@@ -282,8 +283,8 @@ def _markdown(payload: dict[str, Any]) -> str:
         "",
         "## Runs",
         "",
-        "| rank | label | elapsed s | read wait s | supply worker s | supply hidden s | h2d+cal s | registration s | output s |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| rank | label | elapsed s | read wait s | supply worker s | supply hidden s | h2d+cal s | registration s | LN s | output s |",
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for rank, row in enumerate(payload.get("ranked_runs", []), start=1):
         timing = row.get("timing_s", {})
@@ -294,7 +295,7 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"{timing.get('light_read_supply_worker_cumulative')} | "
             f"{timing.get('light_read_supply_overlap_saved')} | "
             f"{timing.get('light_h2d_calibrate_store')} | {timing.get('resident_registration_warp')} | "
-            f"{timing.get('output_write')} |"
+            f"{timing.get('resident_local_normalization')} | {timing.get('output_write')} |"
         )
     lines.extend(["", "## Comparisons", ""])
     for comparison in payload.get("comparisons", []):

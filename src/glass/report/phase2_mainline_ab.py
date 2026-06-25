@@ -18,6 +18,14 @@ TRACKED_INTEGRATION_PATTERNS = (
     "resident_dq_map_*.fits",
 )
 
+DEFAULT_COMPONENT_RATIO_BUDGETS = {
+    "light_read_upload_calibrate": 1.50,
+    "resident_registration_warp": 1.50,
+    "resident_local_normalization": 1.50,
+    "resident_integration": 1.25,
+    "output_write": 2.00,
+}
+
 
 def _number(value: Any) -> float | None:
     try:
@@ -296,11 +304,83 @@ def _check(name: str, passed: bool, details: dict[str, Any] | None = None) -> di
     return {"name": name, "passed": bool(passed), "details": details or {}}
 
 
+def _component_ratio_budget_map(
+    *,
+    max_component_ratio: float | None,
+    component_ratio_budgets: dict[str, float] | None,
+) -> dict[str, float]:
+    budgets = {
+        key: float(max_component_ratio)
+        if max_component_ratio is not None
+        else float(value)
+        for key, value in DEFAULT_COMPONENT_RATIO_BUDGETS.items()
+    }
+    for key, value in (component_ratio_budgets or {}).items():
+        budgets[str(key)] = float(value)
+    invalid = {key: value for key, value in budgets.items() if value <= 0.0}
+    if invalid:
+        raise ValueError(f"component ratio budgets must be positive: {invalid}")
+    return budgets
+
+
+def _component_ratio_budget_state(
+    runtime_delta: dict[str, Any],
+    *,
+    max_component_ratio: float | None,
+    component_ratio_budgets: dict[str, float] | None,
+) -> dict[str, Any]:
+    budgets = _component_ratio_budget_map(
+        max_component_ratio=max_component_ratio,
+        component_ratio_budgets=component_ratio_budgets,
+    )
+    timing_delta = runtime_delta.get("timing_delta")
+    timing_delta = timing_delta if isinstance(timing_delta, dict) else {}
+    rows: list[dict[str, Any]] = []
+    for component, budget in budgets.items():
+        delta = timing_delta.get(component)
+        delta = delta if isinstance(delta, dict) else {}
+        ratio = _number(delta.get("ratio"))
+        baseline_s = _number(delta.get("baseline_s"))
+        candidate_s = _number(delta.get("candidate_s"))
+        passed = ratio is not None and ratio <= float(budget)
+        rows.append(
+            {
+                "component": component,
+                "baseline_s": baseline_s,
+                "candidate_s": candidate_s,
+                "ratio": ratio,
+                "max_ratio": float(budget),
+                "passed": passed,
+                "status": "passed" if passed else "failed",
+            }
+        )
+    failed = [row for row in rows if not row["passed"]]
+    present = [row for row in rows if row["ratio"] is not None]
+    worst = max(
+        present,
+        key=lambda row: float(row["ratio"]),
+        default=None,
+    )
+    return {
+        "schema_version": 1,
+        "default_budgets": DEFAULT_COMPONENT_RATIO_BUDGETS,
+        "max_component_ratio": max_component_ratio,
+        "component_ratio_budgets": budgets,
+        "rows": rows,
+        "failed_rows": failed,
+        "failed_count": len(failed),
+        "worst_component": worst,
+        "passed": not failed,
+    }
+
+
 def build_phase2_mainline_ab(
     baseline_run: str | Path,
     candidate_run: str | Path,
     *,
     max_elapsed_ratio: float = 1.15,
+    max_component_ratio: float | None = None,
+    component_ratio_budgets: dict[str, float] | None = None,
     min_active_frame_count: int = 1,
     require_hash_match: bool = True,
 ) -> dict[str, Any]:
@@ -317,6 +397,11 @@ def build_phase2_mainline_ab(
     candidate_contracts = _contract_status(candidate)
     candidate_components = _component_summary(_component_rows(candidate))
     candidate_frame_index_alignment = _frame_index_alignment_status(candidate)
+    component_ratio_budget = _component_ratio_budget_state(
+        runtime_delta,
+        max_component_ratio=max_component_ratio,
+        component_ratio_budgets=component_ratio_budgets,
+    )
 
     required_contract_names = ("pipeline_contract", "resident_result_contract")
     required_contracts_pass = all(
@@ -361,6 +446,16 @@ def build_phase2_mainline_ab(
             bool(candidate_frame_index_alignment.get("passed")),
             candidate_frame_index_alignment,
         ),
+        _check(
+            "component_ratios_within_budget",
+            bool(component_ratio_budget.get("passed")),
+            {
+                "failed_count": component_ratio_budget["failed_count"],
+                "failed_rows": component_ratio_budget["failed_rows"],
+                "worst_component": component_ratio_budget["worst_component"],
+                "budgets": component_ratio_budget["component_ratio_budgets"],
+            },
+        ),
     ]
     if require_hash_match:
         checks.append(
@@ -382,10 +477,13 @@ def build_phase2_mainline_ab(
         "baseline_run": str(baseline),
         "candidate_run": str(candidate),
         "max_elapsed_ratio": max_elapsed_ratio,
+        "max_component_ratio": max_component_ratio,
+        "component_ratio_budgets": component_ratio_budget["component_ratio_budgets"],
         "min_active_frame_count": min_active_frame_count,
         "require_hash_match": require_hash_match,
         "runtime_compare": runtime_compare,
         "runtime_delta": runtime_delta,
+        "component_ratio_budget": component_ratio_budget,
         "candidate_components": candidate_components,
         "candidate_contracts": candidate_contracts,
         "candidate_frame_index_alignment": candidate_frame_index_alignment,
@@ -402,6 +500,17 @@ def build_phase2_mainline_ab(
             "candidate_active_frame_count": active_count,
             "candidate_masked_frame_count": active_summary.get("masked_frame_count"),
             "largest_component": candidate_components.get("largest_component"),
+            "worst_component_ratio": (
+                None
+                if component_ratio_budget.get("worst_component") is None
+                else component_ratio_budget["worst_component"].get("ratio")
+            ),
+            "worst_component_ratio_name": (
+                None
+                if component_ratio_budget.get("worst_component") is None
+                else component_ratio_budget["worst_component"].get("component")
+            ),
+            "component_ratio_failed_count": component_ratio_budget["failed_count"],
             "frame_index_alignment_passed": candidate_frame_index_alignment.get("passed"),
             "frame_index_alignment_status": candidate_frame_index_alignment.get("status"),
             "hash_mismatch_count": map_comparison["mismatch_count"],
@@ -423,6 +532,7 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Best label: `{summary.get('best_label')}`",
         f"- Candidate active/masked frames: `{summary.get('candidate_active_frame_count')}` / `{summary.get('candidate_masked_frame_count')}`",
         f"- Largest candidate component: `{largest.get('component')}` = `{largest.get('elapsed_s')}` s",
+        f"- Worst component ratio: `{summary.get('worst_component_ratio_name')}` = `{summary.get('worst_component_ratio')}`",
         f"- Hash mismatches/missing maps: `{summary.get('hash_mismatch_count')}` / `{summary.get('hash_missing_map_count')}`",
         "",
         "## Checks",
@@ -431,6 +541,15 @@ def _markdown(payload: dict[str, Any]) -> str:
     for check in payload.get("checks", []):
         status = "PASS" if check.get("passed") else "FAIL"
         lines.append(f"- {status}: `{check.get('name')}`")
+    lines.extend(["", "## Component Ratios", ""])
+    lines.append("| component | baseline s | candidate s | ratio | max ratio | status |")
+    lines.append("| --- | ---: | ---: | ---: | ---: | --- |")
+    for row in payload.get("component_ratio_budget", {}).get("rows", []):
+        lines.append(
+            "| "
+            f"{row.get('component')} | {row.get('baseline_s')} | {row.get('candidate_s')} | "
+            f"{row.get('ratio')} | {row.get('max_ratio')} | {row.get('status')} |"
+        )
     lines.append("")
     return "\n".join(lines)
 
