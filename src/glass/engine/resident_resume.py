@@ -108,6 +108,71 @@ def _resident_reentry_candidate(run: Path, ledger: dict[str, Any], failed_stage:
     }
 
 
+def _boundary_by_name(boundary: dict[str, Any], name: str) -> dict[str, Any]:
+    rows = boundary.get("boundaries") if isinstance(boundary.get("boundaries"), list) else []
+    for row in rows:
+        if isinstance(row, dict) and row.get("name") == name:
+            return row
+    return {}
+
+
+def _resident_boundary_reentry_candidate(
+    run: Path,
+    boundary: dict[str, Any],
+    failed_stage: Any,
+) -> dict[str, Any]:
+    summary = boundary.get("summary") if isinstance(boundary.get("summary"), dict) else {}
+    boundary_name = summary.get("strongest_supported_boundary")
+    if boundary_name not in {"resident_calibration", "resident_master_cache"}:
+        boundary_name = None
+    boundary_row = _boundary_by_name(boundary, str(boundary_name)) if boundary_name else {}
+    invocation = _run_invocation(run)
+    argv = invocation["argv"] if isinstance(invocation.get("argv"), list) else []
+    out_arg = _argv_option_value(argv, "--out")
+    invocation_cwd = Path(str(invocation.get("cwd") or Path.cwd()))
+    out_path = None if out_arg is None else Path(str(out_arg))
+    resolved_out = None if out_path is None else (out_path if out_path.is_absolute() else invocation_cwd / out_path)
+    out_matches = bool(resolved_out is not None and resolved_out.resolve() == run.resolve())
+    eligible = bool(
+        boundary_name
+        and boundary_row.get("resume_supported") is True
+        and invocation.get("exists")
+        and invocation.get("subcommand") == "run"
+        and not failed_stage
+        and out_matches
+    )
+    reasons: list[str] = []
+    if not boundary_name:
+        reasons.append("no_supported_resident_boundary")
+    elif boundary_row.get("resume_supported") is not True:
+        reasons.append(f"{boundary_name}_not_resume_supported")
+    if not invocation.get("exists"):
+        reasons.append("missing_run_invocation")
+    if invocation.get("subcommand") != "run":
+        reasons.append("run_invocation_not_run")
+    if failed_stage:
+        reasons.append(f"run_state_failed_stage:{failed_stage}")
+    if out_arg is None:
+        reasons.append("run_invocation_missing_out")
+    elif not out_matches:
+        reasons.append("run_invocation_out_mismatch")
+    action = (
+        "reenter_from_calibration_boundary"
+        if boundary_name == "resident_calibration"
+        else "reenter_from_master_cache_boundary"
+        if boundary_name == "resident_master_cache"
+        else "blocked"
+    )
+    return {
+        "eligible": eligible,
+        "action": action if eligible else "blocked",
+        "reasons": reasons,
+        "boundary_name": boundary_name,
+        "boundary_action": boundary_row.get("resume_action"),
+        "invocation": invocation,
+    }
+
+
 def _state_mentions_resident(state: dict[str, Any]) -> bool:
     stages: list[str] = []
     for key in ("current_stage", "failed_stage"):
@@ -159,6 +224,7 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
     integration_complete = bool(summary.get("integration_complete"))
     failed_stage = state.get("failed_stage")
     reentry = _resident_reentry_candidate(run, ledger, failed_stage)
+    boundary_reentry = _resident_boundary_reentry_candidate(run, boundary, failed_stage)
     if not resident:
         action = "not_resident_run"
         passed = True
@@ -174,24 +240,35 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
     elif (
         not integration_complete
         and _resident_stage_started(ledger, "resident_calibration_integration")
+        and boundary_reentry["eligible"]
+    ):
+        action = str(boundary_reentry["action"])
+        passed = True
+        reason = (
+            "resident CUDA run can re-enter from the ready "
+            f"{boundary_reentry['boundary_name']} boundary using stored run invocation"
+        )
+    elif (
+        not integration_complete
+        and _resident_stage_started(ledger, "resident_calibration_integration")
         and bool(boundary_summary.get("calibration_boundary_ready"))
     ):
-        action = "blocked_calibration_boundary_reentry_not_implemented"
+        action = "blocked_calibration_boundary_reentry_unavailable"
         passed = False
         reason = (
             "resident CUDA calibration/master-cache boundary is ready, but "
-            "calibration-boundary reentry is not implemented yet"
+            "calibration-boundary reentry is unavailable for this run"
         )
     elif (
         not integration_complete
         and _resident_stage_started(ledger, "resident_calibration_integration")
         and bool(boundary_summary.get("master_cache_boundary_ready"))
     ):
-        action = "blocked_master_cache_reentry_not_implemented"
+        action = "blocked_master_cache_reentry_unavailable"
         passed = False
         reason = (
             "resident CUDA master-cache boundary is ready, but master-cache "
-            "reentry is not implemented yet"
+            "reentry is unavailable for this run"
         )
     elif not integration_complete:
         action = "blocked_incomplete_resident_run"
@@ -231,8 +308,11 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
             "calibration_boundary_resume_supported": bool(
                 boundary_summary.get("calibration_boundary_resume_supported")
             ),
+            "boundary_reentry_eligible": bool(boundary_reentry.get("eligible")),
+            "boundary_reentry_name": boundary_reentry.get("boundary_name"),
         },
         "reentry": reentry,
+        "boundary_reentry": boundary_reentry,
         "resident_reentry_boundary": {
             "path": str(run / "resident_reentry_boundary.json"),
             "summary": boundary_summary,

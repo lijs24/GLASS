@@ -2272,7 +2272,14 @@ def _write_resident_resume_reentry_artifact(
     exit_code: int | None,
 ) -> Path:
     path = run / "resident_resume_reentry.json"
-    reentry = preflight.get("reentry") if isinstance(preflight.get("reentry"), dict) else {}
+    preflight_action = preflight.get("resume_action")
+    reentry_key = (
+        "boundary_reentry"
+        if preflight_action
+        in {"reenter_from_calibration_boundary", "reenter_from_master_cache_boundary"}
+        else "reentry"
+    )
+    reentry = preflight.get(reentry_key) if isinstance(preflight.get(reentry_key), dict) else {}
     invocation = reentry.get("invocation") if isinstance(reentry.get("invocation"), dict) else {}
     write_json(
         path,
@@ -2281,8 +2288,10 @@ def _write_resident_resume_reentry_artifact(
             "artifact_type": "resident_resume_reentry",
             "created_at": now_iso(),
             "run": str(run),
-            "preflight_action": preflight.get("resume_action"),
+            "preflight_action": preflight_action,
             "preflight_reason": preflight.get("reason"),
+            "reentry_key": reentry_key,
+            "boundary_name": reentry.get("boundary_name"),
             "argv": invocation.get("argv") if isinstance(invocation.get("argv"), list) else [],
             "exit_code": exit_code,
             "status": "passed" if exit_code == 0 else "failed",
@@ -3340,8 +3349,18 @@ def cmd_resume(args: argparse.Namespace) -> int:
             )
             console.print("Resident CUDA run already has complete artifacts; no stages repeated.")
             return 0
-        if preflight.get("passed") is True and action == "reenter_from_run_invocation":
-            reentry = preflight.get("reentry") if isinstance(preflight.get("reentry"), dict) else {}
+        if preflight.get("passed") is True and action in {
+            "reenter_from_run_invocation",
+            "reenter_from_master_cache_boundary",
+            "reenter_from_calibration_boundary",
+        }:
+            reentry_key = (
+                "boundary_reentry"
+                if action
+                in {"reenter_from_master_cache_boundary", "reenter_from_calibration_boundary"}
+                else "reentry"
+            )
+            reentry = preflight.get(reentry_key) if isinstance(preflight.get(reentry_key), dict) else {}
             invocation = reentry.get("invocation") if isinstance(reentry.get("invocation"), dict) else {}
             argv = [str(item) for item in invocation.get("argv", [])] if isinstance(invocation.get("argv"), list) else []
             if not argv:
@@ -3351,6 +3370,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
                         "status": "failed",
                         "stage": "resident_resume",
                         "action": action,
+                        "reentry_key": reentry_key,
                         "reason": "resident resume reentry missing stored argv",
                         "preflight": str(preflight_path),
                     }
@@ -3361,6 +3381,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
                     "status": "running",
                     "stage": "resident_resume",
                     "action": action,
+                    "boundary_name": reentry.get("boundary_name"),
                     "preflight": str(preflight_path),
                 }
             )

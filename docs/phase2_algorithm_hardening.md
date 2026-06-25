@@ -801,6 +801,96 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 649: Resident Calibration Boundary Reentry
+
+Gate649 turns the Gate648 resident calibration boundary from audit evidence
+into an executable resume path. It stays on the Phase 2 mainline: a resident
+run that has entered `resident_calibration_integration` can now re-enter
+through the strongest ready supported boundary when the stored invocation still
+targets the same run directory and the run has no failed stage.
+
+Implementation:
+
+- `resident_reentry_boundary.json` now marks `resident_master_cache` and
+  `resident_calibration` as resume-supported only when a validated
+  `run_invocation.json` is present.
+- Boundary actions are explicit:
+  `reenter_from_master_cache_boundary` and
+  `reenter_from_calibration_boundary`.
+- `build_resident_resume_preflight()` now builds a `boundary_reentry` decision
+  and allows incomplete resident runs to re-enter from the ready calibration or
+  master-cache boundary.
+- `glass resume` records `reentry_key=boundary_reentry` and `boundary_name` in
+  `resident_resume_reentry.json`, then invokes the stored `glass run` argv and
+  finishes with a final `noop_complete` preflight.
+- The stored invocation is revalidated before use: subcommand must be `run`,
+  `--out` must resolve to the current run directory, and `failed_stage` must be
+  empty.
+- This gate re-enters the resident run safely but does not yet persist and reuse
+  calibrated light pixels from an interrupted mid-stage VRAM state.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Focused tests:
+  `tests/test_resident_reentry_boundary.py` and
+  `tests/test_resident_resume.py`: `9 passed`.
+- Tests cover matching-invocation calibration boundary support, missing
+  invocation blocking, and `glass resume` reentry from a ready
+  `resident_calibration` boundary.
+- Full pytest: `1361 passed in 60.33 s`.
+
+Real 200-light validation:
+
+- Reentry skeleton:
+  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\candidate_from_calibration_boundary`.
+- The skeleton contained the ready master-cache and calibration boundary
+  artifacts, a matching `run_invocation.json`, and timing/state evidence that
+  `resident_calibration_integration` had started but the run was incomplete.
+- Initial boundary preflight: `passed=true`,
+  `resume_action=reenter_from_calibration_boundary`,
+  `boundary_reentry_eligible=true`, and
+  `boundary_reentry_name=resident_calibration`.
+- Command:
+  `glass resume --run C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\candidate_from_calibration_boundary`.
+- Reentry artifact:
+  `resident_resume_reentry.json` records
+  `preflight_action=reenter_from_calibration_boundary`,
+  `reentry_key=boundary_reentry`, `boundary_name=resident_calibration`, and
+  `exit_code=0`.
+- Final preflight: `resume_action=noop_complete`, `16` completed stages,
+  `24` expected resident artifact rows, and `0` missing artifact rows.
+- Total elapsed: `11.485255000297911 s`.
+- Resident calibration/integration stage: `9.839130699983798 s`.
+- New boundary stage: about `0.013113 s`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames.
+- Resident regression gate versus Gate648: passed, elapsed ratio
+  `0.9899309067228078`, no artifact, output, registration, or frame-accounting
+  drift.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.005624135079195954`, p99 absolute difference
+  `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed with speedup `95.12553269140832x`.
+- Phase 2 mainline audit: passed. The largest measured stage remains
+  `resident_calibration_integration`; the largest resident components are
+  `light_read_upload_calibrate` at `3.5132379999849945 s` and
+  `resident_integration` at `3.2337921999860555 s`.
+
+Interpretation:
+
+- This is a behavioral resume gate, not another report-only handoff. The
+  ready calibration boundary now drives an actual `glass resume` reentry.
+- The current implementation still restarts the resident CUDA command and
+  relies on shared master-cache reuse; true in-stage continuation from
+  persisted calibrated-light state remains a future gate.
+- Pixel math, frame admission, registration, warp, LN, DQ, and rejection are
+  unchanged. The real 200-light comparison and acceptance metrics remain green.
+- The next substantive gate should return to hot-path execution work:
+  reducing `light_read_upload_calibrate`, reducing resident integration time,
+  or splitting resident calibration/admission so more work survives a reentry.
+
 ### S2-Gate 648: Resident Calibration Reentry Boundary
 
 Gate648 keeps the Phase 2 work on the substantive resident CUDA resume path.

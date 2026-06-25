@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 647.
+- Gate: S2-Gate 649.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate647_resident_reentry\runs_20260625_190000`.
+  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate647_resident_reentry\runs_20260625_190000\candidate_reentry_from_scout`.
-- GLASS elapsed time: `11.2256182001438 s`.
+  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\candidate_from_calibration_boundary`.
+- GLASS elapsed time: `11.485255000297911 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `97.325686703473x`.
+- Speedup: `95.12553269140832x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -170,30 +170,32 @@ Current Phase 2 latest mainline acceptance:
   `15` started stages, `15` complete stages, `23` expected artifact rows, `0`
   missing artifact rows, and `can_noop_resume=true`.
 - Gate648 adds the next resident reentry boundary inside the calibration/cache
-  surface. A real 200-light run now writes `resident_reentry_boundary.json`,
-  records a timed `resident_reentry_boundary` stage, and exposes
-  `pre_integration`, `resident_master_cache`, and `resident_calibration`
-  boundary readiness to `glass resume`. The latest completed-run resume returned
-  `resume_action=noop_complete`, while the preflight summary recorded
-  `strongest_ready_boundary=resident_calibration`,
-  `calibration_boundary_ready=true`, and
-  `calibration_boundary_resume_supported=false`. The ledger now records `16`
+  surface. A real 200-light run writes `resident_reentry_boundary.json`, records
+  a timed `resident_reentry_boundary` stage, and exposes `pre_integration`,
+  `resident_master_cache`, and `resident_calibration` boundary readiness to
+  `glass resume`.
+- Gate649 makes that calibration boundary executable. A real 200-light
+  incomplete skeleton with ready master-cache and calibration evidence resumed
+  with `resume_action=reenter_from_calibration_boundary`, wrote
+  `resident_resume_reentry.json` with `reentry_key=boundary_reentry`,
+  `boundary_name=resident_calibration`, and `exit_code=0`, then finished with
+  final `resume_action=noop_complete`. Latest ledger evidence records `16`
   started stages, `16` complete stages, `24` expected artifact rows, `0`
   missing artifact rows, and `can_noop_resume=true`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
-  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
-  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  shape match true, RMS `0.005624135079195954`, p99 absolute difference
+  `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
   pixels `60105814`.
 - Pipeline contract: passed, including `resident_dq_lifecycle_contract` and
   `frame_accounting_resident_dq_lifecycle_contract`.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate647: passed with candidate/baseline
-  elapsed ratio `1.0335357209723688` and no failed checks.
+- Resident regression gate versus Gate648: passed with candidate/baseline
+  elapsed ratio `0.9899309067228078` and no failed checks.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate648_reentry_boundary\runs_20260625_200000\gate648_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\gate649_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate648_reentry_boundary\runs_20260625_200000\gate648_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\gate649_phase2_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

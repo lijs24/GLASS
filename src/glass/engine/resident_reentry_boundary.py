@@ -245,8 +245,10 @@ def build_resident_reentry_boundary(run_dir: str | Path) -> dict[str, Any]:
         artifacts=[_artifact_row(resident_master_cache_path, required=True)],
         evidence=master_evidence,
         reasons=master_reasons,
-        resume_supported=False,
-        resume_action="blocked_master_cache_reentry_not_implemented",
+        resume_supported=bool(pre_integration["resume_supported"]),
+        resume_action="reenter_from_master_cache_boundary"
+        if pre_integration["resume_supported"]
+        else "blocked_master_cache_reentry_missing_invocation",
     )
 
     artifacts_ready, artifacts_evidence, artifacts_reasons = _calibration_artifacts_ready(
@@ -276,8 +278,10 @@ def build_resident_reentry_boundary(run_dir: str | Path) -> dict[str, Any]:
             "resident_master_cache": master_evidence,
         },
         reasons=artifacts_reasons + contract_reasons + master_cache_boundary["reasons"],
-        resume_supported=False,
-        resume_action="blocked_calibration_boundary_reentry_not_implemented",
+        resume_supported=bool(pre_integration["resume_supported"]),
+        resume_action="reenter_from_calibration_boundary"
+        if pre_integration["resume_supported"]
+        else "blocked_calibration_boundary_reentry_missing_invocation",
     )
 
     boundaries = [pre_integration, master_cache_boundary, calibration_boundary]
@@ -301,8 +305,15 @@ def build_resident_reentry_boundary(run_dir: str | Path) -> dict[str, Any]:
             "calibration_boundary_resume_supported": bool(
                 calibration_boundary["resume_supported"]
             ),
+            "master_cache_boundary_resume_supported": bool(
+                master_cache_boundary["resume_supported"]
+            ),
             "resume_action": (
                 calibration_boundary["resume_action"]
+                if calibration_boundary["resume_supported"]
+                else master_cache_boundary["resume_action"]
+                if master_cache_boundary["resume_supported"]
+                else calibration_boundary["resume_action"]
                 if calibration_boundary["ready"]
                 else master_cache_boundary["resume_action"]
                 if master_cache_boundary["ready"]

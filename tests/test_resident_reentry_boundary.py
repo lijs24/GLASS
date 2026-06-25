@@ -156,6 +156,30 @@ def test_resident_reentry_boundary_rejects_invocation_for_other_out(
     assert payload["summary"]["strongest_supported_boundary"] is None
 
 
+def test_resident_reentry_boundary_supports_calibration_boundary_with_matching_invocation(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_ready_calibration_boundary(run)
+    write_json(
+        run / "run_invocation.json",
+        {
+            "schema_version": 1,
+            "artifact_type": "run_invocation",
+            "subcommand": "run",
+            "argv": ["run", "--out", str(run)],
+            "cwd": str(tmp_path),
+        },
+    )
+
+    payload = build_resident_reentry_boundary(run)
+
+    assert payload["summary"]["calibration_boundary_ready"] is True
+    assert payload["summary"]["calibration_boundary_resume_supported"] is True
+    assert payload["summary"]["strongest_supported_boundary"] == "resident_calibration"
+    assert payload["summary"]["resume_action"] == "reenter_from_calibration_boundary"
+
+
 def test_resident_resume_reports_ready_calibration_boundary_without_cpu_fallback(
     tmp_path: Path,
 ) -> None:
@@ -167,7 +191,8 @@ def test_resident_resume_reports_ready_calibration_boundary_without_cpu_fallback
 
     preflight = read_json(run / "resident_resume_preflight.json")
     assert preflight["passed"] is False
-    assert preflight["resume_action"] == "blocked_calibration_boundary_reentry_not_implemented"
+    assert preflight["resume_action"] == "blocked_calibration_boundary_reentry_unavailable"
+    assert "missing_run_invocation" in preflight["boundary_reentry"]["reasons"]
     assert preflight["summary"]["calibration_boundary_ready"] is True
     assert preflight["summary"]["strongest_ready_boundary"] == "resident_calibration"
     assert preflight["resident_reentry_boundary"]["summary"]["calibration_boundary_ready"] is True
