@@ -49,6 +49,7 @@ def _write_registered_integration_fixture(
     tmp_path: Path,
     *,
     allow_cuda_fast_path: bool = False,
+    output_variance_map: bool = True,
 ) -> tuple[Path, Path]:
     import numpy as np
 
@@ -86,7 +87,7 @@ def _write_registered_integration_fixture(
                 "combine": "mean",
                 "weighting": "none",
                 "rejection": "none",
-                "output_variance_map": True,
+                "output_variance_map": output_variance_map,
                 "allow_cuda_streaming_accumulator_fast_path": allow_cuda_fast_path,
             },
         },
@@ -135,6 +136,27 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     assert all("valid" in output["dq_summary"] for output in integration["outputs"])
     assert all(output["stack_engine_dq_provenance"]["schema_version"] == 1 for output in integration["outputs"])
     assert all(output["stack_engine_dq_provenance"]["input_samples"] > 0 for output in integration["outputs"])
+    assert all(
+        output["stack_engine_metrics"]["execution_path"] == "stack_engine_streaming_tile_sink"
+        for output in integration["outputs"]
+    )
+    assert all(
+        output["stack_engine_metrics"]["full_output_arrays_materialized"] is False
+        for output in integration["outputs"]
+    )
+    assert all(
+        output["stack_engine_metrics"]["streaming_tile_contract_failed_count"] == 0
+        for output in integration["outputs"]
+    )
+    assert all(
+        output["stack_engine_dq_provenance"]["result_contract"]["contract_type"]
+        == "stack_engine_streaming_result_contract"
+        for output in integration["outputs"]
+    )
+    assert all(
+        output["stack_engine_dq_provenance"]["result_contract"]["passed"]
+        for output in integration["outputs"]
+    )
     assert all(output["dq_provenance_summary"]["source_schema"] == "stack_engine_dq_provenance" for output in integration["outputs"])
     assert all(output["dq_provenance_summary"]["engine"] == "stack_engine_cpu" for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
@@ -172,6 +194,19 @@ def test_integration_auto_keeps_stack_engine_default_when_cuda_is_available(
     assert all(output["backend"] == "cpu" for output in payload["outputs"])
     assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in payload["outputs"])
     assert all(output["stack_engine_enabled"] for output in payload["outputs"])
+    assert all(
+        output["stack_engine_metrics"]["execution_path"] == "stack_engine_streaming_tile_sink"
+        for output in payload["outputs"]
+    )
+    assert all(
+        output["stack_engine_metrics"]["full_output_arrays_materialized"] is False
+        for output in payload["outputs"]
+    )
+    assert all(output["stack_engine_metrics"]["streaming_tile_contract_count"] == 4 for output in payload["outputs"])
+    assert all(
+        output["stack_engine_dq_provenance"]["result_contract"]["passed"]
+        for output in payload["outputs"]
+    )
     assert np.allclose(read_fits_data(run / "integration" / "master_H.fits"), 4.0)
 
 
@@ -198,6 +233,23 @@ def test_integration_cuda_backend_keeps_stack_engine_default_without_policy(
     assert all(output["backend"] == "cpu" for output in payload["outputs"])
     assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in payload["outputs"])
     assert all(output["stack_engine_enabled"] for output in payload["outputs"])
+    assert np.allclose(read_fits_data(run / "integration" / "master_H.fits"), 4.0)
+
+
+def test_stack_engine_streaming_sink_accepts_disabled_variance_map(tmp_path: Path):
+    run, plan = _write_registered_integration_fixture(tmp_path, output_variance_map=False)
+
+    payload = integrate_registered_frames(run, plan_path=plan, backend="cpu", tile_size=2)
+
+    output = payload["outputs"][0]
+    assert output["variance_map_path"] is None
+    assert output["output_variance_map"] is False
+    assert output["stack_engine_metrics"]["execution_path"] == "stack_engine_streaming_tile_sink"
+    assert output["stack_engine_metrics"]["full_output_arrays_materialized"] is False
+    contract = output["stack_engine_dq_provenance"]["result_contract"]
+    assert contract["contract_type"] == "stack_engine_streaming_result_contract"
+    assert contract["requested_maps"]["variance"] is False
+    assert contract["passed"] is True
     assert np.allclose(read_fits_data(run / "integration" / "master_H.fits"), 4.0)
 
 

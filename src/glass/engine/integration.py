@@ -220,6 +220,205 @@ class _CoverageImageSource:
         return mask
 
 
+@dataclass(slots=True)
+class _WindowedCoverageImageSource:
+    parent: _CoverageImageSource
+    base: TileWindow
+    metadata: dict[str, Any] = field(default_factory=dict)
+    channels: int = 1
+    dtype: str = "float32"
+
+    @property
+    def path(self) -> str | Path:
+        return self.parent.path
+
+    @property
+    def width(self) -> int:
+        return self.base.width
+
+    @property
+    def height(self) -> int:
+        return self.base.height
+
+    def _global_window(self, window: TileWindow) -> TileWindow:
+        if window.y0 < 0 or window.x0 < 0 or window.y1 > self.base.height or window.x1 > self.base.width:
+            raise ValueError("local stack tile is outside the parent integration tile")
+        return TileWindow(
+            self.base.y0 + window.y0,
+            self.base.y0 + window.y1,
+            self.base.x0 + window.x0,
+            self.base.x0 + window.x1,
+        )
+
+    def read_tile(self, window: TileWindow, dtype: Any = np.float32) -> np.ndarray:
+        return self.parent.read_tile(self._global_window(window), dtype=dtype)
+
+    def read_mask_tile(self, window: TileWindow) -> DQMask:
+        return self.parent.read_mask_tile(self._global_window(window))
+
+
+def _empty_dq_flag_counts() -> dict[str, int]:
+    return {flag.name.lower(): 0 for flag in DQFlag if flag != DQFlag.VALID}
+
+
+def _int_value(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _add_int(target: dict[str, Any], key: str, value: Any) -> None:
+    target[key] = _int_value(target.get(key)) + _int_value(value)
+
+
+def _contract_check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
+    return {
+        "name": name,
+        "passed": bool(passed),
+        "evidence": evidence,
+        "note": note,
+    }
+
+
+def _compact_tile_contract(tile: TileWindow, contract: dict[str, Any]) -> dict[str, Any]:
+    checks = contract.get("checks") if isinstance(contract.get("checks"), list) else []
+    failed = [
+        str(item.get("name"))
+        for item in checks
+        if isinstance(item, dict) and not bool(item.get("passed"))
+    ]
+    return {
+        "tile": {"y0": tile.y0, "y1": tile.y1, "x0": tile.x0, "x1": tile.x1},
+        "passed": bool(contract.get("passed")),
+        "status": contract.get("status"),
+        "contract_type": contract.get("contract_type"),
+        "failed_checks": failed,
+    }
+
+
+def _stack_engine_streaming_result_contract(
+    *,
+    width: int,
+    height: int,
+    request: StackRequest,
+    requested_maps: dict[str, bool],
+    output_paths: dict[str, Path | None],
+    metrics: dict[str, Any],
+    dq_provenance: dict[str, Any],
+    tile_contracts: list[dict[str, Any]],
+    tile_count: int,
+) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+    failed_tile_contracts = [item for item in tile_contracts if not bool(item.get("passed"))]
+    checks.append(
+        _contract_check(
+            "tile_stack_engine_contracts_passed",
+            not failed_tile_contracts,
+            {
+                "tile_contract_count": len(tile_contracts),
+                "failed_tile_contract_count": len(failed_tile_contracts),
+                "failed_tiles": failed_tile_contracts[:8],
+            },
+        )
+    )
+    missing_requested_paths = {
+        name: str(output_paths.get(name))
+        for name, required in requested_maps.items()
+        if required and (output_paths.get(name) is None or not Path(output_paths[name]).exists())
+    }
+    checks.append(
+        _contract_check(
+            "requested_maps_streamed",
+            not missing_requested_paths,
+            {
+                "requested_maps": requested_maps,
+                "missing_requested_paths": missing_requested_paths,
+            },
+        )
+    )
+    checks.append(
+        _contract_check(
+            "full_output_arrays_not_materialized",
+            metrics.get("full_output_arrays_materialized") is False,
+            {
+                "execution_path": metrics.get("execution_path"),
+                "full_output_arrays_materialized": metrics.get("full_output_arrays_materialized"),
+            },
+        )
+    )
+    expected_pixels = int(width) * int(height)
+    checks.append(
+        _contract_check(
+            "streamed_tiles_cover_output_shape",
+            _int_value(metrics.get("streamed_output_pixels")) == expected_pixels and tile_count == len(tile_contracts),
+            {
+                "streamed_output_pixels": metrics.get("streamed_output_pixels"),
+                "expected_pixels": expected_pixels,
+                "tile_count": tile_count,
+                "tile_contract_count": len(tile_contracts),
+            },
+        )
+    )
+    input_samples = _int_value(dq_provenance.get("input_samples"))
+    input_valid = _int_value(dq_provenance.get("input_valid_samples_before_rejection"))
+    input_invalid = _int_value(dq_provenance.get("input_invalid_samples_before_rejection"))
+    valid_after = _int_value(dq_provenance.get("valid_samples_after_rejection"))
+    low_rejected = _int_value(dq_provenance.get("low_rejected_samples"))
+    high_rejected = _int_value(dq_provenance.get("high_rejected_samples"))
+    checks.append(
+        _contract_check(
+            "input_valid_invalid_samples_match_total",
+            input_valid + input_invalid == input_samples,
+            {
+                "input_samples": input_samples,
+                "input_valid_samples_before_rejection": input_valid,
+                "input_invalid_samples_before_rejection": input_invalid,
+            },
+        )
+    )
+    checks.append(
+        _contract_check(
+            "input_valid_samples_close_after_rejection",
+            input_valid == valid_after + low_rejected + high_rejected,
+            {
+                "input_valid_samples_before_rejection": input_valid,
+                "valid_samples_after_rejection": valid_after,
+                "low_rejected_samples": low_rejected,
+                "high_rejected_samples": high_rejected,
+                "accounted_samples": valid_after + low_rejected + high_rejected,
+            },
+        )
+    )
+    expected_input_samples = len(request.frame_ids) * expected_pixels
+    checks.append(
+        _contract_check(
+            "input_samples_match_request_shape",
+            input_samples == expected_input_samples,
+            {
+                "input_samples": input_samples,
+                "expected_input_samples": expected_input_samples,
+                "frame_count": len(request.frame_ids),
+                "pixels_per_frame": expected_pixels,
+            },
+        )
+    )
+    passed = all(item["passed"] for item in checks)
+    return {
+        "schema_version": 1,
+        "contract_type": "stack_engine_streaming_result_contract",
+        "compatible_contract_type": "stack_engine_result_contract",
+        "passed": passed,
+        "status": "passed" if passed else "failed",
+        "master_shape": [int(height), int(width)],
+        "requested_maps": requested_maps,
+        "tile_count": int(tile_count),
+        "tile_contract_count": len(tile_contracts),
+        "failed_tile_contract_count": len(failed_tile_contracts),
+        "checks": checks,
+    }
+
+
 def _write_stack_engine_result(
     result: StackEngineResult,
     master_path: Path,
@@ -316,6 +515,9 @@ def _integrate_with_stack_engine(
             )
             for item in items
         }
+        first_source = next(iter(sources.values()))
+        width = int(first_source.width)
+        height = int(first_source.height)
         request = StackRequest(
             frame_ids=tuple(item["frame_id"] for item in items),
             source_kind="light",
@@ -341,21 +543,226 @@ def _integrate_with_stack_engine(
             weights={item["frame_id"]: frame_weights[item["frame_id"]] for item in items},
             metadata={"stage": "integration", "coverage_source": "coverage_fits"},
         )
-        result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
-    stack_engine_metrics: dict[str, Any] = dict(result.metrics)
-    stack_engine_metrics["dq_provenance"] = result.dq_provenance
-    tile_count, dq_summary = _write_stack_engine_result(
-        result,
-        master_path,
-        weight_path,
-        coverage_path,
-        variance_path if output_variance_map else None,
-        low_path,
-        high_path,
-        dq_path,
-        tile_size,
-    )
-    return tile_count, stack_engine_metrics, method, dq_summary, result.dq_provenance
+        requested_maps = {
+            "master": True,
+            "weight": True,
+            "coverage": True,
+            "variance": bool(output_variance_map),
+            "low_rejection": True,
+            "high_rejection": True,
+            "dq": True,
+        }
+        output_paths: dict[str, Path | None] = {
+            "master": master_path,
+            "weight": weight_path,
+            "coverage": coverage_path,
+            "variance": variance_path if output_variance_map else None,
+            "low_rejection": low_path,
+            "high_rejection": high_path,
+            "dq": dq_path,
+        }
+        stack_engine_metrics: dict[str, Any] = {
+            "frame_count": len(items),
+            "width": width,
+            "height": height,
+            "combine": request.combine.method,
+            "rejection": request.rejection.method,
+            "rejection_scale_estimator": None,
+            "valid_samples": 0,
+            "input_valid_samples": 0,
+            "input_invalid_samples": 0,
+            "low_rejected": 0,
+            "high_rejected": 0,
+            "rejected_samples": 0,
+            "execution_path": "stack_engine_streaming_tile_sink",
+            "full_output_arrays_materialized": False,
+            "streamed_output_pixels": 0,
+            "streaming_tile_contract_count": 0,
+            "streaming_tile_contract_failed_count": 0,
+        }
+        dq_provenance: dict[str, Any] = {
+            "schema_version": 1,
+            "input_samples": 0,
+            "input_valid_samples_before_rejection": 0,
+            "input_invalid_samples_before_rejection": 0,
+            "input_flagged_samples": 0,
+            "input_nonfinite_samples": 0,
+            "input_dq_flag_counts": _empty_dq_flag_counts(),
+            "valid_samples_after_rejection": 0,
+            "low_rejected_samples": 0,
+            "high_rejected_samples": 0,
+            "rejected_samples": 0,
+            "rejection_policy": None,
+            "output_coverage_zero_pixels": 0,
+            "output_low_rejected_pixels": 0,
+            "output_high_rejected_pixels": 0,
+            "output_dq_summary": {},
+            "semantics": (
+                "Source DQ flags and non-finite samples are consumed as invalid input stack "
+                "samples before rejection. The integration sink executes StackEngine on one "
+                "output tile at a time and writes maps immediately; only tile-sized StackEngine "
+                "results are materialized."
+            ),
+            "execution_path": "stack_engine_streaming_tile_sink",
+            "full_output_arrays_materialized": False,
+        }
+        dq_summary: dict[str, int] = {}
+        tile_contracts: list[dict[str, Any]] = []
+        tile_count = 0
+        variance_sum = 0.0
+        variance_count = 0
+        variance_max = 0.0
+
+        with ExitStack() as writer_stack:
+            master_writer = writer_stack.enter_context(
+                FitsTileWriter(master_path, width, height, {"IMAGETYP": "master"})
+            )
+            weight_writer = writer_stack.enter_context(
+                FitsTileWriter(weight_path, width, height, {"IMAGETYP": "weight"})
+            )
+            coverage_writer = writer_stack.enter_context(
+                FitsTileWriter(coverage_path, width, height, {"IMAGETYP": "coverage"})
+            )
+            variance_writer = (
+                writer_stack.enter_context(FitsTileWriter(variance_path, width, height, {"IMAGETYP": "variance"}))
+                if output_variance_map
+                else None
+            )
+            low_writer = writer_stack.enter_context(FitsTileWriter(low_path, width, height, {"IMAGETYP": "lowrej"}))
+            high_writer = writer_stack.enter_context(FitsTileWriter(high_path, width, height, {"IMAGETYP": "highrej"}))
+            dq_writer = writer_stack.enter_context(FitsTileWriter(dq_path, width, height, dq_header("integration")))
+
+            for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
+                window = TileWindow(tile.y0, tile.y1, tile.x0, tile.x1)
+                tile_sources = {
+                    frame_id: _WindowedCoverageImageSource(parent=source, base=window)
+                    for frame_id, source in sources.items()
+                }
+                tile_result = CPUStackEngine(tile_size=max(window.width, window.height)).stack(request, tile_sources)
+                tile_master = np.asarray(tile_result.master, dtype=np.float32)
+                tile_weight = (
+                    np.asarray(tile_result.weight_map, dtype=np.float32)
+                    if tile_result.weight_map is not None
+                    else np.zeros_like(tile_master, dtype=np.float32)
+                )
+                tile_coverage = (
+                    np.asarray(tile_result.coverage_map, dtype=np.float32)
+                    if tile_result.coverage_map is not None
+                    else np.zeros_like(tile_master, dtype=np.float32)
+                )
+                tile_low = (
+                    np.asarray(tile_result.low_rejection_map, dtype=np.float32)
+                    if tile_result.low_rejection_map is not None
+                    else np.zeros_like(tile_master, dtype=np.float32)
+                )
+                tile_high = (
+                    np.asarray(tile_result.high_rejection_map, dtype=np.float32)
+                    if tile_result.high_rejection_map is not None
+                    else np.zeros_like(tile_master, dtype=np.float32)
+                )
+                tile_variance = (
+                    np.asarray(tile_result.variance_map, dtype=np.float32)
+                    if tile_result.variance_map is not None
+                    else np.zeros_like(tile_master, dtype=np.float32)
+                )
+                tile_dq = (
+                    tile_result.dq_mask
+                    if tile_result.dq_mask is not None
+                    else dq_mask_from_coverage(tile_coverage, DQFlag.NO_DATA)
+                )
+
+                master_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, tile_master)
+                weight_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, tile_weight)
+                coverage_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, tile_coverage)
+                if variance_writer is not None:
+                    variance_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, tile_variance)
+                    finite_variance = tile_variance[np.isfinite(tile_variance)]
+                    if finite_variance.size:
+                        variance_sum += float(np.sum(finite_variance, dtype=np.float64))
+                        variance_count += int(finite_variance.size)
+                        variance_max = max(variance_max, float(np.max(finite_variance)))
+                low_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, tile_low)
+                high_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, tile_high)
+                write_dq_tile(dq_writer, tile, tile_dq)
+
+                tile_summary = tile_dq.summary()
+                add_summary_counts(dq_summary, tile_summary)
+                tile_metrics = tile_result.metrics
+                tile_provenance = tile_result.dq_provenance
+                if stack_engine_metrics["rejection_scale_estimator"] is None:
+                    stack_engine_metrics["rejection_scale_estimator"] = tile_metrics.get("rejection_scale_estimator")
+                for key in (
+                    "valid_samples",
+                    "input_valid_samples",
+                    "input_invalid_samples",
+                    "low_rejected",
+                    "high_rejected",
+                    "rejected_samples",
+                ):
+                    _add_int(stack_engine_metrics, key, tile_metrics.get(key))
+                _add_int(stack_engine_metrics, "streamed_output_pixels", window.width * window.height)
+                for target_key, source_key in (
+                    ("input_samples", "input_samples"),
+                    ("input_valid_samples_before_rejection", "input_valid_samples_before_rejection"),
+                    ("input_invalid_samples_before_rejection", "input_invalid_samples_before_rejection"),
+                    ("input_flagged_samples", "input_flagged_samples"),
+                    ("input_nonfinite_samples", "input_nonfinite_samples"),
+                    ("valid_samples_after_rejection", "valid_samples_after_rejection"),
+                    ("low_rejected_samples", "low_rejected_samples"),
+                    ("high_rejected_samples", "high_rejected_samples"),
+                    ("rejected_samples", "rejected_samples"),
+                    ("output_coverage_zero_pixels", "output_coverage_zero_pixels"),
+                    ("output_low_rejected_pixels", "output_low_rejected_pixels"),
+                    ("output_high_rejected_pixels", "output_high_rejected_pixels"),
+                ):
+                    _add_int(dq_provenance, target_key, tile_provenance.get(source_key))
+                if dq_provenance["rejection_policy"] is None:
+                    dq_provenance["rejection_policy"] = tile_provenance.get("rejection_policy")
+                source_flag_counts = tile_provenance.get("input_dq_flag_counts")
+                if isinstance(source_flag_counts, dict):
+                    for key, value in source_flag_counts.items():
+                        dq_provenance["input_dq_flag_counts"][str(key)] = (
+                            _int_value(dq_provenance["input_dq_flag_counts"].get(str(key))) + _int_value(value)
+                        )
+                tile_contract = tile_provenance.get("result_contract")
+                if isinstance(tile_contract, dict):
+                    tile_contracts.append(_compact_tile_contract(window, tile_contract))
+                else:
+                    tile_contracts.append(
+                        {
+                            "tile": {"y0": tile.y0, "y1": tile.y1, "x0": tile.x0, "x1": tile.x1},
+                            "passed": False,
+                            "status": "missing",
+                            "contract_type": None,
+                            "failed_checks": ["missing_result_contract"],
+                        }
+                    )
+                tile_count += 1
+
+        dq_provenance["output_dq_summary"] = dict(dq_summary)
+        stack_engine_metrics["streaming_tile_contract_count"] = len(tile_contracts)
+        stack_engine_metrics["streaming_tile_contract_failed_count"] = len(
+            [item for item in tile_contracts if not bool(item.get("passed"))]
+        )
+        if variance_count:
+            stack_engine_metrics["variance_mean"] = variance_sum / float(variance_count)
+            stack_engine_metrics["variance_max"] = variance_max
+        result_contract = _stack_engine_streaming_result_contract(
+            width=width,
+            height=height,
+            request=request,
+            requested_maps=requested_maps,
+            output_paths=output_paths,
+            metrics=stack_engine_metrics,
+            dq_provenance=dq_provenance,
+            tile_contracts=tile_contracts,
+            tile_count=tile_count,
+        )
+        dq_provenance["result_contract"] = result_contract
+        dq_provenance["streaming_tile_contracts"] = tile_contracts
+        stack_engine_metrics["result_contract_passed"] = bool(result_contract["passed"])
+        stack_engine_metrics["dq_provenance"] = dq_provenance
+    return tile_count, stack_engine_metrics, method, dq_summary, dq_provenance
 
 
 def integrate_registered_frames(

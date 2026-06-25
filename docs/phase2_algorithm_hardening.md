@@ -879,6 +879,75 @@ Interpretation:
   remains resident registration/warp orchestration, I/O/upload/calibration
   overlap, and a redesigned scalable order-statistic reducer.
 
+### S2-Gate 669: StackEngine Streaming Integration Sink
+
+Gate669 returns to the StackEngine default-path completeness target. The
+CPU/tile integration surface already used `CPUStackEngine` for the scientific
+combine/rejection logic, but the outer integration stage still accepted a full
+`StackEngineResult` and wrote its full-frame arrays afterward. Gate669 changes
+that outer sink: each output tile is now processed by `CPUStackEngine`, written
+immediately to FITS maps, and reduced into one run-level DQ/result contract.
+
+Implementation:
+
+- Added `_WindowedCoverageImageSource`, which maps a global integration tile to
+  the local `ImageSource` shape expected by `CPUStackEngine`.
+- `_integrate_with_stack_engine` now opens output FITS tile writers and loops
+  over `iter_tiles`; each tile creates tile-local StackEngine sources, runs the
+  existing StackEngine logic, writes master/weight/coverage/variance/rejection
+  and DQ tiles, and then discards the tile result.
+- Added `stack_engine_streaming_result_contract`, compatible with the existing
+  `stack_engine_result_contract`, to prove:
+  - all per-tile StackEngine contracts passed;
+  - all requested maps were streamed;
+  - full output arrays were not materialized by the integration sink;
+  - streamed tiles cover the output shape;
+  - input valid/invalid/rejected sample accounting closes over the full frame.
+- `integration_results.json` now records
+  `execution_path=stack_engine_streaming_tile_sink`,
+  `full_output_arrays_materialized=false`,
+  `streaming_tile_contract_count`, and
+  `streaming_tile_contract_failed_count` for StackEngine integration outputs.
+
+Validation:
+
+- Syntax check:
+  `python -m py_compile src\glass\engine\integration.py`.
+- Focused integration tests:
+  `4 passed`, covering the default StackEngine CPU path, CUDA-default guard,
+  synthetic audit, and disabled variance-map streaming contract.
+- StackEngine contract tests:
+  `17 passed`.
+- Synthetic performance/result validation:
+  `test_pipeline_fixture_audit` generated a synthetic dataset, ran
+  `glass audit --backend cpu --tile-size 8`, produced integration maps and
+  report artifacts, and verified the streaming sink contract.
+- Real 200-light resident guard:
+  `C:\glass_runs\phase2_s2_gate669_stackengine_streaming_sink\runs_20260626_030000\resident_default_guard`.
+  This gate does not change resident CUDA code, but the guard confirms the
+  main high-VRAM path still runs and preserves outputs.
+- Gate669 versus Gate668 resident regression:
+  `C:\glass_runs\phase2_s2_gate669_stackengine_streaming_sink\runs_20260626_030000\gate669_vs_gate668_regression.json`.
+  Status passed; failed checks `[]`; total elapsed ratio `1.046346188895259`;
+  artifact, frame-accounting, frame-signature, registration, output, and
+  numerical-drift difference counts were all zero.
+- Resident component timing in that guard run:
+  light read/upload/calibrate `3.3856848999857903 s`,
+  registration/warp `0.2651259994599968 s`, local normalization
+  `0.34654980001505464 s`, integration `3.2716861999360844 s`, output write
+  `0.2615312000270933 s`.
+- Full pytest: `1410 passed in 62.32 s`.
+
+Interpretation:
+
+- This is not a resident CUDA speed optimization; it is a mainline StackEngine
+  memory-model fix. It removes the integration stage's full-frame StackEngine
+  result materialization on the CPU/tile path while keeping the same
+  StackEngine math and per-tile contracts.
+- The resident CUDA 200-light hot path is intentionally unchanged by this gate.
+  The next substantive performance gate should return to resident registration,
+  I/O/upload/calibration overlap, or the hardened reducer.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

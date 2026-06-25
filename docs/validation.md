@@ -415,6 +415,20 @@ Current Phase 2 latest mainline acceptance:
   `unit_positive_weight_frame_count=193`. Runtime moved from
   `11.220837099594064 s` old default to `11.097266299999319 s` promoted
   default on this repeated 200-light comparison.
+- Gate669 changes the CPU/tile StackEngine integration sink so output maps are
+  written tile-by-tile instead of serializing a full `StackEngineResult` first.
+  Focused validation passed integration default/variance-map tests and the
+  StackEngine contract suite. The synthetic audit fixture generated a small
+  FITS dataset, ran the full CPU audit path, produced integration maps and
+  report artifacts, and verified
+  `execution_path=stack_engine_streaming_tile_sink`,
+  `full_output_arrays_materialized=false`, zero failed streaming tile
+  contracts, and a passing `stack_engine_streaming_result_contract`. A real
+  200-light resident guard at
+  `C:\glass_runs\phase2_s2_gate669_stackengine_streaming_sink\runs_20260626_030000\resident_default_guard`
+  passed regression against Gate668 promoted default with elapsed ratio
+  `1.046346188895259`, no failed checks, and zero artifact/frame/registration
+  or output differences. Full pytest passed with `1410 passed in 62.32 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

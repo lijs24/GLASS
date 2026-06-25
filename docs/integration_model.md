@@ -336,6 +336,19 @@ Explicit false values still restore `global_reread_weighted_samples`, explicit
 true values record `environment_enabled`, and unrecognized values such as
 `auto` remain disabled.
 
+S2-Gate 669 changes the portable CPU/tile integration sink from full-result
+serialization to streaming output. The stage still calls `CPUStackEngine` for
+the combine/rejection math, but it now wraps each global output tile in
+tile-local `ImageSource` views, runs StackEngine on that tile, writes FITS map
+tiles immediately, and aggregates DQ provenance across all tiles. Integration
+artifacts record `execution_path=stack_engine_streaming_tile_sink`,
+`full_output_arrays_materialized=false`, per-tile contract counts, and a
+`stack_engine_streaming_result_contract` that is compatible with the older
+`stack_engine_result_contract`. This gate does not change resident CUDA math or
+the high-VRAM 200-light default path; it closes the CPU/tile StackEngine
+memory-model gap and keeps disabled optional maps such as variance from being
+treated as missing requested outputs.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted
