@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 656.
+- Gate: S2-Gate 657.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate656_registration_source_dq_input_audit\runs_20260625_212001`.
+  `C:\glass_runs\phase2_s2_gate657_real_source_dq_probe\runs_20260625_213204`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate656_registration_source_dq_input_audit\runs_20260625_212001\default_strict`.
-- GLASS elapsed time: `11.83883819996845 s`.
+  `C:\glass_runs\phase2_s2_gate657_real_source_dq_probe\runs_20260625_213204\source_dq_positive_strict`.
+- GLASS elapsed time: `14.132218099897727 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: about `92.28x`.
+- Speedup: about `77.31x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -259,6 +259,20 @@ Current Phase 2 latest mainline acceptance:
   `registration_source_dq_input_invalid_samples=0`, passed
   `phase2-mainline-audit --fail-on-not-green`, and passed regression versus
   Gate655 default strict with `elapsed_ratio=1.009718840829939`.
+- Gate657 adds a real 200-light positive source-DQ validation path through
+  `glass source-dq-probe-manifest`. The command generated a `uint8` sidecar
+  mask for frame `F000061` at pixel `[3211, 4800]`, rebound the normal
+  processing plan through `glass plan --source-dq-manifest`, and ran resident
+  CUDA in strict `source_dq_positive` scope. Latest evidence records
+  `source_dq_invalid=1`, `source_dq_applied=1`,
+  `registration_source_dq_input_invalid_samples=1`, the `F000061`
+  registration row carrying `source_dq_registration_input.invalid_samples=1`,
+  integration provenance `input_invalid_samples_before_rejection=1`, and all
+  source-DQ registration runtime checks passed. This run intentionally differs
+  from the zero-DQ default route; the Gate657-vs-Gate656 compare records shape
+  match true, coverage-masked p50/p90/p99 absolute differences
+  `0.0` / `1.0081672668457031` / `5.743577690124511`, and RMS
+  `2.1730066333730473`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

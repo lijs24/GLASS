@@ -22,7 +22,7 @@ from glass.engine.pipeline import initialize_run
 from glass.engine.resident_reference_health import build_resident_reference_health
 from glass.engine.resident_registration_health import build_resident_registration_health
 from glass.engine.resident_reference_scout import write_resident_reference_scout
-from glass.io.fits_io import write_fits_data
+from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy
 from tests.conftest import cuda_module_or_skip
@@ -1992,6 +1992,80 @@ def test_cli_synthetic_source_dq_manifest_binds_into_plan(tmp_path: Path):
     assert Path(bound[0]["source_dq_mask_path"]).exists()
     assert Path(bound[0]["path"]).name == "light_001.fits"
     assert not any(frame["frame_type"] == "unknown" for frame in plan_payload["frames"])
+
+
+def test_cli_source_dq_probe_manifest_binds_into_plan(tmp_path: Path):
+    dataset = tmp_path / "synthetic"
+    manifest = tmp_path / "manifest.json"
+    base_plan = tmp_path / "processing_plan.json"
+    probe_root = tmp_path / "dq_probe"
+    probed_plan = tmp_path / "processing_plan_with_probe.json"
+
+    assert (
+        main(
+            [
+                "synthetic",
+                "--out",
+                str(dataset),
+                "--frames",
+                "3",
+                "--width",
+                "28",
+                "--height",
+                "20",
+            ]
+        )
+        == 0
+    )
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(base_plan)]) == 0
+    assert (
+        main(
+            [
+                "source-dq-probe-manifest",
+                "--plan",
+                str(base_plan),
+                "--out",
+                str(probe_root),
+                "--light-index",
+                "1",
+                "--y",
+                "6",
+                "--x",
+                "8",
+            ]
+        )
+        == 0
+    )
+
+    probe_manifest = read_json(probe_root / "source_dq_manifest.json")
+    sidecar = probe_root / probe_manifest["bindings"][0]["dq_mask_path"]
+    dq = read_fits_data(sidecar, dtype=np.float32)
+    assert dq.shape == (20, 28)
+    assert dq[6, 8] == pytest.approx(float(int(DQFlag.HOT_PIXEL)))
+    assert int(np.count_nonzero(dq)) == 1
+    assert probe_manifest["read_only_input"] is True
+    assert probe_manifest["bindings"][0]["purpose"] == "resident_source_dq_positive_probe"
+
+    assert (
+        main(
+            [
+                "plan",
+                "--manifest",
+                str(manifest),
+                "--out",
+                str(probed_plan),
+                "--source-dq-manifest",
+                str(probe_root / "source_dq_manifest.json"),
+            ]
+        )
+        == 0
+    )
+    plan_payload = read_json(probed_plan)
+    bound = [frame for frame in plan_payload["frames"] if frame.get("source_dq_mask_path")]
+    assert len(bound) == 1
+    assert Path(bound[0]["source_dq_mask_path"]) == sidecar
+    assert Path(bound[0]["path"]).name == Path(probe_manifest["bindings"][0]["frame_path"]).name
 
 
 def test_cli_report_surfaces_quality_saturation_summary(tmp_path: Path):

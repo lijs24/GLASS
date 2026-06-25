@@ -801,6 +801,106 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 657: Real 200-Light Source-DQ Probe Manifest
+
+Gate657 closes the real-data gap left by Gates 655-656. The M38 benchmark
+does not naturally include nonzero source-DQ sidecars, so previous positive
+source-DQ behavior was proven with synthetic CUDA fixtures while the real
+200-light run only proved zero-input closure. Gate657 adds a reproducible
+diagnostic CLI that writes source-DQ probe sidecars into an output directory,
+then uses that normal manifest boundary to run the real 200-light resident
+CUDA pipeline with `framework_scope=source_dq_positive`.
+
+Implementation:
+
+- Added `glass source-dq-probe-manifest`.
+- The command reads an existing `processing_plan.json`, selects a light frame
+  by `--frame-id`, `--frame-path`, or `--light-index`, and writes:
+  - `source_dq_manifest.json`;
+  - a FITS sidecar under the requested output directory;
+  - a single DQ-flagged probe pixel.
+- The command records `read_only_input=true` and writes only to its output
+  directory. It does not modify the original image tree.
+- Probe sidecars use compact integer FITS storage: `uint8` for flags up to
+  `255`, `int16` for larger DQ bits.
+- Added a CLI smoke test proving that the generated manifest can be fed back
+  into `glass plan --source-dq-manifest` and binds to the selected light.
+
+Focused validation:
+
+- Ruff over touched CLI/test files: passed.
+- Focused tests:
+  `tests/test_cli_smoke.py::test_cli_source_dq_probe_manifest_binds_into_plan`,
+  `tests/test_cli_smoke.py::test_cli_synthetic_source_dq_manifest_binds_into_plan`,
+  and
+  `tests/test_plan_builder.py::test_processing_plan_binds_source_dq_manifest_to_light_frame`:
+  `3 passed`.
+
+Real 200-light validation:
+
+- Probe manifest:
+  `C:\glass_runs\phase2_s2_gate657_real_source_dq_probe\runs_20260625_213204\source_dq_probe\source_dq_manifest.json`.
+- Probe sidecar:
+  `C:\glass_runs\phase2_s2_gate657_real_source_dq_probe\runs_20260625_213204\source_dq_probe\source_dq\F000061_dq_probe.fits`.
+- Probe binding: frame `F000061`, pixel `[3211, 4800]`, flag
+  `hot_pixel`, sidecar dtype `uint8`, sidecar size about `58.8 MiB`.
+- Source-DQ bound plan:
+  `C:\glass_runs\phase2_s2_gate657_real_source_dq_probe\runs_20260625_213204\processing_plan_source_dq_probe.json`.
+- Green resident CUDA source-DQ positive run:
+  `C:\glass_runs\phase2_s2_gate657_real_source_dq_probe\runs_20260625_213204\source_dq_positive_strict`.
+- `resident_source_dq_execution.json`: `input_invalid_samples_before_rejection=1`,
+  `applied_invalid_samples=1`.
+- `registration_results.json`: source-DQ registration input summary reports
+  `invalid_samples=1`, and the `F000061` row reports
+  `source_dq_registration_input.invalid_samples=1`.
+- `resident_registration_runtime_contract.json`: passed, including
+  `source_dq_registration_visibility_closes`,
+  `registration_results_carry_source_dq_input_if_positive`, and
+  `registration_source_dq_input_matches_execution`.
+- `integration_results.json`: integration provenance records
+  `input_invalid_samples_before_rejection=1`.
+- `resident_mainline_framework.json`: passed in `source_dq_positive` scope.
+- `glass phase2-mainline-audit --fail-on-not-green`: passed with `200` lights,
+  `193` active frames, and `7` masked frames.
+- GLASS elapsed time: `14.132218099897727 s`, about `77.31x` faster than the
+  `1092.541 s` black-box timing.
+- Native warp evidence: `triangle_warp_batch_fallback_frame_count=0`,
+  `triangle_warp_batch_native_chunk_count=24`,
+  `triangle_warp_batch_native_chunk_frames=8`, and
+  `triangle_warp_batch_native_total_s=0.4878145 s`.
+- Component timing:
+  `resident_light_read_upload_calibrate=4.175479300087318 s`,
+  `resident_registration_warp=0.26504389953333884 s`,
+  `resident_local_normalization=0.34960509999655187 s`,
+  `resident_integration=3.360753999906592 s`,
+  and `resident_output_write=0.34624189999885857 s`.
+
+Result comparison:
+
+- Compared Gate657 source-DQ positive master against Gate656 default master
+  with coverage >= `190`.
+- Shape match: true.
+- Compared pixels: `50339858`.
+- Coverage fraction: `0.8165268153742344`.
+- Absolute difference p50/p90/p99:
+  `0.0` / `1.0081672668457031` / `5.743577690124511`.
+- RMS difference: `2.1730066333730473`.
+- Relative RMS difference: `0.008350306636239585`.
+- Interpretation: this diagnostic intentionally changes a source frame before
+  registration/LN/integration. It is not expected to be bit-identical to the
+  default zero-DQ route, and the comparison is recorded as drift evidence, not
+  as a default-regression failure.
+
+Interpretation:
+
+- This gate turns positive source-DQ from a synthetic-only proof into a
+  reproducible real 200-light validation path.
+- It advances the DQ/mask pipeline contract without changing default image math
+  or CUDA kernels.
+- The next substantive work can now choose between broader real DQ sources
+  such as bad-pixel maps/cosmetic masks and the measured resident
+  calibration/integration hot path.
+
 ### S2-Gate 656: Registration Source-DQ Input Audit
 
 Gate656 moves the source-DQ/registration bridge one step closer to the actual

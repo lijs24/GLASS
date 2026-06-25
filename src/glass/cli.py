@@ -9,10 +9,12 @@ from time import perf_counter
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from rich.console import Console
 
 from glass.capabilities import capability_report
 from glass.gpu.compatibility import recommend_windows_cuda_packages
+from glass.engine.contracts import DQFlag
 from glass.engine.integration import integrate_registered_frames
 from glass.engine.local_norm import local_normalize_registered_frames
 from glass.engine.pipeline import initialize_run, run_calibration_stages
@@ -76,6 +78,7 @@ from glass.engine.resident_source_dq_strategy import build_resident_source_dq_st
 from glass.engine.warp import warp_registered_frames
 from glass.engine.resume import resume_summary
 from glass.engine.state import write_run_state
+from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.metadata.scanner import scan_tree
 from glass.planner.plan_builder import build_processing_plan
@@ -2715,6 +2718,118 @@ def cmd_plan(args: argparse.Namespace) -> int:
     write_json(args.out, plan)
     console.print(f"Wrote processing plan: {args.out}")
     console.print({"executable": plan.executable, "warnings": len(plan.global_warnings)})
+    return 0
+
+
+def _source_dq_probe_light_frames(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    frames = plan.get("frames") if isinstance(plan.get("frames"), list) else []
+    return [
+        frame
+        for frame in frames
+        if isinstance(frame, dict) and str(frame.get("frame_type") or "").lower() == "light"
+    ]
+
+
+def _select_source_dq_probe_frame(args: argparse.Namespace, plan: dict[str, Any]) -> dict[str, Any]:
+    lights = _source_dq_probe_light_frames(plan)
+    if not lights:
+        raise ValueError("processing plan contains no light frames")
+    if args.frame_id:
+        for frame in lights:
+            if str(frame.get("id")) == str(args.frame_id):
+                return frame
+        raise ValueError(f"source-DQ probe frame_id not found: {args.frame_id}")
+    if args.frame_path:
+        target = str(args.frame_path).replace("\\", "/").lower()
+        for frame in lights:
+            frame_path = str(frame.get("path") or "")
+            normalized = frame_path.replace("\\", "/").lower()
+            path = Path(frame_path)
+            keys = {normalized, path.name.lower(), path.stem.lower()}
+            if target in keys or normalized.endswith(target):
+                return frame
+        raise ValueError(f"source-DQ probe frame_path not found: {args.frame_path}")
+    index = int(args.light_index)
+    if index < 0 or index >= len(lights):
+        raise ValueError(f"source-DQ probe light index {index} out of range for {len(lights)} lights")
+    return lights[index]
+
+
+def _dq_flag_from_cli(value: str) -> DQFlag:
+    key = str(value).upper()
+    try:
+        flag = DQFlag[key]
+    except KeyError as exc:
+        choices = ", ".join(flag.name.lower() for flag in DQFlag if flag != DQFlag.VALID)
+        raise ValueError(f"unknown DQ flag {value!r}; expected one of: {choices}") from exc
+    if flag == DQFlag.VALID:
+        raise ValueError("source-DQ probe flag must not be valid")
+    return flag
+
+
+def cmd_source_dq_probe_manifest(args: argparse.Namespace) -> int:
+    plan = read_json(args.plan)
+    frame = _select_source_dq_probe_frame(args, plan)
+    width = int(frame.get("width") or 0)
+    height = int(frame.get("height") or 0)
+    if width <= 0 or height <= 0:
+        raise ValueError(
+            f"selected frame {frame.get('id')} has invalid shape width={width}, height={height}"
+        )
+    x = width // 2 if args.x is None else int(args.x)
+    y = height // 2 if args.y is None else int(args.y)
+    if x < 0 or x >= width or y < 0 or y >= height:
+        raise ValueError(f"source-DQ probe pixel ({x}, {y}) outside frame shape {width}x{height}")
+    flag = _dq_flag_from_cli(args.flag)
+    out = Path(args.out)
+    sidecar_root = out / "source_dq"
+    frame_id = str(frame.get("id"))
+    sidecar_name = f"{frame_id}_dq_probe.fits"
+    sidecar_path = sidecar_root / sidecar_name
+    sidecar_dtype = np.uint8 if int(flag) <= 255 else np.int16
+    dq = np.zeros((height, width), dtype=sidecar_dtype)
+    dq[y, x] = int(flag)
+    write_fits_data(sidecar_path, dq, dtype=sidecar_dtype)
+    manifest = {
+        "schema_version": 1,
+        "artifact_type": "source_dq_probe_manifest",
+        "created_by": "glass source-dq-probe-manifest",
+        "plan_path": str(Path(args.plan).resolve(strict=False)),
+        "read_only_input": True,
+        "probe": {
+            "frame_id": frame_id,
+            "frame_path": str(frame.get("path")),
+            "width": width,
+            "height": height,
+            "pixel": [y, x],
+            "flag": flag.name.lower(),
+            "flag_value": int(flag),
+            "sidecar_dtype": np.dtype(sidecar_dtype).name,
+            "dq_mask_path": str(sidecar_path.relative_to(out)),
+        },
+        "bindings": [
+            {
+                "frame_id": frame_id,
+                "frame_path": str(frame.get("path")),
+                "dq_mask_path": str(sidecar_path.relative_to(out)),
+                "flag": flag.name.lower(),
+                "flag_value": int(flag),
+                "pixel": [y, x],
+                "purpose": "resident_source_dq_positive_probe",
+            }
+        ],
+    }
+    manifest_path = out / "source_dq_manifest.json"
+    write_json(manifest_path, manifest)
+    console.print(f"Wrote source-DQ probe manifest: {manifest_path}")
+    console.print(
+        {
+            "frame_id": frame_id,
+            "sidecar": str(sidecar_path),
+            "pixel": [y, x],
+            "flag": flag.name.lower(),
+        }
+    )
     return 0
 
 
@@ -6641,6 +6756,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional source-DQ sidecar manifest to bind onto light frame records",
     )
     plan.set_defaults(func=cmd_plan)
+
+    source_dq_probe = sub.add_parser(
+        "source-dq-probe-manifest",
+        help="generate a diagnostic source-DQ sidecar manifest from a processing plan",
+    )
+    source_dq_probe.add_argument("--plan", required=True, help="source processing_plan.json")
+    source_dq_probe.add_argument(
+        "--out",
+        required=True,
+        help="output directory that will receive source_dq_manifest.json and sidecar FITS masks",
+    )
+    source_dq_probe.add_argument("--frame-id", help="light frame id to bind; overrides --light-index")
+    source_dq_probe.add_argument("--frame-path", help="light frame path/name/stem to bind; overrides --light-index")
+    source_dq_probe.add_argument("--light-index", type=int, default=0, help="zero-based light index when no frame is specified")
+    source_dq_probe.add_argument("--y", type=int, help="probe pixel y coordinate; default is image center")
+    source_dq_probe.add_argument("--x", type=int, help="probe pixel x coordinate; default is image center")
+    source_dq_probe.add_argument(
+        "--flag",
+        default="hot_pixel",
+        choices=sorted(flag.name.lower() for flag in DQFlag if flag != DQFlag.VALID),
+        help="DQ flag value written into the probe sidecar",
+    )
+    source_dq_probe.set_defaults(func=cmd_source_dq_probe_manifest)
 
     subset = sub.add_parser("subset", help="select a small executable subset from a manifest")
     subset.add_argument("--manifest", required=True)
