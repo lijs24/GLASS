@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from glass.cli import main
+from glass.engine.resident_component_timing import (
+    build_resident_component_timing,
+    materialize_resident_component_timing,
+)
 from glass.io.json_io import read_json, write_json
 from glass.report.phase2_mainline_audit import build_phase2_mainline_audit
 
@@ -97,6 +101,11 @@ def _write_green_run(run: Path) -> None:
             ],
         },
     )
+    timing = read_json(run / "run_timing.json")
+    component_timing = build_resident_component_timing(run, timing=timing)
+    write_json(run / "resident_component_timing.json", component_timing)
+    materialize_resident_component_timing(timing, component_timing)
+    write_json(run / "run_timing.json", timing)
     write_json(run / "resident_frame_masks.json", {"summary": {"passed": True, "active_frame_count": 193, "masked_frame_count": 7}})
     write_json(
         run / "resident_reference_health.json",
@@ -237,6 +246,48 @@ def test_phase2_mainline_audit_fails_missing_component_ledger_artifact(tmp_path:
     checks = {check["name"]: check for check in audit["checks"]}
     evidence = checks["resident_stage_ledger_component_contract"]["evidence"]
     assert evidence["summary"]["missing_artifact_count"] == 1
+
+
+def test_phase2_mainline_audit_fails_missing_component_timing_artifact(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_green_run(run)
+    (run / "resident_component_timing.json").unlink()
+
+    audit = build_phase2_mainline_audit(run)
+
+    assert audit["passed"] is False
+    assert "core_artifacts_present" in audit["failed_checks"]
+    assert "timing_components_available" in audit["failed_checks"]
+    checks = {check["name"]: check for check in audit["checks"]}
+    evidence = checks["timing_components_available"]["evidence"]
+    assert evidence["component_artifact"]["exists"] is False
+
+
+def test_phase2_mainline_audit_fails_missing_required_component_timing(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_green_run(run)
+    payload = read_json(run / "resident_component_timing.json")
+    for row in payload["components"]:
+        if row["source_key"] == "resident_registration_warp":
+            row["elapsed_s"] = None
+            row["status"] = "missing"
+    payload["passed"] = False
+    payload["status"] = "failed"
+    payload["summary"]["missing_required_components"] = ["resident_registration_warp"]
+    write_json(run / "resident_component_timing.json", payload)
+
+    audit = build_phase2_mainline_audit(run)
+
+    assert audit["passed"] is False
+    assert "timing_components_available" in audit["failed_checks"]
+    checks = {check["name"]: check for check in audit["checks"]}
+    evidence = checks["timing_components_available"]["evidence"]
+    assert evidence["component_artifact"]["passed"] is False
+    assert evidence["component_artifact"]["missing_required_components"] == [
+        "resident_registration_warp"
+    ]
 
 
 def test_phase2_mainline_audit_cli_writes_markdown(tmp_path: Path) -> None:

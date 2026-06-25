@@ -106,11 +106,11 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 651.
+- Gate: S2-Gate 652.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate651_stage_ledger_mainline_gate\runs_20260625_230000`.
+  `C:\glass_runs\phase2_s2_gate652_component_timing_surface\runs_20260626_000000`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\candidate_from_calibration_boundary`.
+  `C:\glass_runs\phase2_s2_gate652_component_timing_surface\runs_20260626_000000\candidate_component_timing_replay`.
 - GLASS elapsed time: `11.485255000297911 s`.
 - Black-box reference elapsed time: `1092.541 s`.
 - Speedup: `95.12553269140832x`.
@@ -200,6 +200,16 @@ Current Phase 2 latest mainline acceptance:
   `resident_registration`, `resident_local_normalization`, and
   `resident_integration` all `complete`, `18` complete stages, `27` expected
   artifact rows, `0` missing artifacts, and `can_noop_resume=true`.
+- Gate652 promotes the resident component timing breakdown into the Phase 2
+  mainline hard gate. Resident run/audit now write
+  `resident_component_timing.json` and materialize `resident_component_stages`
+  into `run_timing.json`. The latest real 200-light audit requires this
+  artifact and records `timing_components_available=passed` with required
+  components present: `light_read_upload_calibrate=3.5132379999849945 s`,
+  `resident_registration_warp=0.26844110037200153 s`, and
+  `resident_integration=3.2337921999860555 s`. Optional measured components
+  include `resident_local_normalization=0.3582464000210166 s` and
+  `output_write=0.23136649990919977 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
@@ -213,7 +223,7 @@ Current Phase 2 latest mainline acceptance:
 - Acceptance audit:
   `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\gate649_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate651_stage_ledger_mainline_gate\runs_20260625_230000\gate651_phase2_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate652_component_timing_surface\runs_20260626_000000\gate652_phase2_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

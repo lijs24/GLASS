@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from glass.engine.resident_component_timing import (
+    REQUIRED_RESIDENT_COMPONENT_TIMING_KEYS,
+    build_resident_component_timing,
+)
 from glass.engine.resident_stage_ledger import build_resident_stage_ledger
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
@@ -21,6 +25,7 @@ REQUIRED_CORE_ARTIFACTS = (
     "resident_dq_pixel_closure.json",
     "resident_master_cache.json",
     "resident_stage_ledger.json",
+    "resident_component_timing.json",
     "resident_result_contract.json",
     "pipeline_contract.json",
     "stack_engine_contract.json",
@@ -118,8 +123,31 @@ def _output_map_state(run: Path, artifact: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _timing_components(timing: dict[str, Any], artifact: dict[str, Any]) -> dict[str, Any]:
+def _timing_components(run: Path, timing: dict[str, Any], artifact: dict[str, Any]) -> dict[str, Any]:
     timing_s = artifact.get("timing_s") if isinstance(artifact.get("timing_s"), dict) else {}
+    component_path = run / "resident_component_timing.json"
+    component_payload = _json_if_exists(component_path)
+    if not component_payload:
+        component_payload = build_resident_component_timing(
+            run,
+            timing=timing,
+            resident_payload={"artifacts": [artifact]},
+        )
+    component_summary = (
+        component_payload.get("summary")
+        if isinstance(component_payload.get("summary"), dict)
+        else {}
+    )
+    component_rows = (
+        component_payload.get("components")
+        if isinstance(component_payload.get("components"), list)
+        else []
+    )
+    components_from_artifact = {
+        str(row.get("source_key")): _number(row.get("elapsed_s"))
+        for row in component_rows
+        if isinstance(row, dict) and row.get("source_key") is not None
+    }
     stages = {
         "resident_reference_scout": _stage_elapsed(timing, "resident_reference_scout"),
         "resident_reference_health": _stage_elapsed(timing, "resident_reference_health"),
@@ -129,16 +157,42 @@ def _timing_components(timing: dict[str, Any], artifact: dict[str, Any]) -> dict
         "warp_quality_contract": _stage_elapsed(timing, "warp_quality_contract"),
     }
     components = {
-        "light_read_upload_calibrate": _number(timing_s.get("light_read_upload_calibrate")),
-        "resident_registration_warp": _number(timing_s.get("resident_registration_warp")),
-        "resident_local_normalization": _number(timing_s.get("resident_local_normalization")),
-        "resident_integration": _number(timing_s.get("resident_integration")),
-        "output_write": _number(timing_s.get("output_write")),
+        "light_read_upload_calibrate": components_from_artifact.get(
+            "light_read_upload_calibrate",
+            _number(timing_s.get("light_read_upload_calibrate")),
+        ),
+        "resident_registration_warp": components_from_artifact.get(
+            "resident_registration_warp",
+            _number(timing_s.get("resident_registration_warp")),
+        ),
+        "resident_local_normalization": components_from_artifact.get(
+            "resident_local_normalization",
+            _number(timing_s.get("resident_local_normalization")),
+        ),
+        "resident_integration": components_from_artifact.get(
+            "resident_integration",
+            _number(timing_s.get("resident_integration")),
+        ),
+        "output_write": components_from_artifact.get(
+            "output_write",
+            _number(timing_s.get("output_write")),
+        ),
     }
     return {
         "total_elapsed_s": _number(timing.get("total_elapsed_s")),
         "stages": stages,
         "resident_components_s": components,
+        "component_artifact": {
+            "path": str(component_path),
+            "exists": component_path.exists(),
+            "passed": component_payload.get("passed"),
+            "status": component_payload.get("status"),
+            "required_component_keys": list(REQUIRED_RESIDENT_COMPONENT_TIMING_KEYS),
+            "missing_required_components": component_summary.get("missing_required_components"),
+            "present_component_count": component_summary.get("present_component_count"),
+            "total_component_elapsed_s": _number(component_summary.get("total_component_elapsed_s")),
+            "largest_component": component_summary.get("largest_component"),
+        },
         "largest_stage": max(
             ((name, value) for name, value in stages.items() if value is not None),
             key=lambda item: item[1],
@@ -290,7 +344,7 @@ def build_phase2_mainline_audit(
     ]
 
     output_maps = _output_map_state(run_root, resident_artifact)
-    timing_state = _timing_components(timing, resident_artifact)
+    timing_state = _timing_components(run_root, timing, resident_artifact)
     stage_ledger_state = _stage_ledger_state(run_root)
 
     default_route_evidence = {
@@ -456,6 +510,11 @@ def build_phase2_mainline_audit(
             "timing_components_available",
             timing_state["total_elapsed_s"] is not None
             and timing_state["stages"]["resident_calibration_integration"] is not None
+            and timing_state["component_artifact"]["exists"] is True
+            and timing_state["component_artifact"]["passed"] is True
+            and not timing_state["component_artifact"]["missing_required_components"]
+            and timing_state["resident_components_s"]["light_read_upload_calibrate"] is not None
+            and timing_state["resident_components_s"]["resident_registration_warp"] is not None
             and timing_state["resident_components_s"]["resident_integration"] is not None,
             timing_state,
         ),

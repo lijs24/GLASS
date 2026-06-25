@@ -5,6 +5,10 @@ from argparse import Namespace
 
 from glass.cli import _write_resident_mainline_framework
 from glass.engine.pipeline import initialize_run
+from glass.engine.resident_component_timing import (
+    build_resident_component_timing,
+    materialize_resident_component_timing,
+)
 from glass.engine.resident_mainline_framework import (
     build_resident_mainline_framework,
     write_resident_mainline_framework,
@@ -157,6 +161,11 @@ def _write_minimal_green_resident_run(
             ]
         },
     )
+    timing = read_json(run / "run_timing.json")
+    component_timing = build_resident_component_timing(run, timing=timing)
+    write_json(run / "resident_component_timing.json", component_timing)
+    materialize_resident_component_timing(timing, component_timing)
+    write_json(run / "run_timing.json", timing)
     write_json(run / "resident_frame_masks.json", {"summary": {"passed": True, "active_frame_count": 3, "masked_frame_count": 0}})
     write_json(
         run / "resident_dq_lifecycle.json",

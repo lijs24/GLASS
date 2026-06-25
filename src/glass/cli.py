@@ -19,6 +19,10 @@ from glass.engine.pipeline import initialize_run, run_calibration_stages
 from glass.engine.quality import measure_calibrated_quality
 from glass.engine.registration import register_calibrated_frames
 from glass.engine.resident_calibration_artifacts import build_resident_calibration_artifacts
+from glass.engine.resident_component_timing import (
+    materialize_resident_component_timing,
+    write_resident_component_timing,
+)
 from glass.engine.resident_cuda import build_resident_memory_admission, run_resident_calibration_integration
 from glass.engine.resident_mainline_framework import (
     DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_GATE,
@@ -2344,6 +2348,28 @@ def _write_resident_stage_ledger_artifact(run: Path, state, timing: dict[str, An
     return ledger_path
 
 
+def _write_resident_component_timing_artifact(
+    run: Path,
+    state,
+    timing: dict[str, Any],
+) -> Path:
+    component_path = write_resident_component_timing(run, timing=timing)
+    payload = read_json(component_path)
+    if isinstance(payload, dict):
+        materialize_resident_component_timing(timing, payload)
+        _write_timing(run, timing)
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_component_timing",
+            path=str(component_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    return component_path
+
+
 def _write_run_report(
     run: Path,
     report_path: Path,
@@ -2967,6 +2993,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 _write_resident_registration_health_failed_state(out, state, exc)
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
+        _write_resident_component_timing_artifact(out, state, timing)
         postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
         _write_resident_stage_ledger_artifact(out, state, timing)
         failed_exit = _print_resident_postcondition_failure(
@@ -3280,6 +3307,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 _write_resident_registration_health_failed_state(out, state, exc)
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
+        _write_resident_component_timing_artifact(out, state, timing)
         postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
         _write_resident_stage_ledger_artifact(out, state, timing)
         write_run_state(args.out, state)

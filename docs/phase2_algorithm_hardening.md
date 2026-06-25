@@ -801,6 +801,75 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 652: Resident Component Timing Surface
+
+Gate652 turns the resident hot-path timing breakdown from an implicit
+`resident_artifacts.json` field into a first-class, required mainline artifact.
+This is a performance-engineering gate: future CUDA resident optimization work
+can now target and regress-check the measured component timings without
+manually decoding a monolithic `resident_calibration_integration` stage.
+
+Implementation:
+
+- Added `src/glass/engine/resident_component_timing.py`.
+- Resident `glass run` and `glass audit` now write
+  `resident_component_timing.json` after `resident_calibration_integration`.
+- `run_timing.json` now materializes `resident_component_stages` and
+  `resident_component_timing_summary` for the same measured component values.
+- `phase2-mainline-audit` now treats `resident_component_timing.json` as a
+  required core artifact and fails `timing_components_available` unless the
+  artifact exists, passes, and includes required core components:
+  `light_read_upload_calibrate`, `resident_registration_warp`, and
+  `resident_integration`.
+- Added positive and negative unit coverage for component timing extraction,
+  run-timing materialization, missing artifact failure, and missing required
+  component failure.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Focused tests:
+  `tests/test_resident_component_timing.py`,
+  `tests/test_phase2_mainline_audit.py`, and
+  `tests/test_resident_stage_ledger.py`: `13 passed`.
+- Full pytest after fixture propagation: `1369 passed`.
+
+Real 200-light validation:
+
+- Replay root:
+  `C:\glass_runs\phase2_s2_gate652_component_timing_surface\runs_20260626_000000\candidate_component_timing_replay`.
+- Source full run:
+  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\candidate_from_calibration_boundary`.
+- Mainline audit:
+  `C:\glass_runs\phase2_s2_gate652_component_timing_surface\runs_20260626_000000\gate652_phase2_mainline_audit.json`.
+- Phase 2 mainline audit status: passed.
+- Input lights: `200`; active frames: `193`; masked frames: `7`.
+- Speedup versus black-box reference: `95.12553269140832x`.
+- Coverage-masked compare to reference: RMS `0.005624135079195954`,
+  p99 absolute difference `0.0021429822302888963`, coverage fraction
+  `0.9749333995120938`.
+- Component timing artifact status: passed, with no missing required
+  components.
+- Measured component split from the real run:
+  - `light_read_upload_calibrate`: `3.5132379999849945 s`;
+  - `resident_integration`: `3.2337921999860555 s`;
+  - `resident_local_normalization`: `0.3582464000210166 s`;
+  - `resident_registration_warp`: `0.26844110037200153 s`;
+  - `output_write`: `0.23136649990919977 s`.
+
+Interpretation:
+
+- This gate directly supports the Phase 2 mainline optimization goal by making
+  hot-path component timings required, reproducible, and machine-readable.
+- The largest measured component is now formally visible as
+  `resident_light_read_upload_calibrate`, followed closely by
+  `resident_integration`.
+- Pixel math, frame admission, registration, warp, LN, DQ, rejection, output
+  maps, and runtime scheduling are unchanged.
+- The next substantive gate should use this contract to optimize either the
+  light read/upload/calibration pipeline or the resident integration reducer,
+  with real 200-light A/B validation.
+
 ### S2-Gate 651: Component Ledger Mainline Gate
 
 Gate651 promotes the Gate650 component-stage ledger from an optional/resume
