@@ -12656,12 +12656,19 @@ class ResidentCalibratedStack {
     unsigned char* d_unit_positive_frame_mask = nullptr;
     float* d_master = nullptr;
     float* d_weight_map = nullptr;
+    const bool synthesize_unit_weight_map_from_u16_coverage =
+        count_map_dtype == "uint16" && download_weight_map && download_diagnostics &&
+        unit_positive_weights;
     if (count_map_dtype == "uint16") {
       double allocation_s = 0.0;
       double weights_upload_s = 0.0;
       double kernel_sync_s = 0.0;
+      double device_download_s = 0.0;
+      double weight_map_host_synthesis_s = 0.0;
       double download_s = 0.0;
       double free_s = 0.0;
+      const bool materialize_device_weight_map =
+          download_weight_map && !synthesize_unit_weight_map_from_u16_coverage;
       py::array_t<std::uint16_t> coverage_map;
       py::array_t<std::uint16_t> low_rejection_map;
       py::array_t<std::uint16_t> high_rejection_map;
@@ -12709,7 +12716,7 @@ class ResidentCalibratedStack {
               "cudaMalloc(resident hardened winsor unit positive frame mask)");
         }
         check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident hardened winsor master)");
-        if (download_weight_map) {
+        if (materialize_device_weight_map) {
           check_cuda(
               cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)),
               "cudaMalloc(resident hardened winsor weight map)");
@@ -12798,7 +12805,7 @@ class ResidentCalibratedStack {
         check_cuda(
             cudaMemcpy(master_info.ptr, d_master, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
             "cudaMemcpy(resident hardened winsor master)");
-        if (download_weight_map) {
+        if (materialize_device_weight_map) {
           check_cuda(
               cudaMemcpy(
                   weight_ptr,
@@ -12829,6 +12836,14 @@ class ResidentCalibratedStack {
                   pixels_per_frame_ * sizeof(unsigned short),
                   cudaMemcpyDeviceToHost),
               "cudaMemcpy(resident hardened winsor uint16 high rejection map)");
+        }
+        device_download_s = seconds_since(download_start);
+        if (synthesize_unit_weight_map_from_u16_coverage) {
+          const auto synthesis_start = Clock::now();
+          for (std::size_t pixel_index = 0; pixel_index < pixels_per_frame_; ++pixel_index) {
+            weight_ptr[pixel_index] = static_cast<float>(coverage_ptr[pixel_index]);
+          }
+          weight_map_host_synthesis_s = seconds_since(synthesis_start);
         }
         download_s = seconds_since(download_start);
       } catch (...) {
@@ -12899,18 +12914,35 @@ class ResidentCalibratedStack {
         profile_info["allocation_s"] = allocation_s;
         profile_info["weights_upload_s"] = weights_upload_s;
         profile_info["kernel_sync_s"] = kernel_sync_s;
+        profile_info["device_download_s"] = device_download_s;
+        profile_info["weight_map_host_synthesis_s"] = weight_map_host_synthesis_s;
         profile_info["download_s"] = download_s;
         profile_info["free_s"] = free_s;
         profile_info["count_map_dtype"] = count_map_dtype;
         profile_info["download_mode"] = download_mode;
         profile_info["diagnostic_maps_downloaded"] = download_diagnostics;
         profile_info["weight_map_downloaded"] = download_weight_map;
-        profile_info["downloaded_arrays"] =
+        profile_info["unit_positive_weight_map_from_coverage"] =
+            synthesize_unit_weight_map_from_u16_coverage;
+        profile_info["weight_map_device_materialized"] = materialize_device_weight_map;
+        profile_info["weight_map_download_source"] =
+            synthesize_unit_weight_map_from_u16_coverage
+                ? "coverage_map_uint16_host_expand"
+                : (download_weight_map ? "device_weight_map" : "not_requested");
+        profile_info["returned_arrays"] =
             1 + (download_weight_map ? 1 : 0) + (download_diagnostics ? 3 : 0);
+        profile_info["device_downloaded_arrays"] =
+            1 + (materialize_device_weight_map ? 1 : 0) + (download_diagnostics ? 3 : 0);
+        profile_info["downloaded_arrays"] =
+            1 + (materialize_device_weight_map ? 1 : 0) + (download_diagnostics ? 3 : 0);
         profile_info["downloaded_bytes"] = static_cast<unsigned long long>(
             pixels_per_frame_ *
-            (sizeof(float) + (download_weight_map ? sizeof(float) : 0) +
+            (sizeof(float) + (materialize_device_weight_map ? sizeof(float) : 0) +
              (download_diagnostics ? 3 * sizeof(unsigned short) : 0)));
+        profile_info["host_synthesized_bytes"] = static_cast<unsigned long long>(
+            synthesize_unit_weight_map_from_u16_coverage
+                ? pixels_per_frame_ * sizeof(float)
+                : 0);
         return py::make_tuple(master, weight_obj, coverage_obj, low_obj, high_obj, profile_info);
       }
       return py::make_tuple(master, weight_obj, coverage_obj, low_obj, high_obj);

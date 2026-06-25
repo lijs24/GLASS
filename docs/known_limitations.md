@@ -38,7 +38,10 @@ Current code is intentionally gated:
   than preloaded all at once, while calibrated light frames are the primary
   resident stack. Current lifecycle byte counts can be inferred from output FITS
   headers and frame accounting when tiny smoke runs lack full runtime memory
-  estimates.
+  estimates. S2-Gate 675 removes one redundant resident hardened `float32`
+  weight-map device output and D2H transfer for unit-positive `uint16`
+  count-map audit runs, but the host result still returns a `float32`
+  `weight_map` synthesized from coverage for compatibility.
   S2-Gate 616 sets the default resident matrix-warp chunk capacity to `8`
   frames after real 200-light probes showed larger chunks used much more VRAM
   and slowed the current Lanczos3 batch kernel; explicit chunk-capacity

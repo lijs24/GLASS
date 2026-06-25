@@ -500,6 +500,21 @@ Current Phase 2 latest mainline acceptance:
   slower on the paired default run: total ratio `1.0181637343039516` and
   integration ratio `1.0355348444807078`, so it was not promoted. Full pytest
   passed with `1418 passed in 64.75 s`.
+- Gate675 removes the redundant device `float32` weight-map materialization
+  from the default unit-positive resident hardened `uint16` count-map path and
+  synthesizes the returned host weight map from the downloaded coverage map.
+  The real 200-light run at
+  `C:\glass_runs\phase2_s2_gate675_unit_weight_map_from_coverage\runs_20260626_090000\default_unit_weight_map_from_coverage`
+  passed Phase 2 mainline audit with `200` input lights and `193` active
+  frames. The native profile recorded `returned_arrays=5`,
+  `downloaded_arrays=4`, `downloaded_bytes=616512000`,
+  `host_synthesized_bytes=246604800`, and
+  `weight_map_download_source=coverage_map_uint16_host_expand`. Regression
+  against Gate674 passed with no artifact, frame-accounting, registration,
+  output, or numerical drift. Total elapsed ratio was
+  `1.0077329966094555`; the resident integration component improved from
+  `3.323810000088997 s` to `3.2761442000046372 s`, and native kernel sync
+  improved from `3.192917 s` to `3.1436261 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

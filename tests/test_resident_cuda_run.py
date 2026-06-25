@@ -2947,7 +2947,17 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert hardened_timing["native_profile"]["winsorized_accumulation_order"] == "frame_axis_input_order"
     assert hardened_timing["native_profile"]["kernel_sync_s"] >= 0.0
     assert hardened_timing["native_profile"]["download_s"] >= 0.0
-    assert hardened_timing["native_profile"]["downloaded_arrays"] == 5
+    assert hardened_timing["native_profile"]["unit_positive_weight_map_from_coverage"] is True
+    assert hardened_timing["native_profile"]["weight_map_device_materialized"] is False
+    assert (
+        hardened_timing["native_profile"]["weight_map_download_source"]
+        == "coverage_map_uint16_host_expand"
+    )
+    assert hardened_timing["native_profile"]["returned_arrays"] == 5
+    assert hardened_timing["native_profile"]["device_downloaded_arrays"] == 4
+    assert hardened_timing["native_profile"]["downloaded_arrays"] == 4
+    assert hardened_timing["native_profile"]["downloaded_bytes"] == expected_master.size * (4 + 3 * 2)
+    assert hardened_timing["native_profile"]["host_synthesized_bytes"] == expected_master.size * 4
     assert hardened_timing["pixel_count"] == expected_master.size
     assert hardened_timing["total_s"] >= 0.0
     if output["dq_map_stats_native_method"] == "resident_dq_map_count_maps_i16":

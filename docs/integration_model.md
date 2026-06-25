@@ -336,6 +336,21 @@ Explicit false values still restore `global_reread_weighted_samples`, explicit
 true values record `environment_enabled`, and unrecognized values such as
 `auto` remain disabled.
 
+S2-Gate 675 adds a unit-positive output-map optimization to the resident
+hardened winsorized `uint16` count-map path. For `integration-weighting none`
+groups with unit-positive `0/1` weights and full audit maps, the final
+`weight_map` is mathematically identical to `coverage_map.astype(float32)`.
+The native path therefore skips materializing the device `float32` weight map
+and synthesizes the Python-returned host `weight_map` from the downloaded
+`uint16` coverage map. Profiles record
+`unit_positive_weight_map_from_coverage=true`,
+`weight_map_device_materialized=false`, and
+`weight_map_download_source=coverage_map_uint16_host_expand`. In this case,
+`returned_arrays=5` while `downloaded_arrays=4`: returned arrays count the
+Python result surface, and downloaded arrays/bytes count true D2H traffic.
+Non-unit weights, `float32` count maps, and reduced download modes retain the
+device weight-map route.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

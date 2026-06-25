@@ -1292,6 +1292,68 @@ Interpretation:
   numerically safe on the 200-light data but is not faster for the current
   `193/200` active-frame case.
 
+### S2-Gate 675: Unit-Weight Map From Coverage
+
+Gate675 removes one redundant device output map from the default resident
+`integration-weighting none` path. When resident hardened winsorized integration
+uses unit-positive `0/1` weights, full audit output maps, and `uint16` count
+maps, the per-pixel final `weight_map` is exactly the accepted-sample coverage
+count represented as `float32`. The native CUDA path now skips allocating and
+writing a device `float32` weight map, downloads the existing `uint16` coverage
+map, and expands the host-returned `weight_map` from coverage after D2H.
+
+Implementation:
+
+- Added native profile fields:
+  `unit_positive_weight_map_from_coverage`,
+  `weight_map_device_materialized`, `weight_map_download_source`,
+  `returned_arrays`, `device_downloaded_arrays`, `device_download_s`,
+  `weight_map_host_synthesis_s`, and `host_synthesized_bytes`.
+- For the optimized default case, `returned_arrays` remains `5` while
+  `downloaded_arrays`/`device_downloaded_arrays` becomes `4`, because
+  `downloaded_*` now records true D2H arrays/bytes rather than Python-returned
+  arrays.
+- Non-unit weighting, `float32` count maps, `master_weight`, and `master_only`
+  routes keep their previous device weight-map behavior.
+
+Validation:
+
+- Native CUDA rebuild passed under VS BuildTools/CUDA 13.2.
+- Focused CUDA tests:
+  `tests/test_cuda_resident_stack.py::test_resident_stack_hardened_winsorized_sigma_unit_weight_map_from_coverage`
+  and
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline`
+  passed.
+- Resident CUDA test files:
+  `207 passed in 21.13 s`.
+- Real 200-light candidate run:
+  `C:\glass_runs\phase2_s2_gate675_unit_weight_map_from_coverage\runs_20260626_090000\default_unit_weight_map_from_coverage`.
+  The candidate recorded `downloaded_arrays=4`, `returned_arrays=5`,
+  `downloaded_bytes=616512000`, `host_synthesized_bytes=246604800`,
+  `weight_map_download_source=coverage_map_uint16_host_expand`, and
+  `weight_map_device_materialized=false`.
+- Final Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate675_unit_weight_map_from_coverage\runs_20260626_090000\gate675_phase2_mainline_audit.json`.
+  Status passed, failed checks `[]`, input lights `200`, active frames `193`.
+- Regression against Gate674:
+  `C:\glass_runs\phase2_s2_gate675_unit_weight_map_from_coverage\runs_20260626_090000\gate675_vs_gate674_regression.json`.
+  Status passed with no artifact, frame-accounting, registration, output, or
+  numerical drift. Total elapsed ratio was `1.0077329966094555`, while resident
+  integration improved from `3.323810000088997 s` to
+  `3.2761442000046372 s` (`0.985659288562498x`) and native kernel sync improved
+  from `3.192917 s` to `3.1436261 s` (`0.9845624236395748x`).
+
+Interpretation:
+
+- This is a resident transfer/memory hardening gate, not a broad end-to-end
+  speed breakthrough. It removes one full-frame `float32` device map and one
+  D2H transfer in the dominant unit-weight audit path while preserving identical
+  science outputs.
+- The slight total-runtime loss in the single real run was traced to
+  `light_read_upload_calibrate` variance, not the integration substage. Future
+  gates should now return to either the light upload/calibration overlap or a
+  larger resident order-statistic reducer redesign.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

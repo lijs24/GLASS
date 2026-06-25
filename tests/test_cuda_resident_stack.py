@@ -3720,6 +3720,65 @@ def test_resident_stack_hardened_winsorized_sigma_compact_count_maps_match_float
     assert np.allclose(compact_high.astype(np.float32), float_high, rtol=1e-5, atol=1e-5)
 
 
+def test_resident_stack_hardened_winsorized_sigma_unit_weight_map_from_coverage():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    frames = [
+        np.array([[1, 1], [10, 4]], dtype=np.float32),
+        np.array([[1, 2], [10, 4]], dtype=np.float32),
+        np.array([[1, 3], [10, 4]], dtype=np.float32),
+        np.array([[12, 4], [10, 40]], dtype=np.float32),
+    ]
+    weights = np.ones((len(frames),), dtype=np.float32)
+    resident_stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.4,
+            2.4,
+            count_map_dtype="uint16",
+            download_mode="full",
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            np.stack(frames, axis=0),
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.4,
+            high_sigma=2.4,
+        )
+    )
+
+    profile = timing["native_profile"]
+    assert profile["unit_positive_weights_detected"] is True
+    assert profile["unit_positive_weight_map_from_coverage"] is True
+    assert profile["weight_map_device_materialized"] is False
+    assert profile["weight_map_download_source"] == "coverage_map_uint16_host_expand"
+    assert profile["returned_arrays"] == 5
+    assert profile["device_downloaded_arrays"] == 4
+    assert profile["downloaded_arrays"] == 4
+    assert profile["downloaded_bytes"] == 4 * (4 + 3 * 2)
+    assert profile["host_synthesized_bytes"] == 4 * 4
+    assert profile["device_download_s"] >= 0.0
+    assert profile["weight_map_host_synthesis_s"] >= 0.0
+    assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=0.0, atol=0.0)
+    assert np.allclose(weight_map, coverage.astype(np.float32), rtol=0.0, atol=0.0)
+    assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
+
+
 def test_resident_stack_hardened_winsorized_sigma_master_only_matches_full_master():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
