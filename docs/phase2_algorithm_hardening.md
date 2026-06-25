@@ -1840,6 +1840,81 @@ Interpretation:
   and multi-buffer overlap as a system, using this 250us default as the new
   baseline.
 
+### S2-Gate 683: Windows Native Sequential Raw FITS Reads
+
+Gate683 hardens the default Windows resident native-completion read path. The
+previous native raw-FITS helper used portable `std::ifstream` for each raw image
+payload read. On Windows this gate routes the same raw payload reads through
+`CreateFileW` with `FILE_FLAG_SEQUENTIAL_SCAN`, preserves the existing
+completion queue and CUDA calibration kernels, and records the selected read
+backend in native timing, resident I/O artifacts, and the resident light
+pipeline profile.
+
+Implementation:
+
+- Added a Windows-only UTF-8 path conversion and sequential raw-read helper in
+  the native extension.
+- Kept the portable `std::ifstream` fallback for non-Windows builds.
+- Added `native_path_read_backend` and `native_completion_read_backend` to the
+  native completion timing dictionary.
+- Propagated the aggregate backend to
+  `resident_io_pipeline.native_path_calibration_read_backend` and
+  `resident_light_pipeline_profile.native_completion.read_backend`.
+- Added focused CUDA/resident tests requiring `win32_sequential_scan` on
+  Windows and `std_ifstream` elsewhere.
+
+Validation:
+
+- Native CUDA extension build:
+  `cmake --build build --target _glass_cuda_native --config Release` under the
+  Visual Studio 2022 developer environment.
+- Focused tests passed:
+  `2 passed in 1.64 s`.
+- Ruff on touched Python files passed.
+- Real 200-light run:
+  `C:\glass_runs\phase2_s2_gate683_win32_sequential_read\runs_20260626_193000\win32_seq_default`.
+- Runtime compare:
+  `C:\glass_runs\phase2_s2_gate683_win32_sequential_read\gate683_runtime_compare.json`.
+  Gate682 remains the best observed runtime at `11.735124099999666 s`; Gate683
+  completed in `11.860965099884197 s`, elapsed ratio
+  `1.0107234485815566`.
+- Regression gate versus Gate682 passed:
+  `C:\glass_runs\phase2_s2_gate683_win32_sequential_read\gate683_regression_gate_realistic.json`.
+  Failed checks `[]`, active/masked frames `193 / 7`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate683_win32_sequential_read\gate683_mainline_audit_realistic.json`.
+  Failed checks `[]`, input lights `200`, active/masked frames `193 / 7`.
+- Direct FITS SHA256 comparison against Gate682 passed:
+  `C:\glass_runs\phase2_s2_gate683_win32_sequential_read\gate683_output_hash_compare.json`.
+  Master, weight, coverage, low-rejection, high-rejection, and DQ maps were
+  bitwise identical.
+
+Timing and telemetry:
+
+- `native_path_calibration_read_backend=win32_sequential_scan`.
+- `resident_light_pipeline_profile.native_completion.read_backend=win32_sequential_scan`.
+- Worker raw-read cumulative timing:
+  - file open `0.021070399999999996 s`;
+  - file read `11.38378689999999 s`;
+  - read total `11.405036199999998 s`.
+- Component timing:
+  - `resident_light_read_upload_calibrate=2.889858099981211 s`;
+  - `resident_registration_warp=0.2672783996677026 s`;
+  - `resident_local_normalization=0.3487906999653205 s`;
+  - `resident_integration=3.3763850999530405 s`;
+  - output write `0.284553200006485 s`.
+
+Interpretation:
+
+- This is a default-path engineering hardening gate, not a speed promotion.
+- The Windows backend is now explicit in artifacts, which makes future I/O
+  experiments auditable instead of inferred from platform behavior.
+- The small elapsed slowdown versus Gate682 is within the regression guard and
+  did not change any output bits. Gate682 remains the timing baseline.
+- The next substantive optimization should return to multi-buffer overlap or
+  the resident registration/warp orchestration path, where the evidence shows
+  larger remaining gains than switching the raw-read syscall wrapper alone.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

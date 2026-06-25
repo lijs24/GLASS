@@ -624,6 +624,18 @@ Current Phase 2 latest mainline acceptance:
   and active/masked frames `193 / 7`. Direct FITS comparison showed
   bitwise-identical master, weight, coverage, low-rejection, high-rejection,
   and DQ maps.
+- Gate683 routes Windows native raw-FITS payload reads through
+  `CreateFileW + FILE_FLAG_SEQUENTIAL_SCAN` and records the selected read
+  backend in resident artifacts and the light-pipeline profile. The real
+  200-light run at
+  `C:\glass_runs\phase2_s2_gate683_win32_sequential_read\runs_20260626_193000\win32_seq_default`
+  recorded `native_path_calibration_read_backend=win32_sequential_scan`.
+  Phase 2 mainline and regression gates passed with failed checks `[]`, input
+  lights `200`, and active/masked frames `193 / 7`. Runtime compare kept
+  Gate682 as the best observed run: Gate683 elapsed `11.860965099884197 s`
+  versus Gate682 `11.735124099999666 s`, elapsed ratio
+  `1.0107234485815566`. Direct SHA256 comparison showed bitwise-identical
+  master, weight, coverage, low-rejection, high-rejection, and DQ maps.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

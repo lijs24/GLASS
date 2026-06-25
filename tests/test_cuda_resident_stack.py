@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -354,6 +355,9 @@ def test_resident_stack_calibrates_u16be_paths_completion_queue_on_gpu_like_cpu(
     assert timing["native_path_host_buffer_pinned"] is True
     assert timing["raw_h2d_bytes"] == 2 * 4 * 5 * 2
     assert timing["native_path_read_bytes"] == 2 * 4 * 5 * 2
+    expected_read_backend = "win32_sequential_scan" if os.name == "nt" else "std_ifstream"
+    assert timing["native_path_read_backend"] == expected_read_backend
+    assert timing["native_completion_read_backend"] == expected_read_backend
     assert np.allclose(master, cpu_master, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, np.full((4, 5), len(paths), dtype=np.float32))
 

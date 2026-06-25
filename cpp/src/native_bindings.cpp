@@ -3,6 +3,13 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -2281,13 +2288,121 @@ struct RawFitsReadTiming {
   double file_read_s = 0.0;
   double total_s = 0.0;
   unsigned long long bytes_read = 0;
+  std::string backend = "std_ifstream";
 };
+
+#ifdef _WIN32
+std::wstring utf8_to_wide_path(const std::string& path) {
+  if (path.empty()) {
+    return std::wstring();
+  }
+  const int required = MultiByteToWideChar(
+      CP_UTF8,
+      MB_ERR_INVALID_CHARS,
+      path.data(),
+      static_cast<int>(path.size()),
+      nullptr,
+      0);
+  if (required <= 0) {
+    throw std::runtime_error("failed to convert UTF-8 path for Win32 raw FITS read");
+  }
+  std::wstring wide(static_cast<std::size_t>(required), L'\0');
+  const int written = MultiByteToWideChar(
+      CP_UTF8,
+      MB_ERR_INVALID_CHARS,
+      path.data(),
+      static_cast<int>(path.size()),
+      wide.data(),
+      required);
+  if (written != required) {
+    throw std::runtime_error("short UTF-8 path conversion for Win32 raw FITS read");
+  }
+  return wide;
+}
+
+std::string win32_error_message(const std::string& prefix, DWORD error) {
+  std::ostringstream message;
+  message << prefix << " (GetLastError=" << static_cast<unsigned long>(error) << ")";
+  return message.str();
+}
+
+RawFitsReadTiming read_raw_fits_bytes_into_ptr_win32_sequential(
+    const std::string& path,
+    unsigned long long data_offset,
+    std::size_t byte_count,
+    unsigned char* out) {
+  using Clock = std::chrono::steady_clock;
+  const auto total_start = Clock::now();
+  const auto open_start = Clock::now();
+  const std::wstring wide_path = utf8_to_wide_path(path);
+  HANDLE handle = CreateFileW(
+      wide_path.c_str(),
+      GENERIC_READ,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      nullptr,
+      OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+      nullptr);
+  if (handle == INVALID_HANDLE_VALUE) {
+    throw std::runtime_error(
+        win32_error_message("failed to open FITS image for Win32 sequential raw read", GetLastError()) +
+        ": " + path);
+  }
+  struct HandleCloser {
+    HANDLE handle = INVALID_HANDLE_VALUE;
+    ~HandleCloser() {
+      if (handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(handle);
+      }
+    }
+  } closer{handle};
+  LARGE_INTEGER offset;
+  offset.QuadPart = static_cast<LONGLONG>(data_offset);
+  if (!SetFilePointerEx(handle, offset, nullptr, FILE_BEGIN)) {
+    throw std::runtime_error(
+        win32_error_message("failed to seek FITS raw image data offset", GetLastError()));
+  }
+  const auto open_stop = Clock::now();
+  double read_s = 0.0;
+  constexpr std::size_t chunk_bytes = 8u << 20;
+  std::size_t done = 0;
+  while (done < byte_count) {
+    const std::size_t count = std::min(chunk_bytes, byte_count - done);
+    const DWORD to_read = static_cast<DWORD>(count);
+    DWORD bytes_read = 0;
+    const auto read_start = Clock::now();
+    const BOOL ok = ReadFile(handle, out + done, to_read, &bytes_read, nullptr);
+    const auto read_stop = Clock::now();
+    if (!ok) {
+      throw std::runtime_error(
+          win32_error_message("failed during Win32 sequential raw FITS read", GetLastError()));
+    }
+    if (bytes_read != to_read) {
+      throw std::runtime_error("truncated FITS image data during Win32 sequential raw native read");
+    }
+    read_s += std::chrono::duration<double>(read_stop - read_start).count();
+    done += count;
+  }
+  const auto total_stop = Clock::now();
+
+  RawFitsReadTiming timing;
+  timing.file_open_s = std::chrono::duration<double>(open_stop - open_start).count();
+  timing.file_read_s = read_s;
+  timing.total_s = std::chrono::duration<double>(total_stop - total_start).count();
+  timing.bytes_read = static_cast<unsigned long long>(byte_count);
+  timing.backend = "win32_sequential_scan";
+  return timing;
+}
+#endif
 
 RawFitsReadTiming read_raw_fits_bytes_into_ptr(
     const std::string& path,
     unsigned long long data_offset,
     std::size_t byte_count,
     unsigned char* out) {
+#ifdef _WIN32
+  return read_raw_fits_bytes_into_ptr_win32_sequential(path, data_offset, byte_count, out);
+#else
   using Clock = std::chrono::steady_clock;
   const auto total_start = Clock::now();
   const auto open_start = Clock::now();
@@ -2321,7 +2436,9 @@ RawFitsReadTiming read_raw_fits_bytes_into_ptr(
   timing.file_read_s = read_s;
   timing.total_s = std::chrono::duration<double>(total_stop - total_start).count();
   timing.bytes_read = static_cast<unsigned long long>(byte_count);
+  timing.backend = "std_ifstream";
   return timing;
+#endif
 }
 
 py::dict read_simple_fits_raw_batch_into_u8(
@@ -7273,10 +7390,12 @@ class ResidentCalibratedStack {
       out["native_path_read_file_read_s"] = 0.0;
       out["native_path_read_total_s"] = 0.0;
       out["native_path_read_bytes"] = 0;
+      out["native_path_read_backend"] = "none";
       out["native_completion_read_file_open_s"] = 0.0;
       out["native_completion_read_file_read_s"] = 0.0;
       out["native_completion_read_total_s"] = 0.0;
       out["native_completion_read_bytes"] = 0;
+      out["native_completion_read_backend"] = "none";
       out["native_completion_submit_count"] = 0;
       out["native_completion_count"] = 0;
       out["native_completion_out_of_order_count"] = 0;
@@ -7400,6 +7519,7 @@ class ResidentCalibratedStack {
     double native_open_s = 0.0;
     double native_read_s = 0.0;
     double native_total_read_s = 0.0;
+    std::string native_read_backend;
     unsigned long long native_bytes_read = 0;
     unsigned long long submit_count = 0;
     unsigned long long completion_count = 0;
@@ -7648,6 +7768,11 @@ class ResidentCalibratedStack {
           native_open_s += completion.timing.file_open_s;
           native_read_s += completion.timing.file_read_s;
           native_total_read_s += completion.timing.total_s;
+          if (native_read_backend.empty()) {
+            native_read_backend = completion.timing.backend;
+          } else if (native_read_backend != completion.timing.backend) {
+            native_read_backend = "mixed";
+          }
           native_bytes_read += completion.timing.bytes_read;
           ++completion_count;
           if (completion.frame_offset != next_expected_completion) {
@@ -7796,10 +7921,12 @@ class ResidentCalibratedStack {
     out["native_path_read_file_read_s"] = native_read_s;
     out["native_path_read_total_s"] = native_total_read_s;
     out["native_path_read_bytes"] = native_bytes_read;
+    out["native_path_read_backend"] = native_read_backend.empty() ? "unknown" : native_read_backend;
     out["native_completion_read_file_open_s"] = native_open_s;
     out["native_completion_read_file_read_s"] = native_read_s;
     out["native_completion_read_total_s"] = native_total_read_s;
     out["native_completion_read_bytes"] = native_bytes_read;
+    out["native_completion_read_backend"] = native_read_backend.empty() ? "unknown" : native_read_backend;
     out["native_completion_submit_count"] = submit_count;
     out["native_completion_count"] = completion_count;
     out["native_completion_out_of_order_count"] = out_of_order_count;

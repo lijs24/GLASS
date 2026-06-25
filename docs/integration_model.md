@@ -442,6 +442,19 @@ recorded `183` waves, `17` multi-frame waves, and `max_wave_frames=2`; the
 was bitwise identical across all six integration FITS outputs, and improved
 total elapsed time from `12.245715199969709 s` to `11.735124099999666 s`.
 
+S2-Gate 683 changes the Windows native raw-FITS read helper used by the
+resident native-completion calibration path from portable `std::ifstream` to
+`CreateFileW` with `FILE_FLAG_SEQUENTIAL_SCAN`, while keeping the portable
+`std::ifstream` fallback for non-Windows builds. Runtime artifacts now record
+`native_path_calibration_read_backend`, and the resident light pipeline profile
+records `native_completion.read_backend`. The real 200-light validation run
+`C:\glass_runs\phase2_s2_gate683_win32_sequential_read\runs_20260626_193000\win32_seq_default`
+reported `win32_sequential_scan`, passed mainline and regression gates against
+Gate682, and produced bitwise-identical master, weight, coverage, low-rejection,
+high-rejection, and DQ FITS outputs. Gate682 remains the timing baseline:
+Gate683 completed in `11.860965099884197 s` versus Gate682
+`11.735124099999666 s`, elapsed ratio `1.0107234485815566`.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

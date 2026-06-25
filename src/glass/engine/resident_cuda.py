@@ -8133,6 +8133,7 @@ def run_resident_calibration_integration(
             native_path_calibration_file_open_s = 0.0
             native_path_calibration_file_read_s = 0.0
             native_path_calibration_total_s = 0.0
+            native_path_calibration_read_backend: str | None = None
             native_path_calibration_host_buffer_bytes = 0
             native_path_calibration_wave_h2d_elapsed_s = 0.0
             native_path_calibration_host_buffer_model: str | None = None
@@ -8669,6 +8670,16 @@ def run_resident_calibration_integration(
                             native_path_calibration_total_s += float(
                                 calibration_timing.get("native_path_read_total_s", 0.0) or 0.0
                             )
+                            timing_read_backend = str(
+                                calibration_timing.get("native_path_read_backend", "") or ""
+                            )
+                            if timing_read_backend:
+                                native_path_calibration_read_backend = (
+                                    timing_read_backend
+                                    if native_path_calibration_read_backend
+                                    in {None, timing_read_backend}
+                                    else "mixed"
+                                )
                             native_path_calibration_host_buffer_bytes = max(
                                 native_path_calibration_host_buffer_bytes,
                                 int(calibration_timing.get("native_path_host_buffer_bytes", 0) or 0),
@@ -13494,6 +13505,7 @@ def run_resident_calibration_integration(
                 "native_path_calibration_file_open_s": float(native_path_calibration_file_open_s),
                 "native_path_calibration_file_read_s": float(native_path_calibration_file_read_s),
                 "native_path_calibration_total_s": float(native_path_calibration_total_s),
+                "native_path_calibration_read_backend": native_path_calibration_read_backend,
                 "native_path_calibration_host_buffer_bytes": int(native_path_calibration_host_buffer_bytes),
                 "native_path_calibration_wave_h2d_elapsed_s": float(
                     native_path_calibration_wave_h2d_elapsed_s

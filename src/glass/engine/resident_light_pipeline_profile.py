@@ -162,6 +162,7 @@ def build_resident_light_pipeline_profile(
         },
         "native_completion": {
             "enabled": native_completion_enabled,
+            "read_backend": resident_io_pipeline.get("native_path_calibration_read_backend"),
             "submit_count": _int_value(
                 resident_io_pipeline,
                 "native_completion_calibration_submit_count",
