@@ -1469,6 +1469,75 @@ Interpretation:
   H2D/calibration overlap. Gate677 just removes a verified no-op transfer from
   the default route so future profiles are cleaner.
 
+### S2-Gate 678: Selected-Buffer Reuse Probe
+
+Gate678 tests a narrower resident hardened winsorized reducer hypothesis before
+attempting a larger rewrite. Gate622 proved that keeping a second frame-order
+local sample array was slower. Gate678 keeps only the existing per-thread sample
+buffer and, when explicitly requested, reuses that buffer after quartile
+selection for later winsorized mean/variance/rejection passes.
+
+Implementation:
+
+- Added the opt-in environment flag
+  `GLASS_CUDA_UNIT_WEIGHT_SELECTED_REUSE=1`.
+- Added a new native/CUDA dispatch branch that is admitted only when the
+  unit-positive mask-scan path is available and no active-index/local-reuse/
+  radix-select branch has precedence.
+- The route records
+  `unit_positive_selected_reuse_requested`,
+  `unit_positive_selected_reuse_enabled`,
+  `unit_positive_selected_reuse_reason`, and
+  `sample_reuse_strategy=selected_buffer_reuse_unit_positive_weights`.
+- Default execution remains
+  `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`.
+
+Validation:
+
+- Native CUDA rebuild passed under VS BuildTools/CUDA 13.2.
+- Focused resident hardened CUDA tests passed:
+  `5 passed`, covering default mask-scan, explicit mask-scan, selected-buffer
+  reuse, local ordered reuse, and unit-weight map-from-coverage behavior.
+- Current-HEAD default 200-light run:
+  `C:\glass_runs\phase2_s2_gate678_selected_reuse\runs_20260626_130000\default_head`.
+- Selected-buffer candidate:
+  `C:\glass_runs\phase2_s2_gate678_selected_reuse\runs_20260626_130000\selected_reuse`.
+- Candidate Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate678_selected_reuse\runs_20260626_130000\gate678_selected_phase2_mainline_audit.json`.
+  Status passed, failed checks `[]`, input lights `200`, active frames `193`.
+- Default current-HEAD regression against Gate677:
+  `C:\glass_runs\phase2_s2_gate678_selected_reuse\runs_20260626_130000\gate678_default_vs_gate677_regression.json`.
+  Status passed with failed checks `[]` and elapsed ratio
+  `0.9913605001863092`.
+- Selected-buffer regression against default:
+  `C:\glass_runs\phase2_s2_gate678_selected_reuse\runs_20260626_130000\gate678_selected_vs_default_regression.json`.
+  Status failed only on `resident_determinism_passed`; all contracts, frame
+  masks, DQ lifecycle, master-cache, and memory-lifecycle checks passed.
+- Timing:
+  - default resident integration `3.3610659999540076 s`;
+  - selected-buffer resident integration `3.4472310000564903 s`;
+  - default native kernel sync `3.2432453 s`;
+  - selected-buffer native kernel sync `3.3259804 s`;
+  - selected/default total elapsed ratio `1.0094310426288307`.
+- Coverage-masked master compare:
+  `C:\glass_runs\phase2_s2_gate678_selected_reuse\runs_20260626_130000\gate678_selected_vs_default_master.json`.
+  Shape matched and coverage fraction was `0.9749333995120938`; RMS difference
+  was `0.000560800848695079`, relative RMS
+  `1.7645079997153338e-06`, and p99 absolute difference
+  `3.814697265625e-05`.
+
+Interpretation:
+
+- This is a useful negative reducer result. Reusing the partitioned sample
+  buffer avoids the second local array from Gate622, but it changes the later
+  accumulation order and therefore fails the strict resident determinism gate.
+- The route is also slower on the real 200-light benchmark. It remains
+  diagnostic/opt-in only and is not a default-promotion candidate.
+- The current default route remains green against Gate677. The next substantive
+  optimization should not spend more effort on per-thread local-array reuse; it
+  should move to a deterministic cooperative/segmented reducer or return to the
+  H2D/read/calibration pipeline.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

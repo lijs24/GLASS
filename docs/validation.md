@@ -543,6 +543,22 @@ Current Phase 2 latest mainline acceptance:
   `1.0394643023337526`; the slowdown was in surrounding
   `light_read_upload_calibrate` variance, while resident integration stayed
   essentially flat at `3.3727147999452427 s`.
+- Gate678 adds an opt-in selected-buffer reuse probe for the same resident
+  hardened reducer family and rejects it with real evidence. The current-HEAD
+  default run at
+  `C:\glass_runs\phase2_s2_gate678_selected_reuse\runs_20260626_130000\default_head`
+  passed regression against Gate677 with failed checks `[]` and elapsed ratio
+  `0.9913605001863092`. The candidate run at
+  `C:\glass_runs\phase2_s2_gate678_selected_reuse\runs_20260626_130000\selected_reuse`
+  passed Phase 2 mainline audit with `200` lights and `193` active frames, but
+  default-vs-candidate regression failed `resident_determinism_passed` and was
+  slower: selected/default resident integration `3.4472310000564903 s` /
+  `3.3610659999540076 s`, native kernel sync `3.3259804 s` / `3.2432453 s`,
+  and total elapsed ratio `1.0094310426288307`. The coverage-masked master
+  compare showed tiny numerical drift (`rms_diff=0.000560800848695079`,
+  `relative_rms_diff=1.7645079997153338e-06`, p99 absolute difference
+  `3.814697265625e-05`), so the branch remains opt-in only and is explicitly
+  not promoted.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

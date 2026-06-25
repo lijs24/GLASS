@@ -362,6 +362,26 @@ skips allocating and uploading that device buffer. Profiles record
 weighted scans, non-unit weights, and explicitly disabled mask-scan routes keep
 the device weight buffer because those kernels do read per-frame weights.
 
+S2-Gate 678 adds an explicitly guarded selected-buffer reuse probe,
+`GLASS_CUDA_UNIT_WEIGHT_SELECTED_REUSE=1`, for the same unit-positive mask-scan
+family. The kernel reuses the existing per-thread sample buffer after quartile
+selection instead of duplicating a second frame-order buffer or rereading the
+resident stack for every later winsorized pass. This reduces local-memory
+pressure relative to the Gate622 ordered local-reuse experiment, but it also
+changes the later floating-point accumulation order because the selected sample
+buffer has been partitioned by quickselect. The real 200-light A/B recorded
+`sample_reuse_strategy=selected_buffer_reuse_unit_positive_weights` and passed
+the Phase 2 mainline audit, but it was slower than the default
+`frame_mask_global_reread_unit_positive_weights` path: resident integration
+`3.4472310000564903 s` versus `3.3610659999540076 s`, native kernel sync
+`3.3259804 s` versus `3.2432453 s`. The default-vs-candidate regression gate
+failed `resident_determinism_passed`; the coverage-masked master compare still
+showed only tiny numerical drift (`rms_diff=0.000560800848695079`,
+`relative_rms_diff=1.7645079997153338e-06`, p99 absolute difference
+`3.814697265625e-05`). The route remains opt-in only and is not a promotion
+candidate unless a future reducer redesign restores deterministic/default-order
+outputs and wins real timing.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in
