@@ -382,6 +382,24 @@ showed only tiny numerical drift (`rms_diff=0.000560800848695079`,
 candidate unless a future reducer redesign restores deterministic/default-order
 outputs and wins real timing.
 
+S2-Gate 679 records the resident hardened reducer launch shape as an audit
+contract and closes the block-size tuning question for the current real
+200-light workload. Native profiles now include
+`hardened_kernel_threads_per_block=256` in both count-map branches. Real
+candidate runs with 128-thread and 512-thread launch shapes produced bitwise
+identical master, weight, coverage, low-rejection, high-rejection, and DQ maps
+against the 256-thread default, but both were slower: 128 threads recorded
+resident integration `3.5057293999707326 s` and native kernel sync
+`3.3859033 s`; 512 threads recorded resident integration
+`3.4998344000196084 s` and native kernel sync `3.3783218 s`. The fresh
+256-thread control recorded resident integration `3.3787344000302255 s` and
+native kernel sync `3.2560789 s`; the final profiled 256-thread default
+recorded resident integration `3.3770098999375477 s` and native kernel sync
+`3.2540928 s`. This is another negative optimization result: future work
+should not spend more gates on simple block-size tuning. The next substantive
+integration optimization should be a deterministic cooperative/segmented
+reducer redesign or a return to H2D/read/calibration overlap.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

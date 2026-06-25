@@ -12670,6 +12670,7 @@ class ResidentCalibratedStack {
             ? static_cast<unsigned long long>(unit_positive_weight_frame_count)
             : static_cast<unsigned long long>(
                   unit_positive_weight_frame_count <= 256 ? 256 : 512);
+    const unsigned long long hardened_kernel_threads_per_block = 256ull;
     const std::string native_kernel_capacity_selector = radix_select_enabled
         ? "radix_select_unbounded_positive_samples"
         : (unit_positive_weight_frame_count <= 256 ? "small_256" : "large_512");
@@ -12933,6 +12934,7 @@ class ResidentCalibratedStack {
         profile_info["native_admission_frame_limit"] = native_admission_frame_limit;
         profile_info["native_kernel_frame_capacity"] = native_kernel_frame_capacity;
         profile_info["native_kernel_capacity_selector"] = native_kernel_capacity_selector;
+        profile_info["hardened_kernel_threads_per_block"] = hardened_kernel_threads_per_block;
         profile_info["radix_select_requested"] = radix_select_requested;
         profile_info["radix_select_enabled"] = radix_select_enabled;
         profile_info["radix_select_positive_sample_count"] =
@@ -13223,6 +13225,7 @@ class ResidentCalibratedStack {
       profile_info["native_admission_frame_limit"] = native_admission_frame_limit;
       profile_info["native_kernel_frame_capacity"] = native_kernel_frame_capacity;
       profile_info["native_kernel_capacity_selector"] = native_kernel_capacity_selector;
+      profile_info["hardened_kernel_threads_per_block"] = hardened_kernel_threads_per_block;
       profile_info["radix_select_requested"] = radix_select_requested;
       profile_info["radix_select_enabled"] = radix_select_enabled;
       profile_info["radix_select_positive_sample_count"] =

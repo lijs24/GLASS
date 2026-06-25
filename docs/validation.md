@@ -559,6 +559,23 @@ Current Phase 2 latest mainline acceptance:
   `relative_rms_diff=1.7645079997153338e-06`, p99 absolute difference
   `3.814697265625e-05`), so the branch remains opt-in only and is explicitly
   not promoted.
+- Gate679 adds a native profile contract for the resident hardened reducer
+  launch shape and rejects simple 128/512 block-size tuning on the real
+  200-light benchmark. The fresh 256-thread control at
+  `C:\glass_runs\phase2_s2_gate679_wave_fill_mode\runs_20260626_140000\single_wait_fresh`
+  recorded resident integration `3.3787344000302255 s` and native kernel sync
+  `3.2560789 s`. The 128-thread candidate at
+  `C:\glass_runs\phase2_s2_gate679_hardened_threads\runs_20260626_143000\threads128_candidate`
+  recorded `3.5057293999707326 s` and `3.3859033 s`; the 512-thread candidate at
+  `C:\glass_runs\phase2_s2_gate679_hardened_threads\runs_20260626_143000\threads512_candidate`
+  recorded `3.4998344000196084 s` and `3.3783218 s`. Both candidates were
+  bitwise identical to the 256-thread control for all six integration FITS
+  outputs, but slower. The final profiled 256-thread default at
+  `C:\glass_runs\phase2_s2_gate679_hardened_threads\runs_20260626_143000\threads256_profile_default`
+  recorded `hardened_kernel_threads_per_block=256`, passed Phase 2 mainline
+  audit with `200` input lights and `193` active frames, and passed regression
+  against the fresh 256-thread control with failed checks `[]` and elapsed
+  ratio `1.0220616179844362`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

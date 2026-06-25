@@ -1538,6 +1538,80 @@ Interpretation:
   should move to a deterministic cooperative/segmented reducer or return to the
   H2D/read/calibration pipeline.
 
+### S2-Gate 679: Hardened Reducer Launch-Shape Audit
+
+Gate679 stops the current reducer micro-tuning loop by testing the one remaining
+low-cost launch-shape hypothesis on the real 200-light benchmark. Instead of
+promoting another variant, it records the chosen launch shape in native profiles
+so future performance comparisons can prove which hardened reducer shape was
+actually executed.
+
+Implementation:
+
+- Added `hardened_kernel_threads_per_block=256` to the native resident
+  hardened winsorized integration profile.
+- The field is emitted in both native count-map branches so reduced-download and
+  full-audit map runs can be compared with the same contract.
+- The default CUDA launch shape remains 256 threads per block.
+- Focused resident CUDA tests assert the profile field for weighted,
+  large-frame, and unit-positive count-map paths.
+
+Validation:
+
+- Native CUDA rebuild passed under VS BuildTools/CUDA 13.2. The build retained
+  the existing Windows codepage warning and signed/unsigned warning, but
+  completed successfully.
+- Focused CUDA hardened tests passed after the final 256-thread restore:
+  `20 passed, 57 deselected`.
+- Full pytest passed: `1420 passed in 65.33 s`.
+- Real 200-light fresh 256-thread control:
+  `C:\glass_runs\phase2_s2_gate679_wave_fill_mode\runs_20260626_140000\single_wait_fresh`.
+- Real 128-thread candidate:
+  `C:\glass_runs\phase2_s2_gate679_hardened_threads\runs_20260626_143000\threads128_candidate`.
+- Real 512-thread candidate:
+  `C:\glass_runs\phase2_s2_gate679_hardened_threads\runs_20260626_143000\threads512_candidate`.
+- Final profiled 256-thread default:
+  `C:\glass_runs\phase2_s2_gate679_hardened_threads\runs_20260626_143000\threads256_profile_default`.
+- Phase 2 mainline audit for the final default passed:
+  `C:\glass_runs\phase2_s2_gate679_hardened_threads\gate679_phase2_mainline_audit.json`.
+  Failed checks `[]`, input lights `200`, active frames `193`.
+- Regression of final profiled 256-thread default against the fresh 256-thread
+  control passed:
+  `C:\glass_runs\phase2_s2_gate679_hardened_threads\gate679_default_profile_vs_fresh_regression.json`.
+  Failed checks `[]`, elapsed ratio `1.0220616179844362`.
+- Runtime compare:
+  `C:\glass_runs\phase2_s2_gate679_hardened_threads\gate679_threads_runtime_compare.json`.
+  Best label was `fresh256`; final profiled 256-thread resident integration was
+  essentially identical to the fresh 256-thread control with integration ratio
+  `0.9994896017595635`.
+- All six integration FITS outputs were bitwise identical for 128, 512, and the
+  final profiled 256-thread default against the fresh 256-thread control:
+  master, weight map, coverage map, low-rejection map, high-rejection map, and
+  DQ map.
+
+Timing:
+
+- Fresh 256-thread control: resident integration `3.3787344000302255 s`,
+  native kernel sync `3.2560789 s`.
+- 128-thread candidate: resident integration `3.5057293999707326 s`, native
+  kernel sync `3.3859033 s`.
+- 512-thread candidate: resident integration `3.4998344000196084 s`, native
+  kernel sync `3.3783218 s`.
+- Final profiled 256-thread default: resident integration `3.3770098999375477 s`,
+  native kernel sync `3.2540928 s`.
+
+Interpretation:
+
+- This is a useful negative result. Simple block-size tuning does not improve
+  the current RTX PRO 6000 200-light hardened reducer path.
+- Keeping the profile field is still valuable because future reducer rewrites
+  can be compared against an explicit launch-shape contract instead of an
+  implied default.
+- The next substantive optimization should be either a deterministic
+  cooperative/segmented reducer redesign or the larger H2D/read/calibration
+  overlap work. Further 128/256/512 retesting is low priority unless the kernel
+  algorithm itself changes.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

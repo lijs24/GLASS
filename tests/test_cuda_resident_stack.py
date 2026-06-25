@@ -2809,6 +2809,7 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     assert timing["native_profile"]["unit_positive_weights_fast_path"] is False
     assert timing["native_profile"]["unit_positive_active_frame_count"] == 0
     assert timing["native_profile"]["sample_reuse_strategy"] == "global_reread_weighted_samples"
+    assert timing["native_profile"]["hardened_kernel_threads_per_block"] == 256
     assert timing["native_profile"]["kernel_sync_s"] >= 0.0
     assert timing["native_profile"]["download_s"] >= 0.0
     assert timing["native_profile"]["downloaded_arrays"] == 5
@@ -2933,6 +2934,7 @@ def test_resident_stack_hardened_winsorized_sigma_260_frames_matches_cpu_baselin
         "ascending_unique_quartile_quickselect_order_statistics"
     )
     assert timing["native_profile"]["winsorized_accumulation_order"] == "frame_axis_input_order"
+    assert timing["native_profile"]["hardened_kernel_threads_per_block"] == 256
     assert timing["native_profile"]["kernel_sync_s"] >= 0.0
     assert timing["native_profile"]["download_s"] >= 0.0
     assert timing["native_profile"]["downloaded_arrays"] == 5
@@ -3854,6 +3856,7 @@ def test_resident_stack_hardened_winsorized_sigma_unit_weight_map_from_coverage(
     assert profile["downloaded_arrays"] == 4
     assert profile["downloaded_bytes"] == 4 * (4 + 3 * 2)
     assert profile["host_synthesized_bytes"] == 4 * 4
+    assert profile["hardened_kernel_threads_per_block"] == 256
     assert profile["device_download_s"] >= 0.0
     assert profile["weight_map_host_synthesis_s"] >= 0.0
     assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
