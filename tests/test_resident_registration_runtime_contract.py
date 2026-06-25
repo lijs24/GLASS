@@ -129,6 +129,89 @@ def test_resident_registration_runtime_contract_allows_fused_deferred_warp_path(
     assert payload["summary"]["triangle_native_batch_required"] is False
 
 
+def test_resident_registration_runtime_contract_passes_positive_source_dq_visibility(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_triangle_run(run)
+    write_json(
+        run / "resident_source_dq_execution.json",
+        {
+            "artifact": "resident_source_dq_execution",
+            "summary": {
+                "passed": True,
+                "status": "passed",
+                "input_invalid_samples_before_rejection": 1,
+                "applied_invalid_samples": 1,
+            },
+            "groups": [
+                {
+                    "filter": "H",
+                    "passed": True,
+                    "input_invalid_samples_before_rejection": 1,
+                    "applied_invalid_samples": 1,
+                    "required_invalid_samples_not_visible_to_registration_catalog": 0,
+                    "pre_registration_catalog_visible_invalid_samples": 1,
+                    "post_registration_deferred_invalid_samples": 0,
+                    "application_order_counts": {"calibration_pre_registration": 1},
+                    "registration_catalog_visibility_counts": {
+                        "pre_registration_catalog_visible": 1
+                    },
+                }
+            ],
+        },
+    )
+
+    payload = build_resident_registration_runtime_contract(run)
+
+    assert payload["passed"] is True
+    assert payload["summary"]["source_dq_positive"] is True
+    assert payload["summary"]["source_dq_pre_registration_catalog_visible_invalid_samples"] == 1
+
+
+def test_resident_registration_runtime_contract_fails_required_source_dq_after_registration(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_triangle_run(run)
+    write_json(
+        run / "resident_source_dq_execution.json",
+        {
+            "artifact": "resident_source_dq_execution",
+            "summary": {
+                "passed": True,
+                "status": "passed",
+                "input_invalid_samples_before_rejection": 1,
+                "applied_invalid_samples": 1,
+            },
+            "groups": [
+                {
+                    "filter": "H",
+                    "passed": True,
+                    "input_invalid_samples_before_rejection": 1,
+                    "applied_invalid_samples": 1,
+                    "required_invalid_samples_not_visible_to_registration_catalog": 1,
+                    "pre_registration_catalog_visible_invalid_samples": 0,
+                    "post_registration_deferred_invalid_samples": 1,
+                    "application_order_counts": {"post_registration_pre_warp": 1},
+                    "registration_catalog_visibility_counts": {"not_catalog_visible": 1},
+                }
+            ],
+        },
+    )
+
+    payload = build_resident_registration_runtime_contract(run)
+
+    assert payload["passed"] is False
+    assert "source_dq_registration_visibility_closes" in payload["failed_checks"]
+    assert (
+        payload["summary"][
+            "source_dq_required_invalid_samples_not_visible_to_registration_catalog"
+        ]
+        == 1
+    )
+
+
 def test_resident_registration_runtime_contract_is_not_applicable_for_non_triangle_path(
     tmp_path: Path,
 ) -> None:

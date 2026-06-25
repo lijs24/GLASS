@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 654.
+- Gate: S2-Gate 655.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate654_registration_runtime_contract\runs_20260625_205406`.
+  `C:\glass_runs\phase2_s2_gate655_source_dq_registration_bridge\runs_20260625_210540`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate654_registration_runtime_contract\runs_20260625_205406\default_strict_final`.
-- GLASS elapsed time: `11.564531499985605 s`.
+  `C:\glass_runs\phase2_s2_gate655_source_dq_registration_bridge\runs_20260625_210540\default_strict`.
+- GLASS elapsed time: `11.724885900155641 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: about `94.47x`.
+- Speedup: about `93.18x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -224,13 +224,27 @@ Current Phase 2 latest mainline acceptance:
   wave-fill candidate was not promoted because the total-time improvement was
   only about `0.18%`.
 - Gate654 adds `resident_registration_runtime_contract.json` as a required
-  default-run artifact. Latest evidence proves `200` registration rows,
+  default-run artifact. Gate654 evidence proves `200` registration rows,
   `193/7` active/masked frames, `192` warped non-reference frames,
   `triangle_warp_batch_fallback_frame_count=0`, `24` native warp chunks of
   `8` frames, and `warp_frames_per_s=731.4935008091869`. The explicit
   `phase2-mainline-audit --fail-on-not-green` run passed, and regression
   versus Gate653 default 25us passed with
   `elapsed_ratio=1.027729761074061`.
+- Gate655 bridges source-DQ execution into the resident registration runtime
+  contract. If `resident_source_dq_execution.json` exists, the registration
+  runtime contract now records source-DQ execution status, invalid/applied
+  sample closure, and whether catalog-required non-inline source-DQ samples
+  were visible before resident registration catalog construction. The focused
+  synthetic CUDA strict-positive route applied `1` source-DQ sidecar sample and
+  observed it as pre-registration catalog visible. The latest real 200-light
+  run has no nonzero source-DQ sidecars, so it records
+  `source_dq_exists=true`, `source_dq_positive=false`,
+  `source_dq_input_invalid_samples_before_rejection=0`, and
+  `source_dq_required_invalid_samples_not_visible_to_registration_catalog=0`.
+  Its explicit `phase2-mainline-audit --fail-on-not-green` run passed, and
+  regression versus Gate654 default strict passed with
+  `elapsed_ratio=1.0138660524354346`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

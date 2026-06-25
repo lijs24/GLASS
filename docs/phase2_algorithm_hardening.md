@@ -801,6 +801,89 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 655: Source-DQ To Registration Runtime Bridge
+
+Gate655 closes the gap between the source-DQ/mask pipeline contract and the
+resident triangle registration runtime contract. Gate605 already made
+non-inline source-DQ masks catalog-visible before resident star detection, and
+Gate654 made the registration/warp route auditable. Gate655 joins those two
+surfaces: if `resident_source_dq_execution.json` is present, the registration
+runtime contract now records whether source-DQ execution passed, whether all
+declared invalid samples were applied, and whether required non-inline invalid
+samples were visible before registration catalogs were built.
+
+Implementation:
+
+- Extended `resident_registration_runtime_contract.json` with a normalized
+  `source_dq` summary from `resident_source_dq_execution.json`.
+- Added hard checks for:
+  - source-DQ execution passing when the artifact exists;
+  - source-DQ invalid-sample application closing against declared inputs;
+  - required non-inline source-DQ invalid samples being visible before resident
+    registration catalog construction.
+- Added contract summary fields for source-DQ existence, positive invalid
+  samples, applied samples, pre-registration catalog-visible samples,
+  post-registration deferred samples, and required samples not visible to the
+  registration catalog.
+- Added focused unit tests for both a passing positive source-DQ visibility
+  case and a failing post-registration-only visibility case.
+- Added a CUDA CLI test that plans a synthetic sidecar source-DQ mask, runs the
+  resident `similarity_cuda_triangle` path in strict `source_dq_positive` mode,
+  and proves the source-DQ sample reaches both the execution artifact and the
+  registration runtime contract.
+
+Focused validation:
+
+- Ruff over the touched implementation and focused tests: passed.
+- Focused tests:
+  `tests/test_resident_registration_runtime_contract.py`,
+  `tests/test_resident_source_dq_contract.py`, and
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_triangle_source_dq_feeds_registration_runtime_contract`:
+  `11 passed`.
+
+Real 200-light validation:
+
+- Green run:
+  `C:\glass_runs\phase2_s2_gate655_source_dq_registration_bridge\runs_20260625_210540\default_strict`.
+- `resident_registration_runtime_contract.json`: passed, applicable, no failed
+  checks.
+- Frame accounting: `200` registration rows, `193` active frames, `7` masked
+  frames, and `192` warped non-reference frames.
+- Source-DQ bridge evidence on the real M38 run:
+  `source_dq_exists=true`, `source_dq_positive=false`,
+  `source_dq_input_invalid_samples_before_rejection=0`,
+  `source_dq_required_invalid_samples_not_visible_to_registration_catalog=0`.
+  The real benchmark has no nonzero source-DQ sidecars; positive source-DQ
+  behavior is covered by the synthetic CUDA CLI test above.
+- Native warp evidence: `triangle_warp_batch_frame_count=192`,
+  `triangle_warp_batch_fallback_frame_count=0`,
+  `triangle_warp_batch_native_chunk_count=24`,
+  `triangle_warp_batch_native_chunk_frames=8`, and
+  `triangle_warp_batch_native_total_s=0.4884724 s`.
+- Component timing:
+  `resident_light_read_upload_calibrate=3.4670131999300793 s`,
+  `resident_registration_warp=0.2659309997688979 s`,
+  `resident_local_normalization=0.3552255000686273 s`,
+  `resident_integration=3.2340052999788895 s`,
+  and `resident_output_write=0.26684659998863935 s`.
+- GLASS elapsed time: `11.724885900155641 s`.
+- `glass phase2-mainline-audit --fail-on-not-green`: passed with `200` lights,
+  `193` active frames, `7` masked frames, and no failed checks.
+- Regression versus Gate654 default strict run: passed,
+  `elapsed_ratio=1.0138660524354346`, no failed checks.
+
+Interpretation:
+
+- This is an execution-contract gate, not a report-only gate. The resident
+  registration runtime contract now fails if future DQ/mask changes defer
+  catalog-required source-DQ samples until after registration.
+- The real 200-light run proves the bridge does not disturb the default M38
+  path. The synthetic CUDA strict-positive run proves the nonzero sidecar path
+  is visible to resident registration before catalog construction.
+- The next substantive gate should use this safety rail for image-path work:
+  either expand DQ/mask execution beyond sidecar visibility, or target the
+  measured resident hot path in calibration/integration and registration/warp.
+
 ### S2-Gate 654: Resident Registration Runtime Contract
 
 Gate654 converts the resident registration/warp fast path from scattered

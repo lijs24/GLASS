@@ -3532,6 +3532,141 @@ def test_cli_resident_cuda_run_applies_plan_source_dq_sidecar(tmp_path: Path):
     assert applied_rows[0]["sidecar_paths"] == [str(sidecar)]
 
 
+def test_cli_resident_cuda_triangle_source_dq_feeds_registration_runtime_contract(
+    tmp_path: Path,
+):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "triangle_source_dq"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    sidecar = tmp_path / "source_dq" / "light_002_dq.fits"
+    dq = np.zeros((72, 80), dtype=np.float32)
+    dq[20, 25] = float(int(DQFlag.HOT_PIXEL))
+    write_fits_data(sidecar, dq)
+    source_dq_manifest = tmp_path / "source_dq_manifest.json"
+    write_json(
+        source_dq_manifest,
+        {
+            "schema_version": 1,
+            "artifact_type": "test_source_dq_manifest",
+            "bindings": [
+                {
+                    "frame_path": str(Path("light") / "light_002.fits"),
+                    "dq_mask_path": str(sidecar.relative_to(tmp_path)),
+                    "flag": "hot_pixel",
+                    "flag_value": int(DQFlag.HOT_PIXEL),
+                    "pixel": [20, 25],
+                }
+            ],
+        },
+    )
+    assert (
+        main(
+            [
+                "plan",
+                "--manifest",
+                str(manifest),
+                "--out",
+                str(plan),
+                "--source-dq-manifest",
+                str(source_dq_manifest),
+            ]
+        )
+        == 0
+    )
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_triangle_tolerance_px": 1.5,
+            "cuda_triangle_descriptor_radius": 0.08,
+            "cuda_triangle_neighbors": 5,
+            "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine": True,
+            "cuda_triangle_pixel_refine_coarse_stride": 1,
+            "cuda_triangle_pixel_refine_final_stride": 1,
+            "cuda_triangle_min_pixel_ncc": 0.1,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_triangle",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
+            "--resident-star-catalog-deterministic",
+            "--resident-triangle-pixel-refine-final-stride",
+            "2",
+            "--resident-triangle-pixel-refine-fast-coarse",
+            "--resident-warp-interpolation",
+            "bilinear",
+            "--resident-output-maps",
+            "audit",
+            "--reference-frame-id",
+            "light_001",
+            "--resident-mainline-framework-gate",
+            "strict",
+            "--resident-mainline-framework-scope",
+            "source_dq_positive",
+            "--resident-mainline-min-source-dq-invalid-samples",
+            "1",
+            "--resident-mainline-min-source-dq-applied-samples",
+            "1",
+        ]
+    ) == 0
+
+    source_dq_execution = read_json(run / "resident_source_dq_execution.json")
+    contract = read_json(run / "resident_registration_runtime_contract.json")
+    mainline = read_json(run / "resident_mainline_framework.json")
+    contract_checks = {check["name"]: check for check in contract["checks"]}
+
+    assert source_dq_execution["summary"]["input_invalid_samples_before_rejection"] == 1
+    assert source_dq_execution["summary"]["applied_invalid_samples"] == 1
+    assert contract["passed"] is True
+    assert contract["summary"]["source_dq_positive"] is True
+    assert contract["summary"]["source_dq_input_invalid_samples_before_rejection"] == 1
+    assert contract["summary"]["source_dq_applied_invalid_samples"] == 1
+    assert contract["summary"]["source_dq_pre_registration_catalog_visible_invalid_samples"] == 1
+    assert (
+        contract["summary"][
+            "source_dq_required_invalid_samples_not_visible_to_registration_catalog"
+        ]
+        == 0
+    )
+    assert contract_checks["source_dq_registration_visibility_closes"]["passed"] is True
+    assert mainline["passed"] is True
+    assert mainline["framework_scope"] == "source_dq_positive"
+
+
 def test_cli_resident_cuda_run_applies_calibration_artifact_dq_sidecar(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_weight_dataset(tmp_path)

@@ -72,6 +72,71 @@ def _frame_mask_summary(run: Path) -> dict[str, Any]:
     return summary
 
 
+def _source_dq_execution_state(run: Path) -> dict[str, Any]:
+    path = run / "resident_source_dq_execution.json"
+    if not path.exists():
+        return {
+            "path": str(path),
+            "exists": False,
+            "passed": True,
+            "status": "not_present",
+            "input_invalid_samples_before_rejection": 0,
+            "applied_invalid_samples": 0,
+            "required_invalid_samples_not_visible_to_registration_catalog": 0,
+            "pre_registration_catalog_visible_invalid_samples": 0,
+            "post_registration_deferred_invalid_samples": 0,
+            "application_order_counts": {},
+            "registration_catalog_visibility_counts": {},
+            "failed_groups": [],
+        }
+    payload = _json_object(path)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    groups = payload.get("groups") if isinstance(payload.get("groups"), list) else []
+    group_rows = [group for group in groups if isinstance(group, dict)]
+    required_not_visible = sum(
+        int(group.get("required_invalid_samples_not_visible_to_registration_catalog") or 0)
+        for group in group_rows
+    )
+    pre_visible = sum(
+        int(group.get("pre_registration_catalog_visible_invalid_samples") or 0)
+        for group in group_rows
+    )
+    post_deferred = sum(
+        int(group.get("post_registration_deferred_invalid_samples") or 0)
+        for group in group_rows
+    )
+    application_order_counts: dict[str, int] = {}
+    registration_visibility_counts: dict[str, int] = {}
+    for group in group_rows:
+        for key, value in dict(group.get("application_order_counts") or {}).items():
+            application_order_counts[str(key)] = application_order_counts.get(str(key), 0) + int(
+                value or 0
+            )
+        for key, value in dict(group.get("registration_catalog_visibility_counts") or {}).items():
+            registration_visibility_counts[str(key)] = registration_visibility_counts.get(
+                str(key), 0
+            ) + int(value or 0)
+    failed_groups = [
+        str(group.get("filter") or "unknown") for group in group_rows if group.get("passed") is not True
+    ]
+    return {
+        "path": str(path),
+        "exists": True,
+        "passed": summary.get("passed") is True and not failed_groups,
+        "status": summary.get("status") or payload.get("status"),
+        "input_invalid_samples_before_rejection": int(
+            summary.get("input_invalid_samples_before_rejection") or 0
+        ),
+        "applied_invalid_samples": int(summary.get("applied_invalid_samples") or 0),
+        "required_invalid_samples_not_visible_to_registration_catalog": int(required_not_visible),
+        "pre_registration_catalog_visible_invalid_samples": int(pre_visible),
+        "post_registration_deferred_invalid_samples": int(post_deferred),
+        "application_order_counts": dict(sorted(application_order_counts.items())),
+        "registration_catalog_visibility_counts": dict(sorted(registration_visibility_counts.items())),
+        "failed_groups": failed_groups,
+    }
+
+
 def _registration_mode(artifact: dict[str, Any], timing: dict[str, Any]) -> str:
     registration = artifact.get("resident_registration")
     if isinstance(registration, dict) and registration.get("mode") is not None:
@@ -102,6 +167,7 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
     registration = _registration_payload(artifact)
     rows = _registration_rows(run)
     frame_masks = _frame_mask_summary(run)
+    source_dq = _source_dq_execution_state(run)
     mode = _registration_mode(artifact, timing).lower()
     applicable = mode == TRIANGLE_RUNTIME_MODE
 
@@ -131,6 +197,7 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
     coverage_raw = _runtime_value(artifact, "warp_coverage")
     coverage = coverage_raw if isinstance(coverage_raw, dict) else {}
     coverage_required = applicable and bool(coverage) and coverage.get("available") is not False
+    source_dq_positive = int(source_dq["input_invalid_samples_before_rejection"]) > 0
     coverage_frame_count = _int_or_none(coverage.get("frame_count"))
     coverage_warped_frame_count = _int_or_none(coverage.get("warped_frame_count"))
 
@@ -276,6 +343,53 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
                 "warp_frames_per_s": warp_fps,
             },
         ),
+        _check(
+            "source_dq_execution_passed_if_present",
+            not source_dq["exists"] or source_dq["passed"] is True,
+            {
+                "exists": source_dq["exists"],
+                "status": source_dq["status"],
+                "passed": source_dq["passed"],
+                "failed_groups": source_dq["failed_groups"],
+            },
+        ),
+        _check(
+            "source_dq_invalid_samples_applied_if_present",
+            not source_dq["exists"]
+            or source_dq["applied_invalid_samples"]
+            == source_dq["input_invalid_samples_before_rejection"],
+            {
+                "exists": source_dq["exists"],
+                "input_invalid_samples_before_rejection": source_dq[
+                    "input_invalid_samples_before_rejection"
+                ],
+                "applied_invalid_samples": source_dq["applied_invalid_samples"],
+            },
+        ),
+        _check(
+            "source_dq_registration_visibility_closes",
+            not applicable
+            or not source_dq_positive
+            or source_dq["required_invalid_samples_not_visible_to_registration_catalog"] == 0,
+            {
+                "applicable": applicable,
+                "source_dq_positive": source_dq_positive,
+                "required_invalid_samples_not_visible_to_registration_catalog": source_dq[
+                    "required_invalid_samples_not_visible_to_registration_catalog"
+                ],
+                "pre_registration_catalog_visible_invalid_samples": source_dq[
+                    "pre_registration_catalog_visible_invalid_samples"
+                ],
+                "post_registration_deferred_invalid_samples": source_dq[
+                    "post_registration_deferred_invalid_samples"
+                ],
+                "application_order_counts": source_dq["application_order_counts"],
+                "registration_catalog_visibility_counts": source_dq[
+                    "registration_catalog_visibility_counts"
+                ],
+            },
+            "Non-inline source-DQ invalid samples must be visible before resident registration catalogs are built.",
+        ),
     ]
     failed_checks = [str(check["name"]) for check in checks if not check["passed"]]
     passed = not failed_checks
@@ -297,6 +411,21 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
             "expected_warped_frame_count": expected_warped_frames if applicable else None,
             "triangle_native_batch_required": native_batch_required,
             "warp_coverage_required": coverage_required,
+            "source_dq_exists": source_dq["exists"],
+            "source_dq_positive": source_dq_positive,
+            "source_dq_input_invalid_samples_before_rejection": source_dq[
+                "input_invalid_samples_before_rejection"
+            ],
+            "source_dq_applied_invalid_samples": source_dq["applied_invalid_samples"],
+            "source_dq_pre_registration_catalog_visible_invalid_samples": source_dq[
+                "pre_registration_catalog_visible_invalid_samples"
+            ],
+            "source_dq_post_registration_deferred_invalid_samples": source_dq[
+                "post_registration_deferred_invalid_samples"
+            ],
+            "source_dq_required_invalid_samples_not_visible_to_registration_catalog": source_dq[
+                "required_invalid_samples_not_visible_to_registration_catalog"
+            ],
             "triangle_warp_batch_frame_count": warped_frame_count,
             "triangle_warp_batch_fallback_frame_count": fallback_frame_count,
             "triangle_warp_batch_native_chunk_count": native_chunk_count,
@@ -313,6 +442,7 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
             "registration_results": str(run / "registration_results.json"),
             "resident_frame_masks": str(run / "resident_frame_masks.json"),
             "resident_component_timing": str(run / "resident_component_timing.json"),
+            "resident_source_dq_execution": source_dq["path"],
         },
     }
 
