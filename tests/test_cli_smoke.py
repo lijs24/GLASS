@@ -3664,6 +3664,25 @@ def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Pa
                         "engine": "cuda_resident_stack",
                         "active_frame_count": 3,
                         "source_terms": ["post_rejection_coverage", "geometric_warp_coverage"],
+                        "input_samples": 12,
+                        "input_valid_samples_before_rejection": 12,
+                        "input_invalid_samples_before_rejection": 0,
+                        "valid_samples_after_rejection": 12,
+                        "rejected_samples": 0,
+                        "sample_accounting_closure": {
+                            "status": "passed",
+                            "input_total_match": True,
+                            "valid_rejection_match": True,
+                            "input_samples": 12,
+                            "input_valid_samples_before_rejection": 12,
+                            "input_invalid_samples_before_rejection": 0,
+                            "valid_samples_after_rejection": 12,
+                            "rejected_samples": 0,
+                            "semantics": (
+                                "input valid samples before rejection must equal "
+                                "valid samples after rejection plus rejected samples"
+                            ),
+                        },
                         "output_dq_summary": {"valid": 3, "no_data": 1, "warp_edge": 0},
                     },
                     "geometric_warp_coverage": {
@@ -3888,6 +3907,7 @@ def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Pa
         "geometric_coverage_present",
         "dq_summary_matches_provenance",
         "active_not_greater_than_input_frame_count",
+        "sample_accounting_closure_passed",
     ]
     write_json(
         run / "resident_dq_pixel_closure.json",
@@ -3918,7 +3938,16 @@ def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Pa
                     "provenance_active_frame_count": 3,
                     "rejection": "none",
                     "source_terms": ["post_rejection_coverage", "geometric_warp_coverage"],
-                    "sample_accounting_closure": {"status": "missing", "passed": True},
+                    "sample_accounting_closure": {
+                        "status": "passed",
+                        "passed": True,
+                        "input_valid_samples_before_rejection": 12,
+                        "valid_samples_after_rejection": 12,
+                        "rejected_samples": 0,
+                        "valid_rejection_match": True,
+                        "arithmetic_match": True,
+                        "arithmetic_delta": 0,
+                    },
                     "checks": [{"name": name, "passed": True, "details": {}} for name in closure_checks],
                 }
             ],

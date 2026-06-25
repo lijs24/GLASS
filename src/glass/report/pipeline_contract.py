@@ -596,6 +596,32 @@ def _count_map_required(output: dict[str, Any], map_name: str, integration: dict
     return _integration_rejection_mode(integration, output) != "none"
 
 
+def _sample_accounting_closure_required(output: dict[str, Any], integration: dict[str, Any]) -> dict[str, Any]:
+    resident_output = output.get("backend") == "cuda_resident_stack" or output.get("memory_mode") == "resident"
+    map_requirements = {
+        "dq": (
+            (_map_available_policy(output, "dq") is not False)
+            and not _map_skipped(output, "dq")
+        ),
+        "coverage": _count_map_required(output, "coverage", integration),
+        "low_rejection": _count_map_required(output, "low_rejection", integration),
+        "high_rejection": _count_map_required(output, "high_rejection", integration),
+    }
+    required_maps = [name for name, required in map_requirements.items() if required]
+    required = bool(resident_output and required_maps)
+    return {
+        "required": required,
+        "resident_output": resident_output,
+        "required_maps": required_maps,
+        "map_requirements": map_requirements,
+        "reason": (
+            "resident_dq_or_count_maps_require_sample_accounting_closure"
+            if required
+            else "not_a_resident_dq_count_map_surface"
+        ),
+    }
+
+
 def _verify_integration_count_map_pixels(
     output: dict[str, Any],
     *,
@@ -693,20 +719,26 @@ def _rejection_sample_sources(output: dict[str, Any]) -> list[dict[str, Any]]:
     return sources
 
 
-def _sample_accounting_closure_state(output: dict[str, Any]) -> dict[str, Any]:
+def _sample_accounting_closure_state(
+    output: dict[str, Any],
+    integration: dict[str, Any],
+) -> dict[str, Any]:
     summary = output.get("dq_provenance_summary")
     closure = (
         summary.get("sample_accounting_closure")
         if isinstance(summary, dict) and isinstance(summary.get("sample_accounting_closure"), dict)
         else {}
     )
+    required_policy = _sample_accounting_closure_required(output, integration)
+    required = bool(required_policy.get("required"))
     status = closure.get("status")
     present = status in {"passed", "failed"}
     return {
         "present": present,
-        "required": present,
+        "required": required,
+        "required_policy": required_policy,
         "status": status or "missing",
-        "passed": (not present) or status == "passed",
+        "passed": (present and status == "passed") or ((not present) and not required),
         "input_total_match": closure.get("input_total_match"),
         "valid_rejection_match": closure.get("valid_rejection_match"),
         "input_samples": closure.get("input_samples"),
@@ -1215,7 +1247,7 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
             run_root=run_root,
             index=index,
         )
-        sample_closure = _sample_accounting_closure_state(output)
+        sample_closure = _sample_accounting_closure_state(output, integration)
         input_invalid = _integration_input_invalid_samples(output)
         rows.append(
             {
@@ -3156,10 +3188,15 @@ def build_pipeline_contract_audit(
                 "present_count": sum(
                     1 for row in integration_rows if row["sample_accounting_closure"]["present"]
                 ),
+                "required_count": sum(
+                    1 for row in integration_rows if row["sample_accounting_closure"]["required"]
+                ),
                 "failed": [
                     {
                         "item": row["item"],
                         "status": row["sample_accounting_closure"]["status"],
+                        "required": row["sample_accounting_closure"].get("required"),
+                        "required_policy": row["sample_accounting_closure"].get("required_policy"),
                         "input_valid_samples_before_rejection": row[
                             "sample_accounting_closure"
                         ].get("input_valid_samples_before_rejection"),
@@ -3174,7 +3211,7 @@ def build_pipeline_contract_audit(
                     if not row["sample_accounting_closure"]["passed"]
                 ],
             },
-            "Sample-closure evidence is optional for old artifacts, but explicit failed closure blocks the pipeline contract.",
+            "Resident DQ/count-map outputs must carry sample-closure evidence; explicit failed closure blocks the pipeline contract.",
         ),
         _check(
             "frame_accounting_no_integration_conflicts",

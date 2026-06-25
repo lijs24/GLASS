@@ -509,6 +509,14 @@ low-rejection, high-rejection, and DQ maps versus Gate686 while reducing
 resident integration from `3.2561724999686703 s` to `3.234628599951975 s` in the
 recorded run.
 
+S2-Gate 688 makes resident DQ/count-map sample accounting a hard integration
+contract. Any resident CUDA integration output that writes DQ, coverage,
+low-rejection, or high-rejection surfaces must include
+`dq_provenance_summary.sample_accounting_closure` with explicit input total,
+input-valid, input-invalid, rejected, and final-valid sample fields. Master-only
+resident outputs that intentionally skip DQ/count-map surfaces are the only
+resident integration outputs allowed to omit the closure.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

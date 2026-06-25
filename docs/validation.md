@@ -686,6 +686,14 @@ Current Phase 2 latest mainline acceptance:
   lights `200`, and active/masked frames `193 / 7`. Direct SHA256 and array
   comparisons showed byte-identical and array-identical master, weight,
   coverage, low-rejection, high-rejection, and DQ maps.
+- Gate688 hard-requires `sample_accounting_closure` for resident DQ/count-map
+  outputs. The Gate687 200-light resident run was replayed through
+  `resident-result-contract` and `pipeline-contract` with pixel verification;
+  both passed and wrote:
+  `C:\glass_runs\phase2_s2_gate688_sample_closure_contract\gate688_resident_result_contract.json`
+  and
+  `C:\glass_runs\phase2_s2_gate688_sample_closure_contract\gate688_pipeline_contract.json`.
+  Full pytest passed with `1429 passed in 66.28 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

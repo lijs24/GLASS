@@ -21,7 +21,7 @@ def _write_resident_run(
     *,
     mismatch_summary: bool = False,
     mismatch_sample_count: bool = False,
-    sample_closure_status: str | None = None,
+    sample_closure_status: str | None = "passed",
     omit_rejection_semantics: bool = False,
     resident_artifact_legacy_rejection_semantics: bool = False,
     resident_winsorized_mode: str = "fast_approx",
@@ -73,9 +73,12 @@ def _write_resident_run(
     if sample_closure_status is not None:
         provenance_summary["sample_accounting_closure"] = {
             "status": sample_closure_status,
+            "input_samples": 12,
             "input_valid_samples_before_rejection": 9,
+            "input_invalid_samples_before_rejection": 3,
             "valid_samples_after_rejection": 6,
             "rejected_samples": 3,
+            "input_total_match": True,
             "valid_rejection_match": sample_closure_status == "passed",
         }
     output = {
@@ -172,7 +175,7 @@ def test_resident_result_contract_passes_with_pixel_verify(tmp_path: Path) -> No
     assert accounting["map_rejected_sample_sum"] == 3
     assert accounting["coverage_provenance_rejected_samples"] == 3
     assert accounting["provenance_summary_rejected_samples"] == 3
-    assert payload["outputs"][0]["sample_accounting_closure"]["status"] == "missing"
+    assert payload["outputs"][0]["sample_accounting_closure"]["status"] == "passed"
     semantics = checks["resident_winsorized_rejection_semantics_disclosed"]
     assert semantics["passed"] is True
     assert payload["outputs"][0]["rejection_semantics"]["passed"] is True
@@ -393,6 +396,16 @@ def test_resident_result_contract_allows_policy_skipped_coverage_provenance(tmp_
                         "engine": "cuda_resident_stack",
                         "active_frame_count": 3,
                         "source_terms": [],
+                        "sample_accounting_closure": {
+                            "status": "passed",
+                            "input_samples": 12,
+                            "input_valid_samples_before_rejection": 12,
+                            "input_invalid_samples_before_rejection": 0,
+                            "valid_samples_after_rejection": 12,
+                            "rejected_samples": 0,
+                            "input_total_match": True,
+                            "valid_rejection_match": True,
+                        },
                         "output_dq_summary": {"valid": 4},
                     },
                     "output_map_policy": {

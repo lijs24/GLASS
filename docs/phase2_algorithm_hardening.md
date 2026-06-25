@@ -2262,6 +2262,55 @@ Interpretation:
   deterministic cooperative or segmented reducer, or from native H2D/calibrate
   overlap if reducer work becomes too large for one gate.
 
+### S2-Gate 688: Resident Sample-Accounting Closure Hard Requirement
+
+Gate688 returns to the DQ/mask mainline contract. Resident CUDA outputs that
+write DQ, coverage, low-rejection, or high-rejection surfaces now must carry
+explicit `sample_accounting_closure` evidence in `dq_provenance_summary`.
+Master-only resident output policies that skip all DQ/count-map surfaces remain
+allowed to omit the closure.
+
+Implementation:
+
+- `resident-result-contract` now computes whether sample closure is required
+  from the resident output map policy and rejection mode.
+- `pipeline-contract` applies the same policy to resident integration rows and
+  fails resident DQ/count-map outputs with missing closure evidence.
+- Contract evidence records the required maps and policy reason so missing
+  closure cannot be mistaken for an old optional artifact.
+- Test fixtures were upgraded so current resident DQ artifacts carry coherent
+  sample totals by default; legacy or missing-closure scenarios are explicit.
+
+Validation:
+
+- Focused resident result and pipeline contract tests:
+  `64 passed in 2.28 s`.
+- Focused resident CUDA contract tests:
+  `6 passed, 130 deselected`.
+- Focused CLI guardrail contract tests:
+  `2 passed, 92 deselected`.
+- Focused acceptance audit contract tests:
+  `9 passed, 42 deselected`.
+- Ruff on touched files passed.
+- Full pytest passed:
+  `1429 passed in 66.28 s`.
+- Real 200-light artifact replay using the Gate687 resident run:
+  `C:\glass_runs\phase2_s2_gate687_no_reject_accumulation_branch\runs_20260627_000000\default_no_reject_branch`.
+- Resident result contract with pixel verification passed:
+  `C:\glass_runs\phase2_s2_gate688_sample_closure_contract\gate688_resident_result_contract.json`.
+- Pipeline contract with pixel verification passed:
+  `C:\glass_runs\phase2_s2_gate688_sample_closure_contract\gate688_pipeline_contract.json`.
+
+Interpretation:
+
+- This is a mainline DQ/mask contract hardening gate, not a report-only release
+  handoff and not a performance optimization.
+- It prevents resident DQ/count-map outputs from silently losing the arithmetic
+  evidence that links input valid samples, source-DQ invalid samples, rejected
+  samples, and final valid coverage.
+- No calibration, registration, warp, local-normalization, rejection, or output
+  pixel math changed in this gate.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

@@ -87,6 +87,31 @@ def _map_required(output: dict[str, Any], map_name: str, *, rejection: str) -> b
     return map_name in {"master", "weight", "coverage", "dq"}
 
 
+def _sample_accounting_closure_required(
+    output: dict[str, Any],
+    *,
+    rejection: str,
+) -> dict[str, Any]:
+    map_requirements = {
+        "dq": _map_required(output, "dq", rejection=rejection),
+        "coverage": _map_required(output, "coverage", rejection=rejection),
+        "low_rejection": _map_required(output, "low_rejection", rejection=rejection),
+        "high_rejection": _map_required(output, "high_rejection", rejection=rejection),
+    }
+    required_maps = [name for name, required in map_requirements.items() if required]
+    required = bool(required_maps)
+    return {
+        "required": required,
+        "required_maps": required_maps,
+        "map_requirements": map_requirements,
+        "reason": (
+            "resident_dq_or_count_maps_require_sample_accounting_closure"
+            if required
+            else "no_resident_dq_or_count_maps_required"
+        ),
+    }
+
+
 def _map_rows(output: dict[str, Any], run_root: Path, *, rejection: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for map_name, path_key in {**_CORE_MAPS, **_REJECTION_MAPS}.items():
@@ -143,22 +168,30 @@ def _summary_matches(dq_summary: dict[str, Any], provenance_summary: dict[str, A
     return {"passed": not mismatches, "mismatches": mismatches}
 
 
-def _sample_accounting_closure_state(provenance_summary: dict[str, Any]) -> dict[str, Any]:
+def _sample_accounting_closure_state(
+    provenance_summary: dict[str, Any],
+    *,
+    required_policy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     closure = provenance_summary.get("sample_accounting_closure")
+    required_policy = required_policy or {"required": False, "reason": "legacy_optional"}
+    required = bool(required_policy.get("required"))
     if not isinstance(closure, dict):
         return {
             "present": False,
             "status": "missing",
-            "passed": True,
-            "required": False,
+            "passed": not required,
+            "required": required,
+            "required_policy": required_policy,
         }
     status = closure.get("status")
     present = status in {"passed", "failed"}
     return {
         "present": present,
         "status": status,
-        "passed": (not present) or status == "passed",
-        "required": present,
+        "passed": (present and status == "passed") or ((not present) and not required),
+        "required": required,
+        "required_policy": required_policy,
         "input_valid_samples_before_rejection": closure.get(
             "input_valid_samples_before_rejection"
         ),
@@ -540,7 +573,11 @@ def _resident_output_contract(
         summary_rejected_samples,
         0,
     )
-    sample_closure = _sample_accounting_closure_state(provenance_summary)
+    sample_closure_required = _sample_accounting_closure_required(output, rejection=rejection)
+    sample_closure = _sample_accounting_closure_state(
+        provenance_summary,
+        required_policy=sample_closure_required,
+    )
     resident_artifact_descriptor = _resident_artifact_rejection_descriptor(
         run_root,
         output,

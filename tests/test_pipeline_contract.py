@@ -318,7 +318,7 @@ def _write_resident_pipeline_run(
     path: Path,
     *,
     missing_source_terms: bool = False,
-    sample_closure_status: str | None = None,
+    sample_closure_status: str | None = "passed",
     omit_rejection_semantics: bool = False,
     resident_artifact_legacy_rejection_semantics: bool = False,
     active_frame_count: int = 3,
@@ -365,9 +365,12 @@ def _write_resident_pipeline_run(
     if sample_closure_status is not None:
         provenance_summary["sample_accounting_closure"] = {
             "status": sample_closure_status,
-            "input_valid_samples_before_rejection": 9,
-            "valid_samples_after_rejection": 6,
+            "input_samples": 12,
+            "input_valid_samples_before_rejection": 10,
+            "input_invalid_samples_before_rejection": 2,
+            "valid_samples_after_rejection": 7,
             "rejected_samples": 3,
+            "input_total_match": True,
             "valid_rejection_match": sample_closure_status == "passed",
         }
     output = {
@@ -559,6 +562,20 @@ def _write_resident_integration_input_invalid_fixture(path: Path, input_invalid:
         summary = {}
         output["dq_provenance_summary"] = summary
     summary["input_invalid_samples_before_rejection"] = int(input_invalid)
+    closure = summary.get("sample_accounting_closure")
+    if isinstance(closure, dict):
+        closure["input_invalid_samples_before_rejection"] = int(input_invalid)
+        input_samples = closure.get("input_samples")
+        input_samples = int(input_samples) if isinstance(input_samples, int | float) else None
+        if input_samples is not None:
+            closure["input_valid_samples_before_rejection"] = input_samples - int(input_invalid)
+        rejected_samples = closure.get("rejected_samples")
+        rejected_samples = int(rejected_samples) if isinstance(rejected_samples, int | float) else None
+        if input_samples is not None and rejected_samples is not None:
+            closure["valid_samples_after_rejection"] = (
+                input_samples - int(input_invalid) - rejected_samples
+            )
+        closure["input_total_match"] = True
     write_json(integration_path, payload)
 
 
@@ -1628,8 +1645,8 @@ def test_pipeline_contract_surfaces_sample_accounting_closure(tmp_path: Path):
     assert checks["integration_sample_accounting_closure"]["passed"] is True
     assert checks["integration_sample_accounting_closure"]["evidence"]["present_count"] == 1
     assert closure["status"] == "passed"
-    assert closure["input_valid_samples_before_rejection"] == 9
-    assert closure["valid_samples_after_rejection"] == 6
+    assert closure["input_valid_samples_before_rejection"] == 10
+    assert closure["valid_samples_after_rejection"] == 7
     assert closure["rejected_samples"] == 3
 
 
@@ -1643,15 +1660,17 @@ def test_pipeline_contract_blocks_failed_sample_accounting_closure(tmp_path: Pat
 
     assert audit["passed"] is False
     assert checks["integration_sample_accounting_closure"]["passed"] is False
-    assert checks["integration_sample_accounting_closure"]["evidence"]["failed"] == [
-        {
-            "item": "H",
-            "status": "failed",
-            "input_valid_samples_before_rejection": 9,
-            "valid_samples_after_rejection": 6,
-            "rejected_samples": 3,
-        }
-    ]
+    failed = checks["integration_sample_accounting_closure"]["evidence"]["failed"]
+    assert len(failed) == 1
+    assert failed[0]["item"] == "H"
+    assert failed[0]["status"] == "failed"
+    assert failed[0]["required"] is True
+    assert failed[0]["required_policy"]["reason"] == (
+        "resident_dq_or_count_maps_require_sample_accounting_closure"
+    )
+    assert failed[0]["input_valid_samples_before_rejection"] == 10
+    assert failed[0]["valid_samples_after_rejection"] == 7
+    assert failed[0]["rejected_samples"] == 3
     assert closure["status"] == "failed"
 
 
@@ -1678,7 +1697,7 @@ def test_pipeline_contract_markdown_reports_sample_accounting_closure(tmp_path: 
 
     text = markdown.read_text(encoding="utf-8")
     assert "Integration Sample Accounting Closure" in text
-    assert "input-valid `9`" in text
+    assert "input-valid `10`" in text
     assert "rejected `3`" in text
 
 

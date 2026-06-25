@@ -22,6 +22,7 @@ from glass.engine.stack_engine import CPUStackEngine
 from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.report.pipeline_contract import build_pipeline_contract_audit
+from glass.report.resident_result_contract import build_resident_output_contract
 from glass.engine.resident_cuda import (
     _apply_resident_registration_matrix_batch,
     _LightPrefetcher,
@@ -102,6 +103,124 @@ def test_resident_result_contract_payload_validation_allows_admission_only_failu
                 }
             ],
         }
+    )
+
+
+def _resident_contract_map_output(tmp_path: Path, *, sample_closure: dict | None = None) -> dict:
+    integration = tmp_path / "integration"
+    integration.mkdir()
+    paths = {
+        "master_path": integration / "resident_master_H.fits",
+        "weight_map_path": integration / "resident_weight_map_H.fits",
+        "coverage_map_path": integration / "resident_coverage_map_H.fits",
+        "dq_map_path": integration / "resident_dq_map_H.fits",
+    }
+    for path in paths.values():
+        path.write_bytes(b"placeholder")
+    dq_provenance_summary = {
+        "source_schema": "resident_dq_coverage_provenance",
+        "engine": "cuda_resident_stack",
+        "stage": "integration",
+        "active_frame_count": 2,
+        "source_terms": ["post_rejection_coverage", "geometric_warp_coverage"],
+        "output_dq_summary": {"valid": 4},
+    }
+    if sample_closure is not None:
+        dq_provenance_summary["sample_accounting_closure"] = sample_closure
+    return {
+        "filter": "H",
+        "backend": "cuda_resident_stack",
+        "memory_mode": "resident",
+        "rejection": "none",
+        "frame_count": 2,
+        "dq_summary": {"valid": 4},
+        "dq_coverage_provenance": {
+            "available": True,
+            "active_frame_count": 2,
+            "geometric_frame_count_matches_active": True,
+        },
+        "dq_provenance_summary": dq_provenance_summary,
+        "output_map_policy": {
+            "available": ["master", "weight", "coverage", "dq"],
+            "skipped": [],
+        },
+        **{key: str(path) for key, path in paths.items()},
+    }
+
+
+def test_resident_result_contract_requires_sample_closure_for_resident_dq_maps(tmp_path: Path):
+    output = _resident_contract_map_output(tmp_path)
+
+    contract = build_resident_output_contract(output, run_root=tmp_path, parent_rejection="none")
+    checks = {item["name"]: item for item in contract["checks"]}
+    sample_closure = contract["sample_accounting_closure"]
+
+    assert contract["passed"] is False
+    assert checks["sample_accounting_closure_valid"]["passed"] is False
+    assert sample_closure["present"] is False
+    assert sample_closure["required"] is True
+    assert sample_closure["required_policy"]["reason"] == (
+        "resident_dq_or_count_maps_require_sample_accounting_closure"
+    )
+    assert sample_closure["required_policy"]["required_maps"] == ["dq", "coverage"]
+
+
+def test_resident_result_contract_accepts_missing_sample_closure_for_master_only_surface(
+    tmp_path: Path,
+):
+    master = tmp_path / "resident_master_H.fits"
+    master.write_bytes(b"placeholder")
+    output = {
+        "filter": "H",
+        "backend": "cuda_resident_stack",
+        "memory_mode": "resident",
+        "rejection": "none",
+        "frame_count": 2,
+        "master_path": str(master),
+        "output_map_policy": {"available": ["master"], "skipped": []},
+        "dq_provenance_summary": {
+            "source_schema": "resident_dq_coverage_provenance",
+            "engine": "cuda_resident_stack",
+            "stage": "integration",
+            "active_frame_count": 2,
+            "source_terms": [],
+        },
+    }
+
+    contract = build_resident_output_contract(output, run_root=tmp_path, parent_rejection="none")
+    sample_closure = contract["sample_accounting_closure"]
+    checks = {item["name"]: item for item in contract["checks"]}
+
+    assert checks["sample_accounting_closure_valid"]["passed"] is True
+    assert sample_closure["present"] is False
+    assert sample_closure["required"] is False
+    assert sample_closure["required_policy"]["reason"] == "no_resident_dq_or_count_maps_required"
+
+
+def test_pipeline_contract_requires_sample_closure_for_resident_dq_maps(tmp_path: Path):
+    output = _resident_contract_map_output(tmp_path)
+    write_json(
+        tmp_path / "integration_results.json",
+        {
+            "rejection": "none",
+            "outputs": [output],
+            "engine_policy": {"default_engine": "stack_engine_cpu"},
+        },
+    )
+
+    contract = build_pipeline_contract_audit(tmp_path)
+    checks = {item["name"]: item for item in contract["checks"]}
+    sample_check = checks["integration_sample_accounting_closure"]
+    row = contract["integration"]["outputs"][0]["sample_accounting_closure"]
+
+    assert sample_check["passed"] is False
+    assert sample_check["evidence"]["required_count"] == 1
+    assert sample_check["evidence"]["present_count"] == 0
+    assert sample_check["evidence"]["failed"][0]["required"] is True
+    assert row["required"] is True
+    assert row["passed"] is False
+    assert row["required_policy"]["reason"] == (
+        "resident_dq_or_count_maps_require_sample_accounting_closure"
     )
 
 
