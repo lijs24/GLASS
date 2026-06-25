@@ -91,6 +91,8 @@ def _write_minimal_green_resident_run(
     *,
     source_dq_invalid_samples: int = 0,
     source_dq_applied_samples: int | None = None,
+    source_dq_source_counts: dict[str, int] | None = None,
+    source_dq_execution_routes: list[str] | None = None,
 ) -> dict[str, str]:
     if source_dq_applied_samples is None:
         source_dq_applied_samples = source_dq_invalid_samples
@@ -213,8 +215,17 @@ def _write_minimal_green_resident_run(
                     if source_dq_invalid_samples
                     else {}
                 ),
+                "source_counts": (
+                    dict(source_dq_source_counts)
+                    if source_dq_source_counts is not None
+                    else {"resident_calibrated_source_dq_sidecar": 1}
+                    if source_dq_invalid_samples
+                    else {}
+                ),
                 "sidecar_source_counts": {"synthetic": 1} if source_dq_invalid_samples else {},
-                "execution_routes": ["resident_in_memory_mask_streaming"],
+                "execution_routes": list(source_dq_execution_routes)
+                if source_dq_execution_routes is not None
+                else ["resident_in_memory_mask_streaming"],
             },
             "groups": [
                 {
@@ -518,6 +529,67 @@ def test_resident_mainline_framework_source_dq_scope_relaxes_default_route(tmp_p
     check_names = {check["name"] for check in payload["checks"]}
     assert "default_resident_cuda_route" not in check_names
     assert "resident_output_maps_present" not in check_names
+
+
+def test_resident_mainline_framework_inline_cosmetic_cuda_scope_passes(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_minimal_green_resident_run(
+        run,
+        source_dq_invalid_samples=4,
+        source_dq_source_counts={"resident_calibrated_batch_input_cosmetic_cuda": 2},
+        source_dq_execution_routes=["resident_in_memory_mask_streaming"],
+    )
+    source_dq = read_json(run / "resident_source_dq_execution.json")
+    source_dq["summary"].pop("source_counts", None)
+    source_dq["groups"][0]["source_counts"] = {
+        "resident_calibrated_batch_input_cosmetic_cuda": 2
+    }
+    write_json(run / "resident_source_dq_execution.json", source_dq)
+
+    payload = build_resident_mainline_framework(
+        run,
+        requested_action="strict",
+        framework_scope="inline_cosmetic_cuda_positive",
+        min_lights=3,
+        min_active_frames=3,
+        min_source_dq_invalid_samples=1,
+        min_source_dq_applied_samples=1,
+    )
+
+    assert payload["passed"] is True
+    assert payload["framework_scope"] == "inline_cosmetic_cuda_positive"
+    assert payload["source_dq"]["source_counts"] == {
+        "resident_calibrated_batch_input_cosmetic_cuda": 2
+    }
+    check_names = {check["name"] for check in payload["checks"]}
+    assert "resident_inline_cosmetic_cuda_source_present" in check_names
+    assert "resident_inline_cosmetic_cuda_streaming_route" in check_names
+
+
+def test_resident_mainline_framework_inline_cosmetic_cuda_scope_rejects_sidecar_only(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_minimal_green_resident_run(
+        run,
+        source_dq_invalid_samples=4,
+        source_dq_source_counts={"resident_calibrated_source_dq_sidecar": 1},
+        source_dq_execution_routes=["resident_in_memory_mask_streaming"],
+    )
+
+    payload = build_resident_mainline_framework(
+        run,
+        requested_action="strict",
+        framework_scope="inline_cosmetic_cuda_positive",
+        min_lights=3,
+        min_active_frames=3,
+        min_source_dq_invalid_samples=1,
+        min_source_dq_applied_samples=1,
+    )
+
+    assert payload["passed"] is False
+    assert payload["blocking"] is True
+    assert "resident_inline_cosmetic_cuda_source_present" in payload["failed_checks"]
 
 
 def test_write_resident_mainline_framework(tmp_path: Path) -> None:

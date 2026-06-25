@@ -242,6 +242,59 @@ def test_resident_registration_runtime_contract_passes_positive_source_dq_visibi
     assert payload["summary"]["registration_source_dq_input_applied_invalid_samples"] == 1
 
 
+def test_resident_registration_runtime_contract_allows_registration_all_frame_source_dq(
+    tmp_path: Path,
+) -> None:
+    run = tmp_path / "run"
+    _write_triangle_run(run)
+    _write_registration_source_dq_input(
+        run,
+        invalid_samples=5,
+        applied_invalid_samples=5,
+        pre_visible_invalid_samples=0,
+        post_deferred_invalid_samples=5,
+    )
+    write_json(
+        run / "resident_source_dq_execution.json",
+        {
+            "artifact": "resident_source_dq_execution",
+            "summary": {
+                "passed": True,
+                "status": "passed",
+                "input_invalid_samples_before_rejection": 3,
+                "applied_invalid_samples": 3,
+                "all_frame_input_invalid_samples_before_frame_mask": 5,
+                "all_frame_applied_invalid_samples": 5,
+            },
+            "groups": [
+                {
+                    "filter": "H",
+                    "passed": True,
+                    "input_invalid_samples_before_rejection": 3,
+                    "applied_invalid_samples": 3,
+                    "all_frame_input_invalid_samples_before_frame_mask": 5,
+                    "all_frame_applied_invalid_samples": 5,
+                    "required_invalid_samples_not_visible_to_registration_catalog": 0,
+                    "pre_registration_catalog_visible_invalid_samples": 0,
+                    "post_registration_deferred_invalid_samples": 5,
+                    "application_order_counts": {"post_registration_pre_warp": 1},
+                    "registration_catalog_visibility_counts": {"not_catalog_visible": 1},
+                }
+            ],
+        },
+    )
+
+    payload = build_resident_registration_runtime_contract(run)
+
+    assert payload["passed"] is True
+    checks = {check["name"]: check for check in payload["checks"]}
+    evidence = checks["registration_source_dq_input_matches_execution"]["evidence"]
+    assert evidence["registration_matches_active_source_dq"] is False
+    assert evidence["registration_matches_all_frame_source_dq"] is True
+    assert payload["summary"]["source_dq_all_frame_input_invalid_samples_before_frame_mask"] == 5
+    assert payload["summary"]["source_dq_all_frame_applied_invalid_samples"] == 5
+
+
 def test_resident_registration_runtime_contract_fails_positive_source_dq_without_registration_input(
     tmp_path: Path,
 ) -> None:

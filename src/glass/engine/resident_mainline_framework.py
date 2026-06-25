@@ -25,6 +25,17 @@ def _json_if_exists(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _sum_group_count_maps(groups: list[dict[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for group in groups:
+        values = group.get(key)
+        if not isinstance(values, dict):
+            continue
+        for name, value in values.items():
+            counts[str(name)] = counts.get(str(name), 0) + int(value or 0)
+    return dict(sorted(counts.items()))
+
+
 def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "evidence": evidence, "note": note}
 
@@ -33,6 +44,17 @@ def _source_dq_summary(run: Path) -> dict[str, Any]:
     path = run / "resident_source_dq_execution.json"
     payload = _json_if_exists(path)
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    groups_raw = payload.get("groups") if isinstance(payload.get("groups"), list) else []
+    groups = [group for group in groups_raw if isinstance(group, dict)]
+    source_dq_flag_counts = summary.get("source_dq_flag_counts")
+    if not isinstance(source_dq_flag_counts, dict):
+        source_dq_flag_counts = _sum_group_count_maps(groups, "source_dq_flag_counts")
+    source_counts = summary.get("source_counts")
+    if not isinstance(source_counts, dict):
+        source_counts = _sum_group_count_maps(groups, "source_counts")
+    sidecar_source_counts = summary.get("sidecar_source_counts")
+    if not isinstance(sidecar_source_counts, dict):
+        sidecar_source_counts = _sum_group_count_maps(groups, "sidecar_source_counts")
     return {
         "path": str(path),
         "exists": path.exists(),
@@ -52,16 +74,9 @@ def _source_dq_summary(run: Path) -> dict[str, Any]:
         ),
         "input_flagged_samples": _int_or_none(summary.get("input_flagged_samples")),
         "input_nonfinite_samples": _int_or_none(summary.get("input_nonfinite_samples")),
-        "source_dq_flag_counts": (
-            dict(summary.get("source_dq_flag_counts"))
-            if isinstance(summary.get("source_dq_flag_counts"), dict)
-            else {}
-        ),
-        "sidecar_source_counts": (
-            dict(summary.get("sidecar_source_counts"))
-            if isinstance(summary.get("sidecar_source_counts"), dict)
-            else {}
-        ),
+        "source_dq_flag_counts": dict(source_dq_flag_counts),
+        "source_counts": dict(source_counts),
+        "sidecar_source_counts": dict(sidecar_source_counts),
         "execution_routes": (
             list(summary.get("execution_routes"))
             if isinstance(summary.get("execution_routes"), list)
@@ -127,6 +142,43 @@ def _source_dq_checks(
                 "required_min": int(min_source_dq_applied_samples),
                 "source": "resident_source_dq_execution.summary",
             },
+        ),
+    ]
+
+
+def _inline_cosmetic_cuda_source_dq_checks(source_dq: dict[str, Any]) -> list[dict[str, Any]]:
+    source_counts = (
+        dict(source_dq.get("source_counts")) if isinstance(source_dq.get("source_counts"), dict) else {}
+    )
+    execution_routes = [
+        str(route) for route in source_dq.get("execution_routes") or [] if route is not None
+    ]
+    inline_sources = [
+        source
+        for source in source_counts
+        if "cosmetic_cuda" in str(source) and "resident" in str(source)
+    ]
+    route_matches = [
+        route for route in execution_routes if "resident_in_memory_mask_streaming" in route
+    ]
+    return [
+        _check(
+            "resident_inline_cosmetic_cuda_source_present",
+            bool(inline_sources),
+            {
+                "source_counts": source_counts,
+                "matched_sources": inline_sources,
+            },
+            "Inline cosmetic CUDA scope must prove source-DQ came from the resident CUDA detector, not a sidecar.",
+        ),
+        _check(
+            "resident_inline_cosmetic_cuda_streaming_route",
+            bool(route_matches),
+            {
+                "execution_routes": execution_routes,
+                "matched_routes": route_matches,
+            },
+            "Inline cosmetic CUDA source-DQ must still flow through resident in-memory mask streaming.",
         ),
     ]
 
@@ -299,8 +351,11 @@ def build_resident_mainline_framework(
     if action not in {"off", "warn", "strict"}:
         raise ValueError("requested_action must be off, warn, or strict")
     scope = str(framework_scope or DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_SCOPE)
-    if scope not in {"default", "source_dq_positive"}:
-        raise ValueError("framework_scope must be default or source_dq_positive")
+    valid_scopes = {"default", "source_dq_positive", "inline_cosmetic_cuda_positive"}
+    if scope not in valid_scopes:
+        raise ValueError(
+            "framework_scope must be default, source_dq_positive, or inline_cosmetic_cuda_positive"
+        )
     audit = build_phase2_mainline_audit(
         run_path,
         min_lights=max(0, int(min_lights)),
@@ -315,10 +370,12 @@ def build_resident_mainline_framework(
         min_source_dq_invalid_samples=max(0, int(min_source_dq_invalid_samples)),
         min_source_dq_applied_samples=max(0, int(min_source_dq_applied_samples)),
     )
+    if scope == "inline_cosmetic_cuda_positive":
+        extra_checks.extend(_inline_cosmetic_cuda_source_dq_checks(source_dq))
     stack_engine = _stack_engine_summary(run_path)
     stack_engine_checks = _stack_engine_checks(stack_engine)
     audit_checks = list(audit.get("checks") or [])
-    if scope == "source_dq_positive":
+    if scope in {"source_dq_positive", "inline_cosmetic_cuda_positive"}:
         relaxed = {
             "default_resident_cuda_route",
             "resident_output_maps_present",

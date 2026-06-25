@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 657.
+- Gate: S2-Gate 658.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate657_real_source_dq_probe\runs_20260625_213204`.
+  `C:\glass_runs\phase2_s2_gate658_inline_cosmetic_cuda_real\runs_20260625_214737`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate657_real_source_dq_probe\runs_20260625_213204\source_dq_positive_strict`.
-- GLASS elapsed time: `14.132218099897727 s`.
+  `C:\glass_runs\phase2_s2_gate658_inline_cosmetic_cuda_real\runs_20260625_214737\inline_cosmetic_cuda_positive_strict_green`.
+- GLASS elapsed time: `18.911628100206144 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: about `77.31x`.
+- Speedup: about `57.78x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -273,6 +273,25 @@ Current Phase 2 latest mainline acceptance:
   match true, coverage-masked p50/p90/p99 absolute differences
   `0.0` / `1.0081672668457031` / `5.743577690124511`, and RMS
   `2.1730066333730473`.
+- Gate658 adds a real 200-light resident inline cosmetic CUDA positive
+  source-DQ scope. The strict run used
+  `--resident-inline-source-dq cosmetic_cuda` with
+  `--resident-inline-source-dq-max-invalid-fraction 0.02`, passed
+  `resident_mainline_framework.json` with
+  `framework_scope=inline_cosmetic_cuda_positive`, and passed
+  `phase2-mainline-audit --fail-on-not-green` with `200` lights, `193` active
+  frames, and `7` masked frames. Evidence records active source-DQ invalid and
+  applied samples `9532598`, all-frame invalid and applied samples `10258384`,
+  source counts `resident_post_registration_pre_warp_cosmetic_cuda=192` and
+  `resident_post_registration_pre_warp_cosmetic_cuda_flush=8`, and
+  `registration_matches_all_frame_source_dq=true`. This is an opt-in policy
+  impact run: compared with Gate656 default at coverage >= `190`, shape match
+  is true, coverage fraction is `0.9749391414927853`, p50/p90/p99 absolute
+  differences are `0.45581817626953125` / `2.0315895080566406` /
+  `10.900529212951653`, and RMS is `4.465267226951517`. The drift is expected
+  because the detector invalidated millions of hot/cold/cosmetic samples; the
+  default science route remains unchanged until a star-aware source-DQ policy is
+  validated.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

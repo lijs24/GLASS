@@ -7049,11 +7049,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-mainline-framework-scope",
-        choices=["default", "source_dq_positive"],
+        choices=["default", "source_dq_positive", "inline_cosmetic_cuda_positive"],
         default=DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_SCOPE,
         help=(
             "framework postcondition scope: default enforces the promoted resident mainline, "
-            "source_dq_positive is for positive source-DQ resident fixtures"
+            "source_dq_positive is for positive source-DQ resident fixtures, and "
+            "inline_cosmetic_cuda_positive requires resident inline cosmetic CUDA source-DQ"
         ),
     )
     run.add_argument("--resident-mainline-min-lights", type=int, default=1)
@@ -7674,11 +7675,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-mainline-framework-scope",
-        choices=["default", "source_dq_positive"],
+        choices=["default", "source_dq_positive", "inline_cosmetic_cuda_positive"],
         default=DEFAULT_RESIDENT_MAINLINE_FRAMEWORK_SCOPE,
         help=(
             "framework postcondition scope: default enforces the promoted resident mainline, "
-            "source_dq_positive is for positive source-DQ resident fixtures"
+            "source_dq_positive is for positive source-DQ resident fixtures, and "
+            "inline_cosmetic_cuda_positive requires resident inline cosmetic CUDA source-DQ"
         ),
     )
     audit.add_argument("--resident-mainline-min-lights", type=int, default=1)

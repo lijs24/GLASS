@@ -145,6 +145,8 @@ def _source_dq_execution_state(run: Path) -> dict[str, Any]:
             "status": "not_present",
             "input_invalid_samples_before_rejection": 0,
             "applied_invalid_samples": 0,
+            "all_frame_input_invalid_samples_before_frame_mask": 0,
+            "all_frame_applied_invalid_samples": 0,
             "required_invalid_samples_not_visible_to_registration_catalog": 0,
             "pre_registration_catalog_visible_invalid_samples": 0,
             "post_registration_deferred_invalid_samples": 0,
@@ -191,6 +193,17 @@ def _source_dq_execution_state(run: Path) -> dict[str, Any]:
             summary.get("input_invalid_samples_before_rejection") or 0
         ),
         "applied_invalid_samples": int(summary.get("applied_invalid_samples") or 0),
+        "all_frame_input_invalid_samples_before_frame_mask": int(
+            summary.get(
+                "all_frame_input_invalid_samples_before_frame_mask",
+                summary.get("input_invalid_samples_before_rejection"),
+            )
+            or 0
+        ),
+        "all_frame_applied_invalid_samples": int(
+            summary.get("all_frame_applied_invalid_samples", summary.get("applied_invalid_samples"))
+            or 0
+        ),
         "required_invalid_samples_not_visible_to_registration_catalog": int(required_not_visible),
         "pre_registration_catalog_visible_invalid_samples": int(pre_visible),
         "post_registration_deferred_invalid_samples": int(post_deferred),
@@ -262,6 +275,17 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
     coverage = coverage_raw if isinstance(coverage_raw, dict) else {}
     coverage_required = applicable and bool(coverage) and coverage.get("available") is not False
     source_dq_positive = int(source_dq["input_invalid_samples_before_rejection"]) > 0
+    registration_matches_active_source_dq = (
+        registration_source_dq["invalid_samples"]
+        == source_dq["input_invalid_samples_before_rejection"]
+        and registration_source_dq["applied_invalid_samples"] == source_dq["applied_invalid_samples"]
+    )
+    registration_matches_all_frame_source_dq = (
+        registration_source_dq["invalid_samples"]
+        == source_dq["all_frame_input_invalid_samples_before_frame_mask"]
+        and registration_source_dq["applied_invalid_samples"]
+        == source_dq["all_frame_applied_invalid_samples"]
+    )
     coverage_frame_count = _int_or_none(coverage.get("frame_count"))
     coverage_warped_frame_count = _int_or_none(coverage.get("warped_frame_count"))
 
@@ -483,12 +507,11 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
             not applicable
             or not source_dq_positive
             or (
-                registration_source_dq["invalid_samples"]
-                == source_dq["input_invalid_samples_before_rejection"]
-                and registration_source_dq["applied_invalid_samples"]
-                == source_dq["applied_invalid_samples"]
+                (registration_matches_active_source_dq or registration_matches_all_frame_source_dq)
                 and registration_source_dq["pre_registration_catalog_visible_invalid_samples"]
                 == source_dq["pre_registration_catalog_visible_invalid_samples"]
+                and registration_source_dq["post_registration_deferred_invalid_samples"]
+                == source_dq["post_registration_deferred_invalid_samples"]
                 and registration_source_dq[
                     "required_invalid_samples_not_visible_to_registration_catalog"
                 ]
@@ -503,12 +526,23 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
                     "input_invalid_samples_before_rejection"
                 ],
                 "source_dq_applied_invalid_samples": source_dq["applied_invalid_samples"],
+                "source_dq_all_frame_input_invalid_samples_before_frame_mask": source_dq[
+                    "all_frame_input_invalid_samples_before_frame_mask"
+                ],
+                "source_dq_all_frame_applied_invalid_samples": source_dq[
+                    "all_frame_applied_invalid_samples"
+                ],
                 "source_dq_pre_registration_catalog_visible_invalid_samples": source_dq[
                     "pre_registration_catalog_visible_invalid_samples"
+                ],
+                "source_dq_post_registration_deferred_invalid_samples": source_dq[
+                    "post_registration_deferred_invalid_samples"
                 ],
                 "source_dq_required_invalid_samples_not_visible_to_registration_catalog": source_dq[
                     "required_invalid_samples_not_visible_to_registration_catalog"
                 ],
+                "registration_matches_active_source_dq": registration_matches_active_source_dq,
+                "registration_matches_all_frame_source_dq": registration_matches_all_frame_source_dq,
                 "registration_invalid_samples": registration_source_dq["invalid_samples"],
                 "registration_applied_invalid_samples": registration_source_dq[
                     "applied_invalid_samples"
@@ -517,6 +551,9 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
                     registration_source_dq[
                         "pre_registration_catalog_visible_invalid_samples"
                     ]
+                ),
+                "registration_post_registration_deferred_invalid_samples": (
+                    registration_source_dq["post_registration_deferred_invalid_samples"]
                 ),
                 "registration_required_invalid_samples_not_visible_to_registration_catalog": (
                     registration_source_dq[
@@ -554,6 +591,12 @@ def build_resident_registration_runtime_contract(run_dir: str | Path) -> dict[st
                 "input_invalid_samples_before_rejection"
             ],
             "source_dq_applied_invalid_samples": source_dq["applied_invalid_samples"],
+            "source_dq_all_frame_input_invalid_samples_before_frame_mask": source_dq[
+                "all_frame_input_invalid_samples_before_frame_mask"
+            ],
+            "source_dq_all_frame_applied_invalid_samples": source_dq[
+                "all_frame_applied_invalid_samples"
+            ],
             "source_dq_pre_registration_catalog_visible_invalid_samples": source_dq[
                 "pre_registration_catalog_visible_invalid_samples"
             ],

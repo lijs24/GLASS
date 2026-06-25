@@ -801,6 +801,104 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 658: Real Inline Cosmetic CUDA Source-DQ Mainline Scope
+
+Gate658 turns the opt-in `cosmetic_cuda` resident source-DQ route into a real
+200-light strict mainline validation scope. Gate657 proved that a source-DQ
+sidecar can enter the real M38 plan. Gate658 proves the resident CUDA detector
+itself can generate and apply source-DQ masks in the full resident pipeline,
+while keeping registration safe and making active-frame versus all-frame DQ
+accounting explicit.
+
+Implementation:
+
+- Added `inline_cosmetic_cuda_positive` to resident mainline framework scopes.
+- The new scope requires:
+  - positive source-DQ invalid/applied samples;
+  - resident inline cosmetic CUDA sources in `resident_source_dq_execution`;
+  - resident in-memory source-DQ mask streaming.
+- The framework now aggregates `source_counts`, `source_dq_flag_counts`, and
+  `sidecar_source_counts` from execution groups when the aggregate summary does
+  not carry those maps.
+- Hardened `resident_registration_runtime_contract` to distinguish active
+  integration DQ counts from all-frame registration-row DQ audit counts.
+  Registration source-DQ input may now match either the active integration
+  totals or the all-frame totals, but post-registration deferred, pre-visible,
+  required-not-visible, and row-total counts must still close.
+- Added focused tests for:
+  - inline cosmetic CUDA scope pass/fail;
+  - rejecting sidecar-only source-DQ evidence for the inline CUDA scope;
+  - all-frame registration source-DQ totals matching execution while active
+    integration totals are lower.
+
+Real 200-light validation:
+
+- Green run:
+  `C:\glass_runs\phase2_s2_gate658_inline_cosmetic_cuda_real\runs_20260625_214737\inline_cosmetic_cuda_positive_strict_green`.
+- Command used `--resident-inline-source-dq cosmetic_cuda` and
+  `--resident-inline-source-dq-max-invalid-fraction 0.02` so the real detector
+  applied source-DQ instead of being fully skipped by the conservative default
+  guard.
+- `resident_mainline_framework.json`: passed with
+  `framework_scope=inline_cosmetic_cuda_positive`.
+- `resident_registration_runtime_contract.json`: passed with
+  `registration_matches_all_frame_source_dq=true`.
+- `phase2-mainline-audit --fail-on-not-green`: passed with `200` lights,
+  `193` active frames, and `7` masked frames.
+- GLASS elapsed time: `18.911628100206144 s`, about `57.78x` faster than the
+  `1092.541 s` black-box timing.
+- Source-DQ active integration samples:
+  `input_invalid_samples_before_rejection=9532598`,
+  `applied_invalid_samples=9532598`.
+- Source-DQ all-frame registration/audit samples:
+  `all_frame_input_invalid_samples_before_frame_mask=10258384`,
+  `all_frame_applied_invalid_samples=10258384`.
+- Source-DQ sources:
+  `resident_post_registration_pre_warp_cosmetic_cuda=192`,
+  `resident_post_registration_pre_warp_cosmetic_cuda_flush=8`.
+- Source-DQ flags in the final green run:
+  hot pixels `4083517`, cold pixels `5449079`, cosmetic corrected samples
+  `9532596`.
+- Deferred application:
+  `resident_inline_source_dq_deferred_frame_count=200`,
+  `resident_inline_source_dq_deferred_applied_frame_count=200`,
+  `resident_inline_source_dq_deferred_pending_frame_count=0`.
+- Component timing:
+  `resident_light_read_upload_calibrate=7.699204199947417 s`,
+  `resident_registration_warp=0.2707780001219362 s`,
+  `resident_local_normalization=0.35652599995955825 s`,
+  `resident_integration=3.2230436999816447 s`,
+  `resident_output_write=0.2761841000756249 s`.
+
+Result comparison:
+
+- Compared Gate658 inline cosmetic CUDA master against Gate656 default master
+  with coverage >= `190`.
+- Shape match: true.
+- Compared pixels: `60106168`.
+- Coverage fraction: `0.9749391414927853`.
+- Absolute difference p50/p90/p99:
+  `0.45581817626953125` / `2.0315895080566406` /
+  `10.900529212951653`.
+- RMS difference: `4.465267226951517`.
+- Relative RMS difference: `0.014049558858932804`.
+- Interpretation: this is a deliberate opt-in DQ policy run that invalidates
+  millions of real samples. The drift is expected and is recorded as policy
+  impact evidence, not as a default-route regression. The default route remains
+  the science baseline until a star-aware cosmetic policy is validated.
+
+Interpretation:
+
+- Gate658 closes a real Phase 2 DQ/mask gap: source-DQ now has a strict
+  positive real-data scope for resident inline CUDA, not only sidecars or
+  synthetic fixtures.
+- The active/all-frame accounting fix is important for every deferred
+  registration-safe DQ policy, because registration audits all frames while
+  integration summaries use active frames.
+- The next substantive gate should make the cosmetic CUDA policy more
+  scientific, especially star-aware or structure-aware masking, so the default
+  route can eventually benefit from inline DQ without large master drift.
+
 ### S2-Gate 657: Real 200-Light Source-DQ Probe Manifest
 
 Gate657 closes the real-data gap left by Gates 655-656. The M38 benchmark
