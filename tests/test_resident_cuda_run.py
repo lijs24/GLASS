@@ -728,6 +728,100 @@ def test_resident_registration_matrix_batch_keeps_translation_matrices_batched()
     assert track_coverage is True
 
 
+def test_resident_registration_matrix_batch_bypasses_identity_matrices() -> None:
+    class FakeStack:
+        def __init__(self) -> None:
+            self.calls: list[tuple[list[int], np.ndarray]] = []
+
+        def apply_matrix_lanczos3_frames(
+            self,
+            indices: list[int],
+            matrices: np.ndarray,
+            fill: float,
+            clamping_threshold: float,
+            dispatch: str = "loop",
+            track_coverage: bool = True,
+        ) -> dict[str, object]:
+            self.calls.append((list(indices), matrices.copy()))
+            assert indices == [11, 13]
+            assert matrices.shape == (2, 3, 3)
+            assert np.isnan(fill)
+            assert clamping_threshold == pytest.approx(-1.0)
+            assert dispatch == "chunked"
+            assert track_coverage is True
+            return {
+                "batched": True,
+                "frame_count": len(indices),
+                "fallback_frame_count": 0,
+                "timing_model": "fake_chunked_identity_filtered",
+                "inverse_upload_mode": "chunked_device_batch",
+                "track_coverage": track_coverage,
+                "total_s": 0.01,
+            }
+
+        def apply_matrix_lanczos3_frame(self, *_args: object, **_kwargs: object) -> None:
+            raise AssertionError("identity matrices should not fall back to per-frame warp")
+
+        def apply_translation_bilinear_frame(self, *_args: object, **_kwargs: object) -> None:
+            raise AssertionError("identity matrices should not use translation warp")
+
+    stack = FakeStack()
+    models, timing = _apply_resident_registration_matrix_batch(
+        stack,
+        [
+            (10, translation_matrix(0.0, 0.0)),
+            (11, translation_matrix(0.25, -0.5)),
+            (12, translation_matrix(0.0, 0.0)),
+            (13, translation_matrix(-1.0, 2.0)),
+        ],
+        interpolation="lanczos3",
+        clamping_threshold=-1.0,
+        batch_dispatch="chunked",
+        track_coverage=True,
+    )
+
+    assert models == [
+        "identity_bypass",
+        "matrix_lanczos3_batch",
+        "identity_bypass",
+        "matrix_lanczos3_batch",
+    ]
+    assert [call[0] for call in stack.calls] == [[11, 13]]
+    assert timing["batched"] is True
+    assert timing["input_frame_count"] == 4
+    assert timing["frame_count"] == 2
+    assert timing["identity_bypass_frame_count"] == 2
+    assert timing["identity_bypass_model"] == "skip_resampling_preserve_resident_frame"
+    assert timing["fallback_frame_count"] == 0
+
+
+def test_resident_registration_matrix_batch_all_identity_avoids_native_call() -> None:
+    class FakeStack:
+        def apply_matrix_bilinear_frames(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            raise AssertionError("all-identity batch should not call native matrix warp")
+
+        def apply_translation_bilinear_frame(self, *_args: object, **_kwargs: object) -> None:
+            raise AssertionError("all-identity batch should not call translation warp")
+
+    models, timing = _apply_resident_registration_matrix_batch(
+        FakeStack(),
+        [
+            (1, translation_matrix(0.0, 0.0)),
+            (2, translation_matrix(0.0, 0.0)),
+        ],
+        interpolation="bilinear",
+        batch_dispatch="chunked",
+        track_coverage=False,
+    )
+
+    assert models == ["identity_bypass", "identity_bypass"]
+    assert timing["batched"] is False
+    assert timing["input_frame_count"] == 2
+    assert timing["frame_count"] == 0
+    assert timing["identity_bypass_frame_count"] == 2
+    assert timing["fallback_frame_count"] == 0
+
+
 def test_resident_registration_matrix_batch_honors_chunk_capacity() -> None:
     class FakeStack:
         def __init__(self) -> None:
@@ -783,7 +877,7 @@ def test_resident_registration_matrix_batch_honors_chunk_capacity() -> None:
 
     stack = FakeStack()
     matrices = [
-        (index, translation_matrix(float(index), -float(index)))
+        (index, translation_matrix(float(index + 1), -float(index + 1)))
         for index in range(5)
     ]
 
@@ -856,7 +950,7 @@ def test_resident_registration_matrix_batch_honors_pipelined_dispatch() -> None:
 
     stack = FakeStack()
     matrices = [
-        (index, translation_matrix(float(index), -float(index)))
+        (index, translation_matrix(float(index + 1), -float(index + 1)))
         for index in range(9)
     ]
 

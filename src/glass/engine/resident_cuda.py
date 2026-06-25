@@ -2136,6 +2136,13 @@ def _matrix_is_translation(matrix: list[list[float]], atol: float = 1.0e-6) -> b
     )
 
 
+def _matrix_is_identity(matrix: list[list[float]], atol: float = 1.0e-6) -> bool:
+    m = np.asarray(matrix, dtype=np.float64)
+    if m.shape != (3, 3):
+        return False
+    return bool(np.allclose(m, np.eye(3), atol=atol))
+
+
 def _resident_triangle_translation_refine(
     reference_catalog: dict[str, Any] | None,
     moving_catalog: dict[str, Any] | None,
@@ -2725,6 +2732,8 @@ def _apply_resident_registration_matrix_batch(
     if not items:
         return [], {"batched": False, "frame_count": 0}
     models: list[str | None] = [None] * len(items)
+    identity_bypass_count = 0
+    fallback_frame_count = 0
     matrix_positions: list[int] = []
     matrix_indices: list[int] = []
     matrix_values: list[list[list[float]]] = []
@@ -2739,6 +2748,10 @@ def _apply_resident_registration_matrix_batch(
         )
     )
     for position, (index, matrix) in enumerate(items):
+        if _matrix_is_identity(matrix):
+            models[position] = "identity_bypass"
+            identity_bypass_count += 1
+            continue
         if _matrix_is_translation(matrix) and not matrix_batch_available:
             if interpolation == "lanczos3" and hasattr(stack, "apply_matrix_lanczos3_frame"):
                 stack.apply_matrix_lanczos3_frame(index, matrix, np.nan, float(clamping_threshold))
@@ -2746,6 +2759,7 @@ def _apply_resident_registration_matrix_batch(
             else:
                 stack.apply_translation_bilinear_frame(index, float(matrix[0][2]), float(matrix[1][2]), np.nan)
                 models[position] = "translation_bilinear"
+            fallback_frame_count += 1
             continue
         matrix_positions.append(position)
         matrix_indices.append(index)
@@ -2754,7 +2768,10 @@ def _apply_resident_registration_matrix_batch(
     timing: dict[str, Any] = {
         "batched": False,
         "frame_count": 0,
-        "fallback_frame_count": len(items) - len(matrix_positions),
+        "fallback_frame_count": fallback_frame_count,
+        "input_frame_count": len(items),
+        "identity_bypass_frame_count": identity_bypass_count,
+        "identity_bypass_model": "skip_resampling_preserve_resident_frame",
     }
     if matrix_positions:
         batch_kwargs: dict[str, Any] = {
@@ -2796,9 +2813,19 @@ def _apply_resident_registration_matrix_batch(
                     interpolation,
                     clamping_threshold,
                 )
-            timing = {"batched": False, "frame_count": 0, "fallback_frame_count": len(items)}
+            fallback_frame_count += len(matrix_positions)
+            timing = {"batched": False, "frame_count": 0}
         timing["batched"] = bool(timing.get("frame_count", 0))
-        timing["fallback_frame_count"] = len(items) - int(timing.get("frame_count", 0) or 0)
+        timing["fallback_frame_count"] = (
+            fallback_frame_count
+            + len(matrix_positions)
+            - int(timing.get("frame_count", 0) or 0)
+            if bool(timing.get("batched", False))
+            else fallback_frame_count
+        )
+        timing["input_frame_count"] = len(items)
+        timing["identity_bypass_frame_count"] = identity_bypass_count
+        timing["identity_bypass_model"] = "skip_resampling_preserve_resident_frame"
     return [str(model or "unavailable") for model in models], timing
 
 
@@ -10530,6 +10557,7 @@ def run_resident_calibration_integration(
                     triangle_warp_batch_timing_model = "off"
                 triangle_warp_batch_frame_count = 0
                 triangle_warp_batch_fallback_frame_count = 0
+                triangle_warp_identity_bypass_frame_count = 0
                 triangle_warp_batch_native_inverse_upload_mode = "off"
                 triangle_warp_batch_native_inverse_prepare_s = 0.0
                 triangle_warp_batch_native_inverse_batch_alloc_s = 0.0
@@ -11209,6 +11237,7 @@ def run_resident_calibration_integration(
                 ) -> None:
                     nonlocal triangle_warp_batch_fallback_frame_count
                     nonlocal triangle_warp_batch_frame_count
+                    nonlocal triangle_warp_identity_bypass_frame_count
                     nonlocal triangle_warp_batch_native_chunk_count
                     nonlocal triangle_warp_batch_native_chunk_frames
                     nonlocal triangle_warp_batch_native_coverage_bytes
@@ -11262,6 +11291,9 @@ def run_resident_calibration_integration(
                     )
                     warp_elapsed = perf_counter() - warp_start
                     _add_elapsed(registration_component_s, "triangle_warp", warp_elapsed)
+                    triangle_warp_identity_bypass_frame_count += int(
+                        warp_timing.get("identity_bypass_frame_count", 0) or 0
+                    )
                     if bool(warp_timing.get("batched", False)):
                         triangle_warp_batch_timing_model = str(
                             warp_timing.get("timing_model", "unavailable")
@@ -11382,10 +11414,13 @@ def run_resident_calibration_integration(
                         )
                     for item, warp_model in zip(items, warp_models, strict=True):
                         frame_index = int(item["index"])
-                        warped_frame_indices.add(frame_index)
+                        if warp_model != "identity_bypass":
+                            warped_frame_indices.add(frame_index)
                         registration_results[int(item["result_index"])].warnings.extend(
                             [
                                 f"resident_registration_application={warp_model}",
+                                "triangle_warp_identity_bypass="
+                                + str(warp_model == "identity_bypass").lower(),
                                 "triangle_warp_batch=" + str(bool(warp_timing.get("batched", False))).lower(),
                                 f"triangle_warp_batch_mode={triangle_warp_batch_mode}",
                                 f"triangle_warp_batch_dispatch={resident_warp_batch_dispatch}",
@@ -12295,6 +12330,9 @@ def run_resident_calibration_integration(
                         )
                         warp_elapsed = perf_counter() - warp_start
                         _add_elapsed(registration_component_s, "triangle_warp", warp_elapsed)
+                        triangle_warp_identity_bypass_frame_count += int(
+                            warp_timing.get("identity_bypass_frame_count", 0) or 0
+                        )
                         if bool(warp_timing.get("batched", False)):
                             triangle_warp_batch_timing_model = str(
                                 warp_timing.get("timing_model", "unavailable")
@@ -12418,10 +12456,13 @@ def run_resident_calibration_integration(
                             warp_models,
                             strict=True,
                         ):
-                            warped_frame_indices.add(int(item["index"]))
+                            if warp_model != "identity_bypass":
+                                warped_frame_indices.add(int(item["index"]))
                             result.warnings.extend(
                                 [
                                     f"resident_registration_application={warp_model}",
+                                    "triangle_warp_identity_bypass="
+                                    + str(warp_model == "identity_bypass").lower(),
                                     "triangle_warp_batch=" + str(bool(warp_timing.get("batched", False))).lower(),
                                     f"triangle_warp_batch_mode={triangle_warp_batch_mode}",
                                     f"triangle_warp_batch_dispatch={resident_warp_batch_dispatch}",
@@ -15281,6 +15322,16 @@ def run_resident_calibration_integration(
                         "triangle_warp_batch_frame_count": int(triangle_warp_batch_frame_count)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
+                        "triangle_warp_identity_bypass_frame_count": int(
+                            triangle_warp_identity_bypass_frame_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_identity_bypass_model": (
+                            "skip_resampling_preserve_resident_frame"
+                            if resident_registration == "similarity_cuda_triangle"
+                            else "off"
+                        ),
                         "triangle_warp_batch_fallback_frame_count": int(
                             triangle_warp_batch_fallback_frame_count
                         )

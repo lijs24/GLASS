@@ -694,6 +694,16 @@ Current Phase 2 latest mainline acceptance:
   and
   `C:\glass_runs\phase2_s2_gate688_sample_closure_contract\gate688_pipeline_contract.json`.
   Full pytest passed with `1429 passed in 66.28 s`.
+- Gate689 adds resident matrix-warp identity bypass. The real 200-light run at
+  `C:\glass_runs\phase2_s2_gate689_identity_warp_bypass\runs_20260627_013000\identity_bypass_default`
+  passed Phase 2 mainline audit, resident regression versus Gate687, resident
+  result contract with pixel verification, and pipeline contract with pixel
+  verification. Direct SHA256 and array comparisons showed byte-identical and
+  array-identical master, weight, coverage, low-rejection, high-rejection, and
+  DQ maps versus Gate687. This data set recorded
+  `triangle_warp_identity_bypass_frame_count=0`, so the gate validates
+  compatibility and future identity-matrix behavior rather than a speedup on
+  the current M38 stack.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

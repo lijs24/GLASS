@@ -2311,6 +2311,84 @@ Interpretation:
 - No calibration, registration, warp, local-normalization, rejection, or output
   pixel math changed in this gate.
 
+### S2-Gate 689: Resident Matrix-Warp Identity Bypass
+
+Gate689 returns to the resident registration/warp mainline. The resident
+matrix-warp batch wrapper now recognizes exact identity 3x3 transforms and
+keeps those frames resident without launching a matrix-warp kernel or rewriting
+the frame. Non-identity matrices continue through the same native batch or
+fallback warp paths.
+
+Implementation:
+
+- Added `_matrix_is_identity` beside the existing translation-matrix detector.
+- `_apply_resident_registration_matrix_batch` now returns
+  `identity_bypass` for identity matrices and filters them out of native batch
+  inputs.
+- Batch timing now records:
+  - `input_frame_count`;
+  - `identity_bypass_frame_count`;
+  - `identity_bypass_model=skip_resampling_preserve_resident_frame`.
+- Triangle registration call sites no longer add `identity_bypass` frames to
+  `warped_frame_indices`, so the existing full-coverage accumulator covers
+  them as unwarped positive-weight frames.
+- Resident registration artifacts now expose
+  `triangle_warp_identity_bypass_frame_count` and
+  `triangle_warp_identity_bypass_model`.
+
+Validation:
+
+- Focused resident matrix batch tests:
+  `6 passed, 132 deselected`.
+- Broader resident CUDA registration/contract tests:
+  `14 passed, 124 deselected`.
+- Focused CUDA resident stack warp/fused tests:
+  `4 passed, 73 deselected`.
+- Phase 2 mainline audit tests:
+  `8 passed`.
+- Ruff on touched files passed.
+- Full pytest passed:
+  `1431 passed in 66.66 s`.
+- Real 200-light candidate:
+  `C:\glass_runs\phase2_s2_gate689_identity_warp_bypass\runs_20260627_013000\identity_bypass_default`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate689_identity_warp_bypass\gate689_mainline_audit.json`.
+- Resident regression gate versus Gate687 passed:
+  `C:\glass_runs\phase2_s2_gate689_identity_warp_bypass\gate689_regression_gate.json`.
+  Failed checks `[]`, elapsed ratio `1.02595343286861`.
+- Resident result and pipeline contracts with pixel verification passed:
+  `C:\glass_runs\phase2_s2_gate689_identity_warp_bypass\gate689_resident_result_contract.json`;
+  `C:\glass_runs\phase2_s2_gate689_identity_warp_bypass\gate689_pipeline_contract.json`.
+- Direct FITS SHA256 and array compare against Gate687 passed for master,
+  weight, coverage, low-rejection, high-rejection, and DQ maps:
+  `C:\glass_runs\phase2_s2_gate689_identity_warp_bypass\gate689_output_compare.json`.
+
+Timing and telemetry:
+
+- Gate687 baseline total elapsed:
+  `12.207209800020792 s`.
+- Gate689 candidate total elapsed:
+  `12.524028800078668 s`.
+- Gate689 resident component timing:
+  - light read/upload/calibrate `3.5127374000148848 s`;
+  - registration/warp `0.278870000038296 s`;
+  - local normalization `0.36278890003450215 s`;
+  - integration `3.2666022999910638 s`;
+  - output write `0.26949790003709495 s`.
+- The real M38 200-light candidate recorded
+  `triangle_warp_identity_bypass_frame_count=0`, so this run validates
+  compatibility and output parity rather than demonstrating a speed win.
+
+Interpretation:
+
+- This is a resident registration/warp engineering gate, not a release/report
+  handoff.
+- It removes unnecessary resampling work for identity matrix inputs in
+  synthetic, external-matrix, or future zero-motion batches.
+- Current default 200-light data did not contain identity moving warps, so the
+  measured elapsed ratio reflects normal single-run storage/GPU scheduling
+  variance, not a numerical or algorithmic regression.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

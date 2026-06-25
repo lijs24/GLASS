@@ -517,6 +517,15 @@ input-valid, input-invalid, rejected, and final-valid sample fields. Master-only
 resident outputs that intentionally skip DQ/count-map surfaces are the only
 resident integration outputs allowed to omit the closure.
 
+S2-Gate 689 adds a resident matrix-warp identity bypass before native batch
+warp dispatch. Exact identity 3x3 matrices keep their resident calibrated frame
+unchanged and are reported as `identity_bypass`; non-identity transforms still
+use the same native matrix warp or fallback path. The existing full-coverage
+accumulator accounts for bypassed positive-weight frames as unwarped frames,
+preserving DQ/coverage semantics. The first real 200-light validation did not
+contain identity moving warps, so it is an output-parity and compatibility gate
+rather than a measured speedup gate.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in
