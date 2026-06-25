@@ -468,6 +468,20 @@ weight, coverage, low-rejection, high-rejection, and DQ FITS outputs. Runtime
 compare selected Gate684 at `11.66652269999031 s` versus Gate682
 `11.735124099999666 s`, elapsed ratio `0.9941541819732985`.
 
+S2-Gate 685 clarifies resident native-completion read-overlap semantics for
+integration benchmarks. The default native completion path performs raw FITS
+payload reads inside the native completion queue, so the legacy prefetch
+`worker_*` fields remain zero even though native worker read time is present in
+`native_path_calibration_total_s`. Resident artifacts now expose `read_supply_*`
+fields that describe the effective light-frame supply model, including
+`read_supply_model=native_completion_calibration`,
+`read_supply_worker_cumulative_s`, `read_supply_file_read_cumulative_s`,
+`read_supply_consumer_wait_wall_s`, `read_supply_overlap_saved_s`, and
+`read_supply_worker_to_wall_ratio`. The real 200-light Gate685 run produced
+byte-identical master, weight, coverage, low-rejection, high-rejection, and DQ
+maps versus Gate684; this is telemetry hardening only, not a change to
+calibration or integration math.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

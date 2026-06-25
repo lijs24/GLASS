@@ -99,6 +99,9 @@ def test_light_pipeline_profile_exposes_native_completion_lane_fill() -> None:
         },
         resident_io_pipeline={
             "calibration_batch_requested_streams": 8,
+            "native_path_calibration_total_s": 29.0,
+            "native_path_calibration_file_open_s": 0.4,
+            "native_path_calibration_file_read_s": 28.5,
             "native_completion_calibration_enabled": True,
             "native_completion_calibration_submit_count": 200,
             "native_completion_calibration_completion_count": 200,
@@ -125,11 +128,36 @@ def test_light_pipeline_profile_exposes_native_completion_lane_fill() -> None:
             "native_completion_calibration_consumer_wave_fill_timeout_count": 38,
             "native_completion_calibration_consumer_wave_fill_wait_s": 0.288,
         },
-        resident_io_overlap={},
+        resident_io_overlap={
+            "read_supply_model": "native_completion_calibration",
+            "read_supply_worker_cumulative_s": 29.0,
+            "read_supply_file_read_cumulative_s": 28.5,
+            "read_supply_consumer_wait_wall_s": 0.288,
+            "read_supply_overlap_saved_s": 25.0,
+            "read_supply_overlap_efficiency": 25.0 / 29.0,
+            "read_supply_worker_to_wall_ratio": 29.0 / 4.0,
+            "native_completion_worker_cumulative_s": 29.0,
+            "native_completion_file_open_cumulative_s": 0.4,
+            "native_completion_file_read_cumulative_s": 28.5,
+            "native_completion_consumer_wait_wall_s": 0.288,
+            "native_completion_hidden_by_stage_s": 25.0,
+            "native_completion_worker_to_wall_ratio": 29.0 / 4.0,
+        },
     )
 
     native = profile["native_completion"]
     assert native["enabled"] is True
+    assert profile["overlap"]["model"] == "native_completion_calibration"
+    assert profile["overlap"]["worker_cumulative_s"] == 29.0
+    assert profile["overlap"]["file_read_cumulative_s"] == 28.5
+    assert profile["overlap"]["saved_s"] == 25.0
+    assert profile["overlap"]["worker_cumulative_to_wall_ratio"] == 29.0 / 4.0
+    assert native["worker_cumulative_s"] == 29.0
+    assert native["file_open_cumulative_s"] == 0.4
+    assert native["file_read_cumulative_s"] == 28.5
+    assert native["consumer_wait_wall_s"] == 0.288
+    assert native["hidden_by_stage_s"] == 25.0
+    assert native["worker_to_wall_ratio"] == 29.0 / 4.0
     assert native["completion_count"] == 200
     assert native["worker_count"] == 16
     assert native["queue_buffer_count"] == 32

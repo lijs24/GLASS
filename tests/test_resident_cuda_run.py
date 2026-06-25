@@ -7733,6 +7733,7 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
 
     artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
     io_pipeline = artifact["resident_io_pipeline"]
+    io_overlap = artifact["resident_io_overlap"]
     assert io_pipeline["native_completion_calibration_candidate"] is True
     assert io_pipeline["native_completion_calibration_policy"] == "env_enabled"
     assert io_pipeline["native_completion_calibration_requested"] is True
@@ -7746,8 +7747,47 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     assert io_pipeline["native_path_calibration_read_backend_policy"] == "auto"
     assert io_pipeline["native_path_calibration_read_backend"] == "std_ifstream"
     native_completion_profile = artifact["resident_light_pipeline_profile"]["native_completion"]
+    overlap_profile = artifact["resident_light_pipeline_profile"]["overlap"]
+    assert io_overlap["read_supply_model"] == "native_completion_calibration"
+    assert io_overlap["read_supply_worker_cumulative_source"] == "native_path_calibration_total_s"
+    assert (
+        io_overlap["read_supply_worker_cumulative_s"]
+        == io_pipeline["native_path_calibration_total_s"]
+    )
+    assert (
+        io_overlap["read_supply_file_read_cumulative_s"]
+        == io_pipeline["native_path_calibration_file_read_s"]
+    )
+    assert (
+        io_overlap["native_completion_worker_cumulative_s"]
+        == io_pipeline["native_path_calibration_total_s"]
+    )
+    assert (
+        io_overlap["native_completion_file_read_cumulative_s"]
+        == io_pipeline["native_path_calibration_file_read_s"]
+    )
+    assert io_overlap["read_supply_overlap_saved_s"] >= 0.0
+    assert io_overlap["read_supply_worker_to_wall_ratio"] is not None
+    assert io_overlap["read_supply_effective_backend"] == "std_ifstream"
+    assert overlap_profile["model"] == "native_completion_calibration"
+    assert (
+        overlap_profile["worker_cumulative_s"]
+        == io_pipeline["native_path_calibration_total_s"]
+    )
+    assert (
+        overlap_profile["file_read_cumulative_s"]
+        == io_pipeline["native_path_calibration_file_read_s"]
+    )
     assert native_completion_profile["read_backend_policy"] == "auto"
     assert native_completion_profile["read_backend"] == "std_ifstream"
+    assert (
+        native_completion_profile["worker_cumulative_s"]
+        == io_pipeline["native_path_calibration_total_s"]
+    )
+    assert (
+        native_completion_profile["file_read_cumulative_s"]
+        == io_pipeline["native_path_calibration_file_read_s"]
+    )
     assert io_pipeline["native_completion_queue_buffer_policy_source"] == "runtime_auto_base"
     assert io_pipeline["native_completion_queue_buffer_base_frames"] >= 2
     assert io_pipeline["native_completion_queue_buffer_requested_frames"] is None

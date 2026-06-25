@@ -13684,6 +13684,60 @@ def run_resident_calibration_integration(
             read_worker_to_wall_ratio = (
                 read_worker_total / load_calibrate_elapsed if load_calibrate_elapsed > 0.0 else None
             )
+            native_completion_consumer_wait_total = (
+                float(native_completion_calibration_slot_reuse_wait_s)
+                + float(native_completion_calibration_consumer_wave_fill_wait_s)
+            )
+            if native_completion_calibration_enabled:
+                read_supply_model = "native_completion_calibration"
+                read_supply_worker_total = float(native_path_calibration_total_s)
+                read_supply_file_open_total = float(native_path_calibration_file_open_s)
+                read_supply_file_read_total = float(native_path_calibration_file_read_s)
+                read_supply_decode_total = 0.0
+                read_supply_consumer_wait_total = native_completion_consumer_wait_total
+                read_supply_worker_source = "native_path_calibration_total_s"
+                read_supply_file_read_source = "native_path_calibration_file_read_s"
+                read_supply_decode_source = "gpu_raw_u16_decode_inside_native_calibration"
+                read_supply_effective_backend = native_path_calibration_read_backend
+            else:
+                read_supply_model = "prefetch_worker_thread"
+                read_supply_worker_total = read_worker_total
+                read_supply_file_open_total = fits_open_timing["total"]
+                read_supply_file_read_total = fits_native_file_read_timing["total"]
+                read_supply_decode_total = fits_materialize_decode_timing["total"]
+                read_supply_consumer_wait_total = read_wait_total
+                read_supply_worker_source = "per_frame_read_worker_s"
+                read_supply_file_read_source = "per_frame_fits_native_file_read_s"
+                read_supply_decode_source = "per_frame_fits_materialize_decode_s"
+                read_supply_effective_backend = resident_fits_read_mode_effective
+            read_supply_wait_avoidance_s = max(
+                0.0,
+                read_supply_worker_total - read_supply_consumer_wait_total,
+            )
+            read_supply_hidden_by_stage_s = max(
+                0.0,
+                read_supply_worker_total - load_calibrate_elapsed,
+            )
+            read_supply_overlap_efficiency = (
+                read_supply_hidden_by_stage_s / read_supply_worker_total
+                if read_supply_worker_total > 0.0
+                else None
+            )
+            read_supply_wait_avoidance_efficiency = (
+                read_supply_wait_avoidance_s / read_supply_worker_total
+                if read_supply_worker_total > 0.0
+                else None
+            )
+            read_supply_wait_fraction_of_wall = (
+                read_supply_consumer_wait_total / load_calibrate_elapsed
+                if load_calibrate_elapsed > 0.0
+                else None
+            )
+            read_supply_worker_to_wall_ratio = (
+                read_supply_worker_total / load_calibrate_elapsed
+                if load_calibrate_elapsed > 0.0
+                else None
+            )
             resident_io_overlap = {
                 "schema_version": 1,
                 "wall_clock_stage_s": load_calibrate_elapsed,
@@ -13695,6 +13749,53 @@ def run_resident_calibration_integration(
                 "overlap_efficiency": read_overlap_efficiency,
                 "consumer_wait_fraction_of_wall": read_wait_fraction_of_wall,
                 "worker_cumulative_to_wall_ratio": read_worker_to_wall_ratio,
+                "read_supply_model": read_supply_model,
+                "read_supply_worker_cumulative_s": read_supply_worker_total,
+                "read_supply_worker_cumulative_source": read_supply_worker_source,
+                "read_supply_file_open_cumulative_s": read_supply_file_open_total,
+                "read_supply_file_read_cumulative_s": read_supply_file_read_total,
+                "read_supply_file_read_source": read_supply_file_read_source,
+                "read_supply_decode_cumulative_s": read_supply_decode_total,
+                "read_supply_decode_source": read_supply_decode_source,
+                "read_supply_consumer_wait_wall_s": read_supply_consumer_wait_total,
+                "read_supply_wait_avoidance_s": read_supply_wait_avoidance_s,
+                "read_supply_wait_avoidance_efficiency": read_supply_wait_avoidance_efficiency,
+                "read_supply_overlap_saved_s": read_supply_hidden_by_stage_s,
+                "read_supply_hidden_by_stage_s": read_supply_hidden_by_stage_s,
+                "read_supply_overlap_efficiency": read_supply_overlap_efficiency,
+                "read_supply_consumer_wait_fraction_of_wall": read_supply_wait_fraction_of_wall,
+                "read_supply_worker_to_wall_ratio": read_supply_worker_to_wall_ratio,
+                "read_supply_effective_backend": read_supply_effective_backend,
+                "native_completion_worker_cumulative_s": (
+                    float(native_path_calibration_total_s)
+                    if native_completion_calibration_enabled
+                    else 0.0
+                ),
+                "native_completion_file_open_cumulative_s": (
+                    float(native_path_calibration_file_open_s)
+                    if native_completion_calibration_enabled
+                    else 0.0
+                ),
+                "native_completion_file_read_cumulative_s": (
+                    float(native_path_calibration_file_read_s)
+                    if native_completion_calibration_enabled
+                    else 0.0
+                ),
+                "native_completion_consumer_wait_wall_s": (
+                    native_completion_consumer_wait_total
+                    if native_completion_calibration_enabled
+                    else 0.0
+                ),
+                "native_completion_hidden_by_stage_s": (
+                    read_supply_hidden_by_stage_s
+                    if native_completion_calibration_enabled
+                    else 0.0
+                ),
+                "native_completion_worker_to_wall_ratio": (
+                    read_supply_worker_to_wall_ratio
+                    if native_completion_calibration_enabled
+                    else None
+                ),
                 "prefetch_enabled": bool(resident_prefetch_frames > 0),
                 "prefetch_frames": int(resident_prefetch_frames),
                 "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
@@ -13792,8 +13893,9 @@ def run_resident_calibration_integration(
                 **native_path_calibration_report,
                 "master_cache_async_write": master_cache_async_write_summary,
                 "note": (
-                    "worker_* values are cumulative read-thread time and can exceed wall-clock time "
-                    "when prefetch overlaps FITS decode with GPU upload/calibration."
+                    "worker_* values keep the legacy prefetch-thread timing model. read_supply_* "
+                    "values describe the effective light-frame supply model, including native "
+                    "completion calibration where raw FITS reads occur inside the native queue."
                 ),
             }
             light_loop_accounted_without_master = (
@@ -13812,6 +13914,10 @@ def run_resident_calibration_integration(
             light_pipeline_timing = {
                 "light_read_upload_calibrate": load_calibrate_elapsed,
                 "light_read_wait_wall": read_wait_total,
+                "light_read_supply_consumer_wait_wall": read_supply_consumer_wait_total,
+                "light_read_supply_worker_cumulative": read_supply_worker_total,
+                "light_read_supply_file_read": read_supply_file_read_total,
+                "light_read_supply_overlap_saved": read_supply_hidden_by_stage_s,
                 "light_master_build_or_load_in_loop": light_master_build_or_load_in_loop,
                 "light_calibration_batch_native_total": float(calibration_batch_native_total_s),
                 "light_native_path_calibration_file_read": float(native_path_calibration_file_read_s),
@@ -13950,6 +14056,10 @@ def run_resident_calibration_integration(
                     "light_loop_total": load_calibrate_elapsed,
                     "light_read_decode_total": read_wait_total,
                     "light_read_decode_worker_total": read_worker_total,
+                    "light_read_supply_consumer_wait_wall": read_supply_consumer_wait_total,
+                    "light_read_supply_worker_cumulative": read_supply_worker_total,
+                    "light_read_supply_file_read": read_supply_file_read_total,
+                    "light_read_supply_overlap_saved": read_supply_hidden_by_stage_s,
                     "light_fits_open_total": fits_open_timing["total"],
                     "light_fits_materialize_decode_total": fits_materialize_decode_timing["total"],
                     "light_fits_native_file_read_total": fits_native_file_read_timing["total"],
@@ -14217,6 +14327,10 @@ def run_resident_calibration_integration(
                         "light_read_wait_wall": read_wait_total,
                         "light_read_decode_worker": read_worker_total,
                         "light_read_worker_cumulative": read_worker_total,
+                        "light_read_supply_consumer_wait_wall": read_supply_consumer_wait_total,
+                        "light_read_supply_worker_cumulative": read_supply_worker_total,
+                        "light_read_supply_file_read": read_supply_file_read_total,
+                        "light_read_supply_overlap_saved": read_supply_hidden_by_stage_s,
                         "light_fits_open": fits_open_timing["total"],
                         "light_fits_open_worker_cumulative": fits_open_timing["total"],
                         "light_fits_materialize_decode": fits_materialize_decode_timing["total"],

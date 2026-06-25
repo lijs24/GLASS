@@ -12,6 +12,10 @@ TIMING_KEYS = [
     "light_read_upload_calibrate",
     "light_read_wait_wall",
     "light_read_worker_cumulative",
+    "light_read_supply_consumer_wait_wall",
+    "light_read_supply_worker_cumulative",
+    "light_read_supply_file_read",
+    "light_read_supply_overlap_saved",
     "light_h2d_calibrate_store",
     "resident_registration_warp",
     "resident_integration",
@@ -29,6 +33,18 @@ IO_KEYS = [
     "calibration_wave_requested_frames",
     "calibration_release_mode_requested",
     "calibration_release_mode_effective",
+]
+
+
+IO_OVERLAP_KEYS = [
+    "read_supply_model",
+    "read_supply_effective_backend",
+    "read_supply_worker_cumulative_s",
+    "read_supply_file_read_cumulative_s",
+    "read_supply_consumer_wait_wall_s",
+    "read_supply_overlap_saved_s",
+    "read_supply_worker_to_wall_ratio",
+    "read_supply_overlap_efficiency",
 ]
 
 
@@ -52,6 +68,78 @@ def _load_first_resident_artifact(run: Path) -> dict[str, Any]:
     return first if isinstance(first, dict) else {}
 
 
+def _read_supply_from_artifact(
+    timing: dict[str, Any],
+    io_pipeline: dict[str, Any],
+    io_overlap: dict[str, Any],
+) -> dict[str, float | None]:
+    wall = _number(timing.get("light_read_upload_calibrate"))
+    worker = _number(io_overlap.get("read_supply_worker_cumulative_s"))
+    file_read = _number(io_overlap.get("read_supply_file_read_cumulative_s"))
+    wait = _number(io_overlap.get("read_supply_consumer_wait_wall_s"))
+    hidden = _number(io_overlap.get("read_supply_overlap_saved_s"))
+    if worker is None and io_pipeline.get("native_completion_calibration_enabled"):
+        worker = _number(io_pipeline.get("native_path_calibration_total_s"))
+        file_read = _number(io_pipeline.get("native_path_calibration_file_read_s"))
+        slot_wait = _number(io_pipeline.get("native_completion_calibration_slot_reuse_wait_s")) or 0.0
+        fill_wait = (
+            _number(io_pipeline.get("native_completion_calibration_consumer_wave_fill_wait_s"))
+            or 0.0
+        )
+        wait = slot_wait + fill_wait
+        hidden = None if worker is None or wall is None else max(0.0, worker - wall)
+    if worker is None:
+        worker = _number(timing.get("light_read_worker_cumulative"))
+    if wait is None:
+        wait = _number(timing.get("light_read_wait_wall"))
+    if hidden is None and worker is not None and wall is not None:
+        hidden = max(0.0, worker - wall)
+    return {
+        "light_read_supply_consumer_wait_wall": wait,
+        "light_read_supply_worker_cumulative": worker,
+        "light_read_supply_file_read": file_read,
+        "light_read_supply_overlap_saved": hidden,
+    }
+
+
+def _io_overlap_row(
+    timing: dict[str, Any],
+    io_pipeline: dict[str, Any],
+    io_overlap: dict[str, Any],
+    read_supply: dict[str, float | None],
+) -> dict[str, Any]:
+    row = {key: io_overlap.get(key) for key in IO_OVERLAP_KEYS}
+    if row.get("read_supply_model") is None and io_pipeline.get(
+        "native_completion_calibration_enabled"
+    ):
+        row["read_supply_model"] = "native_completion_calibration"
+    if row.get("read_supply_effective_backend") is None:
+        row["read_supply_effective_backend"] = io_pipeline.get(
+            "native_path_calibration_read_backend"
+        )
+    field_map = {
+        "read_supply_worker_cumulative_s": "light_read_supply_worker_cumulative",
+        "read_supply_file_read_cumulative_s": "light_read_supply_file_read",
+        "read_supply_consumer_wait_wall_s": "light_read_supply_consumer_wait_wall",
+        "read_supply_overlap_saved_s": "light_read_supply_overlap_saved",
+    }
+    for overlap_key, timing_key in field_map.items():
+        if row.get(overlap_key) is None:
+            row[overlap_key] = read_supply.get(timing_key)
+    worker = _number(row.get("read_supply_worker_cumulative_s"))
+    wall = _number(timing.get("light_read_upload_calibrate"))
+    hidden = _number(row.get("read_supply_overlap_saved_s"))
+    if row.get("read_supply_worker_to_wall_ratio") is None and worker not in (None, 0.0):
+        row["read_supply_worker_to_wall_ratio"] = (
+            None if wall in (None, 0.0) else float(worker) / float(wall)
+        )
+    if row.get("read_supply_overlap_efficiency") is None and worker not in (None, 0.0):
+        row["read_supply_overlap_efficiency"] = (
+            None if hidden is None else float(hidden) / float(worker)
+        )
+    return row
+
+
 def _run_row(label: str, run: str | Path) -> dict[str, Any]:
     root = Path(run)
     timing_payload = read_json(root / "run_timing.json") if (root / "run_timing.json").exists() else {}
@@ -62,16 +150,32 @@ def _run_row(label: str, run: str | Path) -> dict[str, Any]:
         if isinstance(artifact.get("resident_io_pipeline"), dict)
         else {}
     )
+    io_overlap = (
+        artifact.get("resident_io_overlap")
+        if isinstance(artifact.get("resident_io_overlap"), dict)
+        else {}
+    )
     total_elapsed = _number(timing_payload.get("total_elapsed_s"))
     if total_elapsed is None:
         total_elapsed = _number(timing.get("total"))
+    timing_row = {key: _number(timing.get(key)) for key in TIMING_KEYS}
+    read_supply = _read_supply_from_artifact(timing, io_pipeline, io_overlap)
+    for key, value in read_supply.items():
+        if timing_row.get(key) is None:
+            timing_row[key] = value
     return {
         "label": label,
         "run": str(root),
         "run_exists": root.exists(),
         "total_elapsed_s": total_elapsed,
-        "timing_s": {key: _number(timing.get(key)) for key in TIMING_KEYS},
+        "timing_s": timing_row,
         "resident_io_pipeline": {key: io_pipeline.get(key) for key in IO_KEYS},
+        "resident_io_overlap": _io_overlap_row(
+            timing,
+            io_pipeline,
+            io_overlap,
+            read_supply,
+        ),
     }
 
 
@@ -115,7 +219,17 @@ def _recommendation(rows: list[dict[str, Any]], comparisons: list[dict[str, Any]
         (comparison.get("timing_delta", {}).get("light_read_wait_wall", {}).get("ratio") or 0.0) > 1.5
         for comparison in comparisons
     )
-    if slow_due_to_read_wait:
+    slow_due_to_supply_wait = any(
+        (
+            comparison.get("timing_delta", {})
+            .get("light_read_supply_consumer_wait_wall", {})
+            .get("ratio")
+            or 0.0
+        )
+        > 1.5
+        for comparison in comparisons
+    )
+    if slow_due_to_read_wait or slow_due_to_supply_wait:
         return "repeat_with_warm_cache_or_dedicated_io_window"
     return f"best_observed:{best['label']}"
 
@@ -168,26 +282,33 @@ def _markdown(payload: dict[str, Any]) -> str:
         "",
         "## Runs",
         "",
-        "| rank | label | elapsed s | read wait s | worker read s | h2d+cal s | registration s | output s |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| rank | label | elapsed s | read wait s | supply worker s | supply hidden s | h2d+cal s | registration s | output s |",
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for rank, row in enumerate(payload.get("ranked_runs", []), start=1):
         timing = row.get("timing_s", {})
         lines.append(
             "| "
             f"{rank} | {row.get('label')} | {row.get('total_elapsed_s')} | "
-            f"{timing.get('light_read_wait_wall')} | {timing.get('light_read_worker_cumulative')} | "
+            f"{timing.get('light_read_wait_wall')} | "
+            f"{timing.get('light_read_supply_worker_cumulative')} | "
+            f"{timing.get('light_read_supply_overlap_saved')} | "
             f"{timing.get('light_h2d_calibrate_store')} | {timing.get('resident_registration_warp')} | "
             f"{timing.get('output_write')} |"
         )
     lines.extend(["", "## Comparisons", ""])
     for comparison in payload.get("comparisons", []):
         read_wait = comparison.get("timing_delta", {}).get("light_read_wait_wall", {})
+        supply_worker = comparison.get("timing_delta", {}).get(
+            "light_read_supply_worker_cumulative",
+            {},
+        )
         lines.append(
             "- "
             f"`{comparison.get('candidate_label')}` / `{comparison.get('baseline_label')}`: "
             f"elapsed ratio `{comparison.get('elapsed_ratio')}`, "
-            f"read-wait ratio `{read_wait.get('ratio')}`"
+            f"read-wait ratio `{read_wait.get('ratio')}`, "
+            f"supply-worker ratio `{supply_worker.get('ratio')}`"
         )
     lines.append("")
     return "\n".join(lines)

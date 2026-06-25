@@ -10,6 +10,15 @@ def _float_value(mapping: Mapping[str, Any], key: str) -> float:
         return 0.0
 
 
+def _optional_float_value(mapping: Mapping[str, Any], key: str) -> float | None:
+    if key not in mapping or mapping.get(key) is None:
+        return None
+    try:
+        return float(mapping.get(key))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _int_value(mapping: Mapping[str, Any], key: str) -> int:
     try:
         return int(mapping.get(key) or 0)
@@ -69,6 +78,39 @@ def build_resident_light_pipeline_profile(
     read_wait_fraction = _fraction(read_wait, wall)
     native_fraction = _fraction(native, wall)
     unaccounted_fraction = _fraction(unaccounted, wall)
+    read_supply_overlap_saved = _optional_float_value(
+        resident_io_overlap,
+        "read_supply_overlap_saved_s",
+    )
+    if read_supply_overlap_saved is None:
+        read_supply_overlap_saved = overlap_saved
+    read_supply_overlap_efficiency = _optional_float_value(
+        resident_io_overlap,
+        "read_supply_overlap_efficiency",
+    )
+    if read_supply_overlap_efficiency is None:
+        read_supply_overlap_efficiency = _float_value(
+            resident_io_overlap,
+            "overlap_efficiency",
+        )
+    read_supply_consumer_wait_fraction = _optional_float_value(
+        resident_io_overlap,
+        "read_supply_consumer_wait_fraction_of_wall",
+    )
+    if read_supply_consumer_wait_fraction is None:
+        read_supply_consumer_wait_fraction = _float_value(
+            resident_io_overlap,
+            "consumer_wait_fraction_of_wall",
+        )
+    read_supply_worker_to_wall_ratio = _optional_float_value(
+        resident_io_overlap,
+        "read_supply_worker_to_wall_ratio",
+    )
+    if read_supply_worker_to_wall_ratio is None:
+        read_supply_worker_to_wall_ratio = _float_value(
+            resident_io_overlap,
+            "worker_cumulative_to_wall_ratio",
+        )
     requested_streams = _int_value(resident_io_pipeline, "calibration_batch_requested_streams")
     native_completion_enabled = bool(
         resident_io_pipeline.get("native_completion_calibration_enabled", False)
@@ -135,13 +177,25 @@ def build_resident_light_pipeline_profile(
             ),
         },
         "overlap": {
-            "saved_s": overlap_saved,
-            "efficiency": _float_value(resident_io_overlap, "overlap_efficiency"),
-            "consumer_wait_fraction_of_wall": _float_value(
+            "model": resident_io_overlap.get("read_supply_model") or "legacy_prefetch_worker",
+            "saved_s": read_supply_overlap_saved,
+            "efficiency": read_supply_overlap_efficiency,
+            "consumer_wait_fraction_of_wall": read_supply_consumer_wait_fraction,
+            "worker_cumulative_to_wall_ratio": read_supply_worker_to_wall_ratio,
+            "worker_cumulative_s": _float_value(
                 resident_io_overlap,
-                "consumer_wait_fraction_of_wall",
+                "read_supply_worker_cumulative_s",
             ),
-            "worker_cumulative_to_wall_ratio": _float_value(
+            "file_read_cumulative_s": _float_value(
+                resident_io_overlap,
+                "read_supply_file_read_cumulative_s",
+            ),
+            "consumer_wait_wall_s": _float_value(
+                resident_io_overlap,
+                "read_supply_consumer_wait_wall_s",
+            ),
+            "legacy_saved_s": overlap_saved,
+            "legacy_worker_cumulative_to_wall_ratio": _float_value(
                 resident_io_overlap,
                 "worker_cumulative_to_wall_ratio",
             ),
@@ -166,6 +220,33 @@ def build_resident_light_pipeline_profile(
                 "native_path_calibration_read_backend_policy"
             ),
             "read_backend": resident_io_pipeline.get("native_path_calibration_read_backend"),
+            "worker_cumulative_s": _float_value(
+                resident_io_overlap,
+                "native_completion_worker_cumulative_s",
+            )
+            or _float_value(resident_io_pipeline, "native_path_calibration_total_s"),
+            "file_open_cumulative_s": _float_value(
+                resident_io_overlap,
+                "native_completion_file_open_cumulative_s",
+            )
+            or _float_value(resident_io_pipeline, "native_path_calibration_file_open_s"),
+            "file_read_cumulative_s": _float_value(
+                resident_io_overlap,
+                "native_completion_file_read_cumulative_s",
+            )
+            or _float_value(resident_io_pipeline, "native_path_calibration_file_read_s"),
+            "consumer_wait_wall_s": _float_value(
+                resident_io_overlap,
+                "native_completion_consumer_wait_wall_s",
+            ),
+            "hidden_by_stage_s": _float_value(
+                resident_io_overlap,
+                "native_completion_hidden_by_stage_s",
+            ),
+            "worker_to_wall_ratio": _float_value(
+                resident_io_overlap,
+                "native_completion_worker_to_wall_ratio",
+            ),
             "submit_count": _int_value(
                 resident_io_pipeline,
                 "native_completion_calibration_submit_count",

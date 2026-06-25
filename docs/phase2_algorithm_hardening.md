@@ -2004,6 +2004,96 @@ Interpretation:
   matrices before implementing deeper multi-buffer overlap or moving additional
   registration/warp orchestration onto resident CUDA.
 
+### S2-Gate 685: Native Completion Overlap Semantics
+
+Gate685 fixes the resident performance evidence contract for the default native
+completion calibration path. Gate684 already stored native worker read totals
+in `resident_io_pipeline`, but `resident_io_overlap` still used the legacy
+prefetch-thread timing model and therefore showed zero worker/read overlap on
+the current default path. Gate685 adds an explicit effective read-supply model
+without changing calibration, registration, LN, rejection, integration, frame
+admission, or FITS output pixels.
+
+Implementation:
+
+- Added `read_supply_*` fields to `resident_io_overlap`:
+  - `read_supply_model`;
+  - `read_supply_worker_cumulative_s`;
+  - `read_supply_file_read_cumulative_s`;
+  - `read_supply_consumer_wait_wall_s`;
+  - `read_supply_overlap_saved_s`;
+  - `read_supply_worker_to_wall_ratio`;
+  - `read_supply_overlap_efficiency`.
+- Added native-completion aliases:
+  - `native_completion_worker_cumulative_s`;
+  - `native_completion_file_read_cumulative_s`;
+  - `native_completion_consumer_wait_wall_s`;
+  - `native_completion_hidden_by_stage_s`.
+- Kept legacy `worker_*` and `light_read_wait_wall` fields unchanged for
+  existing reports and tests.
+- Extended `resident_light_pipeline_profile.overlap` and
+  `native_completion` to display the effective read-supply model.
+- Extended `resident-runtime-compare` to derive read-supply fields from older
+  Gate684 artifacts that lack `read_supply_*` but do contain
+  `native_path_calibration_total_s`.
+
+Validation:
+
+- Ruff on touched Python files passed.
+- Focused tests passed:
+  `8 passed in 0.66 s`.
+- Full pytest passed:
+  `1426 passed in 66.10 s`.
+- Real 200-light default candidate:
+  `C:\glass_runs\phase2_s2_gate685_native_overlap_semantics\runs_20260626_223000\default_overlap_semantics`.
+- Runtime compare:
+  `C:\glass_runs\phase2_s2_gate685_native_overlap_semantics\gate685_runtime_compare.json`.
+  Gate684 remained best observed at `11.66652269999031 s`; Gate685 completed
+  in `12.43947100022342 s`, elapsed ratio `1.0662535290171555`, inside the
+  `1.10` regression guard.
+- Regression gate versus Gate684 passed:
+  `C:\glass_runs\phase2_s2_gate685_native_overlap_semantics\gate685_regression_gate.json`.
+  Failed checks `[]`, active/masked frames `193 / 7`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate685_native_overlap_semantics\gate685_mainline_audit.json`.
+  Failed checks `[]`, input lights `200`, active/masked frames `193 / 7`.
+- Direct FITS SHA256 and array comparisons against Gate684 passed:
+  `C:\glass_runs\phase2_s2_gate685_native_overlap_semantics\gate685_output_hash_compare.json`;
+  `C:\glass_runs\phase2_s2_gate685_native_overlap_semantics\gate685_output_array_compare.json`.
+  Master, weight, coverage, low-rejection, high-rejection, and DQ maps were
+  byte-identical and array-identical.
+
+Timing and telemetry:
+
+- Gate685 effective read-supply model:
+  - `read_supply_model=native_completion_calibration`;
+  - `read_supply_effective_backend=std_ifstream`;
+  - `read_supply_worker_cumulative_s=30.826195000000002`;
+  - `read_supply_file_read_cumulative_s=30.780779700000004`;
+  - `read_supply_consumer_wait_wall_s=0.03785769999999997`;
+  - `read_supply_overlap_saved_s=27.324453300009186`;
+  - `read_supply_worker_to_wall_ratio=8.80310360986387`;
+  - `read_supply_overlap_efficiency=0.8864036998406447`.
+- Gate684 derived read-supply model:
+  - `read_supply_worker_cumulative_s=29.178299899999992`;
+  - `read_supply_file_read_cumulative_s=29.126343799999997`;
+  - `read_supply_overlap_saved_s=25.94881539998577`;
+  - `read_supply_worker_to_wall_ratio=9.034971339813362`.
+
+Interpretation:
+
+- The current default is not waiting on Python-visible `light_read_wait_wall`;
+  the native completion worker reads tens of seconds cumulatively and hides
+  most of that work behind a roughly 3-4 second light read/upload/calibrate
+  wall-time stage.
+- Gate685 shows that single-run runtime movement here is dominated by external
+  storage/cache variability and native H2D/calibration timing, not by missing
+  prefetch accounting.
+- The next substantive optimization should target resident GPU work that still
+  consumes wall time: native H2D/calibrate/store efficiency, resident
+  integration kernel time, or moving more registration/warp orchestration into
+  batched resident CUDA.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

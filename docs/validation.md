@@ -649,6 +649,20 @@ Current Phase 2 latest mainline acceptance:
   elapsed ratio `0.9941541819732985`. Direct SHA256 comparison showed
   bitwise-identical master, weight, coverage, low-rejection, high-rejection,
   and DQ maps.
+- Gate685 fixes resident native-completion read-overlap telemetry. The real
+  200-light run at
+  `C:\glass_runs\phase2_s2_gate685_native_overlap_semantics\runs_20260626_223000\default_overlap_semantics`
+  recorded `read_supply_model=native_completion_calibration`,
+  `read_supply_worker_cumulative_s=30.826195000000002`,
+  `read_supply_file_read_cumulative_s=30.780779700000004`,
+  `read_supply_overlap_saved_s=27.324453300009186`, and
+  `read_supply_worker_to_wall_ratio=8.80310360986387`. Phase 2 mainline and
+  regression gates passed with failed checks `[]`, input lights `200`, and
+  active/masked frames `193 / 7`. Runtime compare kept Gate684 as best observed:
+  Gate685 elapsed `12.43947100022342 s`, elapsed ratio
+  `1.0662535290171555` versus Gate684. Direct SHA256 and array comparisons
+  showed byte-identical and array-identical master, weight, coverage,
+  low-rejection, high-rejection, and DQ maps.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
