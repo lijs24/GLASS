@@ -948,6 +948,84 @@ Interpretation:
   The next substantive performance gate should return to resident registration,
   I/O/upload/calibration overlap, or the hardened reducer.
 
+### S2-Gate 670: StackEngine Streaming Master Calibration Sink
+
+Gate670 completes the same out-of-core sink work for CPU/tile master
+calibration frames. Before this gate, bias/dark master construction and
+per-flat normalized master construction used `CPUStackEngine` for the science
+logic, but the outer pipeline still accepted a full-frame `StackEngineResult`
+before writing the master FITS. Gate670 makes the master-frame path match the
+Gate669 integration path: StackEngine runs on tile-local sources, each master
+tile is written immediately, and only tile-sized StackEngine results are
+materialized.
+
+Implementation:
+
+- Added `_WindowedImageSource`, which maps a global master-output tile onto the
+  local source shape expected by `CPUStackEngine`.
+- `_stack_mean_master_with_engine` now streams bias/dark/raw master output
+  tile-by-tile. Optional bias subtraction for dark construction is applied to
+  the tile after the StackEngine combine, matching the previous formula while
+  avoiding a full-frame master array.
+- `_stack_normalized_flat_master` now streams the per-flat normalized flat
+  master tile-by-tile. The final `flat_floor` clamp is applied per output tile
+  before writing and statistics collection.
+- Added `stack_engine_master_streaming_result_contract`, compatible with the
+  existing `stack_engine_result_contract`, to prove:
+  - all per-tile StackEngine contracts passed;
+  - the master output path exists and contains finite written tiles;
+  - full output arrays were not materialized by the master sink;
+  - streamed master tiles cover the output shape;
+  - input valid/invalid/rejected sample accounting closes over the full frame.
+- `calibration_artifacts.json` master records now report
+  `execution_path=stack_engine_master_streaming_tile_sink`,
+  `full_output_arrays_materialized=false`,
+  `streaming_tile_contract_count`, and
+  `streaming_tile_contract_failed_count`.
+
+Validation:
+
+- Syntax check:
+  `python -m py_compile src\glass\engine\pipeline.py`.
+- Focused master/calibration tests:
+  `4 passed`, covering legacy parity, min/max rejection, synthetic calibration
+  run artifacts, and StackEngine contract acceptance.
+- Synthetic calibration artifact:
+  `C:\glass_runs\phase2_s2_gate670_master_streaming_sink\runs_20260626_040000\synthetic_cpu_calibration`.
+  Bias, dark, and flat masters all recorded
+  `execution_path=stack_engine_master_streaming_tile_sink`,
+  `full_output_arrays_materialized=false`, `streaming_tile_contract_count=16`,
+  `streaming_tile_contract_failed_count=0`, and a passing
+  `stack_engine_master_streaming_result_contract`.
+- Calibration-only StackEngine contract:
+  `C:\glass_runs\phase2_s2_gate670_master_streaming_sink\runs_20260626_040000\synthetic_stack_engine_contract.json`.
+  Status passed, `strict_native_stack_engine_ready=true`, master count `3`.
+- Real 200-light resident guard:
+  `C:\glass_runs\phase2_s2_gate670_master_streaming_sink\runs_20260626_040000\resident_default_guard`.
+  This gate does not change resident CUDA code, but the guard confirms the
+  main high-VRAM path still runs and preserves outputs.
+- Gate670 versus Gate669 resident regression:
+  `C:\glass_runs\phase2_s2_gate670_master_streaming_sink\runs_20260626_040000\gate670_vs_gate669_regression.json`.
+  Status passed; failed checks `[]`; total elapsed ratio `1.0081524547892338`;
+  artifact, frame-accounting, frame-signature, registration, output, and
+  numerical-drift difference counts were all zero.
+- Resident component timing in the guard run:
+  light read/upload/calibrate `3.320315600023605 s`,
+  registration/warp `0.2691957000643015 s`, local normalization
+  `0.37488160002976656 s`, integration `3.2789314999245107 s`, output write
+  `0.2674127999925986 s`.
+- Full pytest: `1410 passed in 62.66 s`.
+
+Interpretation:
+
+- This is not a resident CUDA speed optimization; it is a core StackEngine
+  default-path memory-model fix.
+- Bias, dark, and flat master science formulas are unchanged. The change is the
+  lifetime of the intermediate StackEngine result: tile-sized only.
+- Together with Gate669, the CPU/tile StackEngine default surfaces for master
+  frames and light integration now have explicit streaming sinks and
+  result-contract provenance.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

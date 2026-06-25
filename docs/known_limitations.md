@@ -18,10 +18,11 @@ Current code is intentionally gated:
   pending until their gates produce artifacts.
 - The portable CPU/tile integration path now streams StackEngine output tiles
   directly to FITS maps and no longer materializes the full integration result
-  in the outer integration sink. Direct `CPUStackEngine.stack(...)` API calls
-  and some calibration/master-frame surfaces can still return full result
-  arrays by design; future gates should extend the same sink pattern to any
-  remaining large StackEngine surfaces before claiming universal out-of-core
+  in the outer integration sink. CPU/tile master calibration now applies the
+  same sink pattern for bias, dark, and per-flat normalized flat masters. Direct
+  `CPUStackEngine.stack(...)` API calls can still return full result arrays by
+  design, and later gates should keep moving any remaining large StackEngine
+  call sites behind sink-oriented APIs before claiming universal out-of-core
   StackEngine execution.
 - The resident CUDA path keeps calibrated light frames in VRAM and is fast on
   large same-shape mono datasets. It currently performs calibration, resident

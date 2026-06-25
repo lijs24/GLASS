@@ -346,6 +346,27 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert all(master["stack_engine_dq_provenance"]["schema_version"] == 1 for master in artifacts["masters"].values())
     assert all(master["stack_engine_dq_provenance"]["input_samples"] > 0 for master in artifacts["masters"].values())
     assert all(
+        master["stack_engine_metrics"]["execution_path"] == "stack_engine_master_streaming_tile_sink"
+        for master in artifacts["masters"].values()
+    )
+    assert all(
+        master["stack_engine_metrics"]["full_output_arrays_materialized"] is False
+        for master in artifacts["masters"].values()
+    )
+    assert all(
+        master["stack_engine_metrics"]["streaming_tile_contract_failed_count"] == 0
+        for master in artifacts["masters"].values()
+    )
+    assert all(
+        master["stack_engine_dq_provenance"]["result_contract"]["contract_type"]
+        == "stack_engine_master_streaming_result_contract"
+        for master in artifacts["masters"].values()
+    )
+    assert all(
+        master["stack_engine_dq_provenance"]["result_contract"]["passed"]
+        for master in artifacts["masters"].values()
+    )
+    assert all(
         master["dq_provenance_summary"]["source_schema"] == "stack_engine_dq_provenance"
         for master in artifacts["masters"].values()
     )
@@ -479,6 +500,12 @@ def test_stack_engine_master_matches_legacy_streaming(tmp_path: Path):
     assert mode == "stack_engine_cpu"
     assert fallback_reason is None
     assert metrics["combine"] == "mean"
+    assert metrics["execution_path"] == "stack_engine_master_streaming_tile_sink"
+    assert metrics["full_output_arrays_materialized"] is False
+    assert metrics["streaming_tile_contract_count"] == 6
+    assert metrics["streaming_tile_contract_failed_count"] == 0
+    assert metrics["dq_provenance"]["result_contract"]["contract_type"] == "stack_engine_master_streaming_result_contract"
+    assert metrics["dq_provenance"]["result_contract"]["passed"] is True
     assert np.allclose(read_fits_data(stack_engine), read_fits_data(legacy))
     assert stack_stats["mean"] == legacy_stats["mean"]
 
@@ -510,6 +537,8 @@ def test_stack_engine_master_rejection_removes_extreme_samples(tmp_path: Path):
     assert fallback_reason is None
     assert metrics["low_rejected"] == 16
     assert metrics["high_rejected"] == 16
+    assert metrics["execution_path"] == "stack_engine_master_streaming_tile_sink"
+    assert metrics["dq_provenance"]["result_contract"]["passed"] is True
     assert np.allclose(read_fits_data(out), 2.5)
     assert stats["mean"] == 2.5
 

@@ -18,6 +18,17 @@ Master flat is calibrated by subtracting either bias or flat-dark data, then
 normalizing each source flat by its own median or mean before StackEngine
 combination. A `flat_floor` avoids division by zero and is applied to the final
 normalized master flat.
+
+As of S2-Gate 670, CPU/tile master calibration uses a streaming StackEngine
+sink for bias, dark, and per-flat normalized flat masters. Each output tile is
+presented to `CPUStackEngine` through tile-local image sources, written
+immediately to the master FITS, and then discarded. Master artifacts record
+`execution_path=stack_engine_master_streaming_tile_sink`,
+`full_output_arrays_materialized=false`, per-tile contract counts, and a
+`stack_engine_master_streaming_result_contract`. This keeps the same
+calibration formulas while removing full-frame `StackEngineResult`
+materialization from the master-frame pipeline.
+
 Both tile-mode and resident-mode `glass run` honor `--flat-floor`, and the
 effective value is written into `calibration_artifacts.json` or
 `resident_artifacts.json`. This is scientifically important for real flat

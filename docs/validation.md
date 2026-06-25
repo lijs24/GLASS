@@ -429,6 +429,22 @@ Current Phase 2 latest mainline acceptance:
   passed regression against Gate668 promoted default with elapsed ratio
   `1.046346188895259`, no failed checks, and zero artifact/frame/registration
   or output differences. Full pytest passed with `1410 passed in 62.32 s`.
+- Gate670 applies the same streaming-sink model to CPU/tile master calibration.
+  Focused validation passed direct master legacy-parity and min/max rejection
+  tests, a synthetic calibration run through `glass run --until-stage
+  calibration`, and StackEngine contract acceptance. Calibration artifacts now
+  prove `execution_path=stack_engine_master_streaming_tile_sink`,
+  `full_output_arrays_materialized=false`, zero failed streaming tile
+  contracts, and a passing
+  `stack_engine_master_streaming_result_contract` for bias/dark/flat masters.
+  The synthetic calibration artifact at
+  `C:\glass_runs\phase2_s2_gate670_master_streaming_sink\runs_20260626_040000\synthetic_cpu_calibration`
+  recorded 3 streaming masters, each with 16 tile contracts and zero failed
+  tile contracts. The real 200-light resident guard at
+  `C:\glass_runs\phase2_s2_gate670_master_streaming_sink\runs_20260626_040000\resident_default_guard`
+  passed regression against Gate669 with elapsed ratio `1.0081524547892338`,
+  no failed checks, and zero artifact/frame/registration or output
+  differences. Full pytest passed with `1410 passed in 62.66 s`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
