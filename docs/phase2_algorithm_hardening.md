@@ -345,6 +345,73 @@ Decision:
 - The next larger bottleneck remains the resident hardened winsorized reducer
   kernel or a deeper native read/H2D overlap redesign.
 
+### S2-Gate 633: Lazy Fallback Scale In Hardened Reducer
+
+Gate 633 returns to the bounded resident hardened winsorized reducer itself.
+The previous CUDA kernel computed a fallback mean/std for every pixel before
+selecting q25/median/q75, even though the fallback scale is needed only when
+the median/IQR scale is zero or non-finite. Gate633 changes the bounded
+256/512-frame native reducer to compute that fallback lazily.
+
+Implementation:
+
+- Removed the unconditional fallback mean/std pass over the per-pixel sample
+  array from the bounded hardened winsorized CUDA kernel.
+- After q25/median/q75 selection, the kernel now recomputes fallback std only
+  for IQR-degenerate pixels.
+- The lazy fallback recomputes samples in the original frame-axis order from
+  resident stack/weight inputs, preserving CPUStackEngine parity for flat or
+  low-dynamic-range pixels.
+- Native profiles now record
+  `fallback_scale_strategy=lazy_iqr_degenerate_frame_axis_rescan` and
+  `fallback_scale_default_path=median_iqr_scale_without_fallback_std`.
+- Added a CUDA/CPU parity test with flat pixels plus high/low outliers to force
+  the IQR-degenerate fallback branch.
+
+Validation:
+
+- Native rebuild through the VS BuildTools environment with CUDA Toolkit 13.2:
+  passed.
+- Focused CUDA hardened resident-stack tests:
+  `17 passed, 52 deselected`.
+- Focused resident CLI hardened tests:
+  `7 passed, 120 deselected`.
+- Real 200-light candidate root:
+  `C:\glass_runs\phase2_s2_gate633_lazy_fallback\runs_20260625_144040`.
+- Regression gates:
+  - Gate632 promoted default versus Gate633 lazy candidate:
+    `regression_gate632_promoted_vs_gate633_lazy.json`, passed, elapsed ratio
+    `1.026617075839138`;
+  - Gate632 `single_wait_r2` versus Gate633 lazy candidate r2:
+    `regression_gate632_single_wait_r2_vs_gate633_lazy_r2.json`, passed,
+    elapsed ratio `1.0044802533947044`.
+- Both regression gates reported zero output differences and preserved
+  `193 / 7` active/masked frame accounting.
+
+Measured rows:
+
+| variant | total s | resident integration s | hardened total s | kernel sync s | fallback strategy |
+|---|---:|---:|---:|---:|---|
+| gate632_promoted | 10.820 | 3.320 | 3.320 | 3.198 | eager_fallback_std_before_quartiles |
+| gate633_lazy | 11.108 | 3.317 | 3.317 | 3.183 | lazy_iqr_degenerate_frame_axis_rescan |
+| gate632_single_wait_r2 | 10.687 | 3.316 | 3.316 | 3.193 | eager_fallback_std_before_quartiles |
+| gate633_lazy_r2 | 10.735 | 3.308 | 3.308 | 3.178 | lazy_iqr_degenerate_frame_axis_rescan |
+
+Interpretation:
+
+- The reducer kernel-sync component improved in both pairs with a stable
+  ratio near `0.9953x`.
+- End-to-end total runtime did not improve materially because surrounding
+  read/H2D/calibration and registration/warp variance is larger than the
+  approximately 15 ms kernel gain.
+- This gate is kept because it removes unnecessary per-pixel work while
+  preserving output parity; it is not claimed as a visible end-to-end speedup
+  gate by itself.
+- The next substantive speed gate should target a larger resident bottleneck:
+  a redesigned cooperative/segmented hardened reducer, resident
+  registration/warp orchestration, or deeper native read/H2D/calibration
+  overlap.
+
 ### S2-Gate 614: Resident Regression Gate
 
 Gate 614 deliberately returns from a failed native integration micro-optimization

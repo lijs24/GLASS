@@ -78,9 +78,13 @@ Current code is intentionally gated:
   mask-scan won total elapsed time in three paired runs, but hardened
   integration and kernel-sync timings were consistently slower, so the total
   gain was attributed to surrounding runtime variance. The environment flag now
-  requires an explicit true value and ignores values such as `auto`. Richer
-  robust rejection policies, cosmetic correction, and broader data-shape
-  support remain future work.
+  requires an explicit true value and ignores values such as `auto`. Gate633
+  removes the unconditional fallback std pass from the bounded CUDA reducer and
+  computes it lazily only for IQR-degenerate pixels; real 200-light kernel-sync
+  time improved slightly in both paired runs, but total runtime did not move
+  materially because the gain is smaller than surrounding I/O and registration
+  variance. Richer robust rejection policies, cosmetic correction, and broader
+  data-shape support remain future work.
 - The default native-completion calibration schedule still uses 4 lanes. Gate631
   tested 8/12/16-lane real 200-light variants and rejected default promotion:
   8-lane preserved output but did not deliver a stable native H2D/calibration

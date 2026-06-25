@@ -1656,25 +1656,78 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
     return;
   }
 
-  float mean = 0.0f;
-  for (int i = 0; i < count; ++i) {
-    mean += values[i];
-  }
-  mean /= static_cast<float>(count);
-  float variance = 0.0f;
-  for (int i = 0; i < count; ++i) {
-    const float delta = values[i] - mean;
-    variance += delta * delta;
-  }
-  const float fallback_scale = sqrtf(variance / static_cast<float>(count));
-
   float center0 = 0.0f;
   float q25 = 0.0f;
   float q75 = 0.0f;
   glass_select_quartiles_f32(values, count, &center0, &q25, &q75);
   float first_scale = (q75 - q25) / 1.349f;
   if (!(first_scale > 0.0f) || !isfinite(first_scale)) {
-    first_scale = fallback_scale;
+    float fallback_mean = 0.0f;
+    if (ReuseLocalUnitSamples) {
+      for (int i = 0; i < count; ++i) {
+        fallback_mean += ordered_values.get(i);
+      }
+    } else if (UnitPositiveWeights || UnitPositiveWeightMask) {
+      const std::size_t loop_count = UnitPositiveWeights ? active_frame_count : frame_count;
+      for (std::size_t sample_pos = 0; sample_pos < loop_count; ++sample_pos) {
+        const std::size_t frame =
+            UnitPositiveWeights ? static_cast<std::size_t>(active_indices[sample_pos]) : sample_pos;
+        if (UnitPositiveWeightMask && unit_positive_weight_mask[frame] == 0) {
+          continue;
+        }
+        const float value = stack[frame * pixels_per_frame + pixel];
+        if (isfinite(value)) {
+          fallback_mean += value;
+        }
+      }
+    } else {
+      for (std::size_t frame = 0; frame < frame_count; ++frame) {
+        const float weight = weights[frame];
+        if (weight <= 0.0f || !isfinite(weight)) {
+          continue;
+        }
+        const float value = stack[frame * pixels_per_frame + pixel];
+        if (isfinite(value)) {
+          fallback_mean += value;
+        }
+      }
+    }
+    fallback_mean /= static_cast<float>(count);
+
+    float fallback_variance = 0.0f;
+    if (ReuseLocalUnitSamples) {
+      for (int i = 0; i < count; ++i) {
+        const float delta = ordered_values.get(i) - fallback_mean;
+        fallback_variance += delta * delta;
+      }
+    } else if (UnitPositiveWeights || UnitPositiveWeightMask) {
+      const std::size_t loop_count = UnitPositiveWeights ? active_frame_count : frame_count;
+      for (std::size_t sample_pos = 0; sample_pos < loop_count; ++sample_pos) {
+        const std::size_t frame =
+            UnitPositiveWeights ? static_cast<std::size_t>(active_indices[sample_pos]) : sample_pos;
+        if (UnitPositiveWeightMask && unit_positive_weight_mask[frame] == 0) {
+          continue;
+        }
+        const float value = stack[frame * pixels_per_frame + pixel];
+        if (isfinite(value)) {
+          const float delta = value - fallback_mean;
+          fallback_variance += delta * delta;
+        }
+      }
+    } else {
+      for (std::size_t frame = 0; frame < frame_count; ++frame) {
+        const float weight = weights[frame];
+        if (weight <= 0.0f || !isfinite(weight)) {
+          continue;
+        }
+        const float value = stack[frame * pixels_per_frame + pixel];
+        if (isfinite(value)) {
+          const float delta = value - fallback_mean;
+          fallback_variance += delta * delta;
+        }
+      }
+    }
+    first_scale = sqrtf(fallback_variance / static_cast<float>(count));
   }
   const float first_low = center0 - low_sigma * first_scale;
   const float first_high = center0 + high_sigma * first_scale;

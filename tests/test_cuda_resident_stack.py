@@ -2474,6 +2474,65 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     assert high_reject[1, 1] == 1
 
 
+def test_resident_stack_hardened_winsorized_sigma_degenerate_iqr_matches_cpu():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    frames = [
+        np.array([[10, 10, 10], [10, 10, 10]], dtype=np.float32),
+        np.array([[10, 10, 10], [10, 10, 10]], dtype=np.float32),
+        np.array([[10, 10, 10], [10, 10, 10]], dtype=np.float32),
+        np.array([[10, 10, 10], [10, 10, 10]], dtype=np.float32),
+        np.array([[100, 10, 10], [10, -50, 10]], dtype=np.float32),
+    ]
+    stack_np = np.stack(frames, axis=0)
+    weights = np.ones((len(frames),), dtype=np.float32)
+    resident_stack = module.ResidentCalibratedStack(len(frames), 2, 3)
+    for index, frame in enumerate(frames):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.0,
+            2.0,
+            min_samples=1,
+            max_reject_fraction=1.0,
+            count_map_dtype="uint16",
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            stack_np,
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.0,
+            high_sigma=2.0,
+            min_samples=1,
+            max_reject_fraction=1.0,
+        )
+    )
+
+    assert timing["native_profile"]["fallback_scale_strategy"] == (
+        "lazy_iqr_degenerate_frame_axis_rescan"
+    )
+    assert timing["native_profile"]["fallback_scale_default_path"] == (
+        "median_iqr_scale_without_fallback_std"
+    )
+    assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5)
+    assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
+    assert int(high_reject[0, 0]) == 1
+    assert int(low_reject[1, 1]) == 1
+
+
 def test_resident_stack_hardened_winsorized_sigma_260_frames_matches_cpu_baseline():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(

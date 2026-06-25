@@ -11971,6 +11971,8 @@ class ResidentCalibratedStack {
         profile_info["schema_version"] = 1;
         profile_info["native_profile_model"] = "chrono_allocation_upload_kernel_download_free";
         profile_info["percentile_strategy"] = percentile_strategy;
+        profile_info["fallback_scale_strategy"] = "lazy_iqr_degenerate_frame_axis_rescan";
+        profile_info["fallback_scale_default_path"] = "median_iqr_scale_without_fallback_std";
         profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
         profile_info["sample_reuse_strategy"] = sample_reuse_strategy;
         profile_info["native_frame_count_exceeds_limit"] = frame_count_ > 512;
@@ -12221,6 +12223,8 @@ class ResidentCalibratedStack {
       profile_info["schema_version"] = 1;
       profile_info["native_profile_model"] = "chrono_allocation_upload_kernel_download_free";
       profile_info["percentile_strategy"] = percentile_strategy;
+      profile_info["fallback_scale_strategy"] = "lazy_iqr_degenerate_frame_axis_rescan";
+      profile_info["fallback_scale_default_path"] = "median_iqr_scale_without_fallback_std";
       profile_info["winsorized_accumulation_order"] = "frame_axis_input_order";
       profile_info["sample_reuse_strategy"] = sample_reuse_strategy;
       profile_info["native_frame_count_exceeds_limit"] = frame_count_ > 512;
