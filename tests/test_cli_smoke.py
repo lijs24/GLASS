@@ -2360,6 +2360,7 @@ def test_cli_help_commands():
         "resident-runtime-compare",
         "resident-fits-auto-regression",
         "resident-winsorized-benchmark",
+        "resident-winsorized-overlimit-benchmark",
         "resident-winsorized-benchmark-audit",
         "resident-winsorized-sweep",
         "resident-winsorized-sweep-audit",

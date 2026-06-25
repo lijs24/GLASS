@@ -401,6 +401,56 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 627: Over-Limit Resident Winsorized Benchmark Contract
+
+Gate 627 turns the Gate625/626 over-512 resident radix-select work from an
+ad-hoc probe into a reusable benchmark contract. The goal is not to promote the
+opt-in reducer as the default path; it is to keep a hard, repeatable
+performance-and-parity surface for groups above the old 512-frame bounded
+kernel limit.
+
+Implementation:
+
+- Adds `build_resident_winsorized_overlimit_benchmark`, which generates a
+  deterministic synthetic stack above the 512-frame hardened limit, injects
+  non-finite samples by default, and times a tiled `CPUStackEngine`
+  `winsorized_sigma` baseline.
+- Forces `GLASS_CUDA_RADIX_SELECT_WINSORIZED=1` only inside the benchmark
+  scope, then restores the caller environment.
+- Records upload time, CUDA radix-select integration time, total time with
+  upload, throughput, speedup versus CPUStackEngine, native selector/profile
+  fields, and master/weight/coverage/low/high map differences.
+- Adds the CLI command `glass resident-winsorized-overlimit-benchmark`.
+- Adds `benchmarks/bench_resident_overlimit_winsorized.py` for direct local
+  stress runs.
+
+Validation:
+
+- `ruff` over touched files: passed.
+- Focused over-limit benchmark tests: `3 passed`.
+- Benchmark script and CLI help tests: `2 passed`.
+- Synthetic 545-frame over-limit artifact:
+  `C:\glass_runs\phase2_s2_gate627_overlimit_winsorized\overlimit_545_benchmark.json`.
+- The 545-frame run used
+  `native_kernel_capacity_selector=radix_select_unbounded_positive_samples`,
+  passed all checks, and matched CPUStackEngine exactly for master, weight,
+  coverage, low-rejection, and high-rejection maps.
+- Timings on the 545 x 32 x 32 synthetic case: CPUStackEngine
+  `0.043547699926421046 s`, CUDA upload `0.00484060007147491 s`, CUDA
+  radix-select integration `0.02139750006608665 s`, CUDA total with upload
+  `0.02623810013756156 s`.
+- Speedup versus CPUStackEngine: `2.035176996935297x` excluding upload and
+  `1.6597123914501593x` including upload.
+
+Decision:
+
+- The opt-in over-512 radix-select reducer now has a reusable result/performance
+  contract against the tiled CPUStackEngine baseline.
+- Default resident behavior is unchanged. The next mainline work should either
+  use this contract to improve the over-limit device reducer or return to the
+  real 200-light resident bottlenecks in I/O/upload/calibration and
+  registration/warp orchestration.
+
 ### S2-Gate 626: Deterministic Mixed-Valid Winsorized CPU Baseline
 
 Gate 626 closes the parity-hardening item left by Gate625. The all-valid

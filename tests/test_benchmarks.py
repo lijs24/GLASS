@@ -205,6 +205,39 @@ def test_bench_resident_fused_matrix_dispatch_outputs_agreement(tmp_path: Path):
     assert payload["speedup_stack_over_fused_median"] is None or payload["speedup_stack_over_fused_median"] > 0.0
 
 
+def test_bench_resident_overlimit_winsorized_outputs_required_fields(tmp_path: Path):
+    cuda_module_or_skip()
+    out = tmp_path / "resident_overlimit_winsorized.json"
+
+    _run(
+        "benchmarks/bench_resident_overlimit_winsorized.py",
+        "--out",
+        str(out),
+        "--frames",
+        "513",
+        "--height",
+        "4",
+        "--width",
+        "5",
+        "--tile-size",
+        "2",
+        "--fail-on-failure",
+        timeout_s=45.0,
+        skip_on_timeout=True,
+    )
+
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "resident_winsorized_overlimit_benchmark"
+    assert payload["passed"] is True
+    assert payload["config"]["frame_count"] == 513
+    assert payload["cuda_radix_timing"]["native_kernel_capacity_selector"] == (
+        "radix_select_unbounded_positive_samples"
+    )
+    assert payload["comparisons"]["radix_select_vs_cpu_stack_engine"]["master"]["rms"] <= (
+        payload["config"]["tolerance_rms"]
+    )
+
+
 def test_star_guarded_seed_selection_prefers_star_supported_seed():
     pytest.importorskip("glass_cuda")
     spec = importlib.util.spec_from_file_location(

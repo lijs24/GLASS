@@ -65,7 +65,11 @@ Current code is intentionally gated:
   an opt-in correctness prototype pending large-active-count performance
   validation. Gate626 resolves the mixed-valid/NaN radix-select parity edge by
   making the CPU winsorized baseline deterministic instead of adding a
-  rejection-threshold tolerance. Richer robust rejection policies, cosmetic
+  rejection-threshold tolerance. Gate627 adds a reusable
+  `resident-winsorized-overlimit-benchmark` command and benchmark script so
+  over-512 radix-select parity/performance can be measured against tiled
+  CPUStackEngine, but this is still an evidence surface rather than a
+  default-path promotion. Richer robust rejection policies, cosmetic
   correction, and broader data-shape support remain future work.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 

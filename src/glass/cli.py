@@ -132,7 +132,9 @@ from glass.report.resident_warp_input_audit import (
     write_resident_warp_input_audit,
 )
 from glass.report.resident_winsorized_benchmark import (
+    build_resident_winsorized_overlimit_benchmark,
     build_resident_winsorized_benchmark,
+    write_resident_winsorized_overlimit_benchmark,
     write_resident_winsorized_benchmark,
 )
 from glass.report.resident_winsorized_benchmark_contract import (
@@ -4590,6 +4592,38 @@ def cmd_resident_winsorized_benchmark(args: argparse.Namespace) -> int:
             "status": payload.get("status"),
             "passed": payload.get("passed"),
             "timing_s": payload.get("timing_s"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_resident_winsorized_overlimit_benchmark(args: argparse.Namespace) -> int:
+    payload = build_resident_winsorized_overlimit_benchmark(
+        frame_count=args.frames,
+        height=args.height,
+        width=args.width,
+        seed=args.seed,
+        low_sigma=args.low_sigma,
+        high_sigma=args.high_sigma,
+        min_samples=args.min_samples,
+        max_reject_fraction=args.max_reject_fraction,
+        tile_size=args.tile_size,
+        tolerance_rms=args.tolerance_rms,
+        tolerance_max_abs=args.tolerance_max_abs,
+        inject_nan=not args.no_nan,
+    )
+    write_resident_winsorized_overlimit_benchmark(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "timing_s": payload.get("timing_s"),
+            "speedup_vs_cpu_stack_engine": payload.get("speedup_vs_cpu_stack_engine"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -9264,6 +9298,42 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless CUDA is available and hardened parity checks pass",
     )
     resident_winsorized_benchmark.set_defaults(func=cmd_resident_winsorized_benchmark)
+
+    resident_winsorized_overlimit_benchmark = sub.add_parser(
+        "resident-winsorized-overlimit-benchmark",
+        help="run a 513+ frame resident CUDA radix-select benchmark against tiled CPUStackEngine",
+    )
+    resident_winsorized_overlimit_benchmark.add_argument("--out", required=True, help="output benchmark JSON")
+    resident_winsorized_overlimit_benchmark.add_argument("--markdown", help="optional output Markdown summary")
+    resident_winsorized_overlimit_benchmark.add_argument(
+        "--frames",
+        type=int,
+        default=545,
+        help="synthetic frame count; must be greater than the 512-frame hardened limit",
+    )
+    resident_winsorized_overlimit_benchmark.add_argument("--height", type=int, default=32)
+    resident_winsorized_overlimit_benchmark.add_argument("--width", type=int, default=32)
+    resident_winsorized_overlimit_benchmark.add_argument("--seed", type=int, default=627)
+    resident_winsorized_overlimit_benchmark.add_argument("--low-sigma", type=float, default=3.0)
+    resident_winsorized_overlimit_benchmark.add_argument("--high-sigma", type=float, default=3.0)
+    resident_winsorized_overlimit_benchmark.add_argument("--min-samples", type=int, default=3)
+    resident_winsorized_overlimit_benchmark.add_argument("--max-reject-fraction", type=float, default=0.5)
+    resident_winsorized_overlimit_benchmark.add_argument("--tile-size", type=int, default=16)
+    resident_winsorized_overlimit_benchmark.add_argument("--tolerance-rms", type=float, default=2.0e-5)
+    resident_winsorized_overlimit_benchmark.add_argument("--tolerance-max-abs", type=float, default=2.0e-4)
+    resident_winsorized_overlimit_benchmark.add_argument(
+        "--no-nan",
+        action="store_true",
+        help="disable injected non-finite samples in the synthetic stack",
+    )
+    resident_winsorized_overlimit_benchmark.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless CUDA radix-select and CPUStackEngine parity checks pass",
+    )
+    resident_winsorized_overlimit_benchmark.set_defaults(
+        func=cmd_resident_winsorized_overlimit_benchmark
+    )
 
     resident_winsorized_benchmark_audit = sub.add_parser(
         "resident-winsorized-benchmark-audit",

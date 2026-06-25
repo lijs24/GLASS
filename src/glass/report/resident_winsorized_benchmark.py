@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -7,7 +10,16 @@ from typing import Any
 import numpy as np
 
 from glass.cpu.integration import weighted_integrate_stack
+from glass.engine.contracts import (
+    CombinePolicy,
+    DQMask,
+    OutputMapPolicy,
+    RejectionPolicy,
+    StackRequest,
+    TileWindow,
+)
 from glass.engine.rejection import RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
+from glass.engine.stack_engine import CPUStackEngine
 from glass.io.json_io import write_json
 from glass.models import now_iso
 
@@ -63,6 +75,124 @@ def _timed_cpu_baseline(
         high_sigma=high_sigma,
     )
     return result, perf_counter() - start
+
+
+@dataclass(slots=True)
+class _ArrayImageSource:
+    frame_id: str
+    data: np.ndarray
+
+    @property
+    def path(self) -> str:
+        return f"synthetic://resident-overlimit/{self.frame_id}"
+
+    @property
+    def width(self) -> int:
+        return int(self.data.shape[1])
+
+    @property
+    def height(self) -> int:
+        return int(self.data.shape[0])
+
+    @property
+    def channels(self) -> int:
+        return 1
+
+    @property
+    def dtype(self) -> str:
+        return str(self.data.dtype)
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        return {"frame_id": self.frame_id, "source": "synthetic_resident_overlimit"}
+
+    def read_tile(self, window: TileWindow, dtype: Any = np.float32) -> np.ndarray:
+        y_slice, x_slice = window.as_slices()
+        return np.asarray(self.data[y_slice, x_slice], dtype=dtype)
+
+    def read_mask_tile(self, window: TileWindow) -> DQMask:
+        return DQMask.empty(window.shape)
+
+
+def _timed_cpu_stack_engine_baseline(
+    stack: np.ndarray,
+    weights: np.ndarray,
+    *,
+    low_sigma: float,
+    high_sigma: float,
+    min_samples: int,
+    max_reject_fraction: float,
+    tile_size: int,
+) -> tuple[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray], dict[str, Any], float]:
+    frame_ids = tuple(f"frame_{index:04d}" for index in range(int(stack.shape[0])))
+    sources = {
+        frame_id: _ArrayImageSource(frame_id=frame_id, data=np.asarray(stack[index], dtype=np.float32))
+        for index, frame_id in enumerate(frame_ids)
+    }
+    request = StackRequest(
+        frame_ids=frame_ids,
+        source_kind="light",
+        combine=CombinePolicy(method="weighted_mean", accumulator_dtype="float64"),
+        rejection=RejectionPolicy(
+            method="winsorized_sigma",
+            iterations=1,
+            low_sigma=float(low_sigma),
+            high_sigma=float(high_sigma),
+            min_samples=int(min_samples),
+            max_reject_fraction=float(max_reject_fraction),
+        ),
+        output_maps=OutputMapPolicy(
+            coverage=True,
+            weight=True,
+            variance=False,
+            low_rejection=True,
+            high_rejection=True,
+            dq=False,
+        ),
+        weights={frame_id: float(weights[index]) for index, frame_id in enumerate(frame_ids)},
+        metadata={
+            "baseline": "CPUStackEngine",
+            "tile_size": int(tile_size),
+            "source": "resident_winsorized_overlimit_benchmark",
+        },
+    )
+    engine = CPUStackEngine(tile_size=tile_size)
+    start = perf_counter()
+    result = engine.stack(request, sources)
+    elapsed = perf_counter() - start
+    maps = (
+        result.master,
+        np.zeros_like(result.master, dtype=np.float32)
+        if result.weight_map is None
+        else result.weight_map,
+        np.zeros_like(result.master, dtype=np.float32)
+        if result.coverage_map is None
+        else result.coverage_map,
+        np.zeros_like(result.master, dtype=np.float32)
+        if result.low_rejection_map is None
+        else result.low_rejection_map,
+        np.zeros_like(result.master, dtype=np.float32)
+        if result.high_rejection_map is None
+        else result.high_rejection_map,
+    )
+    provenance = {
+        "metrics": dict(result.metrics),
+        "dq_provenance": dict(result.dq_provenance),
+    }
+    return maps, provenance, elapsed
+
+
+@contextmanager
+def _temporary_env(name: str, value: str):
+    previous = os.environ.get(name)
+    os.environ[name] = value
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = previous
 
 
 def _timed_fast_cuda(
@@ -240,6 +370,228 @@ def build_resident_winsorized_benchmark(
     }
 
 
+def build_resident_winsorized_overlimit_benchmark(
+    *,
+    frame_count: int = RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT + 33,
+    height: int = 32,
+    width: int = 32,
+    seed: int = 627,
+    low_sigma: float = 3.0,
+    high_sigma: float = 3.0,
+    min_samples: int = 3,
+    max_reject_fraction: float = 0.5,
+    tile_size: int = 16,
+    tolerance_rms: float = 2.0e-5,
+    tolerance_max_abs: float = 2.0e-4,
+    inject_nan: bool = True,
+) -> dict[str, Any]:
+    if frame_count <= RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT:
+        raise ValueError(
+            "resident over-limit winsorized benchmark frame_count must be greater than "
+            f"{RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT}"
+        )
+    if height <= 0 or width <= 0 or tile_size <= 0:
+        raise ValueError("height, width, and tile_size must be positive")
+    if min_samples < 1:
+        raise ValueError("min_samples must be at least 1")
+    if not 0.0 <= float(max_reject_fraction) <= 1.0:
+        raise ValueError("max_reject_fraction must be between 0 and 1")
+
+    stack, weights = _synthetic_stack(frame_count, height, width, seed)
+    if inject_nan:
+        stack[8 % frame_count, 3 % height, 4 % width] = np.nan
+        if height >= 5 and width >= 6:
+            stack[frame_count // 3, 4, 5] = np.nan
+
+    cpu_result, cpu_provenance, cpu_elapsed = _timed_cpu_stack_engine_baseline(
+        stack,
+        weights,
+        low_sigma=low_sigma,
+        high_sigma=high_sigma,
+        min_samples=min_samples,
+        max_reject_fraction=max_reject_fraction,
+        tile_size=tile_size,
+    )
+
+    try:
+        import glass_cuda
+    except Exception as exc:  # pragma: no cover - import diagnostics are environment-specific
+        return _overlimit_unavailable_payload(
+            frame_count=frame_count,
+            height=height,
+            width=width,
+            seed=seed,
+            low_sigma=low_sigma,
+            high_sigma=high_sigma,
+            min_samples=min_samples,
+            max_reject_fraction=max_reject_fraction,
+            tile_size=tile_size,
+            tolerance_rms=tolerance_rms,
+            tolerance_max_abs=tolerance_max_abs,
+            inject_nan=inject_nan,
+            cpu_elapsed=cpu_elapsed,
+            cpu_provenance=cpu_provenance,
+            reason=f"{type(exc).__name__}: {exc}",
+        )
+
+    if not glass_cuda.cuda_available() or not hasattr(glass_cuda, "ResidentCalibratedStack"):
+        return _overlimit_unavailable_payload(
+            frame_count=frame_count,
+            height=height,
+            width=width,
+            seed=seed,
+            low_sigma=low_sigma,
+            high_sigma=high_sigma,
+            min_samples=min_samples,
+            max_reject_fraction=max_reject_fraction,
+            tile_size=tile_size,
+            tolerance_rms=tolerance_rms,
+            tolerance_max_abs=tolerance_max_abs,
+            inject_nan=inject_nan,
+            cpu_elapsed=cpu_elapsed,
+            cpu_provenance=cpu_provenance,
+            reason="native CUDA ResidentCalibratedStack is unavailable",
+        )
+
+    resident_stack = glass_cuda.ResidentCalibratedStack(frame_count, height, width)
+    upload_start = perf_counter()
+    for index, frame in enumerate(stack):
+        resident_stack.upload_calibrated_frame(index, frame)
+    upload_elapsed = perf_counter() - upload_start
+
+    with _temporary_env("GLASS_CUDA_RADIX_SELECT_WINSORIZED", "1"):
+        cuda_result = resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            low_sigma,
+            high_sigma,
+            min_samples=int(min_samples),
+            max_reject_fraction=float(max_reject_fraction),
+            count_map_dtype="uint16",
+        )
+    cuda_maps = cuda_result[:5]
+    cuda_timing = cuda_result[5]
+    native_profile = cuda_timing.get("native_profile", {}) if isinstance(cuda_timing, dict) else {}
+
+    cpu_master, cpu_weight, cpu_coverage, cpu_low, cpu_high = cpu_result
+    cuda_master, cuda_weight, cuda_coverage, cuda_low, cuda_high = cuda_maps
+    comparisons = {
+        "radix_select_vs_cpu_stack_engine": {
+            "master": _difference_stats(cuda_master, cpu_master),
+            "weight": _difference_stats(cuda_weight, cpu_weight),
+            "coverage": _difference_stats(cuda_coverage, cpu_coverage),
+            "low_rejection": _difference_stats(cuda_low, cpu_low),
+            "high_rejection": _difference_stats(cuda_high, cpu_high),
+        }
+    }
+    map_stats = comparisons["radix_select_vs_cpu_stack_engine"]
+    selector = str(cuda_timing.get("native_kernel_capacity_selector", ""))
+    radix_enabled = bool(native_profile.get("radix_select_enabled"))
+    checks = [
+        _check("frame_count_exceeds_hardened_limit", True, {
+            "frame_count": int(frame_count),
+            "hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
+        }),
+        _check("cuda_available", True, {"cuda_available": True}),
+        _check(
+            "radix_select_enabled",
+            radix_enabled,
+            {"native_profile.radix_select_enabled": native_profile.get("radix_select_enabled")},
+        ),
+        _check(
+            "radix_select_selector_used",
+            selector == "radix_select_unbounded_positive_samples",
+            {"native_kernel_capacity_selector": selector},
+        ),
+        _check(
+            "radix_master_rms_within_tolerance",
+            map_stats["master"]["rms"] <= tolerance_rms,
+            {"actual": map_stats["master"]["rms"], "required_max": tolerance_rms},
+        ),
+        _check(
+            "radix_master_max_abs_within_tolerance",
+            map_stats["master"]["max_abs"] <= tolerance_max_abs,
+            {"actual": map_stats["master"]["max_abs"], "required_max": tolerance_max_abs},
+        ),
+        _check("radix_weight_map_matches_cpu", map_stats["weight"]["max_abs"] <= tolerance_max_abs, map_stats["weight"]),
+        _check("radix_coverage_map_matches_cpu", map_stats["coverage"]["max_abs"] <= tolerance_max_abs, map_stats["coverage"]),
+        _check(
+            "radix_low_rejection_map_matches_cpu",
+            map_stats["low_rejection"]["max_abs"] <= tolerance_max_abs,
+            map_stats["low_rejection"],
+        ),
+        _check(
+            "radix_high_rejection_map_matches_cpu",
+            map_stats["high_rejection"]["max_abs"] <= tolerance_max_abs,
+            map_stats["high_rejection"],
+        ),
+    ]
+    failed = [item for item in checks if not item.get("passed")]
+    samples = int(frame_count) * int(height) * int(width)
+    cuda_total_with_upload = float(upload_elapsed) + float(cuda_timing.get("total_s", 0.0))
+    cpu_mpix_s = (samples / 1.0e6 / cpu_elapsed) if cpu_elapsed > 0 else None
+    cuda_mpix_s = (
+        samples / 1.0e6 / float(cuda_timing.get("total_s", 0.0))
+        if float(cuda_timing.get("total_s", 0.0)) > 0
+        else None
+    )
+    cuda_total_mpix_s = (samples / 1.0e6 / cuda_total_with_upload) if cuda_total_with_upload > 0 else None
+    return {
+        "schema_version": 1,
+        "artifact_type": "resident_winsorized_overlimit_benchmark",
+        "created_at": now_iso(),
+        "status": "passed" if not failed else "failed",
+        "passed": not failed,
+        "config": {
+            "frame_count": int(frame_count),
+            "height": int(height),
+            "width": int(width),
+            "seed": int(seed),
+            "low_sigma": float(low_sigma),
+            "high_sigma": float(high_sigma),
+            "min_samples": int(min_samples),
+            "max_reject_fraction": float(max_reject_fraction),
+            "tile_size": int(tile_size),
+            "hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
+            "radix_select_env": "GLASS_CUDA_RADIX_SELECT_WINSORIZED=1",
+            "count_map_dtype": "uint16",
+            "inject_nan": bool(inject_nan),
+            "tolerance_rms": float(tolerance_rms),
+            "tolerance_max_abs": float(tolerance_max_abs),
+        },
+        "timing_s": {
+            "cpu_stack_engine": float(cpu_elapsed),
+            "cuda_upload": float(upload_elapsed),
+            "cuda_radix_select": float(cuda_timing.get("total_s", 0.0)),
+            "cuda_total_with_upload": float(cuda_total_with_upload),
+        },
+        "throughput": {
+            "pixels": int(height) * int(width),
+            "samples": samples,
+            "cpu_stack_engine_mpix_s": None if cpu_mpix_s is None else float(cpu_mpix_s),
+            "cuda_radix_select_mpix_s": None if cuda_mpix_s is None else float(cuda_mpix_s),
+            "cuda_total_with_upload_mpix_s": None if cuda_total_mpix_s is None else float(cuda_total_mpix_s),
+        },
+        "speedup_vs_cpu_stack_engine": {
+            "excluding_upload": (
+                float(cpu_elapsed) / float(cuda_timing.get("total_s", 0.0))
+                if float(cuda_timing.get("total_s", 0.0)) > 0
+                else None
+            ),
+            "including_upload": float(cpu_elapsed) / cuda_total_with_upload if cuda_total_with_upload > 0 else None,
+        },
+        "cpu_stack_engine_baseline": cpu_provenance,
+        "cuda_radix_timing": cuda_timing,
+        "comparisons": comparisons,
+        "checks": checks,
+        "failed_checks": [str(item.get("name")) for item in failed],
+        "limitations": [
+            "Synthetic over-limit benchmark only; it does not replace the real 200-light regression.",
+            "This gate validates the opt-in radix-select resident path against the tiled CPUStackEngine baseline.",
+            "The default production path is unchanged by this artifact.",
+        ],
+    }
+
+
 def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "evidence": evidence, "note": note}
 
@@ -275,6 +627,56 @@ def _unavailable_payload(
         "checks": [check],
         "failed_checks": [check["name"]],
         "limitations": ["CUDA was unavailable; only the CPU baseline was timed."],
+    }
+
+
+def _overlimit_unavailable_payload(
+    *,
+    frame_count: int,
+    height: int,
+    width: int,
+    seed: int,
+    low_sigma: float,
+    high_sigma: float,
+    min_samples: int,
+    max_reject_fraction: float,
+    tile_size: int,
+    tolerance_rms: float,
+    tolerance_max_abs: float,
+    inject_nan: bool,
+    cpu_elapsed: float,
+    cpu_provenance: dict[str, Any],
+    reason: str,
+) -> dict[str, Any]:
+    check = _check("cuda_available", False, {"reason": reason})
+    return {
+        "schema_version": 1,
+        "artifact_type": "resident_winsorized_overlimit_benchmark",
+        "created_at": now_iso(),
+        "status": "cuda_unavailable",
+        "passed": False,
+        "config": {
+            "frame_count": int(frame_count),
+            "height": int(height),
+            "width": int(width),
+            "seed": int(seed),
+            "low_sigma": float(low_sigma),
+            "high_sigma": float(high_sigma),
+            "min_samples": int(min_samples),
+            "max_reject_fraction": float(max_reject_fraction),
+            "tile_size": int(tile_size),
+            "hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
+            "radix_select_env": "GLASS_CUDA_RADIX_SELECT_WINSORIZED=1",
+            "count_map_dtype": "uint16",
+            "inject_nan": bool(inject_nan),
+            "tolerance_rms": float(tolerance_rms),
+            "tolerance_max_abs": float(tolerance_max_abs),
+        },
+        "timing_s": {"cpu_stack_engine": float(cpu_elapsed)},
+        "cpu_stack_engine_baseline": cpu_provenance,
+        "checks": [check],
+        "failed_checks": [check["name"]],
+        "limitations": ["CUDA was unavailable; only the CPUStackEngine baseline was timed."],
     }
 
 
@@ -323,6 +725,62 @@ def _markdown(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _overlimit_markdown(payload: dict[str, Any]) -> str:
+    timing = payload.get("timing_s", {})
+    speedup = payload.get("speedup_vs_cpu_stack_engine", {})
+    comparisons = payload.get("comparisons", {})
+    radix = (
+        comparisons.get("radix_select_vs_cpu_stack_engine", {})
+        if isinstance(comparisons, dict)
+        else {}
+    )
+    lines = [
+        "# Resident Winsorized Over-Limit Benchmark",
+        "",
+        f"- Status: `{payload.get('status')}`",
+        f"- Passed: `{payload.get('passed')}`",
+        f"- Frames: `{payload.get('config', {}).get('frame_count')}`",
+        f"- Shape: `{payload.get('config', {}).get('height')}x{payload.get('config', {}).get('width')}`",
+        f"- CPU tile size: `{payload.get('config', {}).get('tile_size')}`",
+        f"- Hardened frame limit: `{payload.get('config', {}).get('hardened_frame_limit')}`",
+        "",
+        "## Timing",
+        "",
+        "| path | seconds |",
+        "| --- | ---: |",
+        f"| CPU StackEngine tiled baseline | {timing.get('cpu_stack_engine')} |",
+        f"| CUDA upload | {timing.get('cuda_upload')} |",
+        f"| CUDA radix-select integration | {timing.get('cuda_radix_select')} |",
+        f"| CUDA total with upload | {timing.get('cuda_total_with_upload')} |",
+        "",
+        "## Speedup",
+        "",
+        "| comparison | factor |",
+        "| --- | ---: |",
+        f"| CUDA radix-select excluding upload vs CPU StackEngine | {speedup.get('excluding_upload')} |",
+        f"| CUDA radix-select including upload vs CPU StackEngine | {speedup.get('including_upload')} |",
+        "",
+        "## Differences",
+        "",
+        "| map | RMS | max abs | p99 abs |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for name in ("master", "weight", "coverage", "low_rejection", "high_rejection"):
+        stats = radix.get(name, {}) if isinstance(radix, dict) else {}
+        lines.append(
+            f"| {name} | {stats.get('rms')} | {stats.get('max_abs')} | {stats.get('p99_abs')} |"
+        )
+    lines.extend(["", "## Failed Checks", ""])
+    failed = payload.get("failed_checks", [])
+    if failed:
+        for name in failed:
+            lines.append(f"- `{name}`")
+    else:
+        lines.append("- none")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def write_resident_winsorized_benchmark(
     out: str | Path,
     payload: dict[str, Any],
@@ -332,3 +790,14 @@ def write_resident_winsorized_benchmark(
     write_json(out, payload)
     if markdown is not None:
         Path(markdown).write_text(_markdown(payload), encoding="utf-8")
+
+
+def write_resident_winsorized_overlimit_benchmark(
+    out: str | Path,
+    payload: dict[str, Any],
+    *,
+    markdown: str | Path | None = None,
+) -> None:
+    write_json(out, payload)
+    if markdown is not None:
+        Path(markdown).write_text(_overlimit_markdown(payload), encoding="utf-8")

@@ -195,6 +195,17 @@ The NaN-containing radix-select stress probe now matches CPU exactly for
 master, weight, coverage, and low/high rejection maps without adding any
 threshold tolerance.
 
+S2-Gate 627 adds a reusable over-limit benchmark surface for that opt-in
+radix-select path. `glass resident-winsorized-overlimit-benchmark` creates a
+deterministic synthetic group above the 512-frame bounded kernel limit, times
+the tiled CPUStackEngine `winsorized_sigma` baseline, temporarily enables
+`GLASS_CUDA_RADIX_SELECT_WINSORIZED=1`, and records CUDA upload/integration
+time plus five-map parity statistics. The benchmark does not change default
+resident admission. Its first 545-frame validation matched CPUStackEngine
+exactly for master, weight, coverage, and rejection maps and measured
+`2.035x` CUDA integration speedup excluding upload on a 32 x 32 synthetic
+case.
+
 S2-Gate 608 raises the native exact hardened CUDA capacity from 256 to 512
 frames. The native kernel now stores and sorts up to 512 valid samples per
 pixel before applying the same median/IQR winsorized formula, so 260-frame
