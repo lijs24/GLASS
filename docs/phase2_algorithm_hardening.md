@@ -401,6 +401,54 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 628: Current 200-Light Default Resident A/B Rebaseline
+
+Gate 628 returns to the Phase 2 real-data mainline after the Gate627 synthetic
+over-limit benchmark contract. No production algorithm code changes are
+introduced in this gate; it verifies that current `main` still preserves the
+real 200-light resident CUDA behavior before the next optimization gate.
+
+Validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate628_real200_default_ab\real_200_default_gate628_20260625_133115`.
+- Baseline run:
+  `C:\glass_runs\phase2_s2_gate626_deterministic_winsorized\real_200_default_gate626_20260625_131241`.
+- Command reused the Gate626 resident CUDA configuration with the shared
+  Gate597 resident master cache.
+- Candidate total elapsed: `11.385932999895886 s`.
+- Baseline total elapsed: `11.000130000058562 s`.
+- Resident regression gate:
+  `C:\glass_runs\phase2_s2_gate628_real200_default_ab\resident_regression_gate_gate628_vs_gate626.json`.
+- Regression status: passed, elapsed ratio `1.0350725854908325`, failed checks
+  `[]`, active frames `193`, masked frames within the `<= 10` gate.
+- Candidate stage timings:
+  - resident reference scout: `0.4880685000680387 s`;
+  - resident reference admission: `0.005492999916896224 s`;
+  - resident memory admission: `0.0034477999433875084 s`;
+  - resident calibration/integration: `10.423424799926579 s`;
+  - local-normalization contract: `0.2141507000196725 s`;
+  - pipeline contract: `0.1950518999947235 s`.
+- Current integration profile: resident hardened winsorized total
+  `3.386850400012918 s`, native kernel sync `3.2286805 s`, selector
+  `small_256`, mode `hardened_cpu_parity`.
+- WBPP black-box compare:
+  `C:\glass_runs\phase2_s2_gate628_real200_default_ab\gate628_resident_vs_wbpp_compare.json`
+  and HTML sibling.
+- WBPP black-box elapsed remains `1092.541 s`; current GLASS elapsed gives
+  `95.95533365688962x` speedup for this run. The comparison region used
+  `min_coverage=190`, covered `97.49333995120938%` of pixels, and preserved
+  shape `6422 x 9600`.
+
+Decision:
+
+- Current `main` is still green against the latest real 200-light default
+  resident CUDA baseline.
+- The next substantive gate should change runtime behavior only where it
+  targets the measured bottlenecks: read/upload/calibration orchestration or
+  resident registration/warp/integration kernel work. Any such change must pass
+  this same real 200-light regression gate.
+
 ### S2-Gate 627: Over-Limit Resident Winsorized Benchmark Contract
 
 Gate 627 turns the Gate625/626 over-512 resident radix-select work from an
