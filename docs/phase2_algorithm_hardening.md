@@ -801,6 +801,84 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 663: Real 200-Light Star-Protected CUDA Source-DQ A/B
+
+Gate663 validates the new Gate662 `cosmetic_star_cuda` path on the real M38
+200-light resident CUDA benchmark. This is not a default-promotion gate; it is
+the first full-scale opt-in A/B that measures science impact, runtime impact,
+and the next optimization target.
+
+Real 200-light A/B:
+
+- Baseline:
+  `C:\glass_runs\phase2_s2_gate660_active_registered_source_dq\runs_20260625_223412\active_registered_conservative_policy_strict`.
+- Candidate:
+  `C:\glass_runs\phase2_s2_gate663_star_cuda_real\runs_20260625_230000\star_cuda_conservative_active_warn`.
+- Candidate mode:
+  `--resident-inline-source-dq cosmetic_star_cuda`.
+- Policy:
+  `conservative` with `active_registered` admission, matching Gate660.
+- Candidate elapsed:
+  `21.259431299986318 s`.
+- Gate660 elapsed:
+  `18.553858600207604 s`.
+- Candidate/Gate660 elapsed ratio:
+  `1.1458226430457135`.
+- Candidate speedup versus the `1092.541 s` black-box reference:
+  `51.39088551257263x`.
+- Gate660 speedup versus the same reference:
+  `58.884840266475636x`.
+
+Source-DQ behavior:
+
+- Candidate and baseline both recorded status counts:
+  `applied=10`, `skipped_high_invalid_fraction=183`,
+  `skipped_admission_policy=7`.
+- Gate660 invalid samples:
+  `147179`.
+- Gate663 invalid samples:
+  `146985`.
+- Star-protected samples in Gate663:
+  - `star_count_total=24256`;
+  - `star_protected_hot_pixels=186`;
+  - `star_protected_cold_pixels=8`;
+  - `star_protected_cosmetic_pixels=194`.
+- The `194` protected cosmetic samples exactly explain the invalid-sample
+  difference versus Gate660.
+
+Output comparison versus Gate660:
+
+- Master shape matched: `6422 x 9600`.
+- Master changed pixels: `7718931` (`0.12520325638430396` fraction).
+- Master RMS: `0.1315372868894881`.
+- Master p99 absolute difference: `0.14057159423828125`.
+- Master max absolute difference: `449.1663932800293`.
+- Weight/coverage changed pixels:
+  `90756` (`0.0014720881345375273` fraction), max absolute difference `2`.
+- Low/high rejection maps changed less than `0.001` of pixels.
+- DQ map changed pixels:
+  `73949` (`0.0011994738139728019` fraction).
+
+Regression gate:
+
+- `resident-regression-gate` passed runtime and required artifact checks with
+  `max_elapsed_ratio=1.20`, `min_active_frame_count=190`, and
+  `max_masked_frame_count=10`.
+- It failed only `resident_determinism_passed`, which is expected for this
+  opt-in detector because the protected samples intentionally change DQ and
+  downstream rejection/coverage output.
+
+Interpretation:
+
+- Gate663 is a useful real-data semantic validation, not a promotion.
+- The new detector protects a small, auditable set of candidate cosmetic
+  samples and leaves the accepted frame set unchanged.
+- Runtime is slower than Gate660 by about `14.6%`; the regression artifact
+  localizes most of the penalty to `light_read_upload_calibrate`
+  (`7.715091700083576 s` to `10.374038000009023 s`).
+- The next substantive gate should batch resident star catalogs and native
+  star-protected apply across frames, then rerun this same A/B.
+
 ### S2-Gate 662: Resident CUDA Star-Protected Inline Cosmetic Source-DQ
 
 Gate662 ports the Gate661 star-protected cosmetic source-DQ contract into the

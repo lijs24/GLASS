@@ -333,6 +333,15 @@ Current Phase 2 latest mainline acceptance:
   fields, CLI/strategy plumbing, and a small resident CUDA run using the new
   detector. The default route remains unchanged and real 200-light mainline
   acceptance is not re-promoted by this opt-in source-DQ gate.
+- Gate663 runs the real M38 200-light A/B for `cosmetic_star_cuda` against the
+  Gate660 conservative active-registered baseline. The candidate completes in
+  `21.259431299986318 s`, remains `51.39088551257263x` faster than the
+  `1092.541 s` black-box reference, and protects `194` cosmetic samples inside
+  resident CUDA star footprints. Output differences are explained by that
+  opt-in semantic change: master RMS versus Gate660 is `0.1315372868894881`,
+  master p99 absolute difference is `0.14057159423828125`, and coverage/weight
+  changes affect about `0.147%` of pixels. It is not promoted because it is
+  `14.6%` slower than Gate660 and fails deterministic equality by design.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
