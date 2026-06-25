@@ -65,8 +65,13 @@ def test_resident_resume_completed_run_noops_after_preflight(tmp_path: Path) -> 
     assert preflight["resume_action"] == "noop_complete"
     assert preflight["summary"]["missing_artifact_count"] == 0
     assert preflight["summary"]["integration_complete"] is True
+    assert preflight["summary"]["stage_ledger_can_noop_resume"] is True
+    assert preflight["stage_ledger"]["path"] == str(run / "resident_stage_ledger.json")
+    ledger = read_json(run / "resident_stage_ledger.json")
+    assert ledger["summary"]["can_noop_resume"] is True
     state = read_json(run / "run_state.json")
     assert "resident_resume" in state["completed_stages"]
+    assert any(artifact["stage"] == "resident_stage_ledger" for artifact in state["artifacts"])
     assert any(artifact["stage"] == "resident_resume" for artifact in state["artifacts"])
 
 
@@ -82,8 +87,10 @@ def test_resident_resume_incomplete_run_blocks_cpu_fallback(tmp_path: Path) -> N
     preflight = read_json(run / "resident_resume_preflight.json")
     assert preflight["passed"] is False
     assert preflight["resume_action"] == "blocked_incomplete_resident_run"
+    assert preflight["stage_ledger"]["path"] == str(run / "resident_stage_ledger.json")
     assert not (run / "calib_cache").exists()
     state = read_json(run / "run_state.json")
     assert state["failed_stage"] == "resident_resume"
     assert state["resume_supported"] is False
+    assert any(artifact["stage"] == "resident_stage_ledger" for artifact in state["artifacts"])
     assert any("CPU/tile resume fallback is not safe" in error for error in state["errors"])

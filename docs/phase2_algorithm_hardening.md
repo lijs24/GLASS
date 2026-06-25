@@ -801,6 +801,77 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 646: Resident Stage Ledger
+
+Gate646 continues the Phase 2 mainline-framework work. Gate645 stopped resident
+CUDA resumes from falling through to the legacy CPU/tile path, but the artifact
+expectations still lived inside the resume preflight. Gate646 moves those
+expectations into a reusable resident stage ledger so `run`, `audit`, and
+`resume` can share the same stage/artifact contract.
+
+Implementation:
+
+- Added `src/glass/engine/resident_stage_ledger.py`.
+- Defined a single `RESIDENT_STAGE_ARTIFACTS` table for resident stages and
+  required artifacts.
+- `glass run --memory-mode resident` and resident `glass audit` now write
+  `resident_stage_ledger.json` after resident postcondition artifacts.
+- The ledger records stage order, timing status, run-state completion,
+  expected artifacts, missing artifacts, per-stage resume action, and a summary
+  with `can_noop_resume`.
+- `glass resume` now writes and consumes the same stage ledger before writing
+  `resident_resume_preflight.json`.
+- `run_state.json` records both `resident_stage_ledger.json` and
+  `resident_resume_preflight.json` when resume is invoked.
+- Added focused tests for missing-artifact detection, overlapping-artifact
+  safety, completed-run no-op resume, and incomplete-run CPU/tile fallback
+  blocking.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Resident stage-ledger and resume focused tests: `4 passed`.
+
+Real 200-light validation:
+
+- Run:
+  `C:\glass_runs\phase2_s2_gate646_resident_stage_ledger\runs_20260625_183731\candidate_stage_ledger_strict`.
+- Evidence summary:
+  `C:\glass_runs\phase2_s2_gate646_resident_stage_ledger\runs_20260625_183731\gate646_ab_summary.json`.
+- `resident_stage_ledger.json`: resident run true, started stages `15`,
+  complete stages `15`, expected artifact rows `23`, missing artifact rows `0`,
+  `can_noop_resume=true`.
+- `glass resume` on the same run returned exit code `0` with
+  `resume_action=noop_complete` and no repeated stages.
+- GLASS total elapsed: `12.633456600131467 s`.
+- Resident calibration/integration stage: `10.656172699993476 s`.
+- Black-box reference elapsed: `1092.541 s`.
+- Acceptance speedup: `86.47997413381154x`.
+- Frame accounting: `200` planned lights, `193` active frames, `7` masked
+  frames.
+- Resident regression gate versus Gate644: passed, elapsed ratio
+  `1.1025927238327333`, no failed checks.
+- Coverage-masked compare to the black-box reference with coverage >= `190`:
+  shape match true, RMS `0.0056241382952344435`, p99 absolute difference
+  `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
+  pixels `60105814`.
+- Acceptance audit: passed.
+- Phase 2 mainline audit: passed.
+
+Interpretation:
+
+- This gate makes resident stage/accounting semantics more real: artifact
+  requirements are centralized and consumed by resume, rather than duplicated in
+  a preflight-only helper.
+- The change does not alter pixel math. The output comparison is stable against
+  the established 200-light reference.
+- Runtime was slower than Gate644 in this single run but stayed inside the
+  regression budget; the measured delta is in the resident read/calibration
+  portion, not caused by the ledger write itself.
+- The next substantive gate should use the ledger to support partial resident
+  re-entry or to split `resident_calibration_integration` into checkpointable
+  sub-stages.
+
 ### S2-Gate 645: Resident Resume Preflight
 
 Gate645 is a mainline framework hardening gate. The resident CUDA path already

@@ -57,6 +57,7 @@ from glass.engine.resident_resume import (
     is_resident_run,
     write_resident_resume_preflight,
 )
+from glass.engine.resident_stage_ledger import write_resident_stage_ledger
 from glass.engine.resident_source_dq_strategy import build_resident_source_dq_strategy
 from glass.engine.warp import warp_registered_frames
 from glass.engine.resume import resume_summary
@@ -2150,14 +2151,17 @@ def _write_resident_resume_failed_state(run: Path, preflight: dict[str, Any]) ->
             errors.append(reason)
     artifacts = state.setdefault("artifacts", [])
     if isinstance(artifacts, list):
-        preflight_path = str(run / "resident_resume_preflight.json")
-        if not any(
-            isinstance(item, dict) and item.get("path") == preflight_path for item in artifacts
-        ):
+        artifact_specs = [
+            ("resident_stage_ledger", str(run / "resident_stage_ledger.json")),
+            ("resident_resume", str(run / "resident_resume_preflight.json")),
+        ]
+        for stage, path in artifact_specs:
+            if any(isinstance(item, dict) and item.get("path") == path for item in artifacts):
+                continue
             artifacts.append(
                 {
-                    "stage": "resident_resume",
-                    "path": preflight_path,
+                    "stage": stage,
+                    "path": path,
                     "format": "json",
                     "created_at": now_iso(),
                     "source_frames": [],
@@ -2191,14 +2195,17 @@ def _write_resident_resume_success_state(run: Path) -> None:
         completed.append("resident_resume")
     artifacts = state.setdefault("artifacts", [])
     if isinstance(artifacts, list):
-        preflight_path = str(run / "resident_resume_preflight.json")
-        if not any(
-            isinstance(item, dict) and item.get("path") == preflight_path for item in artifacts
-        ):
+        artifact_specs = [
+            ("resident_stage_ledger", str(run / "resident_stage_ledger.json")),
+            ("resident_resume", str(run / "resident_resume_preflight.json")),
+        ]
+        for stage, path in artifact_specs:
+            if any(isinstance(item, dict) and item.get("path") == path for item in artifacts):
+                continue
             artifacts.append(
                 {
-                    "stage": "resident_resume",
-                    "path": preflight_path,
+                    "stage": stage,
+                    "path": path,
                     "format": "json",
                     "created_at": now_iso(),
                     "source_frames": [],
@@ -2206,6 +2213,20 @@ def _write_resident_resume_success_state(run: Path) -> None:
                 }
             )
     write_json(state_path, state)
+
+
+def _write_resident_stage_ledger_artifact(run: Path, state, timing: dict[str, Any]) -> Path:
+    ledger_path = write_resident_stage_ledger(run, state=state, timing=timing)
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_stage_ledger",
+            path=str(ledger_path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    return ledger_path
 
 
 def _write_run_report(
@@ -2832,6 +2853,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
         postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
+        _write_resident_stage_ledger_artifact(out, state, timing)
         failed_exit = _print_resident_postcondition_failure(
             run=out,
             state=state,
@@ -3144,6 +3166,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
         postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
+        _write_resident_stage_ledger_artifact(out, state, timing)
         write_run_state(args.out, state)
         failed_exit = _print_resident_postcondition_failure(
             run=out,

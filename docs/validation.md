@@ -106,14 +106,14 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 644.
+- Gate: S2-Gate 646.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210`.
+  `C:\glass_runs\phase2_s2_gate646_resident_stage_ledger\runs_20260625_183731`.
 - GLASS run:
-  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\candidate_sample_reuse_strict`.
-- GLASS elapsed time: `11.457953899982385 s`.
+  `C:\glass_runs\phase2_s2_gate646_resident_stage_ledger\runs_20260625_183731\candidate_stage_ledger_strict`.
+- GLASS elapsed time: `12.633456600131467 s`.
 - Black-box reference elapsed time: `1092.541 s`.
-- Speedup: `95.35219023718358x`.
+- Speedup: `86.47997413381154x`.
 - Frame accounting: `200` planned lights, `193` active weighted frames, and
   `7` zero-weight frames.
 - Calibration frame counts: `20` bias, `20` dark, `20` flat.
@@ -157,6 +157,12 @@ Current Phase 2 latest mainline acceptance:
   found `0` missing artifacts, and did not repeat pipeline stages. Incomplete
   resident runs are now blocked from silently falling through to the legacy
   CPU/tile resume path.
+- Gate646 centralizes resident stage/artifact expectations in
+  `resident_stage_ledger.json` and makes resident resume consume that ledger.
+  Latest evidence records `15` started stages, `15` complete stages, `23`
+  expected artifact rows, `0` missing artifact rows, and
+  `can_noop_resume=true`. Running `glass resume` on the Gate646 200-light run
+  returned `resume_action=noop_complete` and did not repeat pipeline stages.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.0056241382952344435`, p99 absolute difference
   `0.002143551869085057`, coverage fraction `0.9749333995120938`, compared
@@ -165,12 +171,12 @@ Current Phase 2 latest mainline acceptance:
   `frame_accounting_resident_dq_lifecycle_contract`.
 - StackEngine contract: passed.
 - Warp quality contract: passed.
-- Resident regression gate versus Gate643: passed with candidate/baseline
-  elapsed ratio `0.9631800297627578` and no failed checks.
+- Resident regression gate versus Gate644: passed with candidate/baseline
+  elapsed ratio `1.1025927238327333` and no failed checks.
 - Acceptance audit:
-  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\gate644_acceptance_audit.json`.
+  `C:\glass_runs\phase2_s2_gate646_resident_stage_ledger\runs_20260625_183731\gate646_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate644_reference_health_sample_reuse\runs_20260625_172210\gate644_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate646_resident_stage_ledger\runs_20260625_183731\gate646_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

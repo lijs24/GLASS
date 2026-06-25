@@ -4,31 +4,14 @@ from pathlib import Path
 from typing import Any
 
 from glass.io.json_io import read_json, write_json
+from glass.engine.resident_stage_ledger import (
+    build_resident_stage_ledger,
+    write_resident_stage_ledger,
+)
 from glass.models import now_iso
 
 
 RESIDENT_RESUME_PREFLIGHT_SCHEMA_VERSION = 1
-
-_STAGE_OUTPUTS: dict[str, tuple[str, ...]] = {
-    "resident_reference_scout": ("resident_reference_scout.json",),
-    "resident_reference_health": ("resident_reference_health.json",),
-    "resident_reference_admission": ("resident_reference_admission.json",),
-    "resident_memory_admission": ("resident_memory_admission.json",),
-    "resident_calibration_integration": (
-        "calibration_artifacts.json",
-        "frame_quality.json",
-        "integration_results.json",
-        "registration_results.json",
-        "resident_artifacts.json",
-        "resident_result_contract.json",
-    ),
-    "resident_registration_health": ("resident_registration_health.json",),
-    "local_norm_contract": ("local_norm_contract.json",),
-    "pipeline_contract": ("pipeline_contract.json",),
-    "stack_engine_contract": ("stack_engine_contract.json",),
-    "warp_quality_contract": ("warp_quality_contract.json",),
-    "resident_mainline_framework": ("resident_mainline_framework.json",),
-}
 
 
 def _read_json_if_exists(path: Path) -> dict[str, Any]:
@@ -82,28 +65,21 @@ def is_resident_run(run_dir: str | Path) -> bool:
 
 def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
     run = Path(run_dir)
-    timing = _read_json_if_exists(run / "run_timing.json")
     state = _read_json_if_exists(run / "run_state.json")
+    ledger = build_resident_stage_ledger(run)
+    summary = ledger.get("summary") if isinstance(ledger.get("summary"), dict) else {}
     resident = is_resident_run(run)
-    completed_stage_names = _stage_names_from_timing(timing)
-    expected_rows: list[dict[str, Any]] = []
-    for stage in completed_stage_names:
-        for relative_path in _STAGE_OUTPUTS.get(stage, ()):
-            path = run / relative_path
-            expected_rows.append(
-                {
-                    "stage": stage,
-                    "path": str(path),
-                    "exists": path.exists(),
-                    "required_for_resume": True,
-                }
-            )
-    missing = [row for row in expected_rows if not row["exists"]]
-    integration_complete = (run / "integration_results.json").exists() and (
-        "resident_calibration_integration" in completed_stage_names
-        or state.get("current_stage") in {"integration", "report"}
-        or "integration" in state.get("completed_stages", [])
+    expected_rows = (
+        list(ledger.get("expected_artifacts"))
+        if isinstance(ledger.get("expected_artifacts"), list)
+        else []
     )
+    missing = (
+        list(ledger.get("missing_artifacts"))
+        if isinstance(ledger.get("missing_artifacts"), list)
+        else []
+    )
+    integration_complete = bool(summary.get("integration_complete"))
     failed_stage = state.get("failed_stage")
     if not resident:
         action = "not_resident_run"
@@ -135,14 +111,24 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
         "resume_action": action,
         "reason": reason,
         "summary": {
-            "completed_stage_count": len(completed_stage_names),
+            "completed_stage_count": int(summary.get("complete_stage_count") or 0),
+            "started_stage_count": int(summary.get("started_stage_count") or 0),
             "expected_artifact_count": len(expected_rows),
             "missing_artifact_count": len(missing),
             "integration_complete": integration_complete,
             "failed_stage": failed_stage,
-            "memory_mode": timing.get("memory_mode"),
+            "memory_mode": summary.get("memory_mode"),
+            "stage_ledger_can_noop_resume": bool(summary.get("can_noop_resume")),
         },
-        "completed_stages_from_timing": completed_stage_names,
+        "stage_ledger": {
+            "path": str(run / "resident_stage_ledger.json"),
+            "summary": summary,
+        },
+        "completed_stages_from_timing": [
+            str(row.get("stage"))
+            for row in ledger.get("stages", [])
+            if isinstance(row, dict) and row.get("timing_status") == "ok"
+        ],
         "expected_artifacts": expected_rows,
         "missing_artifacts": missing,
     }
@@ -150,7 +136,7 @@ def build_resident_resume_preflight(run_dir: str | Path) -> dict[str, Any]:
 
 def write_resident_resume_preflight(run_dir: str | Path) -> Path:
     run = Path(run_dir)
+    write_resident_stage_ledger(run)
     path = run / "resident_resume_preflight.json"
     write_json(path, build_resident_resume_preflight(run))
     return path
-
