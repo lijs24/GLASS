@@ -430,6 +430,18 @@ FITS outputs were bitwise identical. Runtime compare still selected the
 32-frame default, so this remains a budget-aware execution option rather than a
 default promotion.
 
+S2-Gate 682 promotes the resident native-completion wave-fill default for the
+`throughput-v4-native-completion` preset from `single_wait_25us` to
+`single_wait_250us`. The underlying scheduler and CUDA calibration kernels are
+unchanged; Gate676 already made short waits use micro-poll/yield instead of a
+coarse condition-variable sleep. The promoted default packs more completed raw
+reads into each consumer wave on the real 200-light route: the 25us baseline
+recorded `183` waves, `17` multi-frame waves, and `max_wave_frames=2`; the
+250us default recorded `157` waves, `40` multi-frame waves, and
+`max_wave_frames=3`. The promoted run passed mainline and regression gates,
+was bitwise identical across all six integration FITS outputs, and improved
+total elapsed time from `12.245715199969709 s` to `11.735124099999666 s`.
+
 S2-Gate 669 changes the portable CPU/tile integration sink from full-result
 serialization to streaming output. The stage still calls `CPUStackEngine` for
 the combine/rejection math, but it now wraps each global output tile in

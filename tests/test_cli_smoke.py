@@ -423,7 +423,7 @@ def test_resident_runtime_preset_throughput_v4_native_completion_applies_default
     assert args.resident_native_queue_drain_mode == "thread"
     assert args.resident_warp_chunk_capacity_frames == 8
     assert args.resident_native_completion_calibration == "on"
-    assert args.resident_native_completion_wave_fill_us == 25
+    assert args.resident_native_completion_wave_fill_us == 250
     assert args.resident_native_completion_wave_fill_mode == "single_wait"
     assert args.resident_native_completion_queue_buffer_frames is None
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v4-native-completion"
@@ -448,7 +448,7 @@ def test_resident_runtime_preset_defaults_to_throughput_v4_native_completion() -
     assert args.resident_calibration_wave_frames == 4
     assert args.resident_calibration_release_mode == "callback_queue"
     assert args.resident_native_completion_calibration == "on"
-    assert args.resident_native_completion_wave_fill_us == 25
+    assert args.resident_native_completion_wave_fill_us == 250
     assert args.resident_native_completion_wave_fill_mode == "single_wait"
     assert args.resident_native_completion_queue_buffer_frames is None
     assert args.resident_native_queue_read == "on"
@@ -489,6 +489,36 @@ def test_resident_runtime_preset_respects_explicit_completion_wave_fill_mode() -
             "resident_native_completion_wave_fill_mode"
         ]
         == "multi_wait"
+    )
+
+
+def test_resident_runtime_preset_respects_explicit_completion_wave_fill_us() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "throughput-v4-native-completion",
+            "--resident-native-completion-wave-fill-us",
+            "25",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_native_completion_wave_fill_us == 25
+    assert (
+        "resident_native_completion_wave_fill_us"
+        not in args._resident_runtime_preset_effective["applied"]
+    )
+    assert (
+        args._resident_runtime_preset_effective["explicit_overrides"][
+            "resident_native_completion_wave_fill_us"
+        ]
+        == 25
     )
 
 

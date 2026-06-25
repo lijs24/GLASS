@@ -1765,6 +1765,81 @@ Interpretation:
   read/decode/H2D overlap or a resident reducer redesign rather than further
   single-knob raw-ring sweeps.
 
+### S2-Gate 682: Native Completion 250us Lane-Fill Default
+
+Gate682 returns to the resident native-completion read/H2D/calibration hot path
+and promotes a measured scheduling default. Gate681 showed that larger raw
+rings alone do not help. A focused wave-fill probe showed that the current
+`single_wait_25us` default still drains mostly single-frame completion waves:
+the Gate680 baseline recorded `183` consumer waves, only `17` multi-frame waves,
+and `max_wave_frames=2`. With the existing Gate676 micro-poll implementation,
+`single_wait_250us` packs more completions per wave without changing image math,
+frame admission, DQ semantics, or CUDA kernels.
+
+Implementation:
+
+- Changed the `throughput-v4-native-completion` runtime preset from
+  `resident_native_completion_wave_fill_us=25` to `250`.
+- Kept `resident_native_completion_wave_fill_mode=single_wait`.
+- Kept explicit CLI overrides intact; users can still request `25`, `100`, `0`,
+  or any other supported wait through
+  `--resident-native-completion-wave-fill-us`.
+- Added CLI preset coverage proving the new default and explicit wait-us
+  preservation.
+- Updated resident CUDA runtime-preset smoke expectations to require
+  `single_wait_250us`.
+
+Validation:
+
+- Focused CLI/resident CUDA tests passed:
+  `4 passed in 1.50 s`.
+- Ruff on touched source/tests passed.
+- Real 200-light wave-fill probes:
+  - `C:\glass_runs\phase2_s2_gate682_wave_fill_probe\runs_20260626_180000\wave100`;
+  - `C:\glass_runs\phase2_s2_gate682_wave_fill_probe\runs_20260626_180000\wave250`.
+- Real 200-light promoted-default run with no explicit wait-us flag:
+  `C:\glass_runs\phase2_s2_gate682_wave_fill_default\runs_20260626_183000\default_250us`.
+- Runtime compare:
+  `C:\glass_runs\phase2_s2_gate682_wave_fill_default\gate682_default_250us_runtime_compare.json`.
+  Best label `default_250us`, best elapsed `11.735124099999666 s`.
+- Regression against the Gate680 25us baseline passed:
+  `C:\glass_runs\phase2_s2_gate682_wave_fill_default\gate682_default_250us_regression_gate.json`.
+  Failed checks `[]`, elapsed ratio `0.9583045096482967`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate682_wave_fill_default\gate682_default_250us_phase2_mainline_audit.json`.
+  Failed checks `[]`, input lights `200`, active/masked frames `193 / 7`.
+- FITS result comparison against the Gate680 25us baseline:
+  `C:\glass_runs\phase2_s2_gate682_wave_fill_default\gate682_result_compare_queue32_vs_default250.json`.
+  `resident_master_H.fits`, weight, coverage, low rejection, high rejection,
+  and DQ maps were bitwise identical.
+
+Timing:
+
+- Gate680 25us baseline:
+  - total elapsed `12.245715199969709 s`;
+  - `light_read_upload_calibrate=3.391568800085224 s`;
+  - `light_h2d_calibrate_store=2.750575099955313 s`;
+  - consumer waves `183`, multi-frame waves `17`, max wave frames `2`.
+- Gate682 250us default:
+  - total elapsed `11.735124099999666 s`;
+  - `light_read_upload_calibrate=3.2267182000214234 s`;
+  - `light_h2d_calibrate_store=2.5775656999321654 s`;
+  - consumer waves `157`, multi-frame waves `40`, max wave frames `3`;
+  - measured wave-fill wait `0.035850899999999984 s`.
+
+Interpretation:
+
+- This is a default-path scheduling change with real output parity evidence,
+  not a report-only gate.
+- The longer micro-polled fill wait increases wave packing and reduces H2D /
+  calibration store wall time enough to improve total elapsed time by about
+  `4.17%` on the current 200-light benchmark.
+- The improvement does not require larger pinned raw rings and remains
+  compatible with explicit user overrides.
+- Further read/decode/H2D work should now target native completion lane fill
+  and multi-buffer overlap as a system, using this 250us default as the new
+  baseline.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

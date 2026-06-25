@@ -608,6 +608,22 @@ Current Phase 2 latest mainline acceptance:
   high-rejection, and DQ maps. Runtime compare still selected
   `queue32_default`, so RAM-budget expansion is an auditable option rather than
   a default promotion.
+- Gate682 promotes the default native-completion wave-fill wait from `25us` to
+  `250us` for `throughput-v4-native-completion`. The real 200-light promoted
+  default run at
+  `C:\glass_runs\phase2_s2_gate682_wave_fill_default\runs_20260626_183000\default_250us`
+  was launched without an explicit wave-fill flag and recorded
+  `native_completion_calibration_consumer_wave_fill_policy=single_wait_250us`.
+  Compared with the Gate680 `single_wait_25us` baseline, total elapsed improved
+  from `12.245715199969709 s` to `11.735124099999666 s`, elapsed ratio
+  `0.9583045096482967`; `light_read_upload_calibrate` improved from
+  `3.391568800085224 s` to `3.2267182000214234 s`; H2D/calibrate-store
+  improved from `2.750575099955313 s` to `2.5775656999321654 s`; multi-frame
+  native-completion waves increased from `17` to `40`. Phase 2 mainline audit
+  and resident regression passed with failed checks `[]`, input lights `200`,
+  and active/masked frames `193 / 7`. Direct FITS comparison showed
+  bitwise-identical master, weight, coverage, low-rejection, high-rejection,
+  and DQ maps.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

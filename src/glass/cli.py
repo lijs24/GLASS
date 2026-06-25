@@ -452,7 +452,7 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_native_queue_drain_mode": "thread",
         "resident_warp_chunk_capacity_frames": 8,
         "resident_native_completion_calibration": "on",
-        "resident_native_completion_wave_fill_us": 25,
+        "resident_native_completion_wave_fill_us": 250,
         "resident_native_completion_wave_fill_mode": "single_wait",
     },
 }
