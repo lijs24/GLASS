@@ -11483,10 +11483,6 @@ class ResidentCalibratedStack {
     if (download_mode != "full" && download_mode != "master_weight" && download_mode != "master_only") {
       throw std::invalid_argument("download_mode must be full, master_weight, or master_only");
     }
-    if (frame_count_ > 512) {
-      throw std::invalid_argument(
-          "hardened resident winsorized sigma currently supports at most 512 resident frames");
-    }
     const bool download_diagnostics = download_mode == "full";
     const bool download_weight_map = download_mode != "master_only";
 
@@ -11510,6 +11506,14 @@ class ResidentCalibratedStack {
       if (std::isfinite(weight) && weight > 0.0f && weight != 1.0f) {
         unit_positive_weights = false;
       }
+    }
+    if (unit_positive_weight_frame_count == 0) {
+      throw std::invalid_argument(
+          "hardened resident winsorized sigma requires at least one positive-weight resident frame");
+    }
+    if (unit_positive_weight_frame_count > 512) {
+      throw std::invalid_argument(
+          "hardened resident winsorized sigma currently supports at most 512 positive-weight resident frames");
     }
     std::string unit_active_index_env_value;
     std::string unit_local_reuse_env_value;
@@ -11544,9 +11548,13 @@ class ResidentCalibratedStack {
       unit_local_reuse_env_value = unit_local_reuse_env;
     }
 #endif
-    const bool unit_positive_active_index_enabled =
+    const bool unit_positive_active_index_requested =
         unit_positive_weights && !unit_active_index_env_value.empty() && unit_active_index_env_value != "0" &&
         unit_active_index_env_value != "false" && unit_active_index_env_value != "FALSE";
+    const bool unit_positive_active_count_admission =
+        unit_positive_weights && frame_count_ > 512 && unit_positive_weight_frame_count <= 512;
+    const bool unit_positive_active_index_enabled =
+        unit_positive_active_index_requested || unit_positive_active_count_admission;
     const bool unit_positive_local_reuse_requested =
         unit_positive_weights && !unit_local_reuse_env_value.empty() && unit_local_reuse_env_value != "0" &&
         unit_local_reuse_env_value != "false" && unit_local_reuse_env_value != "FALSE";
@@ -11668,7 +11676,7 @@ class ResidentCalibratedStack {
             d_low_rejection_map,
             d_high_rejection_map,
             frame_count_,
-            unit_positive_active_frame_count,
+            unit_positive_weight_frame_count,
             pixels_per_frame_,
             low_sigma,
             high_sigma,
@@ -11748,11 +11756,27 @@ class ResidentCalibratedStack {
         profile_info["sample_reuse_strategy"] = unit_positive_active_index_enabled
             ? "active_index_global_reread_unit_positive_weights"
             : (unit_positive_local_reuse_enabled ? "local_ordered_reuse_unit_positive_weights"
-                                                 : "global_reread_weighted_samples");
+                                                  : "global_reread_weighted_samples");
+        profile_info["native_frame_count_exceeds_limit"] = frame_count_ > 512;
+        profile_info["native_active_count_admission_enabled"] =
+            frame_count_ > 512 && unit_positive_weight_frame_count <= 512;
+        profile_info["native_admission_sample_count"] =
+            static_cast<unsigned long long>(unit_positive_weight_frame_count);
+        profile_info["native_admission_frame_limit"] = static_cast<unsigned long long>(512);
+        profile_info["native_kernel_frame_capacity"] =
+            static_cast<unsigned long long>(
+                unit_positive_weight_frame_count <= 256 ? 256 : 512);
+        profile_info["native_kernel_capacity_selector"] =
+            unit_positive_weight_frame_count <= 256 ? "small_256" : "large_512";
         profile_info["unit_positive_weights_detected"] = unit_positive_weights;
         profile_info["unit_positive_weights_fast_path"] = unit_positive_active_index_enabled;
         profile_info["unit_positive_local_reuse_requested"] = unit_positive_local_reuse_requested;
         profile_info["unit_positive_local_reuse_enabled"] = unit_positive_local_reuse_enabled;
+        profile_info["unit_positive_active_index_requested"] = unit_positive_active_index_requested;
+        profile_info["unit_positive_active_index_reason"] = unit_positive_active_index_enabled
+            ? (unit_positive_active_count_admission ? "native_active_count_admission_over_frame_limit"
+                                                    : "environment_enabled")
+            : "disabled";
         profile_info["unit_positive_weight_frame_count"] =
             static_cast<unsigned long long>(unit_positive_weight_frame_count);
         profile_info["unit_positive_active_frame_count"] =
@@ -11862,7 +11886,7 @@ class ResidentCalibratedStack {
           d_low_rejection_map,
           d_high_rejection_map,
           frame_count_,
-          unit_positive_active_frame_count,
+          unit_positive_weight_frame_count,
           pixels_per_frame_,
           low_sigma,
             high_sigma,
@@ -11942,11 +11966,27 @@ class ResidentCalibratedStack {
       profile_info["sample_reuse_strategy"] = unit_positive_active_index_enabled
           ? "active_index_global_reread_unit_positive_weights"
           : (unit_positive_local_reuse_enabled ? "local_ordered_reuse_unit_positive_weights"
-                                               : "global_reread_weighted_samples");
+                                                : "global_reread_weighted_samples");
+      profile_info["native_frame_count_exceeds_limit"] = frame_count_ > 512;
+      profile_info["native_active_count_admission_enabled"] =
+          frame_count_ > 512 && unit_positive_weight_frame_count <= 512;
+      profile_info["native_admission_sample_count"] =
+          static_cast<unsigned long long>(unit_positive_weight_frame_count);
+      profile_info["native_admission_frame_limit"] = static_cast<unsigned long long>(512);
+      profile_info["native_kernel_frame_capacity"] =
+          static_cast<unsigned long long>(
+              unit_positive_weight_frame_count <= 256 ? 256 : 512);
+      profile_info["native_kernel_capacity_selector"] =
+          unit_positive_weight_frame_count <= 256 ? "small_256" : "large_512";
       profile_info["unit_positive_weights_detected"] = unit_positive_weights;
       profile_info["unit_positive_weights_fast_path"] = unit_positive_active_index_enabled;
       profile_info["unit_positive_local_reuse_requested"] = unit_positive_local_reuse_requested;
       profile_info["unit_positive_local_reuse_enabled"] = unit_positive_local_reuse_enabled;
+      profile_info["unit_positive_active_index_requested"] = unit_positive_active_index_requested;
+      profile_info["unit_positive_active_index_reason"] = unit_positive_active_index_enabled
+          ? (unit_positive_active_count_admission ? "native_active_count_admission_over_frame_limit"
+                                                  : "environment_enabled")
+          : "disabled";
       profile_info["unit_positive_weight_frame_count"] =
           static_cast<unsigned long long>(unit_positive_weight_frame_count);
       profile_info["unit_positive_active_frame_count"] =

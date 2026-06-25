@@ -4181,6 +4181,58 @@ def _validate_resident_winsorized_runtime_contract(contract: dict[str, Any]) -> 
         )
 
 
+def _resident_winsorized_contract_with_active_count(
+    contract: dict[str, Any],
+    *,
+    active_frame_count: int,
+) -> dict[str, Any]:
+    updated = dict(contract)
+    active_count = int(active_frame_count)
+    frame_count = int(updated.get("frame_count", 0))
+    native_limit = int(
+        updated.get(
+            "hardened_native_frame_limit",
+            RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT,
+        )
+    )
+    active_limit_ok = 0 < active_count <= native_limit
+    can_promote = (
+        updated.get("hardened_requested", False)
+        and updated.get("hardened_available", True)
+        and updated.get("hardened_execution_route")
+        == RESIDENT_WINSORIZED_SIGMA_SEGMENTED_CPU_ROUTE
+        and frame_count > native_limit
+        and active_limit_ok
+        and updated.get("dispatch_ok", True)
+    )
+    updated.update(
+        {
+            "active_frame_count": active_count,
+            "native_active_frame_limit_ok": bool(active_limit_ok),
+            "native_active_count_admission_available": bool(can_promote),
+            "late_native_active_count_promotion": bool(can_promote),
+        }
+    )
+    if not can_promote:
+        return updated
+
+    updated.update(
+        {
+            "resolution_reason": (
+                "late_native_active_count_within_limit:"
+                f"{active_count}<={native_limit}<frame_count:{frame_count}"
+            ),
+            "hardened_execution_route": RESIDENT_WINSORIZED_SIGMA_NATIVE_CUDA_ROUTE,
+            "frame_limit_applies": True,
+            "frame_limit_ok": True,
+            "segmented_cpu_fallback_used": False,
+            "native_hardened_required": True,
+            "implementation": "median_iqr_hardened_cuda_resident_prototype",
+        }
+    )
+    return updated
+
+
 class _ResidentStackFrameImageSource:
     path: Path | None = None
     channels = 1
@@ -12448,6 +12500,14 @@ def run_resident_calibration_integration(
             weights_array = np.asarray(frame_weight_values, dtype=np.float32)
             weights_arg = None if np.all(weights_array == 1.0) else weights_array
             active_frame_count = int(np.count_nonzero(np.isfinite(weights_array) & (weights_array > 0.0)))
+            resident_winsorized_contract = _resident_winsorized_contract_with_active_count(
+                resident_winsorized_contract,
+                active_frame_count=active_frame_count,
+            )
+            _validate_resident_winsorized_runtime_contract(resident_winsorized_contract)
+            group_resident_winsorized_mode = str(
+                resident_winsorized_contract["resident_winsorized_mode"]
+            )
             source_dq_summary = build_resident_source_dq_summary(
                 source_dq_rows,
                 frame_count=len(light_frames),

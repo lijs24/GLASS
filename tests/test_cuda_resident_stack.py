@@ -2540,6 +2540,162 @@ def test_resident_stack_hardened_winsorized_sigma_260_frames_matches_cpu_baselin
     assert int(np.sum(high_reject)) > 0
 
 
+def test_resident_stack_hardened_winsorized_sigma_over_limit_active_count_native(monkeypatch):
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+    monkeypatch.delenv("GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX", raising=False)
+    monkeypatch.delenv("GLASS_CUDA_UNIT_WEIGHT_LOCAL_REUSE", raising=False)
+
+    rng = np.random.default_rng(624)
+    stack_np = rng.normal(800.0, 3.0, size=(520, 3, 4)).astype(np.float32)
+    stack_np[0, 0, :] -= np.float32(60.0)
+    stack_np[1, 1, :] += np.float32(70.0)
+    stack_np[7, 2, 3] = np.nan
+    weights = np.ones((520,), dtype=np.float32)
+    weights[500:] = np.float32(0.0)
+
+    resident_stack = module.ResidentCalibratedStack(
+        stack_np.shape[0],
+        stack_np.shape[1],
+        stack_np.shape[2],
+    )
+    for index, frame in enumerate(stack_np):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.7,
+            2.7,
+            max_reject_fraction=0.5,
+            count_map_dtype="uint16",
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            stack_np,
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.7,
+            high_sigma=2.7,
+            max_reject_fraction=0.5,
+        )
+    )
+
+    profile = timing["native_profile"]
+    assert timing["frame_count"] == 520
+    assert timing["native_kernel_frame_capacity"] == 512
+    assert timing["native_kernel_capacity_selector"] == "large_512"
+    assert profile["native_frame_count_exceeds_limit"] is True
+    assert profile["native_active_count_admission_enabled"] is True
+    assert profile["native_admission_sample_count"] == 500
+    assert profile["unit_positive_weights_detected"] is True
+    assert profile["unit_positive_weights_fast_path"] is True
+    assert profile["unit_positive_active_frame_count"] == 500
+    assert profile["unit_positive_active_index_requested"] is False
+    assert profile["unit_positive_active_index_reason"] == "native_active_count_admission_over_frame_limit"
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=2e-5, atol=2e-5)
+    assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
+
+
+def test_resident_stack_hardened_winsorized_sigma_over_limit_nonunit_active_count_native():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    rng = np.random.default_rng(625)
+    stack_np = rng.normal(500.0, 2.0, size=(520, 2, 3)).astype(np.float32)
+    stack_np[2, 0, :] -= np.float32(40.0)
+    stack_np[3, 1, :] += np.float32(50.0)
+    weights = np.zeros((520,), dtype=np.float32)
+    weights[:200] = rng.uniform(0.75, 1.25, size=(200,)).astype(np.float32)
+
+    resident_stack = module.ResidentCalibratedStack(
+        stack_np.shape[0],
+        stack_np.shape[1],
+        stack_np.shape[2],
+    )
+    for index, frame in enumerate(stack_np):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.5,
+            2.5,
+            max_reject_fraction=0.5,
+            count_map_dtype="uint16",
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            stack_np,
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.5,
+            high_sigma=2.5,
+            max_reject_fraction=0.5,
+        )
+    )
+
+    profile = timing["native_profile"]
+    assert timing["frame_count"] == 520
+    assert timing["native_kernel_frame_capacity"] == 256
+    assert timing["native_kernel_capacity_selector"] == "small_256"
+    assert profile["native_frame_count_exceeds_limit"] is True
+    assert profile["native_active_count_admission_enabled"] is True
+    assert profile["native_admission_sample_count"] == 200
+    assert profile["unit_positive_weights_detected"] is False
+    assert profile["unit_positive_weights_fast_path"] is False
+    assert profile["sample_reuse_strategy"] == "global_reread_weighted_samples"
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=2e-5, atol=2e-5)
+    assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
+
+
+def test_resident_stack_hardened_winsorized_sigma_over_limit_active_count_rejects():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    stack_np = np.ones((520, 2, 2), dtype=np.float32)
+    weights = np.zeros((520,), dtype=np.float32)
+    weights[:513] = np.float32(1.0)
+    resident_stack = module.ResidentCalibratedStack(
+        stack_np.shape[0],
+        stack_np.shape[1],
+        stack_np.shape[2],
+    )
+    for index, frame in enumerate(stack_np):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    with pytest.raises(ValueError, match="at most 512 positive-weight resident frames"):
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            3.0,
+            3.0,
+            count_map_dtype="uint16",
+        )
+
+
 def test_resident_stack_hardened_winsorized_sigma_quartile_rank_edge_counts_match_cpu():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(

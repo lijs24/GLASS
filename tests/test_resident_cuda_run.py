@@ -47,6 +47,7 @@ from glass.engine.resident_cuda import (
     _resident_triangle_determinism_summary,
     _resident_triangle_translation_refine,
     _resident_similarity_frame_dispatch,
+    _resident_winsorized_contract_with_active_count,
     _resident_winsorized_runtime_contract,
     _validate_resident_result_contract_payload,
     _select_star_core_preselected_seed_indices,
@@ -1630,6 +1631,54 @@ def test_resident_hardened_winsorized_contract_uses_segmented_cpu_over_native_li
     assert contract["hardened_execution_route"] == "cpu_stack_engine_segmented_resident_download"
     assert contract["implementation"] == "median_iqr_hardened_cpu_stack_engine_resident_tile_download"
     _validate_resident_winsorized_runtime_contract(contract)
+
+
+def test_resident_hardened_winsorized_contract_late_promotes_active_count_native():
+    frame_count = RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 32
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="hardened_cpu_parity",
+        frame_count=frame_count,
+        dispatch_mode="stack",
+    )
+
+    promoted = _resident_winsorized_contract_with_active_count(
+        contract,
+        active_frame_count=RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT,
+    )
+
+    assert promoted["hardened_requested"] is True
+    assert promoted["hardened_execution_route"] == "native_cuda_resident_stack"
+    assert promoted["implementation"] == "median_iqr_hardened_cuda_resident_prototype"
+    assert promoted["native_frame_limit_ok"] is False
+    assert promoted["native_active_frame_limit_ok"] is True
+    assert promoted["frame_limit_ok"] is True
+    assert promoted["late_native_active_count_promotion"] is True
+    assert promoted["segmented_cpu_fallback_used"] is False
+    assert promoted["active_frame_count"] == RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT
+    assert "late_native_active_count_within_limit" in promoted["resolution_reason"]
+    _validate_resident_winsorized_runtime_contract(promoted)
+
+
+def test_resident_hardened_winsorized_contract_keeps_segmented_when_active_count_over_limit():
+    frame_count = RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 32
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="hardened_cpu_parity",
+        frame_count=frame_count,
+        dispatch_mode="stack",
+    )
+
+    promoted = _resident_winsorized_contract_with_active_count(
+        contract,
+        active_frame_count=RESIDENT_WINSORIZED_SIGMA_HARDENED_NATIVE_FRAME_LIMIT + 1,
+    )
+
+    assert promoted["hardened_execution_route"] == "cpu_stack_engine_segmented_resident_download"
+    assert promoted["native_active_frame_limit_ok"] is False
+    assert promoted["late_native_active_count_promotion"] is False
+    assert promoted["segmented_cpu_fallback_used"] is True
+    _validate_resident_winsorized_runtime_contract(promoted)
 
 
 def test_resident_hardened_winsorized_contract_rejects_over_limit_without_segmented_fallback():

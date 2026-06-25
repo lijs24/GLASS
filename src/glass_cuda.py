@@ -4812,11 +4812,22 @@ class ResidentCalibratedStack:
         low_reject = None if low_reject is None else np.asarray(low_reject)
         high_reject = None if high_reject is None else np.asarray(high_reject)
         actual_count_map_dtype = count_map_dtype if coverage is None else str(np.asarray(coverage).dtype)
-        native_kernel_frame_capacity = 256 if self.frame_count <= 256 else 512
         native_profile = {
             str(key): (float(value) if isinstance(value, float) else value)
             for key, value in native_profile.items()
         }
+        native_kernel_frame_capacity = int(
+            native_profile.get(
+                "native_kernel_frame_capacity",
+                256 if self.frame_count <= 256 else 512,
+            )
+        )
+        native_kernel_capacity_selector = str(
+            native_profile.get(
+                "native_kernel_capacity_selector",
+                "small_256" if native_kernel_frame_capacity == 256 else "large_512",
+            )
+        )
         return (
             master,
             weight_map,
@@ -4831,7 +4842,7 @@ class ResidentCalibratedStack:
                 "resident_winsorized_mode": "hardened_cpu_parity",
                 "frame_count": self.frame_count,
                 "native_kernel_frame_capacity": native_kernel_frame_capacity,
-                "native_kernel_capacity_selector": "small_256" if native_kernel_frame_capacity == 256 else "large_512",
+                "native_kernel_capacity_selector": native_kernel_capacity_selector,
                 "height": self.height,
                 "width": self.width,
                 "pixel_count": self.height * self.width,

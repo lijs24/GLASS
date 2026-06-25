@@ -401,6 +401,60 @@ Validation commands:
   above.
 - `python -m pytest -q`
 
+### S2-Gate 624: Native Active-Count Admission For Over-Limit Hardened Groups
+
+Gate 624 moves a real class of over-512 resident hardened winsorized groups
+back onto the device. Before this gate, the native CUDA exact median/IQR path
+was admitted purely by total input frame count, so a 520-frame group with only
+500 finite positive integration weights still had to use the segmented
+CPUStackEngine fallback. Gate624 changes the admission rule to the actual
+positive-weight sample count while preserving the 512-sample native prototype
+limit.
+
+Implementation:
+
+- The native hardened winsorized binding now counts finite positive integration
+  weights before launch.
+- Native CUDA rejects all-inactive groups and groups with more than `512`
+  positive-weight frames, but allows total frame counts above `512` when the
+  positive-weight count is within the native limit.
+- The CUDA launch selector chooses the `small_256` or `large_512` kernel from
+  the positive-weight admission count, not only from total frame count.
+- Unit-positive over-limit groups automatically use the active-index CUDA path
+  with `unit_positive_active_index_reason=
+  native_active_count_admission_over_frame_limit`; no environment variable is
+  required for this over-limit admission case.
+- The resident pipeline now performs a late native promotion after final frame
+  weights are known. An initial segmented contract can be promoted to
+  `native_cuda_resident_stack` when final active positive-weight count is
+  `1..512`.
+
+Validation:
+
+- Native CUDA rebuild with CUDA Toolkit 13.2.
+- Focused contract tests for late native promotion and over-limit active-count
+  retention: `2 passed`.
+- Focused CUDA tests for a 520-frame resident stack with 500 active frames and
+  for 513 active-frame rejection: `2 passed`.
+- Existing hardened CUDA parity/guard tests for 4-frame, 260-frame,
+  active-index, local-reuse, compact-count, master-only, and rejection-guard
+  paths: `8 passed`.
+- Real 200-light default resident run:
+  `C:\glass_runs\phase2_s2_gate624_active_count_native\real_200_default_gate624_20260625_123824`.
+  It did not trigger over-limit admission because the group is still 200 input
+  frames / 193 active frames, but it passed the resident regression gate against
+  Gate621 with zero artifact, frame-signature, registration, frame-accounting,
+  output, or numerical drift. Runtime ratio was `1.0874700202251362`, within
+  the `1.15` guard.
+
+Decision:
+
+- Promote native active-count admission for over-limit groups whose final
+  positive-weight sample count is within the bounded exact CUDA prototype.
+- Keep groups with more than `512` positive-weight frames on the segmented
+  CPUStackEngine fallback until a true scalable device-side segmented or
+  cooperative order-statistic reducer is implemented.
+
 ### S2-Gate 623: Segmented Fallback Active-Frame Replay
 
 Gate 623 closes an engineering inconsistency in the over-native-limit resident

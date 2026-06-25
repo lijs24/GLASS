@@ -1916,7 +1916,9 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch_typed(
     bool unit_positive_local_reuse) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
-  if (frame_count <= static_cast<std::size_t>(kGlassHardenedWinsorizedSmallMaxFrames)) {
+  const std::size_t capacity_frame_count =
+      active_frame_count > 0 ? active_frame_count : frame_count;
+  if (capacity_frame_count <= static_cast<std::size_t>(kGlassHardenedWinsorizedSmallMaxFrames)) {
     if (unit_positive_local_reuse) {
       glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<
           CountT,

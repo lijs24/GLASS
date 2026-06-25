@@ -164,6 +164,17 @@ with 20 zero-weight frames verified that the fallback downloaded only the 500
 active frame indices and matched the active-only CPUStackEngine result for all
 output maps.
 
+S2-Gate 624 promotes a subset of those over-limit cases back to native CUDA.
+The native hardened winsorized launcher now admits by finite positive-weight
+sample count: total frame groups above 512 may still use the exact CUDA path
+when the final positive-weight count is between 1 and 512. Unit-positive
+over-limit groups automatically use the active-index kernel for this admission
+case, and non-unit groups scan the resident stack while retaining the same
+positive-weight bound. The Python resident pipeline applies this as a late
+promotion after registration, frame-mask, and weighting decisions are final.
+Groups with more than 512 positive-weight frames still use the segmented
+CPUStackEngine fallback.
+
 S2-Gate 608 raises the native exact hardened CUDA capacity from 256 to 512
 frames. The native kernel now stores and sorts up to 512 valid samples per
 pixel before applying the same median/IQR winsorized formula, so 260-frame
@@ -256,9 +267,10 @@ winsorized path with 256-frame and 512-frame native kernel variants using
 quickselect percentiles plus input-frame-order winsorized statistics. The
 tile-streaming CPU path remains the portable scientific baseline, while the
 resident path is the high-VRAM performance path for the 200-light comparison
-dataset. Groups above the 512-frame native hardened limit may use the segmented
-CPUStackEngine resident-tile fallback, now preferably through the batch
-tile-download surface, until the dedicated CUDA segmented reduction is
+dataset. Groups above 512 total frames can remain native only when their final
+positive-weight sample count is at most 512; larger active groups use the
+segmented CPUStackEngine resident-tile fallback, now preferably through the
+batch tile-download surface, until the dedicated CUDA segmented reduction is
 implemented.
 
 ## Variance Map

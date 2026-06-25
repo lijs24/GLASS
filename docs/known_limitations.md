@@ -35,15 +35,17 @@ Current code is intentionally gated:
   auto groups above 64 frames, GLASS applies the Gate600/603
   coverage-preserving `rejection_max_fraction=0.015` guard unless the plan or
   CLI explicitly supplies a guard. Groups above the native 512-frame CUDA
-  prototype use a segmented CPUStackEngine parity fallback that downloads
-  resident calibrated tiles to host and records the route. Current CUDA builds
-  use a batch tile-download surface for that fallback when available, with a
-  single-frame tile loop retained as a compatibility escape hatch. S2-Gate 623
-  filters this fallback to finite positive integration weights before download,
-  so zero-weight quality/mask rejects are not replayed on host. Minimal-output
-  runs, unsupported dispatch, or builds missing the required resident
-  tile-download support can still fall back to the faster mean/std approximation
-  and record the fallback reason.
+  prototype normally use a segmented CPUStackEngine parity fallback that
+  downloads resident calibrated tiles to host and records the route. S2-Gate 624
+  admits a subset of over-limit groups back to native CUDA when the final finite
+  positive-weight sample count is at most 512, even if total input frame count
+  is higher. Current CUDA builds use a batch tile-download surface for the
+  remaining fallback when available, with a single-frame tile loop retained as a
+  compatibility escape hatch. S2-Gate 623 filters this fallback to finite
+  positive integration weights before download, so zero-weight quality/mask
+  rejects are not replayed on host. Minimal-output runs, unsupported dispatch,
+  or builds missing the required resident tile-download support can still fall
+  back to the faster mean/std approximation and record the fallback reason.
 - The resident CUDA hardened winsorized path is still a one-iteration,
   512-frame native prototype with separate 256-frame and 512-frame kernel
   variants. Gate609 ensures default 200-light groups use the smaller variant,
@@ -52,9 +54,11 @@ Current code is intentionally gated:
   remains a bounded local-array implementation. The larger-frame
   segmented fallback is correctness-first, not the final high-throughput CUDA
   segmented reduction. Gate607 reduces Python/native round trips in that
-  fallback, Gate608 covers 260-frame groups natively, and Gate623 avoids
-  downloading zero-weight inactive frames in the host fallback, but groups above
-  512 still reduce on host through the GLASS CPUStackEngine. Richer robust
+  fallback, Gate608 covers 260-frame groups natively, Gate623 avoids
+  downloading zero-weight inactive frames in the host fallback, and Gate624
+  keeps over-512 total-frame groups native when active positive-weight count is
+  at most 512. Groups above 512 positive-weight samples still reduce on host
+  through the GLASS CPUStackEngine. Richer robust
   rejection policies, cosmetic correction, and broader data-shape support
   remain future work.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
