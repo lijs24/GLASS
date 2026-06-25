@@ -46,7 +46,20 @@ def _write_green_run(run: Path) -> None:
             ],
         },
     )
-    write_json(run / "run_state.json", {"current_stage": "integration", "failed_stage": None, "errors": []})
+    write_json(
+        run / "run_state.json",
+        {
+            "current_stage": "integration",
+            "completed_stages": [
+                "resident_light_calibration",
+                "resident_registration",
+                "resident_local_normalization",
+                "resident_integration",
+            ],
+            "failed_stage": None,
+            "errors": [],
+        },
+    )
     write_json(
         run / "frame_accounting.json",
         {
@@ -120,13 +133,18 @@ def _write_green_run(run: Path) -> None:
         "stack_engine_contract.json",
         "warp_quality_contract.json",
         "resident_result_contract.json",
+        "resident_calibration_contract.json",
     ):
         write_json(run / name, {"passed": True, "status": "passed"})
     for name in (
         "integration_results.json",
         "calibration_artifacts.json",
+        "frame_quality.json",
         "registration_results.json",
+        "resident_registration_quality.json",
         "local_norm_results.json",
+        "resident_reference_scout.json",
+        "resident_stage_ledger.json",
     ):
         write_json(run / name, {"passed": True, "status": "passed"})
 
@@ -190,6 +208,10 @@ def test_phase2_mainline_audit_passes_green_resident_run(tmp_path: Path) -> None
     assert audit["next_priorities"][0]["area"] == "resident calibration/integration execution"
     assert audit["next_priorities"][1]["area"] == "reference calibrated-health resident reuse"
     assert audit["next_priorities"][1]["evidence"]["cpu_crosscheck_reused"] is True
+    checks = {check["name"]: check for check in audit["checks"]}
+    ledger = checks["resident_stage_ledger_component_contract"]["evidence"]
+    assert ledger["stage_status"]["resident_calibration"] == "complete"
+    assert "resident_light_calibration" not in ledger["stage_status"]
 
 
 def test_phase2_mainline_audit_fails_missing_output_map(tmp_path: Path) -> None:
@@ -201,6 +223,20 @@ def test_phase2_mainline_audit_fails_missing_output_map(tmp_path: Path) -> None:
 
     assert audit["passed"] is False
     assert "resident_output_maps_present" in audit["failed_checks"]
+
+
+def test_phase2_mainline_audit_fails_missing_component_ledger_artifact(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_green_run(run)
+    (run / "resident_calibration_contract.json").unlink()
+
+    audit = build_phase2_mainline_audit(run)
+
+    assert audit["passed"] is False
+    assert "resident_stage_ledger_component_contract" in audit["failed_checks"]
+    checks = {check["name"]: check for check in audit["checks"]}
+    evidence = checks["resident_stage_ledger_component_contract"]["evidence"]
+    assert evidence["summary"]["missing_artifact_count"] == 1
 
 
 def test_phase2_mainline_audit_cli_writes_markdown(tmp_path: Path) -> None:

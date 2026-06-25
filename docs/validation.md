@@ -106,9 +106,9 @@ Machine-readable speedup summary:
 
 Current Phase 2 latest mainline acceptance:
 
-- Gate: S2-Gate 650.
+- Gate: S2-Gate 651.
 - Evidence root:
-  `C:\glass_runs\phase2_s2_gate650_component_stage_ledger\runs_20260625_220000`.
+  `C:\glass_runs\phase2_s2_gate651_stage_ledger_mainline_gate\runs_20260625_230000`.
 - GLASS run:
   `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\candidate_from_calibration_boundary`.
 - GLASS elapsed time: `11.485255000297911 s`.
@@ -193,6 +193,13 @@ Current Phase 2 latest mainline acceptance:
   and `can_noop_resume=true`. The new `glass resident-stage-ledger` command
   returned exit code `0` with `--fail-on-missing`, and `glass resume` on the
   replay bundle returned `resume_action=noop_complete`.
+- Gate651 promotes that component ledger into the Phase 2 mainline hard gate.
+  `glass phase2-mainline-audit` now requires `resident_stage_ledger.json` and
+  adds `resident_stage_ledger_component_contract`. The latest real 200-light
+  audit records this check as passed with `resident_calibration`,
+  `resident_registration`, `resident_local_normalization`, and
+  `resident_integration` all `complete`, `18` complete stages, `27` expected
+  artifact rows, `0` missing artifacts, and `can_noop_resume=true`.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared
@@ -206,7 +213,7 @@ Current Phase 2 latest mainline acceptance:
 - Acceptance audit:
   `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\gate649_acceptance_audit.json`.
 - Mainline audit:
-  `C:\glass_runs\phase2_s2_gate650_component_stage_ledger\runs_20260625_220000\gate650_phase2_mainline_audit.json`.
+  `C:\glass_runs\phase2_s2_gate651_stage_ledger_mainline_gate\runs_20260625_230000\gate651_phase2_mainline_audit.json`.
 
 Historical Phase 2 hot-path validation:
 

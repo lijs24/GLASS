@@ -1604,6 +1604,7 @@ def _write_resident_mainline_framework(
     )
     if action == "off":
         return None
+    write_resident_stage_ledger(run, state=state)
     path = write_resident_mainline_framework(
         run,
         requested_action=action,

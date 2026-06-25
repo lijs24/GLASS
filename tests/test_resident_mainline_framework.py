@@ -110,7 +110,20 @@ def _write_minimal_green_resident_run(
             "stages": [{"stage": "resident_calibration_integration", "elapsed_s": 2.5}],
         },
     )
-    write_json(run / "run_state.json", {"current_stage": "integration", "failed_stage": None, "errors": []})
+    write_json(
+        run / "run_state.json",
+        {
+            "current_stage": "integration",
+            "completed_stages": [
+                "resident_light_calibration",
+                "resident_registration",
+                "resident_local_normalization",
+                "resident_integration",
+            ],
+            "failed_stage": None,
+            "errors": [],
+        },
+    )
     write_json(
         run / "frame_accounting.json",
         {
@@ -180,10 +193,14 @@ def _write_minimal_green_resident_run(
         "pipeline_contract.json",
         "warp_quality_contract.json",
         "resident_result_contract.json",
+        "resident_calibration_contract.json",
         "integration_results.json",
         "calibration_artifacts.json",
+        "frame_quality.json",
         "registration_results.json",
+        "resident_registration_quality.json",
         "local_norm_results.json",
+        "resident_stage_ledger.json",
     ):
         write_json(run / name, {"passed": True, "status": "passed"})
     return maps

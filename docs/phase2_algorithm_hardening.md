@@ -801,6 +801,75 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 651: Component Ledger Mainline Gate
+
+Gate651 promotes the Gate650 component-stage ledger from an optional/resume
+artifact into the Phase 2 mainline acceptance surface. A resident CUDA run is no
+longer considered green by `glass phase2-mainline-audit` unless the computed
+resident component ledger proves that calibration, registration, local
+normalization, and integration reached complete states with no missing required
+artifacts.
+
+Implementation:
+
+- `phase2-mainline-audit` now treats `resident_stage_ledger.json` as a required
+  core artifact for resident mainline runs.
+- The audit recomputes the resident ledger with current code and adds a hard
+  check named `resident_stage_ledger_component_contract`.
+- The check requires:
+  - `resident_calibration=complete`;
+  - `resident_registration=complete`;
+  - `resident_local_normalization=complete`;
+  - `resident_integration=complete`;
+  - `missing_artifact_count=0`;
+  - `can_noop_resume=true`;
+  - no legacy/auxiliary component rows such as `resident_light_calibration` or
+    `resident_calibration_contract`.
+- Added unit coverage for a green run and a negative run missing the resident
+  calibration contract artifact.
+
+Focused validation:
+
+- Ruff over `src/glass/report/phase2_mainline_audit.py` and
+  `tests/test_phase2_mainline_audit.py`: passed.
+- Focused tests:
+  `tests/test_phase2_mainline_audit.py` and
+  `tests/test_resident_stage_ledger.py`: `8 passed`.
+
+Real 200-light validation:
+
+- Audit artifact:
+  `C:\glass_runs\phase2_s2_gate651_stage_ledger_mainline_gate\runs_20260625_230000\gate651_phase2_mainline_audit.json`.
+- Source full run:
+  `C:\glass_runs\phase2_s2_gate649_cal_boundary_reentry\runs_20260625_210000\candidate_from_calibration_boundary`.
+- Phase 2 mainline audit status: passed.
+- New component-ledger check:
+  `resident_stage_ledger_component_contract=passed`.
+- Component evidence:
+  `resident_calibration=complete`,
+  `resident_registration=complete`,
+  `resident_local_normalization=complete`,
+  `resident_integration=complete`,
+  `complete_stage_count=18`,
+  `expected_artifact_count=27`,
+  `missing_artifact_count=0`,
+  `can_noop_resume=true`.
+- Mainline metrics remain the Gate649 measured values: `200` lights, `193`
+  active frames, `7` masked frames, `95.12553269140832x` speedup versus the
+  black-box reference, RMS `0.005624135079195954`, p99 absolute difference
+  `0.0021429822302888963`, and coverage fraction `0.9749333995120938`.
+
+Interpretation:
+
+- This gate is a hard acceptance-contract upgrade, not a report-only handoff.
+  Future resident default-path changes that regress component ledger semantics
+  now fail the mainline audit.
+- Pixel math, frame admission, registration, warp, LN, DQ, rejection, and output
+  maps are unchanged.
+- The next substantive gate should use this enforced component surface to split
+  the monolithic resident stage further or directly optimize the measured hot
+  components: `light_read_upload_calibrate` and `resident_integration`.
+
 ### S2-Gate 650: Resident Component Stage Ledger
 
 Gate650 fixes a concrete resume/audit contract gap exposed by the Gate649 real

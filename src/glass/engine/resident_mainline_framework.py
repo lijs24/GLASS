@@ -319,7 +319,11 @@ def build_resident_mainline_framework(
     stack_engine_checks = _stack_engine_checks(stack_engine)
     audit_checks = list(audit.get("checks") or [])
     if scope == "source_dq_positive":
-        relaxed = {"default_resident_cuda_route", "resident_output_maps_present"}
+        relaxed = {
+            "default_resident_cuda_route",
+            "resident_output_maps_present",
+            "resident_stage_ledger_component_contract",
+        }
         audit_checks = [
             check
             for check in audit_checks

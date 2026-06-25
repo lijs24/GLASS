@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from glass.engine.resident_stage_ledger import build_resident_stage_ledger
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 
@@ -19,6 +20,7 @@ REQUIRED_CORE_ARTIFACTS = (
     "resident_source_dq_execution.json",
     "resident_dq_pixel_closure.json",
     "resident_master_cache.json",
+    "resident_stage_ledger.json",
     "resident_result_contract.json",
     "pipeline_contract.json",
     "stack_engine_contract.json",
@@ -150,6 +152,54 @@ def _timing_components(timing: dict[str, Any], artifact: dict[str, Any]) -> dict
     }
 
 
+def _stage_ledger_state(run: Path) -> dict[str, Any]:
+    computed = build_resident_stage_ledger(run)
+    summary = computed.get("summary") if isinstance(computed.get("summary"), dict) else {}
+    rows = computed.get("stages") if isinstance(computed.get("stages"), list) else []
+    stage_status = {
+        str(row.get("stage")): row.get("status")
+        for row in rows
+        if isinstance(row, dict) and row.get("stage") is not None
+    }
+    complete_stages = {stage for stage, status in stage_status.items() if status == "complete"}
+    required_complete = {
+        "resident_calibration",
+        "resident_registration",
+        "resident_local_normalization",
+        "resident_integration",
+    }
+    unexpected_component_stages = [
+        stage
+        for stage in ("resident_light_calibration", "resident_calibration_contract")
+        if stage in stage_status
+    ]
+    missing_required_complete = sorted(required_complete - complete_stages)
+    passed = bool(
+        computed.get("resident_run") is True
+        and summary.get("can_noop_resume") is True
+        and int(summary.get("missing_artifact_count") or 0) == 0
+        and not missing_required_complete
+        and not unexpected_component_stages
+    )
+    return {
+        "path": str(run / "resident_stage_ledger.json"),
+        "stored_exists": (run / "resident_stage_ledger.json").exists(),
+        "resident_run": computed.get("resident_run"),
+        "summary": {
+            "complete_stage_count": summary.get("complete_stage_count"),
+            "expected_artifact_count": summary.get("expected_artifact_count"),
+            "missing_artifact_count": summary.get("missing_artifact_count"),
+            "can_noop_resume": summary.get("can_noop_resume"),
+            "integration_complete": summary.get("integration_complete"),
+        },
+        "stage_status": stage_status,
+        "required_complete_stages": sorted(required_complete),
+        "missing_required_complete_stages": missing_required_complete,
+        "unexpected_component_stages": unexpected_component_stages,
+        "passed": passed,
+    }
+
+
 def _comparison_summary(compare_payload: dict[str, Any]) -> dict[str, Any]:
     region = (
         compare_payload.get("comparison_region")
@@ -241,6 +291,7 @@ def build_phase2_mainline_audit(
 
     output_maps = _output_map_state(run_root, resident_artifact)
     timing_state = _timing_components(timing, resident_artifact)
+    stage_ledger_state = _stage_ledger_state(run_root)
 
     default_route_evidence = {
         "backend": timing.get("backend"),
@@ -391,6 +442,11 @@ def build_phase2_mainline_audit(
             },
         ),
         _check("resident_dq_lifecycle_closes", lifecycle_passed, lifecycle_evidence),
+        _check(
+            "resident_stage_ledger_component_contract",
+            bool(stage_ledger_state["passed"]),
+            stage_ledger_state,
+        ),
         _check(
             "resident_output_maps_present",
             not output_maps["missing_fields"],
