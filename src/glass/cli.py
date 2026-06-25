@@ -7073,32 +7073,39 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-inline-source-dq",
-        choices=["off", "cosmetic", "cosmetic_star", "cosmetic_cuda"],
+        choices=["off", "cosmetic", "cosmetic_star", "cosmetic_cuda", "cosmetic_star_cuda"],
         default="off",
         help=(
             "resident source-DQ in-memory detector; cosmetic uses the CPU baseline mask, cosmetic_star "
-            "adds CPU star-catalog protection, and cosmetic_cuda uses resident histogram robust stats plus "
-            "CUDA threshold application without a calibrated cache"
+            "adds CPU star-catalog protection, cosmetic_cuda uses resident histogram robust stats plus "
+            "CUDA threshold application, and cosmetic_star_cuda applies CUDA star-catalog-protected "
+            "isolated correction without a calibrated cache"
         ),
     )
     run.add_argument(
         "--resident-inline-source-dq-hot-sigma",
         type=float,
         default=8.0,
-        help="hot-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_star/cosmetic_cuda",
+        help=(
+            "hot-pixel sigma threshold for --resident-inline-source-dq "
+            "cosmetic/cosmetic_star/cosmetic_cuda/cosmetic_star_cuda"
+        ),
     )
     run.add_argument(
         "--resident-inline-source-dq-cold-sigma",
         type=float,
         default=8.0,
-        help="cold-pixel sigma threshold for --resident-inline-source-dq cosmetic/cosmetic_star/cosmetic_cuda",
+        help=(
+            "cold-pixel sigma threshold for --resident-inline-source-dq "
+            "cosmetic/cosmetic_star/cosmetic_cuda/cosmetic_star_cuda"
+        ),
     )
     run.add_argument(
         "--resident-inline-source-dq-policy",
         choices=sorted(RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS),
         default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_POLICY,
         help=(
-            "cosmetic_cuda high-fraction guard profile: default is safest, conservative "
+            "cosmetic_cuda/cosmetic_star_cuda high-fraction guard profile: default is safest, conservative "
             "allows a small positive real-data DQ signal, diagnostic is for impact studies"
         ),
     )
@@ -7107,7 +7114,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help=(
-            "for cosmetic_cuda, skip applying a threshold mask to any frame when the count-only "
+            "for cosmetic_cuda/cosmetic_star_cuda, skip applying a threshold mask to any frame when the count-only "
             "preflight would invalidate more than this fraction of samples; overrides "
             "--resident-inline-source-dq-policy; set 0 to disable"
         ),
@@ -7117,7 +7124,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS,
         default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
         help=(
-            "cosmetic_cuda admission policy: all preserves legacy behavior; "
+            "cosmetic_cuda/cosmetic_star_cuda admission policy: all preserves legacy behavior; "
             "active_registered applies deferred masks only to currently positive-weight registered frames"
         ),
     )
@@ -7779,32 +7786,39 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--resident-mainline-min-source-dq-applied-samples", type=int, default=0)
     audit.add_argument(
         "--resident-inline-source-dq",
-        choices=["off", "cosmetic", "cosmetic_star", "cosmetic_cuda"],
+        choices=["off", "cosmetic", "cosmetic_star", "cosmetic_cuda", "cosmetic_star_cuda"],
         default="off",
         help=(
             "resident source-DQ in-memory detector for audit; cosmetic uses the CPU baseline mask, "
-            "cosmetic_star adds CPU star-catalog protection, and cosmetic_cuda uses resident histogram robust "
-            "stats plus CUDA threshold application without materializing a calibrated cache"
+            "cosmetic_star adds CPU star-catalog protection, cosmetic_cuda uses resident histogram robust "
+            "stats plus CUDA threshold application, and cosmetic_star_cuda applies CUDA star-catalog-protected "
+            "isolated correction without materializing a calibrated cache"
         ),
     )
     audit.add_argument(
         "--resident-inline-source-dq-hot-sigma",
         type=float,
         default=8.0,
-        help="hot-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_star/cosmetic_cuda mode",
+        help=(
+            "hot-pixel sigma threshold for resident audit inline source-DQ "
+            "cosmetic/cosmetic_star/cosmetic_cuda/cosmetic_star_cuda mode"
+        ),
     )
     audit.add_argument(
         "--resident-inline-source-dq-cold-sigma",
         type=float,
         default=8.0,
-        help="cold-pixel sigma threshold for resident audit inline source-DQ cosmetic/cosmetic_star/cosmetic_cuda mode",
+        help=(
+            "cold-pixel sigma threshold for resident audit inline source-DQ "
+            "cosmetic/cosmetic_star/cosmetic_cuda/cosmetic_star_cuda mode"
+        ),
     )
     audit.add_argument(
         "--resident-inline-source-dq-policy",
         choices=sorted(RESIDENT_INLINE_SOURCE_DQ_POLICY_MAX_INVALID_FRACTIONS),
         default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_POLICY,
         help=(
-            "cosmetic_cuda high-fraction guard profile for audit: default is safest, conservative "
+            "cosmetic_cuda/cosmetic_star_cuda high-fraction guard profile for audit: default is safest, conservative "
             "allows a small positive real-data DQ signal, diagnostic is for impact studies"
         ),
     )
@@ -7813,7 +7827,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help=(
-            "for cosmetic_cuda audit runs, skip applying a threshold mask to any frame when the "
+            "for cosmetic_cuda/cosmetic_star_cuda audit runs, skip applying a threshold mask to any frame when the "
             "count-only preflight would invalidate more than this fraction of samples; overrides "
             "--resident-inline-source-dq-policy; set 0 to disable"
         ),
@@ -7823,7 +7837,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=RESIDENT_INLINE_SOURCE_DQ_ADMISSIONS,
         default=DEFAULT_RESIDENT_INLINE_SOURCE_DQ_ADMISSION,
         help=(
-            "cosmetic_cuda admission policy for audit: all preserves legacy behavior; "
+            "cosmetic_cuda/cosmetic_star_cuda admission policy for audit: all preserves legacy behavior; "
             "active_registered applies deferred masks only to currently positive-weight registered frames"
         ),
     )

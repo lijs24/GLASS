@@ -801,6 +801,60 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 662: Resident CUDA Star-Protected Inline Cosmetic Source-DQ
+
+Gate662 ports the Gate661 star-protected cosmetic source-DQ contract into the
+resident CUDA path. The new mode keeps threshold statistics and candidate
+application on resident calibrated frames, uploads only a compact star catalog,
+and lets a CUDA kernel suppress isolated hot/cold cosmetic correction inside
+the protected star footprint.
+
+Implementation:
+
+- Added native resident CUDA methods:
+  - `ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frame`;
+  - `ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame`.
+- The kernel records applied hot/cold/nonfinite samples, candidate counts,
+  neighbor-protected counts, and star-protected hot/cold/cosmetic counts.
+- Added Python wrappers in `glass_cuda.ResidentCalibratedStack`.
+- Added
+  `glass.engine.resident_source_dq.inline_star_protected_cosmetic_thresholds_from_resident_stack`.
+  It reuses resident histogram median/MAD threshold statistics and obtains a
+  compact star catalog from `ResidentCalibratedStack.star_grid_top_nms_candidates`.
+- Added opt-in `--resident-inline-source-dq cosmetic_star_cuda` for `glass run`
+  and `glass audit`.
+- Resident strategy and runtime artifacts now record:
+  - `ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame`;
+  - `cuda_star_catalog_protected_isolated_threshold_apply`;
+  - `cuda_resident_histogram_median_mad_scalar`;
+  - star catalog count/source/protection radius fields.
+- Batch source-DQ application deliberately falls back to per-frame native
+  star-protected apply until a true batched star-catalog native API exists.
+
+Validation:
+
+- Native rebuild:
+  `python -m cmake --build build --config Release --target _glass_cuda_native`
+  through the Visual Studio Build Tools developer environment.
+- Focused resident/CUDA validation:
+  `7 passed`, covering CLI parsing, strategy artifact fields, resident
+  threshold star-catalog contract, batch fallback, native count/apply kernels,
+  and a small resident CUDA run using `cosmetic_star_cuda`.
+- Full-project pytest for this gate is recorded in
+  `runs/checkpoints/s2_gate_662_status.md`.
+
+Interpretation:
+
+- This is a substantive resident GPU source-DQ gate. It does not change default
+  behavior because resident inline source-DQ still defaults to `off`.
+- The protected star catalog is currently compact and host-uploaded after
+  resident CUDA candidate extraction. Future work should batch star catalogs
+  and apply all frame catalogs with one or a few resident launches.
+- The simple grid/NMS catalog can still over-protect true one-sample hot pixels
+  if they are admitted as stars. Gate662 makes that behavior auditable through
+  star-protected sample counts; later gates should improve star/cosmetic
+  separation before default promotion.
+
 ### S2-Gate 661: Star-Protected Inline Cosmetic Source-DQ Baseline
 
 Gate661 returns from release/report evidence work to the DQ/mask science model.

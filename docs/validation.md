@@ -327,6 +327,12 @@ Current Phase 2 latest mainline acceptance:
   recorded. This is a science-contract baseline for the next resident CUDA
   source-DQ gate; the latest real 200-light mainline acceptance remains
   Gate660 until the GPU implementation is validated.
+- Gate662 adds opt-in `--resident-inline-source-dq cosmetic_star_cuda`.
+  Focused resident CUDA validation proves native star-protected isolated
+  count/apply kernels, resident histogram threshold plus star-catalog artifact
+  fields, CLI/strategy plumbing, and a small resident CUDA run using the new
+  detector. The default route remains unchanged and real 200-light mainline
+  acceptance is not re-promoted by this opt-in source-DQ gate.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

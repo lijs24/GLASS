@@ -76,6 +76,7 @@ from glass.engine.resident_source_dq import (
     combine_source_invalid_masks,
     inline_cosmetic_thresholds_batch_from_resident_stack,
     inline_cosmetic_thresholds_from_resident_stack,
+    inline_star_protected_cosmetic_thresholds_from_resident_stack,
     source_invalid_mask_from_array,
     source_invalid_mask_from_inline_cosmetic,
     source_invalid_mask_from_star_protected_inline_cosmetic,
@@ -3787,7 +3788,7 @@ def _resident_source_invalid_mask_from_frame(
     resident_inline_source_dq_cold_sigma: float = 8.0,
 ) -> tuple[np.ndarray | None, dict[str, Any]]:
     components: list[tuple[np.ndarray | None, dict[str, Any]]] = []
-    if resident_inline_source_dq != "cosmetic_cuda":
+    if resident_inline_source_dq not in {"cosmetic_cuda", "cosmetic_star_cuda"}:
         components.append(source_invalid_mask_from_array(data, height=height, width=width))
     if resident_inline_source_dq == "cosmetic":
         components.append(
@@ -3848,8 +3849,17 @@ def _resident_source_inline_cosmetic_thresholds_from_resident_stack(
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
 ) -> dict[str, Any] | None:
-    if resident_inline_source_dq != "cosmetic_cuda":
+    if resident_inline_source_dq not in {"cosmetic_cuda", "cosmetic_star_cuda"}:
         return None
+    if resident_inline_source_dq == "cosmetic_star_cuda":
+        return inline_star_protected_cosmetic_thresholds_from_resident_stack(
+            stack,
+            frame_index=int(frame_index),
+            height=height,
+            width=width,
+            hot_sigma=resident_inline_source_dq_hot_sigma,
+            cold_sigma=resident_inline_source_dq_cold_sigma,
+        )
     return inline_cosmetic_thresholds_from_resident_stack(
         stack,
         frame_index=int(frame_index),
@@ -3870,8 +3880,20 @@ def _resident_source_inline_cosmetic_thresholds_batch_from_resident_stack(
     resident_inline_source_dq_hot_sigma: float = 8.0,
     resident_inline_source_dq_cold_sigma: float = 8.0,
 ) -> dict[int, dict[str, Any]]:
-    if resident_inline_source_dq != "cosmetic_cuda":
+    if resident_inline_source_dq not in {"cosmetic_cuda", "cosmetic_star_cuda"}:
         return {}
+    if resident_inline_source_dq == "cosmetic_star_cuda":
+        return {
+            int(index): inline_star_protected_cosmetic_thresholds_from_resident_stack(
+                stack,
+                frame_index=int(index),
+                height=height,
+                width=width,
+                hot_sigma=resident_inline_source_dq_hot_sigma,
+                cold_sigma=resident_inline_source_dq_cold_sigma,
+            )
+            for index in frame_indices
+        }
     return inline_cosmetic_thresholds_batch_from_resident_stack(
         stack,
         frame_indices=[int(index) for index in frame_indices],
@@ -7158,8 +7180,17 @@ def run_resident_calibration_integration(
         raise ValueError("integration_rejection_max_fraction must be between 0 and 1")
     if resident_output_maps not in _RESIDENT_OUTPUT_MAP_POLICIES:
         raise ValueError("resident_output_maps must be audit, science, or minimal")
-    if resident_inline_source_dq not in {"off", "cosmetic", "cosmetic_star", "cosmetic_cuda"}:
-        raise ValueError("resident_inline_source_dq must be off, cosmetic, cosmetic_star, or cosmetic_cuda")
+    if resident_inline_source_dq not in {
+        "off",
+        "cosmetic",
+        "cosmetic_star",
+        "cosmetic_cuda",
+        "cosmetic_star_cuda",
+    }:
+        raise ValueError(
+            "resident_inline_source_dq must be off, cosmetic, cosmetic_star, "
+            "cosmetic_cuda, or cosmetic_star_cuda"
+        )
     if resident_inline_source_dq_hot_sigma <= 0.0:
         raise ValueError("resident_inline_source_dq_hot_sigma must be positive")
     if resident_inline_source_dq_cold_sigma <= 0.0:
@@ -7637,7 +7668,7 @@ def run_resident_calibration_integration(
             registration_component_s: dict[str, float] = {}
             source_dq_rows: list[dict[str, Any]] = []
             defer_inline_cosmetic_cuda_source_dq = bool(
-                resident_inline_source_dq == "cosmetic_cuda"
+                resident_inline_source_dq in {"cosmetic_cuda", "cosmetic_star_cuda"}
                 and resident_registration != "off"
             )
             deferred_inline_cosmetic_cuda_by_index: dict[int, dict[str, Any]] = {}
@@ -7748,7 +7779,7 @@ def run_resident_calibration_integration(
                     row["registration_catalog_visible"] = False
                     row["registration_catalog_visibility_required"] = False
                     row["deferred_until_stage"] = "resident_registration_complete"
-                    row["deferred_source"] = "resident_calibrated_input_cosmetic_cuda"
+                    row["deferred_source"] = f"resident_calibrated_input_{resident_inline_source_dq}"
                 source_dq_rows.extend(rows)
 
             registration_during_load_elapsed = 0.0
@@ -8329,7 +8360,7 @@ def run_resident_calibration_integration(
                                     resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                                 )
                                 if (
-                                    resident_inline_source_dq != "cosmetic_cuda"
+                                    resident_inline_source_dq not in {"cosmetic_cuda", "cosmetic_star_cuda"}
                                     or str(mask_info.get("source_model") or "") != "none"
                                     or int(mask_info.get("invalid_samples") or 0) > 0
                                 ):
@@ -8716,7 +8747,7 @@ def run_resident_calibration_integration(
                                 resident_inline_source_dq_hot_sigma=resident_inline_source_dq_hot_sigma,
                                 resident_inline_source_dq_cold_sigma=resident_inline_source_dq_cold_sigma,
                             )
-                            if resident_inline_source_dq == "cosmetic_cuda"
+                            if resident_inline_source_dq in {"cosmetic_cuda", "cosmetic_star_cuda"}
                             else {}
                         )
                         batch_threshold_apply_items: list[dict[str, Any]] = []
@@ -8770,7 +8801,7 @@ def run_resident_calibration_integration(
                             rows = apply_resident_inline_cosmetic_thresholds_batch(
                                 stack,
                                 items=batch_threshold_apply_items,
-                                source="resident_calibrated_batch_input_cosmetic_cuda",
+                                source=f"resident_calibrated_batch_input_{resident_inline_source_dq}",
                                 max_invalid_fraction=resident_inline_source_dq_max_invalid_fraction,
                             )
                             for row in rows:
@@ -8900,7 +8931,7 @@ def run_resident_calibration_integration(
                         if (
                             not source_dq_fast_skip_enabled
                             and (
-                            resident_inline_source_dq != "cosmetic_cuda"
+                            resident_inline_source_dq not in {"cosmetic_cuda", "cosmetic_star_cuda"}
                             or str(mask_info.get("source_model") or "") != "none"
                             or int(mask_info.get("invalid_samples") or 0) > 0
                             )
@@ -8938,7 +8969,7 @@ def run_resident_calibration_integration(
                                     frame_index=int(index),
                                     frame_id=str(frame["id"]),
                                     threshold_info=threshold_info,
-                                    source="resident_calibrated_input_cosmetic_cuda",
+                                    source=f"resident_calibrated_input_{resident_inline_source_dq}",
                                     max_invalid_fraction=resident_inline_source_dq_max_invalid_fraction,
                                 )
                                 row["application_order"] = "calibration_pre_registration"
@@ -8971,7 +9002,7 @@ def run_resident_calibration_integration(
                                     _apply_deferred_inline_cosmetic_cuda_source_dq(
                                         stack,
                                         [index],
-                                        source="resident_post_registration_pre_warp_cosmetic_cuda",
+                                        source=f"resident_post_registration_pre_warp_{resident_inline_source_dq}",
                                     )
                                     stack.apply_translation_frame(index, int(round(dx)), int(round(dy)), np.nan)
                                     warped_frame_indices.add(index)
@@ -9079,7 +9110,7 @@ def run_resident_calibration_integration(
                             _apply_deferred_inline_cosmetic_cuda_source_dq(
                                 stack,
                                 [index],
-                                source="resident_post_registration_pre_warp_cosmetic_cuda",
+                                source=f"resident_post_registration_pre_warp_{resident_inline_source_dq}",
                             )
                             stack.apply_translation_bilinear_frame(index, dx, dy, np.nan)
                             warped_frame_indices.add(index)
@@ -9239,7 +9270,7 @@ def run_resident_calibration_integration(
                                 _apply_deferred_inline_cosmetic_cuda_source_dq(
                                     stack,
                                     [index],
-                                    source="resident_post_registration_pre_warp_cosmetic_cuda",
+                                    source=f"resident_post_registration_pre_warp_{resident_inline_source_dq}",
                                 )
                                 stack.apply_translation_bilinear_frame(index, dx, dy, np.nan)
                                 warped_frame_indices.add(index)
@@ -9822,7 +9853,7 @@ def run_resident_calibration_integration(
                                     _apply_deferred_inline_cosmetic_cuda_source_dq(
                                         stack,
                                         [index],
-                                        source="resident_post_registration_pre_warp_cosmetic_cuda",
+                                        source=f"resident_post_registration_pre_warp_{resident_inline_source_dq}",
                                     )
                                     warp_model = _apply_resident_registration_matrix(
                                         stack,
@@ -11072,7 +11103,7 @@ def run_resident_calibration_integration(
                     _apply_deferred_inline_cosmetic_cuda_source_dq(
                         _stack,
                         [int(item["index"]) for item in items],
-                        source="resident_post_registration_pre_warp_cosmetic_cuda",
+                        source=f"resident_post_registration_pre_warp_{resident_inline_source_dq}",
                     )
                     warp_start = perf_counter()
                     warp_models, warp_timing = _apply_resident_registration_matrix_batch(
@@ -12105,7 +12136,7 @@ def run_resident_calibration_integration(
                         _apply_deferred_inline_cosmetic_cuda_source_dq(
                             stack,
                             [int(item["index"]) for item, _result in valid_triangle_batch_warps],
-                            source="resident_post_registration_pre_warp_cosmetic_cuda",
+                            source=f"resident_post_registration_pre_warp_{resident_inline_source_dq}",
                         )
                         warp_start = perf_counter()
                         warp_models, warp_timing = _apply_resident_registration_matrix_batch(
@@ -12313,7 +12344,7 @@ def run_resident_calibration_integration(
                                 _apply_deferred_inline_cosmetic_cuda_source_dq(
                                     stack,
                                     [index],
-                                    source="resident_post_registration_pre_warp_cosmetic_cuda",
+                                    source=f"resident_post_registration_pre_warp_{resident_inline_source_dq}",
                                 )
                                 warp_model = _apply_resident_registration_matrix(
                                     stack,
@@ -12353,7 +12384,7 @@ def run_resident_calibration_integration(
             _apply_deferred_inline_cosmetic_cuda_source_dq(
                 stack,
                 range(len(light_frames)),
-                source="resident_post_registration_pre_warp_cosmetic_cuda_flush",
+                source=f"resident_post_registration_pre_warp_{resident_inline_source_dq}_flush",
             )
 
             weighting_start = perf_counter()
@@ -14076,6 +14107,9 @@ def run_resident_calibration_integration(
                             else "all_deferred_frames"
                         ),
                         "resident_inline_source_dq_detector": (
+                            "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+                            if resident_inline_source_dq == "cosmetic_star_cuda"
+                            else
                             "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
                             if resident_inline_source_dq == "cosmetic_cuda"
                             else "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
@@ -14086,20 +14120,26 @@ def run_resident_calibration_integration(
                         ),
                         "resident_inline_source_dq_threshold_source": (
                             "cuda_resident_histogram_median_mad_scalar"
-                            if resident_inline_source_dq == "cosmetic_cuda"
+                            if resident_inline_source_dq in {"cosmetic_cuda", "cosmetic_star_cuda"}
                             else None
                         ),
                         "resident_inline_source_dq_threshold_stats_domain": (
-                            "resident_calibrated_frame" if resident_inline_source_dq == "cosmetic_cuda" else None
+                            "resident_calibrated_frame"
+                            if resident_inline_source_dq in {"cosmetic_cuda", "cosmetic_star_cuda"}
+                            else None
                         ),
                         "resident_inline_source_dq_detector_execution": (
-                            "cuda_isolated_threshold_apply" if resident_inline_source_dq == "cosmetic_cuda" else None
+                            "cuda_star_catalog_protected_isolated_threshold_apply"
+                            if resident_inline_source_dq == "cosmetic_star_cuda"
+                            else "cuda_isolated_threshold_apply"
+                            if resident_inline_source_dq == "cosmetic_cuda"
+                            else None
                         ),
                         "resident_inline_source_dq_application_order": (
                             "post_registration_pre_warp"
                             if defer_inline_cosmetic_cuda_source_dq
                             else "calibration_pre_registration"
-                            if resident_inline_source_dq == "cosmetic_cuda"
+                            if resident_inline_source_dq in {"cosmetic_cuda", "cosmetic_star_cuda"}
                             else None
                         ),
                         "resident_inline_source_dq_deferred_until_stage": (
@@ -14134,7 +14174,7 @@ def run_resident_calibration_integration(
                             resident_inline_source_dq_max_invalid_fraction
                         ),
                         "resident_inline_source_dq_high_fraction_guard_enabled": bool(
-                            resident_inline_source_dq == "cosmetic_cuda"
+                            resident_inline_source_dq in {"cosmetic_cuda", "cosmetic_star_cuda"}
                             and resident_inline_source_dq_max_invalid_fraction > 0.0
                         ),
                         "resident_inline_source_dq_high_fraction_skipped_frame_count": int(

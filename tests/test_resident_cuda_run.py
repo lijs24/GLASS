@@ -4118,6 +4118,105 @@ def test_cli_resident_cuda_run_applies_inline_cosmetic_cuda_source_dq_without_ma
     assert artifact["resident_io_pipeline"]["resident_inline_source_dq_deferred_applied_frame_count"] == 0
 
 
+def test_cli_resident_cuda_run_accepts_inline_star_protected_cosmetic_cuda_source_dq(
+    tmp_path: Path,
+):
+    cuda_module_or_skip()
+    dataset = _two_light_cosmetic_cache_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "rdq_inline_cosmetic_star_cuda"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-inline-source-dq",
+            "cosmetic_star_cuda",
+            "--resident-inline-source-dq-hot-sigma",
+            "2.0",
+            "--resident-inline-source-dq-cold-sigma",
+            "8.0",
+            "--resident-inline-source-dq-max-invalid-fraction",
+            "0.01",
+            "--resident-runtime-preset",
+            "manual",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-output-maps",
+            "audit",
+        ]
+    ) == 0
+
+    resident = read_json(run / "resident_artifacts.json")
+    artifact = resident["artifacts"][0]
+    source_dq = artifact["source_dq_summary"]
+    strategy = read_json(run / "resident_source_dq_strategy.json")
+    timing = read_json(run / "run_timing.json")
+
+    assert source_dq["passed"] is True
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq"] == "cosmetic_star_cuda"
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector"] == (
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_threshold_source"] == (
+        "cuda_resident_histogram_median_mad_scalar"
+    )
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_detector_execution"] == (
+        "cuda_star_catalog_protected_isolated_threshold_apply"
+    )
+    assert artifact["resident_io_pipeline"]["resident_inline_source_dq_high_fraction_guard_enabled"] is True
+    assert strategy["inline_source_dq"]["mode"] == "cosmetic_star_cuda"
+    assert strategy["inline_source_dq"]["detector"] == (
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    assert strategy["inline_source_dq"]["detector_execution"] == (
+        "cuda_star_catalog_protected_isolated_threshold_apply"
+    )
+    assert timing["resident_inline_source_dq"] == "cosmetic_star_cuda"
+    rows = source_dq["rows"]
+    assert rows
+    assert any(
+        row.get("inline_source_dq_detector")
+        == "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+        for row in rows
+    )
+    assert any(
+        row.get("source_model") == "inline_star_protected_cosmetic_cuda_thresholds"
+        for row in rows
+    )
+    assert all(row.get("star_catalog_source") for row in rows)
+    assert not (run / "resident_source_dq_cache_route.json").exists()
+
+
 def test_cli_resident_cuda_run_skips_inline_cosmetic_cuda_high_fraction_guard(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_cosmetic_cache_dataset(tmp_path)

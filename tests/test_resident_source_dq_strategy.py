@@ -91,3 +91,29 @@ def test_resident_source_dq_strategy_records_star_protected_inline_detector(tmp_
     assert inline["mode"] == "cosmetic_star"
     assert inline["detector"] == "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
     assert inline["materializes_calibrated_dq_cache"] is False
+
+
+def test_resident_source_dq_strategy_records_cuda_star_protected_inline_detector(
+    tmp_path: Path,
+) -> None:
+    strategy = build_resident_source_dq_strategy(
+        _plan(),
+        tmp_path / "run",
+        free_bytes=10_000,
+        resident_inline_source_dq="cosmetic_star_cuda",
+        resident_inline_source_dq_max_invalid_fraction=0.001,
+    )
+
+    inline = strategy["inline_source_dq"]
+    assert inline["enabled"] is True
+    assert inline["mode"] == "cosmetic_star_cuda"
+    assert inline["detector"] == (
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    assert inline["threshold_source"] == "cuda_resident_histogram_median_mad_scalar"
+    assert inline["detector_execution"] == "cuda_star_catalog_protected_isolated_threshold_apply"
+    assert inline["high_fraction_guard_enabled"] is True
+    assert inline["count_only_preflight"] == (
+        "ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    assert inline["materializes_calibrated_dq_cache"] is False

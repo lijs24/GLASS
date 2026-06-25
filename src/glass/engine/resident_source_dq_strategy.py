@@ -155,6 +155,9 @@ def build_resident_source_dq_strategy(
         "enabled": str(resident_inline_source_dq) != "off",
         "policy": str(resident_inline_source_dq_policy),
         "detector": (
+            "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
+            else
             "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
             if str(resident_inline_source_dq) == "cosmetic_cuda"
             else "glass.cpu.cosmetic.detect_star_protected_cosmetic_defects"
@@ -165,11 +168,15 @@ def build_resident_source_dq_strategy(
         ),
         "threshold_source": (
             "cuda_resident_histogram_median_mad_scalar"
-            if str(resident_inline_source_dq) == "cosmetic_cuda"
+            if str(resident_inline_source_dq) in {"cosmetic_cuda", "cosmetic_star_cuda"}
             else None
         ),
         "detector_execution": (
-            "cuda_isolated_threshold_apply" if str(resident_inline_source_dq) == "cosmetic_cuda" else None
+            "cuda_star_catalog_protected_isolated_threshold_apply"
+            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
+            else "cuda_isolated_threshold_apply"
+            if str(resident_inline_source_dq) == "cosmetic_cuda"
+            else None
         ),
         "hot_sigma": float(resident_inline_source_dq_hot_sigma),
         "cold_sigma": float(resident_inline_source_dq_cold_sigma),
@@ -182,11 +189,13 @@ def build_resident_source_dq_strategy(
             "by registration/current positive-weight frame state"
         ),
         "high_fraction_guard_enabled": bool(
-            str(resident_inline_source_dq) == "cosmetic_cuda"
+            str(resident_inline_source_dq) in {"cosmetic_cuda", "cosmetic_star_cuda"}
             and float(resident_inline_source_dq_max_invalid_fraction) > 0.0
         ),
         "count_only_preflight": (
-            "ResidentCalibratedStack.count_cosmetic_threshold_mask_frame"
+            "ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frame"
+            if str(resident_inline_source_dq) == "cosmetic_star_cuda"
+            else "ResidentCalibratedStack.count_cosmetic_threshold_mask_frame"
             if str(resident_inline_source_dq) == "cosmetic_cuda"
             else None
         ),

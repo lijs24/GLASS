@@ -873,6 +873,278 @@ void glass_count_isolated_cosmetic_threshold_mask_frames_f32_launch(
       counts);
 }
 
+__device__ bool glass_pixel_in_star_protection_f32(
+    std::size_t x,
+    std::size_t y,
+    const float* star_xs,
+    const float* star_ys,
+    int star_count,
+    float radius_sq) {
+  if (star_count <= 0 || radius_sq <= 0.0f) {
+    return false;
+  }
+  const float px = static_cast<float>(x);
+  const float py = static_cast<float>(y);
+  for (int i = 0; i < star_count; ++i) {
+    const float sx = star_xs[i];
+    const float sy = star_ys[i];
+    if (!isfinite(sx) || !isfinite(sy)) {
+      continue;
+    }
+    const float dx = px - sx;
+    const float dy = py - sy;
+    if (dx * dx + dy * dy <= radius_sq) {
+      return true;
+    }
+  }
+  return false;
+}
+
+__global__ void glass_apply_star_protected_isolated_cosmetic_threshold_mask_f32_kernel(
+    float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    const float* star_xs,
+    const float* star_ys,
+    int star_count,
+    float star_protection_radius,
+    unsigned long long* counts) {
+  const std::size_t n = width * height;
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= n) {
+    return;
+  }
+  bool hot;
+  bool cold;
+  bool nonfinite;
+  bool hot_candidate;
+  bool cold_candidate;
+  bool hot_protected;
+  bool cold_protected;
+  glass_isolated_cosmetic_classify_f32(
+      frame,
+      width,
+      height,
+      i,
+      low_threshold,
+      high_threshold,
+      median,
+      structure_sigma,
+      sigma,
+      min_neighbor_support,
+      &hot,
+      &cold,
+      &nonfinite,
+      &hot_candidate,
+      &cold_candidate,
+      &hot_protected,
+      &cold_protected);
+  if (hot_candidate) {
+    atomicAdd(&counts[3], 1ULL);
+  }
+  if (cold_candidate) {
+    atomicAdd(&counts[4], 1ULL);
+  }
+  if (hot_protected) {
+    atomicAdd(&counts[5], 1ULL);
+  }
+  if (cold_protected) {
+    atomicAdd(&counts[6], 1ULL);
+  }
+  if (nonfinite) {
+    atomicAdd(&counts[2], 1ULL);
+    frame[i] = nanf("");
+    return;
+  }
+
+  const std::size_t y = i / width;
+  const std::size_t x = i - y * width;
+  const float radius_sq = star_protection_radius * star_protection_radius;
+  const bool star_protected = (hot || cold) && glass_pixel_in_star_protection_f32(
+      x, y, star_xs, star_ys, star_count, radius_sq);
+  if (star_protected) {
+    if (hot) {
+      atomicAdd(&counts[7], 1ULL);
+    }
+    if (cold) {
+      atomicAdd(&counts[8], 1ULL);
+    }
+    atomicAdd(&counts[9], 1ULL);
+    return;
+  }
+  if (hot) {
+    atomicAdd(&counts[0], 1ULL);
+    frame[i] = nanf("");
+    return;
+  }
+  if (cold) {
+    atomicAdd(&counts[1], 1ULL);
+    frame[i] = nanf("");
+  }
+}
+
+__global__ void glass_count_star_protected_isolated_cosmetic_threshold_mask_f32_kernel(
+    const float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    const float* star_xs,
+    const float* star_ys,
+    int star_count,
+    float star_protection_radius,
+    unsigned long long* counts) {
+  const std::size_t n = width * height;
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= n) {
+    return;
+  }
+  bool hot;
+  bool cold;
+  bool nonfinite;
+  bool hot_candidate;
+  bool cold_candidate;
+  bool hot_protected;
+  bool cold_protected;
+  glass_isolated_cosmetic_classify_f32(
+      frame,
+      width,
+      height,
+      i,
+      low_threshold,
+      high_threshold,
+      median,
+      structure_sigma,
+      sigma,
+      min_neighbor_support,
+      &hot,
+      &cold,
+      &nonfinite,
+      &hot_candidate,
+      &cold_candidate,
+      &hot_protected,
+      &cold_protected);
+  if (hot_candidate) {
+    atomicAdd(&counts[3], 1ULL);
+  }
+  if (cold_candidate) {
+    atomicAdd(&counts[4], 1ULL);
+  }
+  if (hot_protected) {
+    atomicAdd(&counts[5], 1ULL);
+  }
+  if (cold_protected) {
+    atomicAdd(&counts[6], 1ULL);
+  }
+  if (nonfinite) {
+    atomicAdd(&counts[2], 1ULL);
+    return;
+  }
+
+  const std::size_t y = i / width;
+  const std::size_t x = i - y * width;
+  const float radius_sq = star_protection_radius * star_protection_radius;
+  const bool star_protected = (hot || cold) && glass_pixel_in_star_protection_f32(
+      x, y, star_xs, star_ys, star_count, radius_sq);
+  if (star_protected) {
+    if (hot) {
+      atomicAdd(&counts[7], 1ULL);
+    }
+    if (cold) {
+      atomicAdd(&counts[8], 1ULL);
+    }
+    atomicAdd(&counts[9], 1ULL);
+    return;
+  }
+  if (hot) {
+    atomicAdd(&counts[0], 1ULL);
+    return;
+  }
+  if (cold) {
+    atomicAdd(&counts[1], 1ULL);
+  }
+}
+
+void glass_apply_star_protected_isolated_cosmetic_threshold_mask_f32_launch(
+    float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    const float* star_xs,
+    const float* star_ys,
+    int star_count,
+    float star_protection_radius,
+    unsigned long long* counts) {
+  constexpr int threads = 256;
+  const std::size_t n = width * height;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  glass_apply_star_protected_isolated_cosmetic_threshold_mask_f32_kernel<<<blocks, threads>>>(
+      frame,
+      width,
+      height,
+      low_threshold,
+      high_threshold,
+      median,
+      sigma,
+      structure_sigma,
+      min_neighbor_support,
+      star_xs,
+      star_ys,
+      star_count,
+      star_protection_radius,
+      counts);
+}
+
+void glass_count_star_protected_isolated_cosmetic_threshold_mask_f32_launch(
+    const float* frame,
+    std::size_t width,
+    std::size_t height,
+    float low_threshold,
+    float high_threshold,
+    float median,
+    float sigma,
+    float structure_sigma,
+    int min_neighbor_support,
+    const float* star_xs,
+    const float* star_ys,
+    int star_count,
+    float star_protection_radius,
+    unsigned long long* counts) {
+  constexpr int threads = 256;
+  const std::size_t n = width * height;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  glass_count_star_protected_isolated_cosmetic_threshold_mask_f32_kernel<<<blocks, threads>>>(
+      frame,
+      width,
+      height,
+      low_threshold,
+      high_threshold,
+      median,
+      sigma,
+      structure_sigma,
+      min_neighbor_support,
+      star_xs,
+      star_ys,
+      star_count,
+      star_protection_radius,
+      counts);
+}
+
 __global__ void glass_sample_frame_even_f32_kernel(
     const float* frame,
     float* sample,

@@ -420,6 +420,111 @@ def inline_cosmetic_thresholds_from_resident_stack(
     )
 
 
+def inline_star_protected_cosmetic_thresholds_from_resident_stack(
+    stack: Any,
+    *,
+    frame_index: int,
+    height: int,
+    width: int,
+    hot_sigma: float = 8.0,
+    cold_sigma: float = 8.0,
+    star_threshold_sigma: float = 5.0,
+    star_protection_radius_px: float = 3.0,
+    star_grid_cols: int = 8,
+    star_grid_rows: int = 8,
+    star_candidates_per_cell: int = 2,
+    star_max_candidates: int = 256,
+    star_min_separation_px: float = 4.0,
+) -> dict[str, Any]:
+    """Compute resident CUDA thresholds plus a compact resident star catalog."""
+
+    info = inline_cosmetic_thresholds_from_resident_stack(
+        stack,
+        frame_index=int(frame_index),
+        height=height,
+        width=width,
+        hot_sigma=hot_sigma,
+        cold_sigma=cold_sigma,
+    )
+    info["source_model"] = "inline_star_protected_cosmetic_cuda_thresholds"
+    info["inline_source_dq_detector"] = (
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    info["detector_execution"] = "cuda_star_catalog_protected_isolated_threshold_apply"
+    info["star_threshold_sigma"] = float(star_threshold_sigma)
+    info["star_protection_radius_px"] = float(star_protection_radius_px)
+    info["star_catalog_source"] = "resident_cuda_star_grid_top_nms_candidates"
+    if not info.get("supported"):
+        return info
+    metrics = dict(info.get("cosmetic_metrics") or {})
+    stats = dict(info.get("threshold_stats") or {})
+    median = float(metrics.get("median", stats.get("median", 0.0)) or 0.0)
+    sigma = float(metrics.get("sigma", stats.get("sigma", 0.0)) or 0.0)
+    if sigma <= 0.0:
+        sigma = 1.0
+    star_threshold = float(np.float32(median + float(star_threshold_sigma) * sigma))
+    info["star_threshold"] = star_threshold
+    if not hasattr(stack, "star_grid_top_nms_candidates"):
+        info.update(
+            {
+                "supported": False,
+                "reason": "resident_cuda_star_catalog_unavailable",
+                "star_count": 0,
+                "star_x": [],
+                "star_y": [],
+            }
+        )
+        return info
+    catalog = dict(
+        stack.star_grid_top_nms_candidates(
+            int(frame_index),
+            star_threshold,
+            int(star_grid_cols),
+            int(star_grid_rows),
+            int(star_candidates_per_cell),
+            int(star_max_candidates),
+            float(star_min_separation_px),
+        )
+    )
+    star_x = np.asarray(catalog.get("x", []), dtype=np.float32).reshape((-1,))
+    star_y = np.asarray(catalog.get("y", []), dtype=np.float32).reshape((-1,))
+    stored_count = int(catalog.get("stored_count", min(star_x.size, star_y.size)) or 0)
+    star_x = star_x[:stored_count].astype(np.float32, copy=False)
+    star_y = star_y[:stored_count].astype(np.float32, copy=False)
+    info.update(
+        {
+            "star_count": int(stored_count),
+            "star_x": star_x.tolist(),
+            "star_y": star_y.tolist(),
+            "star_catalog": {
+                "count": int(catalog.get("count") or 0),
+                "stored_count": int(stored_count),
+                "grid_cols": int(catalog.get("grid_cols") or star_grid_cols),
+                "grid_rows": int(catalog.get("grid_rows") or star_grid_rows),
+                "candidates_per_cell": int(
+                    catalog.get("candidates_per_cell") or star_candidates_per_cell
+                ),
+                "max_output_candidates": int(catalog.get("max_output_candidates") or star_max_candidates),
+                "min_separation_px": float(catalog.get("min_separation_px") or star_min_separation_px),
+                "catalog_sort_mode": catalog.get("catalog_sort_mode"),
+                "catalog_topk_mode": catalog.get("catalog_topk_mode"),
+            },
+        }
+    )
+    metrics.update(
+        {
+            "star_protection_enabled": True,
+            "star_detector": "ResidentCalibratedStack.star_grid_top_nms_candidates",
+            "star_count": int(stored_count),
+            "star_threshold": star_threshold,
+            "star_threshold_sigma": float(star_threshold_sigma),
+            "star_protection_radius_px": float(star_protection_radius_px),
+        }
+    )
+    info["cosmetic_metrics"] = metrics
+    return info
+
+
 def inline_cosmetic_thresholds_batch_from_resident_stack(
     stack: Any,
     *,
@@ -884,6 +989,10 @@ def apply_resident_inline_cosmetic_thresholds(
         "cosmetic_metrics": dict(threshold_info.get("cosmetic_metrics") or {}),
         "structure_sigma": float(threshold_info.get("structure_sigma", 1.5)),
         "min_neighbor_support": int(threshold_info.get("min_neighbor_support", 2)),
+        "star_count": int(threshold_info.get("star_count") or 0),
+        "star_protection_radius_px": threshold_info.get("star_protection_radius_px"),
+        "star_catalog": dict(threshold_info.get("star_catalog") or {}),
+        "star_catalog_source": threshold_info.get("star_catalog_source"),
         "applied": False,
         "native_method": None,
     }
@@ -895,10 +1004,37 @@ def apply_resident_inline_cosmetic_thresholds(
     stats_for_params = dict(row["threshold_stats"])
     threshold_median = float(metrics_for_params.get("median", stats_for_params.get("median", 0.0)) or 0.0)
     threshold_sigma = float(metrics_for_params.get("sigma", stats_for_params.get("sigma", 0.0)) or 0.0)
-    use_isolated_detector = "isolated" in str(row["inline_source_dq_detector"])
+    detector_name = str(row["inline_source_dq_detector"])
+    isolated_detector_name = "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+    star_protected_detector_name = (
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    use_star_protected_detector = detector_name == star_protected_detector_name
+    use_isolated_detector = detector_name == isolated_detector_name
+    star_x = np.asarray(threshold_info.get("star_x", []), dtype=np.float32).reshape((-1,))
+    star_y = np.asarray(threshold_info.get("star_y", []), dtype=np.float32).reshape((-1,))
+    star_radius = float(threshold_info.get("star_protection_radius_px") or 0.0)
     guard_enabled = max_invalid_fraction is not None and float(max_invalid_fraction) > 0.0
     if guard_enabled and native_count_result is None:
-        if use_isolated_detector and hasattr(stack, "count_isolated_cosmetic_threshold_mask_frame"):
+        if use_star_protected_detector and hasattr(
+            stack,
+            "count_star_protected_isolated_cosmetic_threshold_mask_frame",
+        ):
+            native_count_result = dict(
+                stack.count_star_protected_isolated_cosmetic_threshold_mask_frame(
+                    int(frame_index),
+                    float(row["low_threshold"]),
+                    float(row["high_threshold"]),
+                    threshold_median,
+                    threshold_sigma,
+                    star_x,
+                    star_y,
+                    star_radius,
+                    float(row["structure_sigma"]),
+                    int(row["min_neighbor_support"]),
+                )
+            )
+        elif use_isolated_detector and hasattr(stack, "count_isolated_cosmetic_threshold_mask_frame"):
             native_count_result = dict(
                 stack.count_isolated_cosmetic_threshold_mask_frame(
                     int(frame_index),
@@ -1010,7 +1146,9 @@ def apply_resident_inline_cosmetic_thresholds(
             )
             return row
     required_apply_method = (
-        "apply_isolated_cosmetic_threshold_mask_frame"
+        "apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+        if use_star_protected_detector
+        else "apply_isolated_cosmetic_threshold_mask_frame"
         if use_isolated_detector
         else "apply_cosmetic_threshold_mask_frame"
     )
@@ -1025,6 +1163,21 @@ def apply_resident_inline_cosmetic_thresholds(
 
     if native_result is not None:
         native = dict(native_result)
+    elif use_star_protected_detector:
+        native = dict(
+            stack.apply_star_protected_isolated_cosmetic_threshold_mask_frame(
+                int(frame_index),
+                float(row["low_threshold"]),
+                float(row["high_threshold"]),
+                threshold_median,
+                threshold_sigma,
+                star_x,
+                star_y,
+                star_radius,
+                float(row["structure_sigma"]),
+                int(row["min_neighbor_support"]),
+            )
+        )
     elif use_isolated_detector:
         native = dict(
             stack.apply_isolated_cosmetic_threshold_mask_frame(
@@ -1068,6 +1221,13 @@ def apply_resident_inline_cosmetic_thresholds(
     metrics["candidate_cold_pixels"] = int(native.get("candidate_cold_samples") or cold)
     metrics["protected_hot_pixels"] = int(native.get("protected_hot_samples") or 0)
     metrics["protected_cold_pixels"] = int(native.get("protected_cold_samples") or 0)
+    metrics["star_protected_hot_pixels"] = int(native.get("star_protected_hot_samples") or 0)
+    metrics["star_protected_cold_pixels"] = int(native.get("star_protected_cold_samples") or 0)
+    metrics["star_protected_cosmetic_pixels"] = int(
+        native.get("star_protected_cosmetic_samples") or 0
+    )
+    if native.get("star_count") is not None:
+        metrics["star_count"] = int(native.get("star_count") or 0)
     row.update(
         {
             "status": "applied" if invalid > 0 else "no_invalid_samples",
@@ -1140,6 +1300,9 @@ def apply_resident_inline_cosmetic_thresholds(
                     ],
                     "structure_sigma": row["structure_sigma"],
                     "min_neighbor_support": row["min_neighbor_support"],
+                    "star_count": row["star_count"],
+                    "star_protection_radius_px": row["star_protection_radius_px"],
+                    "star_catalog_source": row["star_catalog_source"],
                     "detector_execution": row["detector_execution"],
                     "cosmetic_metrics": metrics,
                 }
@@ -1220,6 +1383,10 @@ def build_skipped_resident_inline_cosmetic_threshold_row(
         "cosmetic_metrics": metrics,
         "structure_sigma": float(info.get("structure_sigma", 1.5)),
         "min_neighbor_support": int(info.get("min_neighbor_support", 2)),
+        "star_count": int(info.get("star_count") or 0),
+        "star_protection_radius_px": info.get("star_protection_radius_px"),
+        "star_catalog": dict(info.get("star_catalog") or {}),
+        "star_catalog_source": info.get("star_catalog_source"),
         "applied": False,
         "native_method": None,
         "status": "skipped_admission_policy",
@@ -1247,6 +1414,9 @@ def build_skipped_resident_inline_cosmetic_threshold_row(
                 "threshold_stats": dict(info.get("threshold_stats") or {}),
                 "structure_sigma": float(info.get("structure_sigma", 1.5)),
                 "min_neighbor_support": int(info.get("min_neighbor_support", 2)),
+                "star_count": int(info.get("star_count") or 0),
+                "star_protection_radius_px": info.get("star_protection_radius_px"),
+                "star_catalog_source": info.get("star_catalog_source"),
                 "detector_execution": str(
                     info.get("detector_execution") or "cuda_isolated_threshold_apply"
                 ),
@@ -1268,8 +1438,30 @@ def apply_resident_inline_cosmetic_thresholds_batch(
 ) -> list[dict[str, Any]]:
     if not items:
         return []
+    isolated_detector_name = "ResidentCalibratedStack.apply_isolated_cosmetic_threshold_mask_frame"
+    star_protected_detector_name = (
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    if any(
+        str(dict(item["threshold_info"]).get("inline_source_dq_detector") or "")
+        == star_protected_detector_name
+        for item in items
+    ):
+        return [
+            apply_resident_inline_cosmetic_thresholds(
+                stack,
+                frame_index=int(item["frame_index"]),
+                frame_id=str(item["frame_id"]),
+                threshold_info=dict(item["threshold_info"]),
+                source=source,
+                require_native=require_native,
+                max_invalid_fraction=max_invalid_fraction,
+            )
+            for item in items
+        ]
     use_isolated_detector = all(
-        "isolated" in str(dict(item["threshold_info"]).get("inline_source_dq_detector") or "")
+        str(dict(item["threshold_info"]).get("inline_source_dq_detector") or "")
+        == isolated_detector_name
         for item in items
     )
     batch_apply_method = (

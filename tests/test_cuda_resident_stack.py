@@ -8,7 +8,8 @@ import pytest
 from astropy.io import fits
 
 from glass.cpu.calibration import calibrate_light
-from glass.cpu.cosmetic import detect_isolated_cosmetic_defects
+from glass.cpu.cosmetic import detect_isolated_cosmetic_defects, detect_star_protected_cosmetic_defects
+from glass.cpu.star_detect import Star
 from glass.cpu.integration import weighted_integrate_stack
 from glass.cpu.warp import warp_translation
 from glass.engine.contracts import DQFlag, DQMask, OutputMapPolicy, StackRequest, TileWindow
@@ -2049,6 +2050,17 @@ def _isolated_cosmetic_fixture() -> np.ndarray:
     return data
 
 
+def _star_protected_cosmetic_fixture() -> np.ndarray:
+    data = np.full((15, 15), 100.0, dtype=np.float32)
+    data[2, 2] = 900.0
+    data[7, 7] = 700.0
+    data[7, 6] = 180.0
+    data[7, 8] = 180.0
+    data[6, 7] = 180.0
+    data[8, 7] = 180.0
+    return data
+
+
 def test_resident_stack_isolated_cosmetic_threshold_count_matches_cpu_without_modifying_pixels():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "count_isolated_cosmetic_threshold_mask_frame"):
@@ -2090,6 +2102,108 @@ def test_resident_stack_isolated_cosmetic_threshold_count_matches_cpu_without_mo
     assert weight[1, 1] == pytest.approx(2.0)
     assert master[1, 1] == pytest.approx((50.0 + 1000.0) / 2.0)
     assert weight[4, 4] == pytest.approx(2.0)
+
+
+def test_resident_stack_star_protected_isolated_cosmetic_threshold_count_matches_cpu():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "count_star_protected_isolated_cosmetic_threshold_mask_frame"):
+        raise AssertionError(
+            "ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frame is missing"
+        )
+
+    frame = _star_protected_cosmetic_fixture()
+    cpu = detect_star_protected_cosmetic_defects(
+        frame,
+        hot_sigma=2.0,
+        cold_sigma=2.0,
+        min_neighbor_support=6,
+        star_threshold_sigma=2.0,
+        star_protection_radius_px=2.2,
+        stars=[Star(x=7.0, y=7.0, flux=1000.0, sharpness=0.5, npix=5)],
+    )
+    stack = module.ResidentCalibratedStack(2, 15, 15)
+    stack.upload_calibrated_frame(0, np.full((15, 15), 50.0, dtype=np.float32))
+    stack.upload_calibrated_frame(1, frame)
+
+    result = stack.count_star_protected_isolated_cosmetic_threshold_mask_frame(
+        1,
+        0.0,
+        200.0,
+        100.0,
+        50.0,
+        np.array([7.0], dtype=np.float32),
+        np.array([7.0], dtype=np.float32),
+        2.2,
+        1.5,
+        6,
+    )
+    master, weight = stack.integrate_mean()
+
+    assert result["native_method"] == (
+        "ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    assert result["detector_execution"] == "cuda_star_catalog_protected_isolated_threshold_count"
+    assert result["star_catalog_source"] == "host_catalog_coordinates_device_applied"
+    assert result["star_count"] == 1
+    assert cpu.metrics["hot_pixels"] == 1
+    assert cpu.metrics["star_protected_hot_pixels"] == 1
+    assert result["hot_samples"] == 1
+    assert result["cold_samples"] == 0
+    assert result["star_protected_hot_samples"] == 1
+    assert result["star_protected_cosmetic_samples"] == 1
+    assert result["cosmetic_corrected_samples"] == 1
+    assert result["invalid_samples"] == 1
+    assert result["applied"] is False
+    assert weight[2, 2] == pytest.approx(2.0)
+    assert master[2, 2] == pytest.approx((50.0 + 900.0) / 2.0)
+    assert weight[7, 7] == pytest.approx(2.0)
+    assert master[7, 7] == pytest.approx((50.0 + 700.0) / 2.0)
+
+
+def test_resident_stack_star_protected_isolated_cosmetic_threshold_apply_keeps_star_core():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_star_protected_isolated_cosmetic_threshold_mask_frame"):
+        raise AssertionError(
+            "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame is missing"
+        )
+
+    frame = _star_protected_cosmetic_fixture()
+    stack = module.ResidentCalibratedStack(2, 15, 15)
+    stack.upload_calibrated_frame(0, np.full((15, 15), 50.0, dtype=np.float32))
+    stack.upload_calibrated_frame(1, frame)
+
+    result = stack.apply_star_protected_isolated_cosmetic_threshold_mask_frame(
+        1,
+        0.0,
+        200.0,
+        100.0,
+        50.0,
+        np.array([7.0], dtype=np.float32),
+        np.array([7.0], dtype=np.float32),
+        2.2,
+        1.5,
+        6,
+    )
+    master, weight = stack.integrate_mean()
+
+    assert result["native_method"] == (
+        "ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame"
+    )
+    assert result["detector_execution"] == "cuda_star_catalog_protected_isolated_threshold_apply"
+    assert result["star_count"] == 1
+    assert result["hot_samples"] == 1
+    assert result["cold_samples"] == 0
+    assert result["star_protected_hot_samples"] == 1
+    assert result["star_protected_cosmetic_samples"] == 1
+    assert result["cosmetic_corrected_samples"] == 1
+    assert result["invalid_samples"] == 1
+    assert result["applied"] is True
+    assert result["star_catalog_upload_bytes"] == 8
+    assert result["mask_upload_s"] == 0.0
+    assert weight[2, 2] == pytest.approx(1.0)
+    assert master[2, 2] == pytest.approx(50.0)
+    assert weight[7, 7] == pytest.approx(2.0)
+    assert master[7, 7] == pytest.approx((50.0 + 700.0) / 2.0)
 
 
 def test_resident_stack_isolated_cosmetic_threshold_apply_protects_star_core():

@@ -708,6 +708,22 @@ def test_run_resident_inline_source_dq_accepts_star_protected_mode() -> None:
     assert args.resident_inline_source_dq == "cosmetic_star"
 
 
+def test_run_resident_inline_source_dq_accepts_star_protected_cuda_mode() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-inline-source-dq",
+            "cosmetic_star_cuda",
+        ]
+    )
+
+    assert args.resident_inline_source_dq == "cosmetic_star_cuda"
+
+
 def test_run_resident_registration_auto_keeps_tile_path_off() -> None:
     args = _parse_cli(["run", "--plan", "plan.json", "--out", "run", "--backend", "cpu"])
 

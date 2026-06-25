@@ -2919,6 +2919,74 @@ class ResidentCalibratedStack:
         )
         return dict(result)
 
+    def apply_star_protected_isolated_cosmetic_threshold_mask_frame(
+        self,
+        index: int,
+        low_threshold: float,
+        high_threshold: float,
+        median: float,
+        sigma: float,
+        star_xs: Any,
+        star_ys: Any,
+        star_protection_radius: float,
+        structure_sigma: float = 1.5,
+        min_neighbor_support: int = 2,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "apply_star_protected_isolated_cosmetic_threshold_mask_frame"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.apply_star_protected_isolated_cosmetic_threshold_mask_frame "
+                "is not available"
+            )
+        xs = np.ascontiguousarray(np.asarray(star_xs, dtype=np.float32).reshape((-1,)))
+        ys = np.ascontiguousarray(np.asarray(star_ys, dtype=np.float32).reshape((-1,)))
+        result = self._impl.apply_star_protected_isolated_cosmetic_threshold_mask_frame(
+            int(index),
+            float(low_threshold),
+            float(high_threshold),
+            float(median),
+            float(sigma),
+            xs,
+            ys,
+            float(star_protection_radius),
+            float(structure_sigma),
+            int(min_neighbor_support),
+        )
+        return dict(result)
+
+    def count_star_protected_isolated_cosmetic_threshold_mask_frame(
+        self,
+        index: int,
+        low_threshold: float,
+        high_threshold: float,
+        median: float,
+        sigma: float,
+        star_xs: Any,
+        star_ys: Any,
+        star_protection_radius: float,
+        structure_sigma: float = 1.5,
+        min_neighbor_support: int = 2,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "count_star_protected_isolated_cosmetic_threshold_mask_frame"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.count_star_protected_isolated_cosmetic_threshold_mask_frame "
+                "is not available"
+            )
+        xs = np.ascontiguousarray(np.asarray(star_xs, dtype=np.float32).reshape((-1,)))
+        ys = np.ascontiguousarray(np.asarray(star_ys, dtype=np.float32).reshape((-1,)))
+        result = self._impl.count_star_protected_isolated_cosmetic_threshold_mask_frame(
+            int(index),
+            float(low_threshold),
+            float(high_threshold),
+            float(median),
+            float(sigma),
+            xs,
+            ys,
+            float(star_protection_radius),
+            float(structure_sigma),
+            int(min_neighbor_support),
+        )
+        return dict(result)
+
     def apply_isolated_cosmetic_threshold_mask_frames(
         self,
         indices: list[int],
