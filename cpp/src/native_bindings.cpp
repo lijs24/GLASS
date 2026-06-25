@@ -12569,15 +12569,34 @@ class ResidentCalibratedStack {
         glass_env_flag_enabled_strict(unit_mask_scan_env_value);
     const std::string unit_positive_weight_mask_env_reason =
         glass_env_flag_reason_strict(unit_mask_scan_env_value);
+    const bool unit_positive_weight_mask_default_enabled =
+        unit_mask_scan_env_value.empty();
+    const bool unit_positive_weight_mask_policy_enabled =
+        unit_positive_weight_mask_default_enabled || unit_positive_weight_mask_env_enabled;
+    const std::string unit_positive_weight_mask_policy_source =
+        unit_positive_weight_mask_default_enabled
+            ? "default_unit_positive_weight_mask_scan"
+            : unit_positive_weight_mask_env_reason;
+    const bool unit_positive_weight_mask_blocked_by_precedence =
+        unit_positive_active_index_enabled || unit_positive_local_reuse_enabled;
     const bool unit_positive_weight_mask_requested =
         !radix_select_enabled && unit_positive_weights &&
-        !unit_positive_active_index_enabled && !unit_positive_local_reuse_enabled &&
-        unit_positive_weight_mask_env_enabled;
+        !unit_positive_weight_mask_blocked_by_precedence &&
+        unit_positive_weight_mask_policy_enabled;
     const bool unit_positive_weight_mask_enabled = unit_positive_weight_mask_requested;
-    const std::string unit_positive_weight_mask_reason = unit_positive_weight_mask_enabled
-        ? "environment_enabled"
-        : (unit_positive_weight_mask_env_enabled ? "disabled_by_precedence"
-                                                 : unit_positive_weight_mask_env_reason);
+    std::string unit_positive_weight_mask_reason = unit_positive_weight_mask_policy_source;
+    if (unit_positive_weight_mask_enabled) {
+      unit_positive_weight_mask_reason = unit_positive_weight_mask_policy_source;
+    } else if (!unit_positive_weight_mask_policy_enabled) {
+      unit_positive_weight_mask_reason = unit_positive_weight_mask_policy_source;
+    } else if (radix_select_enabled) {
+      unit_positive_weight_mask_reason = "disabled_by_radix_select";
+    } else if (!unit_positive_weights) {
+      unit_positive_weight_mask_reason = "disabled_non_unit_weights";
+    } else if (unit_positive_weight_mask_blocked_by_precedence &&
+               unit_positive_weight_mask_policy_enabled) {
+      unit_positive_weight_mask_reason = "disabled_by_precedence";
+    }
     std::vector<unsigned int> unit_positive_frame_indices;
     if (unit_positive_active_index_enabled) {
       unit_positive_frame_indices.reserve(frame_count_);
@@ -12866,6 +12885,10 @@ class ResidentCalibratedStack {
         profile_info["unit_positive_weight_mask_requested"] = unit_positive_weight_mask_requested;
         profile_info["unit_positive_weight_mask_enabled"] = unit_positive_weight_mask_enabled;
         profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_reason;
+        profile_info["unit_positive_weight_mask_policy_source"] =
+            unit_positive_weight_mask_policy_source;
+        profile_info["unit_positive_weight_mask_default_enabled"] =
+            unit_positive_weight_mask_default_enabled;
         profile_info["unit_positive_weight_frame_count"] =
             static_cast<unsigned long long>(unit_positive_weight_frame_count);
         profile_info["unit_positive_active_frame_count"] =
@@ -13118,6 +13141,10 @@ class ResidentCalibratedStack {
       profile_info["unit_positive_weight_mask_requested"] = unit_positive_weight_mask_requested;
       profile_info["unit_positive_weight_mask_enabled"] = unit_positive_weight_mask_enabled;
       profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_reason;
+      profile_info["unit_positive_weight_mask_policy_source"] =
+          unit_positive_weight_mask_policy_source;
+      profile_info["unit_positive_weight_mask_default_enabled"] =
+          unit_positive_weight_mask_default_enabled;
       profile_info["unit_positive_weight_frame_count"] =
           static_cast<unsigned long long>(unit_positive_weight_frame_count);
       profile_info["unit_positive_active_frame_count"] =

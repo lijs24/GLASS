@@ -320,6 +320,22 @@ explicit true values (`1`, `true`, `yes`, or `on`). Values such as `auto` are
 recorded as `unit_positive_weight_mask_reason=ignored_unrecognized_env_value`
 and use the default `global_reread_weighted_samples` strategy.
 
+S2-Gate 668 promotes the same frame-mask scan as the default native admission
+for unit-positive 0/1 resident weights after a current-HEAD real 200-light A/B
+and a post-change default validation both passed resident regression gates with
+zero output drift. This is not a claim that Gate630's rejected kernel-speed
+hypothesis became true; rather, the branch is now admitted because it is
+low-risk, auditable, uses only one byte per input frame, avoids repeated
+per-pixel float-weight checks in the dominant default case, and preserved or
+slightly improved current total/runtime measurements. When the environment
+variable is unset, matching groups record
+`unit_positive_weight_mask_reason=default_unit_positive_weight_mask_scan`,
+`unit_positive_weight_mask_policy_source=default_unit_positive_weight_mask_scan`,
+and `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`.
+Explicit false values still restore `global_reread_weighted_samples`, explicit
+true values record `environment_enabled`, and unrecognized values such as
+`auto` remain disabled.
+
 ## CUDA Scope
 
 CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted

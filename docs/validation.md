@@ -399,6 +399,22 @@ Current Phase 2 latest mainline acceptance:
   `skipped_admission_policy=7`), and passed regression versus Gate666 with
   elapsed ratio `1.001834568712481`, zero artifact/frame/registration
   differences, zero output differences, and zero numerical drift.
+- Gate668 promotes the unit-positive 0/1 weight mask-scan reducer branch into
+  the default resident CUDA hardened winsorized path. The current-HEAD
+  environment-enabled A/B at
+  `C:\glass_runs\phase2_s2_gate668_mask_scan_promotion_probe\runs_20260626_021500`
+  passed regression versus the old default with elapsed ratio
+  `0.9952617617554094`, and the post-change no-env default run at
+  `C:\glass_runs\phase2_s2_gate668_mask_scan_promotion_probe\runs_20260626_021500\default_promoted`
+  passed regression versus the old default with elapsed ratio
+  `0.9889873813782383`, zero failed checks, and zero output drift. The promoted
+  run records
+  `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`,
+  `unit_positive_weight_mask_reason=default_unit_positive_weight_mask_scan`,
+  `unit_positive_weight_mask_bytes=200`, and
+  `unit_positive_weight_frame_count=193`. Runtime moved from
+  `11.220837099594064 s` old default to `11.097266299999319 s` promoted
+  default on this repeated 200-light comparison.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

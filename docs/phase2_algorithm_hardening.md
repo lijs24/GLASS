@@ -801,6 +801,84 @@ Interpretation:
   integration reducer, or StackEngine default execution coverage for another
   still-legacy path.
 
+### S2-Gate 668: Default Unit-Positive Mask-Scan Winsorized Integration
+
+Gate668 returns to the default resident CUDA integration/rejection path and
+promotes the unit-positive frame-mask reducer branch from an environment-only
+experiment into the normal native admission policy. The promotion is deliberately
+narrow: it applies only when all finite positive integration weights are exactly
+`1.0`, which is the current 200-light default `193` active / `7` zero-weight
+frame case. It does not change the median/IQR winsorized formula, rejection
+guard, frame admission, registration, warp, LN, DQ bits, or accumulation order.
+
+Implementation:
+
+- When `GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN` is unset and the native hardened
+  winsorized wrapper detects unit-positive 0/1 weights, GLASS now uploads a
+  one-byte-per-frame mask and dispatches
+  `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`.
+- `GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN=0`, `false`, `no`, or `off` disables the
+  promotion and restores the generic `global_reread_weighted_samples` strategy.
+- Explicit true values still force the same mask-scan path with
+  `unit_positive_weight_mask_reason=environment_enabled`.
+- Unrecognized values such as `auto` remain ignored and recorded as
+  `ignored_unrecognized_env_value`.
+- Active-index, local-reuse, and radix-select routes still take precedence when
+  their explicit/admission conditions apply.
+- Native profiles now record
+  `unit_positive_weight_mask_policy_source` and
+  `unit_positive_weight_mask_default_enabled`.
+
+Validation:
+
+- Native CUDA rebuild through Visual Studio BuildTools and CUDA Toolkit 13.2:
+  passed; MSVC reported only the pre-existing signed/unsigned warning in
+  `native_bindings.cpp`.
+- Focused CUDA tests:
+  `6 passed`, covering default mask-scan promotion, explicit true, explicit
+  false, ignored invalid value, active-index precedence, and local-reuse
+  precedence.
+- Pre-change current-HEAD 200-light A/B:
+  `C:\glass_runs\phase2_s2_gate668_mask_scan_promotion_probe\runs_20260626_021500`.
+  The environment-enabled mask path passed regression against the old default
+  with elapsed ratio `0.9952617617554094`, zero failed checks, and zero output
+  drift.
+- Post-change default 200-light run:
+  `C:\glass_runs\phase2_s2_gate668_mask_scan_promotion_probe\runs_20260626_021500\default_promoted`.
+  It recorded
+  `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`,
+  `unit_positive_weight_mask_reason=default_unit_positive_weight_mask_scan`,
+  `unit_positive_weight_mask_policy_source=default_unit_positive_weight_mask_scan`,
+  `unit_positive_weight_mask_default_enabled=true`,
+  `unit_positive_weight_mask_bytes=200`, and
+  `unit_positive_weight_frame_count=193`.
+- Default-promotion regression against the old default:
+  `C:\glass_runs\phase2_s2_gate668_mask_scan_promotion_probe\runs_20260626_021500\default_promoted_vs_old_default_regression.json`.
+  It passed with elapsed ratio `0.9889873813782383`, zero failed checks, and
+  zero output drift.
+- Default-promotion regression against the explicit mask opt-in run:
+  `C:\glass_runs\phase2_s2_gate668_mask_scan_promotion_probe\runs_20260626_021500\default_promoted_vs_mask_optin_regression.json`.
+  It passed with elapsed ratio `0.9936957485776359`, zero failed checks, and
+  zero output drift.
+- Runtime snapshot on the 200-light default comparison:
+  old default total `11.220837099594064 s`, promoted default total
+  `11.097266299999319 s`; old resident integration
+  `3.3021216000197455 s`, promoted resident integration
+  `3.270653699990362 s`; native kernel sync changed from `3.1814066 s` to
+  `3.1429195 s`.
+
+Interpretation:
+
+- Gate630 correctly rejected treating mask-scan as a large kernel optimization:
+  its earlier repeated kernel-only measurements were not convincingly faster.
+  Gate668 promotes it for a narrower reason: the branch preserves output, has a
+  tiny memory footprint, removes per-pixel float weight checks for the dominant
+  0/1 default case, has an explicit off switch, and did not regress the current
+  real 200-light default run.
+- This is a small execution-path hardening gate. The next major speed work
+  remains resident registration/warp orchestration, I/O/upload/calibration
+  overlap, and a redesigned scalable order-statistic reducer.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

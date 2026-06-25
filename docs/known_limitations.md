@@ -72,13 +72,17 @@ Current code is intentionally gated:
   default-path promotion. Gate629 adds an opt-in
   `GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN=1` path for the default 0/1-weight case; it
   preserves output determinism on the real 200-light A/B and improves the
-  measured run, but the integration-only gain is modest in a single run, so it
-  remains a guarded probe until repeated-run evidence justifies default
-  promotion. Gate630 ran that repeat evidence and rejected default promotion:
-  mask-scan won total elapsed time in three paired runs, but hardened
-  integration and kernel-sync timings were consistently slower, so the total
-  gain was attributed to surrounding runtime variance. The environment flag now
-  requires an explicit true value and ignores values such as `auto`. Gate633
+  measured run, but the integration-only gain is modest in a single run. Gate630
+  ran repeat evidence and rejected treating mask-scan as a large kernel
+  optimization: mask-scan won total elapsed time in three paired runs, but
+  hardened integration and kernel-sync timings were consistently slower, so the
+  total gain was attributed to surrounding runtime variance. Gate668 later
+  promotes mask-scan as a narrow default admission for unit-positive 0/1 weights
+  because a current-HEAD real 200-light A/B and a post-change default run both
+  passed regression with zero output drift, no total-time regression, and a
+  trivial one-byte-per-frame mask. `GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN=0` remains
+  the diagnostic escape hatch, and invalid values such as `auto` are still
+  ignored. Gate633
   removes the unconditional fallback std pass from the bounded CUDA reducer and
   computes it lazily only for IQR-degenerate pixels; real 200-light kernel-sync
   time improved slightly in both paired runs, but total runtime did not move
