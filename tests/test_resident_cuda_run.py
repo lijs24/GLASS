@@ -8025,17 +8025,28 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     assert io_pipeline["native_path_calibration_enabled"] is False
     assert io_pipeline["native_path_calibration_reason"] == "ignored_native_completion_enabled"
     assert io_pipeline["native_path_calibration_host_buffer_model"] == (
-        "cuda_host_alloc_portable_pinned_completion_ring"
+        "cuda_host_alloc_portable_pinned_completion_prestart_ring"
     )
     assert io_pipeline["native_path_calibration_host_buffer_pinned"] is True
+    assert io_pipeline["native_completion_prestart_policy"] == "default_native_completion_calibration"
+    assert io_pipeline["native_completion_prestart_requested"] is True
+    assert io_pipeline["native_completion_prestart_enabled"] is True
+    assert io_pipeline["native_completion_prestart_reason"] == "default_native_completion_calibration"
+    assert io_pipeline["native_completion_prestart_batch_count"] == 1
+    assert io_pipeline["native_completion_prestart_frame_count"] == 2
     assert io_pipeline["fits_backend_counts"]["native_u16be_raw_completion_calibration"] == 2
-    assert io_pipeline["calibration_batch_mode"] == "fits_u16be_bzero_native_completion_calibration_batch"
+    assert io_pipeline["calibration_batch_mode"] == (
+        "fits_u16be_bzero_native_completion_prestart_calibration_batch"
+    )
     assert io_pipeline["calibration_batch_timing_model"] == (
-        "native_completion_queue_read_then_h2d_gpu_decode_calibration"
+        "native_completion_prestarted_queue_read_overlap_then_h2d_gpu_decode_calibration"
     )
     assert io_pipeline["calibration_wave_release_mode"] == "native_completion_queue_event_gated_slot_reuse"
     assert io_pipeline["native_completion_calibration_slot_release_mode"] == "event_query_deferred_reuse"
-    assert io_pipeline["native_completion_calibration_consumer_schedule_mode"] == "completion_lane_wave_drain"
+    assert (
+        io_pipeline["native_completion_calibration_consumer_schedule_mode"]
+        == "completion_prestart_lane_wave_drain"
+    )
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode"] == "multi_wait"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_requested"] == "multi_wait"
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_mode_source"] == "cli"
@@ -8052,7 +8063,88 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     assert io_pipeline["raw_gpu_float32_host_bytes_avoided"] == 2 * 24 * 24 * 4
 
 
-def test_cli_resident_cuda_native_completion_prestart_is_env_opt_in(tmp_path: Path, monkeypatch) -> None:
+def test_cli_resident_cuda_native_completion_prestart_is_default_for_completion(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = cuda_module_or_skip()
+    required = (
+        "begin_fits_u16be_bzero_paths_completion_queue_read_timed",
+        "finish_fits_u16be_bzero_paths_completion_queue_calibration_timed",
+        "cancel_fits_u16be_bzero_paths_completion_queue_read",
+    )
+    if not all(hasattr(module.ResidentCalibratedStack, name) for name in required):
+        pytest.skip("native u16 GPU completion prestart calibration resident path is not available")
+    dataset = _u16_gpu_decode_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_native_completion_prestart_default"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_BATCH_READ", raising=False)
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_QUEUE_READ", raising=False)
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", raising=False)
+    monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION", "1")
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_COMPLETION_PRESTART", raising=False)
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-fits-read-mode",
+            "native_u16_gpu",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
+    io_pipeline = artifact["resident_io_pipeline"]
+
+    assert io_pipeline["native_completion_calibration_enabled"] is True
+    assert io_pipeline["native_completion_prestart_supported"] is True
+    assert io_pipeline["native_completion_prestart_policy"] == "default_native_completion_calibration"
+    assert io_pipeline["native_completion_prestart_requested"] is True
+    assert io_pipeline["native_completion_prestart_enabled"] is True
+    assert io_pipeline["native_completion_prestart_reason"] == "default_native_completion_calibration"
+    assert io_pipeline["native_completion_prestart_batch_count"] == 1
+    assert io_pipeline["native_completion_prestart_frame_count"] == 2
+    assert io_pipeline["native_completion_prestart_cancel_count"] == 0
+    assert io_pipeline["native_completion_prestart_batch_index_mismatch_count"] == 0
+    assert io_pipeline["native_completion_calibration_submit_count"] == 2
+    assert io_pipeline["native_completion_calibration_completion_count"] == 2
+    assert io_pipeline["native_path_calibration_host_buffer_model"] == (
+        "cuda_host_alloc_portable_pinned_completion_prestart_ring"
+    )
+    assert io_pipeline["calibration_batch_mode"] == (
+        "fits_u16be_bzero_native_completion_prestart_calibration_batch"
+    )
+    assert io_pipeline["calibration_batch_timing_model"] == (
+        "native_completion_prestarted_queue_read_overlap_then_h2d_gpu_decode_calibration"
+    )
+
+
+def test_cli_resident_cuda_native_completion_prestart_honors_env_enable(
+    tmp_path: Path, monkeypatch
+) -> None:
     module = cuda_module_or_skip()
     required = (
         "begin_fits_u16be_bzero_paths_completion_queue_read_timed",
@@ -8108,6 +8200,7 @@ def test_cli_resident_cuda_native_completion_prestart_is_env_opt_in(tmp_path: Pa
 
     assert io_pipeline["native_completion_calibration_enabled"] is True
     assert io_pipeline["native_completion_prestart_supported"] is True
+    assert io_pipeline["native_completion_prestart_policy"] == "env_enabled"
     assert io_pipeline["native_completion_prestart_requested"] is True
     assert io_pipeline["native_completion_prestart_enabled"] is True
     assert io_pipeline["native_completion_prestart_reason"] == "env_enabled"
@@ -8125,6 +8218,81 @@ def test_cli_resident_cuda_native_completion_prestart_is_env_opt_in(tmp_path: Pa
     )
     assert io_pipeline["calibration_batch_timing_model"] == (
         "native_completion_prestarted_queue_read_overlap_then_h2d_gpu_decode_calibration"
+    )
+
+
+def test_cli_resident_cuda_native_completion_prestart_env_can_disable(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = cuda_module_or_skip()
+    required = (
+        "begin_fits_u16be_bzero_paths_completion_queue_read_timed",
+        "finish_fits_u16be_bzero_paths_completion_queue_calibration_timed",
+        "cancel_fits_u16be_bzero_paths_completion_queue_read",
+    )
+    if not all(hasattr(module.ResidentCalibratedStack, name) for name in required):
+        pytest.skip("native u16 GPU completion prestart calibration resident path is not available")
+    dataset = _u16_gpu_decode_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_native_completion_prestart_disabled"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_BATCH_READ", raising=False)
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_QUEUE_READ", raising=False)
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", raising=False)
+    monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION", "1")
+    monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_PRESTART", "0")
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-fits-read-mode",
+            "native_u16_gpu",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
+    io_pipeline = artifact["resident_io_pipeline"]
+
+    assert io_pipeline["native_completion_calibration_enabled"] is True
+    assert io_pipeline["native_completion_prestart_supported"] is True
+    assert io_pipeline["native_completion_prestart_policy"] == "env_disabled"
+    assert io_pipeline["native_completion_prestart_requested"] is False
+    assert io_pipeline["native_completion_prestart_enabled"] is False
+    assert io_pipeline["native_completion_prestart_reason"] == "env_disabled"
+    assert io_pipeline["native_completion_prestart_batch_count"] == 0
+    assert io_pipeline["native_completion_prestart_frame_count"] == 0
+    assert io_pipeline["native_path_calibration_host_buffer_model"] == (
+        "cuda_host_alloc_portable_pinned_completion_ring"
+    )
+    assert io_pipeline["calibration_batch_mode"] == (
+        "fits_u16be_bzero_native_completion_calibration_batch"
+    )
+    assert io_pipeline["calibration_batch_timing_model"] == (
+        "native_completion_queue_read_then_h2d_gpu_decode_calibration"
     )
 
 
@@ -8196,7 +8364,15 @@ def test_cli_resident_cuda_native_completion_runtime_preset_is_cli_opt_in(
     assert io_pipeline["native_completion_calibration_consumer_wave_fill_requested_wait_us"] == 250
     assert io_pipeline["native_path_calibration_enabled"] is False
     assert io_pipeline["native_path_calibration_reason"] == "ignored_native_completion_enabled"
-    assert io_pipeline["calibration_batch_mode"] == "fits_u16be_bzero_native_completion_calibration_batch"
+    assert io_pipeline["native_completion_prestart_policy"] == "default_native_completion_calibration"
+    assert io_pipeline["native_completion_prestart_requested"] is True
+    assert io_pipeline["native_completion_prestart_enabled"] is True
+    assert io_pipeline["native_completion_prestart_reason"] == "default_native_completion_calibration"
+    assert io_pipeline["native_completion_prestart_batch_count"] == 1
+    assert io_pipeline["native_completion_prestart_frame_count"] == 2
+    assert io_pipeline["calibration_batch_mode"] == (
+        "fits_u16be_bzero_native_completion_prestart_calibration_batch"
+    )
     assert artifact["timing_s"]["light_read_decode"] == 0.0
 
 

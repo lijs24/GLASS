@@ -98,6 +98,71 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 698: Default Native Completion Prestart
+
+Gate 698 changes resident CUDA runtime behavior rather than adding another
+report-only or reducer micro-gate. The native completion calibration route now
+starts the raw FITS completion read queue before master-cache load whenever
+native completion calibration is active and the prestart methods are present.
+This makes the Gate696 prestart path the guarded default for the current
+high-VRAM resident route.
+
+Implementation:
+
+- `GLASS_RESIDENT_NATIVE_COMPLETION_PRESTART` is no longer required for the
+  fast path.
+- With no environment override, the resident IO artifact records
+  `native_completion_prestart_policy=default_native_completion_calibration`.
+- `GLASS_RESIDENT_NATIVE_COMPLETION_PRESTART=1` still records
+  `env_enabled`.
+- `GLASS_RESIDENT_NATIVE_COMPLETION_PRESTART=0` disables the prestart path and
+  falls back to the ordinary native completion calibration queue.
+- The policy does not change calibration math, master-cache semantics, source
+  DQ handling, registration, local normalization, rejection, or integration.
+
+Tests:
+
+- Focused resident CUDA tests cover default prestart, explicit enable, explicit
+  disable, the completion-calibration opt-in path, and the v4 runtime preset.
+- Full pytest passed after updating stale completion-queue assertions:
+  `1443 passed in 70.03 s`.
+
+Real 200-light validation:
+
+- Candidate:
+  `C:\glass_runs\phase2_s2_gate698_default_prestart\runs_20260627_090000\default_prestart_candidate`
+- Mainline audit:
+  `C:\glass_runs\phase2_s2_gate698_default_prestart\gate698_default_prestart_mainline_audit.json`
+  passed with `200` input lights and `193 / 7` active/masked frames.
+- A/B versus Gate697:
+  `C:\glass_runs\phase2_s2_gate698_default_prestart\gate698_default_prestart_vs_gate697_ab.json`
+  passed; elapsed ratio `0.9438602383093226`; all six integration FITS hashes
+  matched; component-ratio failures `0`.
+- A/B versus Gate696:
+  `C:\glass_runs\phase2_s2_gate698_default_prestart\gate698_default_prestart_vs_gate696_ab.json`
+  passed; elapsed ratio `0.9819094296357141`; all six integration FITS hashes
+  matched; component-ratio failures `0`.
+
+Candidate timing:
+
+- `resident_light_read_upload_calibrate`: `3.0857310999417678 s`
+- `resident_registration_warp`: `0.26680679921992123 s`
+- `resident_local_normalization`: `0.37221059994772077 s`
+- `resident_integration`: `3.326978600001894 s`
+- `resident_output_write`: `0.2952664999756962 s`
+
+Interpretation:
+
+- This is a substantive default-path change because it alters how resident
+  CUDA overlaps native FITS read supply with master-cache work.
+- The result is bit-identical to Gate696 and Gate697 for all tracked output
+  maps on the 200-light dataset.
+- The observed total runtime improved versus Gate697 in this single run, mainly
+  through lower `light_read_upload_calibrate`, but the dominant native file-read
+  cumulative time remains about `29.5 s`; future work should reduce storage and
+  host/device orchestration variance rather than adding more tiny reducer
+  branches.
+
 ### S2-Gate 697: Hardened Rejection-Candidate Bounds Skip
 
 Gate 697 returns to the resident hardened winsorized integration path and adds

@@ -8127,21 +8127,32 @@ def run_resident_calibration_integration(
             native_completion_calibration_enabled = bool(
                 native_completion_calibration_requested and native_completion_calibration_available
             )
+            native_completion_prestart_enable_values = {"1", "true", "yes", "on"}
+            native_completion_prestart_disable_values = {"0", "false", "no", "off"}
+            if native_completion_prestart_env in native_completion_prestart_enable_values:
+                native_completion_prestart_policy = "env_enabled"
+            elif native_completion_prestart_env in native_completion_prestart_disable_values:
+                native_completion_prestart_policy = "env_disabled"
+            elif native_completion_prestart_env:
+                native_completion_prestart_policy = "env_invalid_disabled"
+            else:
+                native_completion_prestart_policy = "default_native_completion_calibration"
             native_completion_prestart_requested = bool(
                 native_completion_calibration_enabled
-                and native_completion_prestart_env in {"1", "true", "yes", "on"}
+                and native_completion_prestart_policy
+                in {"default_native_completion_calibration", "env_enabled"}
             )
             native_completion_prestart_enabled = bool(
                 native_completion_prestart_requested and native_completion_prestart_supported
             )
             if not native_completion_calibration_enabled:
                 native_completion_prestart_reason = "requires_native_completion_calibration"
-            elif native_completion_prestart_env not in {"1", "true", "yes", "on"}:
-                native_completion_prestart_reason = "env_disabled_default"
+            elif native_completion_prestart_policy in {"env_disabled", "env_invalid_disabled"}:
+                native_completion_prestart_reason = native_completion_prestart_policy
             elif not native_completion_prestart_supported:
                 native_completion_prestart_reason = "native_method_unavailable"
             else:
-                native_completion_prestart_reason = "env_enabled"
+                native_completion_prestart_reason = native_completion_prestart_policy
             native_direct_calibration_enabled = bool(
                 native_path_calibration_enabled or native_completion_calibration_enabled
             )
@@ -13709,6 +13720,7 @@ def run_resident_calibration_integration(
                 "native_completion_calibration_enabled": bool(native_completion_calibration_enabled),
                 "native_completion_calibration_reason": str(native_completion_calibration_reason),
                 "native_completion_prestart_supported": bool(native_completion_prestart_supported),
+                "native_completion_prestart_policy": str(native_completion_prestart_policy),
                 "native_completion_prestart_requested": bool(native_completion_prestart_requested),
                 "native_completion_prestart_enabled": bool(native_completion_prestart_enabled),
                 "native_completion_prestart_reason": str(native_completion_prestart_reason),
