@@ -98,6 +98,88 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 704: Default Compact Unit-Weight Active Indices
+
+Gate704 returns to the measured resident hardened winsorized integration
+hot path. Gate703 left the default 200-light route on
+`frame_mask_global_reread_unit_positive_weights`: the kernel scanned all 200
+frame slots and skipped seven inactive weights through a one-byte mask. A
+focused synthetic probe showed that, for the common `integration-weighting
+none` case with unit-positive `0/1` weights, compact active-frame indices are
+faster when the active count is a strict subset of the frame axis. Gate704
+therefore promotes a conservative default active-index route for that exact
+case while keeping explicit environment controls as rollback and diagnostic
+switches.
+
+Implementation:
+
+- The native hardened winsorized wrapper now enables
+  `active_index_global_reread_unit_positive_weights` by default when all finite
+  positive weights are exactly `1.0`, at least one frame is inactive, radix
+  select is not selected, and no explicit unit-positive reuse environment
+  branch is requested.
+- The compact active-index list is built in original frame order, so the
+  active sample order, median/IQR winsorized formula, rejection guard,
+  count-map semantics, and DQ inputs are unchanged.
+- Explicit `GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX=1` still forces the active
+  index path. Explicit `GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX=0` disables the new
+  default and restores the previous frame-mask default for this unit-positive
+  case.
+- Existing explicit probes keep precedence:
+  `GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN`,
+  `GLASS_CUDA_UNIT_WEIGHT_SELECTED_REUSE`, and
+  `GLASS_CUDA_UNIT_WEIGHT_INDEX_SELECT_REUSE` are not overridden by the new
+  default.
+- Native profiles now distinguish explicit env admission from default
+  admission with `unit_positive_active_index_default_enabled`,
+  `unit_positive_active_index_env_present`,
+  `unit_positive_active_index_env_enabled`, and
+  `unit_positive_active_index_reason=default_compacted_unit_positive_weight_indices`.
+
+Validation:
+
+- Native extension rebuild succeeded with the Visual Studio 2022 Build Tools
+  environment and the `_glass_cuda_native` target.
+- Focused resident hardened winsorized tests passed:
+  `31 passed, 192 deselected`.
+- Full pytest passed: `1451 passed in 72.77 s`.
+- Real 200-light candidate:
+  `C:\glass_runs\phase2_s2_gate704_active_index_integration\runs_20260626_110113\active_index_candidate`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate704_active_index_integration\runs_20260626_110113\gate704_mainline_audit.json`.
+- Resident regression gate versus Gate703 passed:
+  `C:\glass_runs\phase2_s2_gate704_active_index_integration\runs_20260626_110113\gate704_vs_gate703_regression.json`.
+- Determinism summary reported zero artifact, frame-accounting, frame
+  signature, output, numerical-drift, and registration differences.
+
+Real 200-light timing result versus Gate703:
+
+| Metric | Gate703 mask default | Gate704 active-index default | Ratio |
+| --- | ---: | ---: | ---: |
+| Total elapsed | `11.912095099687576 s` | `11.090906699886546 s` | `0.9310626390295886` |
+| Resident calibration + integration stage | `10.474013799917884 s` | `9.755395399988629 s` | `0.931388` |
+| Light read/upload/calibrate | `3.161170899984427 s` | `3.101156600052491 s` | `0.981015` |
+| Resident integration | `3.2807693999493495 s` | `2.6184026999399066 s` | `0.798111` |
+| Native hardened kernel sync | `3.1383918 s` | `2.4904286 s` | `0.793550` |
+| Resident registration/warp | `0.27185329992789775 s` | `0.2694594005588442 s` | `0.991194` |
+| Resident local normalization | `0.3781815000111237 s` | `0.37058149999938905 s` | `0.979904` |
+
+The promoted run recorded `200` input lights, `193` active frames, `7` masked
+frames, `unit_positive_weights_fast_path=true`,
+`unit_positive_active_index_default_enabled=true`,
+`unit_positive_active_frame_count=193`,
+`unit_positive_weight_mask_enabled=false`, and
+`sample_reuse_strategy=active_index_global_reread_unit_positive_weights`.
+
+Next gate:
+
+- Keep Gate704 as the new resident integration baseline.
+- The largest single component is now `resident_light_read_upload_calibrate`
+  at about `3.10 s`, followed closely by resident integration at about
+  `2.62 s`. The next substantive gate should target the calibration I/O/H2D
+  overlap path or a larger cooperative resident reducer, not another
+  report-only artifact.
+
 ### S2-Gate 703: Post-Resident Reference Health Reuse
 
 Gate703 returns to the measured Phase 2 mainline instead of adding another

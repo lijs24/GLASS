@@ -336,6 +336,29 @@ Explicit false values still restore `global_reread_weighted_samples`, explicit
 true values record `environment_enabled`, and unrecognized values such as
 `auto` remain disabled.
 
+S2-Gate 704 supersedes that default for the common unit-positive case where
+only a strict subset of the resident frame axis has positive weight. When all
+finite positive weights are exactly `1.0`, at least one frame is inactive, and
+no explicit unit-positive reuse environment branch is requested, the native
+wrapper now uploads compact active frame indices and selects
+`sample_reuse_strategy=active_index_global_reread_unit_positive_weights` by
+default. The active-index list is built in original frame order, so the median
+and IQR winsorized formula, rejection guard, active sample ordering, DQ inputs,
+and count-map semantics stay equivalent to the prior unit-positive mask scan.
+Explicit `GLASS_CUDA_UNIT_WEIGHT_ACTIVE_INDEX=0` disables this default and
+restores the frame-mask default; explicit mask/selected/index probe variables
+keep precedence. Profiles record
+`unit_positive_active_index_default_enabled`,
+`unit_positive_active_index_env_present`,
+`unit_positive_active_index_env_enabled`, and
+`unit_positive_active_index_reason`. On the real 200-light validation this
+changed the default profile from
+`frame_mask_global_reread_unit_positive_weights` to
+`active_index_global_reread_unit_positive_weights`, kept `193` active frames
+and `7` masked frames, preserved zero deterministic output drift versus
+Gate703, and reduced resident integration from `3.2807693999493495 s` to
+`2.6184026999399066 s`.
+
 S2-Gate 675 adds a unit-positive output-map optimization to the resident
 hardened winsorized `uint16` count-map path. For `integration-weighting none`
 groups with unit-positive `0/1` weights and full audit maps, the final

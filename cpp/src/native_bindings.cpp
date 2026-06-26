@@ -13485,23 +13485,35 @@ class ResidentCalibratedStack {
       throw std::invalid_argument(
           "hardened resident winsorized sigma currently supports at most 512 positive-weight resident frames");
     }
-    const bool unit_positive_active_index_requested =
-        !radix_select_enabled && unit_positive_weights &&
-        !unit_active_index_env_value.empty() && unit_active_index_env_value != "0" &&
+    const std::string unit_mask_scan_env_value =
+        glass_get_env_string("GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN");
+    const std::string unit_selected_reuse_env_value =
+        glass_get_env_string("GLASS_CUDA_UNIT_WEIGHT_SELECTED_REUSE");
+    const std::string unit_index_select_reuse_env_value =
+        glass_get_env_string("GLASS_CUDA_UNIT_WEIGHT_INDEX_SELECT_REUSE");
+    const bool unit_positive_active_index_env_present = !unit_active_index_env_value.empty();
+    const bool unit_positive_active_index_env_enabled =
+        unit_positive_active_index_env_present && unit_active_index_env_value != "0" &&
         unit_active_index_env_value != "false" && unit_active_index_env_value != "FALSE";
+    const bool unit_positive_active_index_requested =
+        !radix_select_enabled && unit_positive_weights && unit_positive_active_index_env_enabled;
     const bool unit_positive_active_count_admission =
         !radix_select_enabled && unit_positive_weights && frame_count_ > 512 &&
         unit_positive_weight_frame_count <= 512;
+    const bool unit_positive_compact_active_index_default =
+        !radix_select_enabled && unit_positive_weights && !unit_positive_active_index_env_present &&
+        unit_local_reuse_env_value.empty() && unit_mask_scan_env_value.empty() &&
+        unit_selected_reuse_env_value.empty() && unit_index_select_reuse_env_value.empty() &&
+        unit_positive_weight_frame_count < frame_count_;
     const bool unit_positive_active_index_enabled =
-        unit_positive_active_index_requested || unit_positive_active_count_admission;
+        unit_positive_active_index_requested || unit_positive_active_count_admission ||
+        unit_positive_compact_active_index_default;
     const bool unit_positive_local_reuse_requested =
         !radix_select_enabled && unit_positive_weights &&
         !unit_local_reuse_env_value.empty() && unit_local_reuse_env_value != "0" &&
         unit_local_reuse_env_value != "false" && unit_local_reuse_env_value != "FALSE";
     const bool unit_positive_local_reuse_enabled =
         unit_positive_local_reuse_requested && !unit_positive_active_index_enabled;
-    const std::string unit_mask_scan_env_value =
-        glass_get_env_string("GLASS_CUDA_UNIT_WEIGHT_MASK_SCAN");
     const bool unit_positive_weight_mask_env_enabled =
         glass_env_flag_enabled_strict(unit_mask_scan_env_value);
     const std::string unit_positive_weight_mask_env_reason =
@@ -13521,8 +13533,6 @@ class ResidentCalibratedStack {
         !unit_positive_weight_mask_blocked_by_precedence &&
         unit_positive_weight_mask_policy_enabled;
     const bool unit_positive_weight_mask_enabled = unit_positive_weight_mask_requested;
-    const std::string unit_selected_reuse_env_value =
-        glass_get_env_string("GLASS_CUDA_UNIT_WEIGHT_SELECTED_REUSE");
     const bool unit_positive_selected_reuse_env_enabled =
         glass_env_flag_enabled_strict(unit_selected_reuse_env_value);
     const std::string unit_positive_selected_reuse_reason =
@@ -13533,8 +13543,6 @@ class ResidentCalibratedStack {
         unit_positive_selected_reuse_requested && !radix_select_enabled &&
         unit_positive_weights && unit_positive_weight_mask_enabled &&
         !unit_positive_active_index_enabled && !unit_positive_local_reuse_enabled;
-    const std::string unit_index_select_reuse_env_value =
-        glass_get_env_string("GLASS_CUDA_UNIT_WEIGHT_INDEX_SELECT_REUSE");
     const bool unit_positive_index_select_reuse_env_enabled =
         glass_env_flag_enabled_strict(unit_index_select_reuse_env_value);
     const std::string unit_positive_index_select_reuse_env_reason =
@@ -13925,9 +13933,16 @@ class ResidentCalibratedStack {
             unit_positive_index_select_reuse_reason;
         profile_info["unit_positive_active_index_requested"] = unit_positive_active_index_requested;
         profile_info["unit_positive_active_index_reason"] = unit_positive_active_index_enabled
-            ? (unit_positive_active_count_admission ? "native_active_count_admission_over_frame_limit"
-                                                    : "environment_enabled")
-            : "disabled";
+            ? (unit_positive_active_count_admission
+                   ? "native_active_count_admission_over_frame_limit"
+                   : (unit_positive_active_index_requested
+                          ? "environment_enabled"
+                          : "default_compacted_unit_positive_weight_indices"))
+            : (unit_positive_active_index_env_present ? "disabled_by_environment_value" : "disabled");
+        profile_info["unit_positive_active_index_default_enabled"] =
+            unit_positive_compact_active_index_default;
+        profile_info["unit_positive_active_index_env_present"] =
+            unit_positive_active_index_env_present;
         profile_info["unit_positive_weight_mask_requested"] = unit_positive_weight_mask_requested;
         profile_info["unit_positive_weight_mask_enabled"] = unit_positive_weight_mask_enabled;
         profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_reason;
@@ -13939,7 +13954,8 @@ class ResidentCalibratedStack {
             static_cast<unsigned long long>(unit_positive_weight_frame_count);
         profile_info["unit_positive_active_frame_count"] =
             static_cast<unsigned long long>(unit_positive_active_frame_count);
-        profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;
+        profile_info["unit_positive_active_index_env_enabled"] =
+            unit_positive_active_index_env_enabled;
         profile_info["unit_positive_weight_mask_bytes"] =
             static_cast<unsigned long long>(unit_positive_frame_mask.size());
         profile_info["native_weight_buffer_required"] = native_weight_buffer_required;
@@ -14240,9 +14256,16 @@ class ResidentCalibratedStack {
           unit_positive_index_select_reuse_reason;
       profile_info["unit_positive_active_index_requested"] = unit_positive_active_index_requested;
       profile_info["unit_positive_active_index_reason"] = unit_positive_active_index_enabled
-          ? (unit_positive_active_count_admission ? "native_active_count_admission_over_frame_limit"
-                                                  : "environment_enabled")
-          : "disabled";
+          ? (unit_positive_active_count_admission
+                 ? "native_active_count_admission_over_frame_limit"
+                 : (unit_positive_active_index_requested
+                        ? "environment_enabled"
+                        : "default_compacted_unit_positive_weight_indices"))
+          : (unit_positive_active_index_env_present ? "disabled_by_environment_value" : "disabled");
+      profile_info["unit_positive_active_index_default_enabled"] =
+          unit_positive_compact_active_index_default;
+      profile_info["unit_positive_active_index_env_present"] =
+          unit_positive_active_index_env_present;
       profile_info["unit_positive_weight_mask_requested"] = unit_positive_weight_mask_requested;
       profile_info["unit_positive_weight_mask_enabled"] = unit_positive_weight_mask_enabled;
       profile_info["unit_positive_weight_mask_reason"] = unit_positive_weight_mask_reason;
@@ -14254,7 +14277,8 @@ class ResidentCalibratedStack {
           static_cast<unsigned long long>(unit_positive_weight_frame_count);
       profile_info["unit_positive_active_frame_count"] =
           static_cast<unsigned long long>(unit_positive_active_frame_count);
-      profile_info["unit_positive_active_index_env_enabled"] = unit_positive_active_index_enabled;
+      profile_info["unit_positive_active_index_env_enabled"] =
+          unit_positive_active_index_env_enabled;
       profile_info["unit_positive_weight_mask_bytes"] =
           static_cast<unsigned long long>(unit_positive_frame_mask.size());
       profile_info["native_weight_buffer_required"] = native_weight_buffer_required;
