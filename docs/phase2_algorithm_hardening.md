@@ -98,6 +98,74 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 702: Pipeline DQ Ledger Contract
+
+Gate 702 promotes DQ/mask state from scattered audit sections into a canonical
+top-level pipeline ledger. This is a Phase 2 mainline completeness gate, not a
+runtime optimization: the goal is to make resident source-DQ execution,
+frame-level admission, registration quality, pixel closure, lifecycle state,
+and integration sample accounting impossible to miss during acceptance.
+
+Implementation:
+
+- `pipeline_contract.json` now contains a top-level `summary` and `dq_ledger`.
+- The DQ ledger records integration DQ/sample-accounting closure, resident
+  source-DQ execution, resident source-DQ integration effect, frame-accounting
+  DQ ledger, resident frame masks, resident registration quality, resident
+  pixel closure, resident DQ lifecycle, and frame-accounting lifecycle closure.
+- `phase2-mainline-audit` now requires a resident run to expose a passing
+  `pipeline_contract.dq_ledger` with resident integration marked required.
+- Pipeline contract markdown and Phase 2 mainline markdown surface the new
+  ledger status directly.
+- Test fixtures for Phase 2 mainline and resident mainline framework were
+  upgraded so green resident runs must carry the same ledger contract.
+
+Validation:
+
+- Focused source-DQ pipeline contract tests: `4 passed`.
+- Focused Phase 2 mainline audit tests: `11 passed`.
+- Full pipeline-contract tests: `49 passed`.
+- Focused resident mainline framework tests: `14 passed`.
+- Ruff on touched files passed.
+- Full pytest passed: `1450 passed in 72.78 s`.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate702_pipeline_dq_ledger\runs_20260626_102533\pipeline_dq_ledger_candidate`
+- Mainline audit:
+  `C:\glass_runs\phase2_s2_gate702_pipeline_dq_ledger\gate702_pipeline_dq_ledger_mainline_audit.json`
+  passed with `200` input lights and `193` active frames.
+- A/B versus Gate701:
+  `C:\glass_runs\phase2_s2_gate702_pipeline_dq_ledger\gate702_vs_gate701_ab.json`
+  passed with elapsed ratio `1.0396590671104042`, worst component ratio
+  `1.06867136255919`, and no failed checks.
+- Candidate timing: total elapsed `12.230225099949166 s`; largest component
+  `resident_integration=3.2608898000326008 s`; resident component ledger passed
+  with all required components present.
+- The run-local `pipeline_contract.json` recorded
+  `summary.dq_ledger_status=passed`, `summary.dq_ledger_passed=true`,
+  `dq_ledger.resident_integration_required=true`,
+  `dq_ledger.integration_output_count=1`,
+  `dq_ledger.resident_integration_output_count=1`, and no failed DQ sections or
+  failed integration outputs.
+
+Interpretation:
+
+- Gate702 closes an acceptance-surface gap for the DQ/mask pipeline contract.
+- It does not alter calibration, registration, warp, local normalization,
+  rejection math, integration math, CUDA kernels, output pixels, or reducer
+  selection.
+- The 200-light run was about `3.97%` slower than Gate701, which is within the
+  current A/B budget and reflects run-to-run variation rather than a new
+  execution path.
+
+Next target:
+
+- Return to substantive execution work: resident integration/reducer
+  architecture and read/upload/calibration overlap remain the dominant measured
+  optimization targets.
+
 ### S2-Gate 701: Radix Reducer Admission Evidence
 
 Gate 701 turns the opt-in resident radix-select winsorized reducer from an

@@ -1357,6 +1357,170 @@ def _resident_source_dq_integration_effect_state(
     }
 
 
+def _pipeline_dq_ledger_summary(
+    *,
+    integration_rows: list[dict[str, Any]],
+    resident_source_dq_execution: dict[str, Any],
+    resident_source_dq_integration_effect: dict[str, Any],
+    frame_accounting_resident_dq_ledger: dict[str, Any],
+    frame_accounting_resident_dq_lifecycle: dict[str, Any],
+    resident_frame_mask: dict[str, Any],
+    resident_registration_quality: dict[str, Any],
+    resident_dq_pixel_closure: dict[str, Any],
+    resident_dq_lifecycle: dict[str, Any],
+) -> dict[str, Any]:
+    def _section(
+        name: str,
+        state: dict[str, Any],
+        *,
+        present_key: str = "exists",
+        fields: tuple[str, ...] = (),
+    ) -> dict[str, Any]:
+        present = bool(state.get(present_key))
+        required = bool(state.get("required"))
+        passed = state.get("passed") is True
+        record: dict[str, Any] = {
+            "name": name,
+            "required": required,
+            "present": present,
+            "status": state.get("status"),
+            "passed": passed,
+            "failed_checks": state.get("failed_checks") or [],
+        }
+        for field in fields:
+            record[field] = state.get(field)
+        return record
+
+    integration_outputs: list[dict[str, Any]] = []
+    failed_integration_outputs: list[dict[str, Any]] = []
+    resident_output_count = 0
+    for row in integration_rows:
+        if not isinstance(row, dict):
+            continue
+        resident = _is_resident_integration_row(row)
+        if resident:
+            resident_output_count += 1
+        closure = (
+            row.get("sample_accounting_closure")
+            if isinstance(row.get("sample_accounting_closure"), dict)
+            else {}
+        )
+        failures: list[str] = []
+        if row.get("dq_contract_ok") is not True:
+            failures.append("dq_contract_failed")
+        if closure.get("passed") is not True:
+            failures.append("sample_accounting_closure_failed")
+        output = {
+            "item": row.get("item"),
+            "resident": resident,
+            "backend": row.get("backend"),
+            "memory_mode": row.get("memory_mode"),
+            "dq_contract_ok": row.get("dq_contract_ok") is True,
+            "sample_accounting_status": closure.get("status"),
+            "sample_accounting_passed": closure.get("passed") is True,
+            "input_invalid_samples_before_rejection": row.get(
+                "input_invalid_samples_before_rejection"
+            ),
+            "failures": failures,
+        }
+        integration_outputs.append(output)
+        if failures:
+            failed_integration_outputs.append(output)
+
+    sections = {
+        "resident_source_dq_execution": _section(
+            "resident_source_dq_execution",
+            resident_source_dq_execution,
+            fields=("path", "summary_passed", "check_count", "failed_groups"),
+        ),
+        "resident_source_dq_integration_effect": _section(
+            "resident_source_dq_integration_effect",
+            resident_source_dq_integration_effect,
+            fields=(
+                "expected_applied_invalid_samples",
+                "observed_integration_invalid_samples",
+                "resident_integration_output_count",
+                "missing_provenance_outputs",
+            ),
+        ),
+        "frame_accounting_resident_dq_ledger": _section(
+            "frame_accounting_resident_dq_ledger",
+            frame_accounting_resident_dq_ledger,
+            present_key="present",
+            fields=(
+                "expected_rows",
+                "accounting_rows",
+                "expected_passed_rows",
+                "expected_failed_rows",
+                "missing_frame_ids",
+                "extra_frame_ids",
+                "failed_frame_ids",
+                "contract_sources",
+                "frame_mask_sources",
+            ),
+        ),
+        "resident_frame_masks": _section(
+            "resident_frame_masks",
+            resident_frame_mask,
+            fields=("path", "closure", "failed_groups"),
+        ),
+        "resident_registration_quality": _section(
+            "resident_registration_quality",
+            resident_registration_quality,
+            fields=("path", "closure", "failed_groups"),
+        ),
+        "resident_dq_pixel_closure": _section(
+            "resident_dq_pixel_closure",
+            resident_dq_pixel_closure,
+            fields=("path", "closure", "failed_groups", "group_failed_checks"),
+        ),
+        "resident_dq_lifecycle": _section(
+            "resident_dq_lifecycle",
+            resident_dq_lifecycle,
+            fields=("path", "closure", "failed_groups", "group_failed_checks"),
+        ),
+        "frame_accounting_resident_dq_lifecycle": _section(
+            "frame_accounting_resident_dq_lifecycle",
+            frame_accounting_resident_dq_lifecycle,
+            present_key="present",
+            fields=(
+                "expected_rows",
+                "accounting_rows",
+                "expected_active_frame_count",
+                "accounting_active_frame_count",
+                "expected_masked_frame_count",
+                "accounting_masked_frame_count",
+                "failed_frame_ids",
+            ),
+        ),
+    }
+
+    failed_sections = [
+        name
+        for name, section in sections.items()
+        if (section["required"] or section["present"]) and section["passed"] is not True
+    ]
+    passed = bool(integration_rows) and not failed_sections and not failed_integration_outputs
+    return {
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "resident_integration_required": resident_output_count > 0,
+        "integration_output_count": len(integration_rows),
+        "resident_integration_output_count": resident_output_count,
+        "failed_sections": failed_sections,
+        "failed_integration_outputs": [
+            {
+                "item": row.get("item"),
+                "resident": row.get("resident"),
+                "failures": row.get("failures"),
+            }
+            for row in failed_integration_outputs
+        ],
+        "integration_outputs": integration_outputs,
+        **sections,
+    }
+
+
 def _local_norm_rows(local_norm: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     enabled = bool(local_norm.get("enabled"))
@@ -2922,6 +3086,17 @@ def build_pipeline_contract_audit(
         frame_accounting,
         resident_dq_lifecycle,
     )
+    dq_ledger = _pipeline_dq_ledger_summary(
+        integration_rows=integration_rows,
+        resident_source_dq_execution=resident_source_dq_execution,
+        resident_source_dq_integration_effect=resident_source_dq_integration_effect,
+        frame_accounting_resident_dq_ledger=frame_accounting_resident_dq_ledger,
+        frame_accounting_resident_dq_lifecycle=frame_accounting_resident_dq_lifecycle,
+        resident_frame_mask=resident_frame_mask,
+        resident_registration_quality=resident_registration_quality,
+        resident_dq_pixel_closure=resident_dq_pixel_closure,
+        resident_dq_lifecycle=resident_dq_lifecycle,
+    )
     stack_engine_runtime_default = _stack_engine_runtime_default_state(
         calibration_master_rows=calibration_master_rows,
         integration_rows=integration_rows,
@@ -3584,6 +3759,21 @@ def build_pipeline_contract_audit(
         )
 
     passed = all(check["passed"] for check in checks)
+    summary = {
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "integration_output_count": len(integration_rows),
+        "resident_integration_output_count": dq_ledger["resident_integration_output_count"],
+        "calibration_master_count": len(calibration_master_rows),
+        "calibrated_light_count": len(calibrated_light_rows),
+        "resident_calibrated_light_count": len(resident_calibrated_light_rows),
+        "dq_ledger_status": dq_ledger["status"],
+        "dq_ledger_passed": dq_ledger["passed"],
+        "dq_ledger_failed_sections": dq_ledger["failed_sections"],
+        "dq_ledger_failed_integration_outputs": dq_ledger["failed_integration_outputs"],
+        "stack_engine_runtime_default_status": stack_engine_runtime_default["status"],
+        "stack_engine_runtime_default_passed": stack_engine_runtime_default["passed"],
+    }
     return {
         "schema_version": 1,
         "audit_type": "pipeline_invariant_contract",
@@ -3591,6 +3781,8 @@ def build_pipeline_contract_audit(
         "run_dir": str(run_root),
         "status": "passed" if passed else "failed",
         "passed": passed,
+        "summary": summary,
+        "dq_ledger": dq_ledger,
         "checks": checks,
         "artifacts": {
             "calibration": {
@@ -3739,11 +3931,14 @@ def build_pipeline_contract_audit(
 
 
 def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) -> None:
+    summary = audit.get("summary") if isinstance(audit.get("summary"), dict) else {}
+    dq_ledger = audit.get("dq_ledger") if isinstance(audit.get("dq_ledger"), dict) else {}
     lines = [
         "# GLASS Pipeline Invariant Contract Audit",
         "",
         f"- Status: {audit['status']}",
         f"- Run: `{audit['run_dir']}`",
+        f"- DQ ledger: `{summary.get('dq_ledger_status')}` / passed `{summary.get('dq_ledger_passed')}`",
         "",
         "## Checks",
         "",
@@ -3790,6 +3985,24 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
     failed_outputs = runtime_default.get("failed_outputs") or []
     if failed_outputs:
         lines.append(f"- failed integration outputs: `{failed_outputs}`")
+    lines.extend(["", "## Pipeline DQ Ledger", ""])
+    lines.append(
+        "- "
+        f"status `{dq_ledger.get('status')}`, "
+        f"resident outputs `{dq_ledger.get('resident_integration_output_count')}`, "
+        f"failed sections `{dq_ledger.get('failed_sections')}`, "
+        f"failed outputs `{dq_ledger.get('failed_integration_outputs')}`"
+    )
+    for row in dq_ledger.get("integration_outputs") or []:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "- "
+            f"{row.get('item')}: resident `{row.get('resident')}`, "
+            f"DQ `{row.get('dq_contract_ok')}`, "
+            f"sample `{row.get('sample_accounting_status')}`, "
+            f"failures `{row.get('failures')}`"
+        )
     lines.extend(["", "## Integration Sample Accounting Closure", ""])
     for row in ((audit.get("integration") or {}).get("outputs") or []):
         closure = row.get("sample_accounting_closure") if isinstance(row, dict) else {}

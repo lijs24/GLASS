@@ -244,8 +244,28 @@ def _write_green_run(
         "resident_master_cache.json",
     ):
         write_json(run / name, {"summary": {"passed": True, "status": "passed"}})
+    write_json(
+        run / "pipeline_contract.json",
+        {
+            "passed": True,
+            "status": "passed",
+            "summary": {
+                "dq_ledger_status": "passed",
+                "dq_ledger_passed": True,
+                "resident_integration_output_count": 1,
+            },
+            "dq_ledger": {
+                "status": "passed",
+                "passed": True,
+                "resident_integration_required": True,
+                "integration_output_count": 1,
+                "resident_integration_output_count": 1,
+                "failed_sections": [],
+                "failed_integration_outputs": [],
+            },
+        },
+    )
     for name in (
-        "pipeline_contract.json",
         "stack_engine_contract.json",
         "warp_quality_contract.json",
         "resident_result_contract.json",
@@ -344,6 +364,25 @@ def test_phase2_mainline_audit_passes_green_resident_run(tmp_path: Path) -> None
     ledger = checks["resident_stage_ledger_component_contract"]["evidence"]
     assert ledger["stage_status"]["resident_calibration"] == "complete"
     assert "resident_light_calibration" not in ledger["stage_status"]
+    assert audit["summary"]["pipeline_dq_ledger"]["status"] == "passed"
+
+
+def test_phase2_mainline_audit_requires_pipeline_dq_ledger(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_green_run(run)
+    payload = read_json(run / "pipeline_contract.json")
+    payload.pop("dq_ledger", None)
+    payload["summary"].pop("dq_ledger_passed", None)
+    write_json(run / "pipeline_contract.json", payload)
+
+    audit = build_phase2_mainline_audit(run)
+
+    assert audit["passed"] is False
+    assert "pipeline_contract_dq_ledger_contract" in audit["failed_checks"]
+    checks = {check["name"]: check for check in audit["checks"]}
+    evidence = checks["pipeline_contract_dq_ledger_contract"]["evidence"]
+    assert evidence["pipeline_contract_passed"] is True
+    assert evidence["dq_ledger_present"] is False
 
 
 def test_phase2_mainline_audit_fails_missing_output_map(tmp_path: Path) -> None:

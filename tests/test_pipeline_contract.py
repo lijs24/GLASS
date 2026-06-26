@@ -1409,6 +1409,12 @@ def test_pipeline_contract_passes_resident_source_dq_execution_contract(tmp_path
     assert source_dq["groups"][0]["materializes_calibrated_dq_cache"] is False
     assert audit["resident_source_dq_integration_effect"]["status"] == "passed"
     assert audit["artifacts"]["resident_source_dq_execution"]["exists"] is True
+    assert audit["summary"]["dq_ledger_passed"] is True
+    assert audit["dq_ledger"]["status"] == "passed"
+    assert audit["dq_ledger"]["resident_integration_output_count"] == 1
+    assert audit["dq_ledger"]["resident_source_dq_execution"]["status"] == "passed"
+    assert audit["dq_ledger"]["resident_source_dq_integration_effect"]["status"] == "passed"
+    assert audit["dq_ledger"]["integration_outputs"][0]["sample_accounting_passed"] is True
 
 
 def test_pipeline_contract_fails_when_source_dq_not_reflected_in_integration(
@@ -1429,6 +1435,9 @@ def test_pipeline_contract_fails_when_source_dq_not_reflected_in_integration(
     assert evidence["status"] == "source_dq_not_reflected_in_integration"
     assert evidence["expected_applied_invalid_samples"] == 2
     assert evidence["observed_integration_invalid_samples"] == 0
+    assert audit["summary"]["dq_ledger_passed"] is False
+    assert audit["dq_ledger"]["status"] == "failed"
+    assert "resident_source_dq_integration_effect" in audit["dq_ledger"]["failed_sections"]
 
 
 def test_pipeline_contract_fails_resident_source_dq_execution_contract(tmp_path: Path):

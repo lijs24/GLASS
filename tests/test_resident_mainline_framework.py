@@ -307,8 +307,28 @@ def _write_minimal_green_resident_run(
     for name in ("resident_dq_pixel_closure.json", "resident_master_cache.json"):
         write_json(run / name, {"summary": {"passed": True, "status": "passed"}})
     write_json(run / "stack_engine_contract.json", _stack_engine_contract())
+    write_json(
+        run / "pipeline_contract.json",
+        {
+            "passed": True,
+            "status": "passed",
+            "summary": {
+                "dq_ledger_status": "passed",
+                "dq_ledger_passed": True,
+                "resident_integration_output_count": 1,
+            },
+            "dq_ledger": {
+                "status": "passed",
+                "passed": True,
+                "resident_integration_required": True,
+                "integration_output_count": 1,
+                "resident_integration_output_count": 1,
+                "failed_sections": [],
+                "failed_integration_outputs": [],
+            },
+        },
+    )
     for name in (
-        "pipeline_contract.json",
         "warp_quality_contract.json",
         "resident_result_contract.json",
         "resident_calibration_contract.json",

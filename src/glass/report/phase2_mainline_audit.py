@@ -395,6 +395,17 @@ def build_phase2_mainline_audit(
     lifecycle_summary = (
         lifecycle.get("summary") if isinstance(lifecycle.get("summary"), dict) else {}
     )
+    pipeline_contract = _json_if_exists(run_root / "pipeline_contract.json")
+    pipeline_contract_summary = (
+        pipeline_contract.get("summary")
+        if isinstance(pipeline_contract.get("summary"), dict)
+        else {}
+    )
+    pipeline_dq_ledger = (
+        pipeline_contract.get("dq_ledger")
+        if isinstance(pipeline_contract.get("dq_ledger"), dict)
+        else {}
+    )
     resident_artifact = _first_resident_artifact(run_root)
 
     input_light_frames = _int_or_none(frame_summary.get("input_light_frames"))
@@ -483,6 +494,32 @@ def build_phase2_mainline_audit(
         and _int_or_none(lifecycle_evidence["lifecycle_active_frames"]) == active_frames
         and _int_or_none(lifecycle_evidence["frame_accounting_masked_frames"]) == masked_frames
         and _int_or_none(lifecycle_evidence["lifecycle_masked_frames"]) == masked_frames
+    )
+    pipeline_dq_ledger_evidence = {
+        "pipeline_contract_exists": bool(pipeline_contract),
+        "pipeline_contract_status": pipeline_contract.get("status"),
+        "pipeline_contract_passed": pipeline_contract.get("passed"),
+        "dq_ledger_present": bool(pipeline_dq_ledger),
+        "dq_ledger_status": pipeline_dq_ledger.get("status"),
+        "dq_ledger_passed": pipeline_dq_ledger.get("passed"),
+        "resident_integration_required": pipeline_dq_ledger.get(
+            "resident_integration_required"
+        ),
+        "resident_integration_output_count": pipeline_dq_ledger.get(
+            "resident_integration_output_count"
+        ),
+        "failed_sections": pipeline_dq_ledger.get("failed_sections"),
+        "failed_integration_outputs": pipeline_dq_ledger.get(
+            "failed_integration_outputs"
+        ),
+        "summary_dq_ledger_status": pipeline_contract_summary.get("dq_ledger_status"),
+        "summary_dq_ledger_passed": pipeline_contract_summary.get("dq_ledger_passed"),
+    }
+    pipeline_dq_ledger_passed = (
+        pipeline_contract.get("passed") is True
+        and pipeline_dq_ledger.get("resident_integration_required") is True
+        and pipeline_dq_ledger.get("passed") is True
+        and pipeline_contract_summary.get("dq_ledger_passed") is True
     )
 
     acceptance_payload: dict[str, Any] = {}
@@ -583,6 +620,12 @@ def build_phase2_mainline_audit(
             },
         ),
         _check("resident_dq_lifecycle_closes", lifecycle_passed, lifecycle_evidence),
+        _check(
+            "pipeline_contract_dq_ledger_contract",
+            pipeline_dq_ledger_passed,
+            pipeline_dq_ledger_evidence,
+            "Pipeline contract must expose a passing resident DQ/mask ledger for the Phase 2 mainline route.",
+        ),
         _check(
             "resident_stage_ledger_component_contract",
             bool(stage_ledger_state["passed"]),
@@ -736,6 +779,17 @@ def build_phase2_mainline_audit(
                 "output_count": active_coverage_contract["output_count"],
                 "failed_output_count": active_coverage_contract["failed_output_count"],
             },
+            "pipeline_dq_ledger": {
+                "status": pipeline_dq_ledger.get("status"),
+                "passed": pipeline_dq_ledger.get("passed"),
+                "resident_integration_output_count": pipeline_dq_ledger.get(
+                    "resident_integration_output_count"
+                ),
+                "failed_section_count": len(pipeline_dq_ledger.get("failed_sections") or []),
+                "failed_integration_output_count": len(
+                    pipeline_dq_ledger.get("failed_integration_outputs") or []
+                ),
+            },
         },
         "checks": checks,
         "next_priorities": next_priorities,
@@ -754,6 +808,7 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Active / masked frames: `{summary.get('active_frames')}` / `{summary.get('masked_frames')}`",
         f"- Total elapsed: `{summary.get('total_elapsed_s')}` s",
         f"- Speedup vs WBPP: `{summary.get('speedup_vs_wbpp')}`",
+        f"- Pipeline DQ ledger: `{(summary.get('pipeline_dq_ledger') or {}).get('status')}`",
         f"- Failed checks: `{payload.get('failed_checks')}`",
         "",
         "## Checks",
