@@ -8003,11 +8003,19 @@ def run_resident_calibration_integration(
             native_completion_calibration_supported = bool(
                 hasattr(stack, "calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed")
             )
+            native_completion_prestart_supported = bool(
+                hasattr(stack, "begin_fits_u16be_bzero_paths_completion_queue_read_timed")
+                and hasattr(stack, "finish_fits_u16be_bzero_paths_completion_queue_calibration_timed")
+                and hasattr(stack, "cancel_fits_u16be_bzero_paths_completion_queue_read")
+            )
             native_path_calibration_env = str(
                 os.environ.get("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", "")
             ).strip().lower()
             native_completion_calibration_env = str(
                 os.environ.get("GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION", "")
+            ).strip().lower()
+            native_completion_prestart_env = str(
+                os.environ.get("GLASS_RESIDENT_NATIVE_COMPLETION_PRESTART", "")
             ).strip().lower()
             native_completion_wave_fill_env = str(
                 os.environ.get("GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US", "")
@@ -8119,6 +8127,21 @@ def run_resident_calibration_integration(
             native_completion_calibration_enabled = bool(
                 native_completion_calibration_requested and native_completion_calibration_available
             )
+            native_completion_prestart_requested = bool(
+                native_completion_calibration_enabled
+                and native_completion_prestart_env in {"1", "true", "yes", "on"}
+            )
+            native_completion_prestart_enabled = bool(
+                native_completion_prestart_requested and native_completion_prestart_supported
+            )
+            if not native_completion_calibration_enabled:
+                native_completion_prestart_reason = "requires_native_completion_calibration"
+            elif native_completion_prestart_env not in {"1", "true", "yes", "on"}:
+                native_completion_prestart_reason = "env_disabled_default"
+            elif not native_completion_prestart_supported:
+                native_completion_prestart_reason = "native_method_unavailable"
+            else:
+                native_completion_prestart_reason = "env_enabled"
             native_direct_calibration_enabled = bool(
                 native_path_calibration_enabled or native_completion_calibration_enabled
             )
@@ -8271,6 +8294,14 @@ def run_resident_calibration_integration(
             native_completion_calibration_consumer_wave_count = 0
             native_completion_calibration_consumer_max_wave_frames = 0
             native_completion_calibration_consumer_multi_frame_wave_count = 0
+            native_completion_prestart_batch_count = 0
+            native_completion_prestart_frame_count = 0
+            native_completion_prestart_begin_submit_s = 0.0
+            native_completion_prestart_begin_to_finish_start_s = 0.0
+            native_completion_prestart_total_wall_s = 0.0
+            native_completion_prestart_initial_submit_count = 0
+            native_completion_prestart_cancel_count = 0
+            native_completion_prestart_batch_index_mismatch_count = 0
             prefetch_fill_blocked_no_slot_count = 0
             prefetch_release_count = 0
             prefetch_max_inflight_slots = 0
@@ -8347,6 +8378,8 @@ def run_resident_calibration_integration(
                     while remaining_index_set:
                         batch_items: list[tuple[int, dict[str, Any], np.ndarray | None, float]] = []
                         batch_frame_starts: list[float] = []
+                        native_completion_prestart_indices: list[int] | None = None
+                        native_completion_prestart_started = False
                         while remaining_index_set and len(batch_items) < calibration_fetch_batch_frames:
                             ready_select_wait_s = 0.0
                             if calibration_ready_order_enabled and light_prefetch.ready_batch_select_enabled:
@@ -8393,32 +8426,103 @@ def run_resident_calibration_integration(
                             if batch_items and master_key != current_master_key:
                                 break
                             if master_key != current_master_key:
-                                master_set_start = perf_counter()
-                                master_bias, master_dark, master_flat, stats, dark_exposure = (
-                                    _load_or_build_matching_masters(
-                                        run,
-                                        filter_name,
-                                        height,
-                                        width,
-                                        frames,
-                                        groups,
-                                        bias_group,
-                                        dark_group,
-                                        flat_group,
-                                        policy,
-                                        master_cache_dir=shared_master_cache_dir,
-                                        cache_write_queue=master_cache_write_queue,
+                                if (
+                                    native_completion_prestart_enabled
+                                    and native_completion_prestart_indices is None
+                                    and not batch_items
+                                ):
+                                    prestart_indices: list[int] = []
+                                    prestart_specs: list[SimpleFitsImageSpec] = []
+                                    prestart_cursor = int(item_index)
+                                    while prestart_cursor < len(light_frames):
+                                        if prestart_cursor in remaining_index_set:
+                                            candidate_master_key = light_master_selections[prestart_cursor][0]
+                                            if candidate_master_key != master_key:
+                                                if prestart_indices:
+                                                    break
+                                                prestart_cursor += 1
+                                                continue
+                                            candidate_frame = light_frames[prestart_cursor]
+                                            candidate_spec = resident_fits_spec_cache.get(
+                                                str(candidate_frame["path"])
+                                            )
+                                            if candidate_spec is None:
+                                                candidate_spec = simple_fits_image_spec(candidate_frame["path"])
+                                                resident_fits_spec_cache[str(candidate_frame["path"])] = candidate_spec
+                                            prestart_indices.append(int(prestart_cursor))
+                                            prestart_specs.append(candidate_spec)
+                                        prestart_cursor += 1
+                                    if prestart_indices:
+                                        native_completion_queue_buffers = native_completion_queue_buffer_planned_frames
+                                        native_completion_workers = max(
+                                            int(resident_prefetch_workers),
+                                            int(resident_calibration_streams),
+                                        )
+                                        native_completion_policy = asdict(policy)
+                                        native_completion_policy[
+                                            "native_completion_consumer_wave_fill_wait_us"
+                                        ] = int(native_completion_wave_fill_wait_us)
+                                        native_completion_policy[
+                                            "native_completion_consumer_wave_fill_mode"
+                                        ] = str(native_completion_wave_fill_mode)
+                                        native_completion_policy["native_completion_read_backend"] = str(
+                                            resident_native_read_backend
+                                        )
+                                        begin_timing = stack.begin_fits_u16be_bzero_paths_completion_queue_read_timed(
+                                            prestart_indices,
+                                            [str(spec.path) for spec in prestart_specs],
+                                            [int(spec.data_offset) for spec in prestart_specs],
+                                            [int(spec.width) * int(spec.height) * 2 for spec in prestart_specs],
+                                            resident_calibration_streams,
+                                            native_completion_queue_buffers,
+                                            native_completion_workers,
+                                            native_completion_policy,
+                                        )
+                                        native_completion_prestart_started = True
+                                        native_completion_prestart_indices = prestart_indices
+                                        native_completion_prestart_batch_count += 1
+                                        native_completion_prestart_frame_count += len(prestart_indices)
+                                        native_completion_prestart_begin_submit_s += float(
+                                            begin_timing.get("begin_submit_s", 0.0) or 0.0
+                                        )
+                                        native_completion_prestart_initial_submit_count += int(
+                                            begin_timing.get("initial_submit_count", 0) or 0
+                                        )
+                                try:
+                                    master_set_start = perf_counter()
+                                    master_bias, master_dark, master_flat, stats, dark_exposure = (
+                                        _load_or_build_matching_masters(
+                                            run,
+                                            filter_name,
+                                            height,
+                                            width,
+                                            frames,
+                                            groups,
+                                            bias_group,
+                                            dark_group,
+                                            flat_group,
+                                            policy,
+                                            master_cache_dir=shared_master_cache_dir,
+                                            cache_write_queue=master_cache_write_queue,
+                                        )
                                     )
-                                )
-                                stack.set_calibration_masters(master_bias, master_dark, master_flat)
-                                master_elapsed += perf_counter() - master_set_start
-                                master_stats_sets[master_key] = stats
-                                current_master_key = master_key
-                                current_dark_exposure = None if dark_exposure is None else float(dark_exposure)
-                                del master_bias, master_dark, master_flat
-                                gc_start = perf_counter()
-                                gc.collect()
-                                gc_elapsed += perf_counter() - gc_start
+                                    stack.set_calibration_masters(master_bias, master_dark, master_flat)
+                                    master_elapsed += perf_counter() - master_set_start
+                                    master_stats_sets[master_key] = stats
+                                    current_master_key = master_key
+                                    current_dark_exposure = None if dark_exposure is None else float(dark_exposure)
+                                    del master_bias, master_dark, master_flat
+                                    gc_start = perf_counter()
+                                    gc.collect()
+                                    gc_elapsed += perf_counter() - gc_start
+                                except Exception:
+                                    if native_completion_prestart_started:
+                                        native_completion_prestart_cancel_count += 1
+                                        try:
+                                            stack.cancel_fits_u16be_bzero_paths_completion_queue_read()
+                                        except Exception:
+                                            pass
+                                    raise
                             if native_direct_calibration_enabled:
                                 spec = resident_fits_spec_cache.get(str(frame["path"]))
                                 header_cache_hit = spec is not None
@@ -8545,20 +8649,52 @@ def run_resident_calibration_integration(
                                 native_completion_policy["native_completion_read_backend"] = str(
                                     resident_native_read_backend
                                 )
-                                calibration_timing = (
-                                    stack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed(
-                                        batch_indices,
-                                        [str(spec.path) for spec in batch_specs],
-                                        [int(spec.data_offset) for spec in batch_specs],
-                                        [int(spec.width) * int(spec.height) * 2 for spec in batch_specs],
-                                        batch_light_exposures,
-                                        batch_dark_exposures,
-                                        resident_calibration_streams,
-                                        native_completion_queue_buffers,
-                                        native_completion_workers,
-                                        native_completion_policy,
-                                    )
+                                prestarted_batch_matches = (
+                                    native_completion_prestart_started
+                                    and native_completion_prestart_indices == batch_indices
                                 )
+                                if native_completion_prestart_started and not prestarted_batch_matches:
+                                    native_completion_prestart_batch_index_mismatch_count += 1
+                                    native_completion_prestart_cancel_count += 1
+                                    stack.cancel_fits_u16be_bzero_paths_completion_queue_read()
+                                if prestarted_batch_matches:
+                                    calibration_timing = (
+                                        stack.finish_fits_u16be_bzero_paths_completion_queue_calibration_timed(
+                                            batch_light_exposures,
+                                            batch_dark_exposures,
+                                            resident_calibration_streams,
+                                            native_completion_policy,
+                                        )
+                                    )
+                                    native_completion_prestart_begin_to_finish_start_s += float(
+                                        calibration_timing.get(
+                                            "native_completion_prestart_begin_to_finish_start_s",
+                                            0.0,
+                                        )
+                                        or 0.0
+                                    )
+                                    native_completion_prestart_total_wall_s += float(
+                                        calibration_timing.get(
+                                            "native_completion_prestart_total_wall_s",
+                                            0.0,
+                                        )
+                                        or 0.0
+                                    )
+                                else:
+                                    calibration_timing = (
+                                        stack.calibrate_frames_fits_u16be_bzero_paths_completion_queue_timed(
+                                            batch_indices,
+                                            [str(spec.path) for spec in batch_specs],
+                                            [int(spec.data_offset) for spec in batch_specs],
+                                            [int(spec.width) * int(spec.height) * 2 for spec in batch_specs],
+                                            batch_light_exposures,
+                                            batch_dark_exposures,
+                                            resident_calibration_streams,
+                                            native_completion_queue_buffers,
+                                            native_completion_workers,
+                                            native_completion_policy,
+                                        )
+                                    )
                                 native_completion_calibration_submit_count += int(
                                     calibration_timing.get("native_completion_submit_count", 0) or 0
                                 )
@@ -13572,6 +13708,28 @@ def run_resident_calibration_integration(
                 "native_completion_calibration_available": bool(native_completion_calibration_available),
                 "native_completion_calibration_enabled": bool(native_completion_calibration_enabled),
                 "native_completion_calibration_reason": str(native_completion_calibration_reason),
+                "native_completion_prestart_supported": bool(native_completion_prestart_supported),
+                "native_completion_prestart_requested": bool(native_completion_prestart_requested),
+                "native_completion_prestart_enabled": bool(native_completion_prestart_enabled),
+                "native_completion_prestart_reason": str(native_completion_prestart_reason),
+                "native_completion_prestart_batch_count": int(native_completion_prestart_batch_count),
+                "native_completion_prestart_frame_count": int(native_completion_prestart_frame_count),
+                "native_completion_prestart_begin_submit_s": float(
+                    native_completion_prestart_begin_submit_s
+                ),
+                "native_completion_prestart_begin_to_finish_start_s": float(
+                    native_completion_prestart_begin_to_finish_start_s
+                ),
+                "native_completion_prestart_total_wall_s": float(
+                    native_completion_prestart_total_wall_s
+                ),
+                "native_completion_prestart_initial_submit_count": int(
+                    native_completion_prestart_initial_submit_count
+                ),
+                "native_completion_prestart_cancel_count": int(native_completion_prestart_cancel_count),
+                "native_completion_prestart_batch_index_mismatch_count": int(
+                    native_completion_prestart_batch_index_mismatch_count
+                ),
                 "native_completion_calibration_submit_count": int(
                     native_completion_calibration_submit_count
                 ),
@@ -14658,6 +14816,9 @@ def run_resident_calibration_integration(
                         "calibration_batch_actual_stream_count": int(calibration_batch_actual_stream_count),
                         "calibration_batch_lane_buffer_bytes": int(calibration_batch_lane_buffer_bytes),
                         "calibration_batch_mode": (
+                            "fits_u16be_bzero_native_completion_prestart_calibration_batch"
+                            if native_completion_prestart_frame_count > 0
+                            else
                             "fits_u16be_bzero_native_completion_calibration_batch"
                             if native_completion_calibration_enabled
                             else
@@ -14679,6 +14840,9 @@ def run_resident_calibration_integration(
                             else "per_frame"
                         ),
                         "calibration_batch_timing_model": (
+                            "native_completion_prestarted_queue_read_overlap_then_h2d_gpu_decode_calibration"
+                            if native_completion_prestart_frame_count > 0
+                            else
                             "native_completion_queue_read_then_h2d_gpu_decode_calibration"
                             if native_completion_calibration_enabled
                             else

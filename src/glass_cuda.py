@@ -3447,6 +3447,57 @@ class ResidentCalibratedStack:
         )
         return dict(result)
 
+    def begin_fits_u16be_bzero_paths_completion_queue_read_timed(
+        self,
+        indices: Any,
+        paths: Any,
+        data_offsets: Any,
+        byte_counts: Any,
+        stream_count: int,
+        queue_buffer_count: int,
+        worker_count: int,
+        policy: Any | None = None,
+    ) -> dict[str, Any]:
+        method = "begin_fits_u16be_bzero_paths_completion_queue_read_timed"
+        if not hasattr(self._impl, method):
+            raise RuntimeError(f"native ResidentCalibratedStack.{method} is not available")
+        result = getattr(self._impl, method)(
+            np.asarray(indices, dtype=np.int64),
+            [str(path) for path in paths],
+            [int(offset) for offset in data_offsets],
+            [int(byte_count) for byte_count in byte_counts],
+            int(stream_count),
+            int(queue_buffer_count),
+            int(worker_count),
+            _policy_payload(policy),
+        )
+        return dict(result)
+
+    def finish_fits_u16be_bzero_paths_completion_queue_calibration_timed(
+        self,
+        light_exposures_s: Any,
+        dark_exposures_s: Any,
+        stream_count: int,
+        policy: Any | None = None,
+    ) -> dict[str, Any]:
+        method = "finish_fits_u16be_bzero_paths_completion_queue_calibration_timed"
+        if not hasattr(self._impl, method):
+            raise RuntimeError(f"native ResidentCalibratedStack.{method} is not available")
+        result = getattr(self._impl, method)(
+            np.asarray(light_exposures_s, dtype=np.float32),
+            np.asarray(dark_exposures_s, dtype=np.float32),
+            int(stream_count),
+            _policy_payload(policy),
+        )
+        return dict(result)
+
+    def cancel_fits_u16be_bzero_paths_completion_queue_read(self) -> dict[str, Any]:
+        method = "cancel_fits_u16be_bzero_paths_completion_queue_read"
+        if not hasattr(self._impl, method):
+            raise RuntimeError(f"native ResidentCalibratedStack.{method} is not available")
+        result = getattr(self._impl, method)()
+        return dict(result)
+
     def apply_translation_frame(self, index: int, dx: int, dy: int, fill: float = np.nan) -> None:
         if not hasattr(self._impl, "apply_translation_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_translation_frame is not available")
