@@ -35,6 +35,8 @@ def test_resident_integration_stack_surface_contract_closes_dq_and_rejection_map
         dq_map=dq.data,
         dq_summary=dq_summary,
         dq_provenance_summary={
+            "active_frame_count": 2,
+            "post_rejection_pixels": 3,
             "valid_samples_after_rejection": 5,
             "rejected_samples": 1,
             "output_dq_summary": dq_summary,
@@ -66,6 +68,10 @@ def test_resident_integration_stack_surface_contract_closes_dq_and_rejection_map
     assert contract["stack_request"]["output_maps"]["coverage"] is True
     checks = {item["name"]: item for item in contract["checks"]}
     assert checks["coverage_zero_matches_dq_no_data"]["passed"] is True
+    assert checks["active_frame_count_matches_positive_weights"]["passed"] is True
+    assert checks["coverage_max_within_active_frame_count"]["passed"] is True
+    assert checks["coverage_positive_pixels_match_post_rejection_pixels"]["passed"] is True
+    assert checks["weight_positive_pixels_match_post_rejection_pixels"]["passed"] is True
     assert checks["low_rejection_pixels_match_dq"]["passed"] is True
     assert checks["rejection_sample_sum_matches_provenance"]["passed"] is True
 
@@ -117,6 +123,7 @@ def test_resident_integration_stack_surface_contract_reuses_precomputed_stats(
             "zero_or_less_pixels": 1,
             "negative_pixels": 0,
             "fractional_pixels": 0,
+            "max": 2.0,
             "stats_source": "test_precomputed",
         },
         "low_rejection": {
@@ -170,6 +177,8 @@ def test_resident_integration_stack_surface_contract_reuses_precomputed_stats(
         dq_map=dq.data,
         dq_summary=dq_summary,
         dq_provenance_summary={
+            "active_frame_count": 2,
+            "post_rejection_pixels": 3,
             "valid_samples_after_rejection": 5,
             "rejected_samples": 1,
             "sample_accounting_closure": {
@@ -197,8 +206,65 @@ def test_resident_integration_stack_surface_contract_reuses_precomputed_stats(
     assert contract["passed"] is True
     checks = {item["name"]: item for item in contract["checks"]}
     assert checks["dq_summary_matches_dq_map"]["evidence"]["source"] == "trusted_precomputed_dq_summary"
+    assert checks["active_frame_count_matches_positive_weights"]["passed"] is True
+    assert checks["coverage_positive_pixels_match_post_rejection_pixels"]["passed"] is True
+    assert checks["weight_positive_pixels_match_post_rejection_pixels"]["passed"] is True
     maps = {row["map"]: row for row in contract["stack_result"]["maps"]}
     assert maps["coverage"]["stats"]["stats_source"] == "test_precomputed"
+
+
+def test_resident_integration_stack_surface_contract_blocks_active_coverage_drift() -> None:
+    master = np.ones((2, 2), dtype=np.float32)
+    weight = np.array([[2.0, 2.0], [0.0, 2.0]], dtype=np.float32)
+    coverage = np.array([[3.0, 1.0], [0.0, 2.0]], dtype=np.float32)
+    low = np.zeros((2, 2), dtype=np.float32)
+    high = np.zeros((2, 2), dtype=np.float32)
+    dq = DQMask.empty((2, 2))
+    dq.mark(DQFlag.NO_DATA, coverage <= 0)
+    dq_summary = dq.summary()
+
+    contract = build_resident_integration_stack_surface_contract(
+        filter_name="H",
+        frame_ids=["light_001", "light_002"],
+        master=master,
+        weight_map=weight,
+        coverage_map=coverage,
+        low_rejection_map=low,
+        high_rejection_map=high,
+        dq_map=dq.data,
+        dq_summary=dq_summary,
+        dq_provenance_summary={
+            "active_frame_count": 1,
+            "post_rejection_pixels": 4,
+            "valid_samples_after_rejection": 6,
+            "rejected_samples": 0,
+            "sample_accounting_closure": {
+                "status": "passed",
+                "input_valid_samples_before_rejection": 6,
+                "valid_samples_after_rejection": 6,
+                "rejected_samples": 0,
+                "valid_rejection_match": True,
+            },
+        },
+        output_map_policy={
+            "available": ["master", "weight", "coverage", "low_rejection", "high_rejection", "dq"],
+            "written": ["master", "weight", "coverage", "low_rejection", "high_rejection", "dq"],
+            "skipped": [],
+        },
+        rejection="none",
+        low_sigma=3.0,
+        high_sigma=3.0,
+        weights=[1.0, 1.0],
+        grouping_key="H",
+        dispatch="stack",
+    )
+
+    checks = {item["name"]: item for item in contract["checks"]}
+    assert contract["passed"] is False
+    assert checks["active_frame_count_matches_positive_weights"]["passed"] is False
+    assert checks["coverage_max_within_active_frame_count"]["passed"] is False
+    assert checks["coverage_positive_pixels_match_post_rejection_pixels"]["passed"] is False
+    assert checks["weight_positive_pixels_match_post_rejection_pixels"]["passed"] is False
 
 
 def test_resident_master_stack_surface_contract_records_source_frame_ids(tmp_path: Path) -> None:

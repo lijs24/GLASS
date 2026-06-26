@@ -98,6 +98,83 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 699: Resident Active-Coverage Contract
+
+Gate 699 returns to the Phase 2 mainline DQ/mask contract. It does not add a
+release handoff or another report-only gate. The resident StackEngine surface
+contract now proves that admitted positive-weight frames, post-rejection
+coverage support, and weight-map support describe the same output footprint.
+
+Implementation:
+
+- `resident_stack_surface` counts finite positive StackRequest frame weights and
+  requires that count to match `dq_provenance_summary.active_frame_count`.
+- Coverage maps now must have `max <= active_frame_count`, blocking impossible
+  per-pixel coverage after rejection.
+- Positive coverage pixels must match
+  `dq_provenance_summary.post_rejection_pixels` when that provenance field is
+  present.
+- Positive weight-map pixels must match the same post-rejection support.
+- Precomputed resident map statistics can satisfy the new checks without
+  rereading full arrays, preserving the existing fast contract path.
+
+Validation:
+
+- Focused resident surface tests:
+  `tests/test_resident_stack_surface.py`, `4 passed`.
+- Focused resident/default smoke:
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_smoke`,
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline`,
+  and
+  `tests/test_stack_engine_contract.py::test_stack_engine_contract_classifies_resident_stack_surface_contract`,
+  `3 passed`.
+- Full pytest passed: `1444 passed in 70.16 s`.
+
+Real 200-light validation:
+
+- Candidate:
+  `C:\glass_runs\phase2_s2_gate699_resident_surface_active_coverage\runs_20260627_100000\active_coverage_contract_candidate`
+- Mainline audit:
+  `C:\glass_runs\phase2_s2_gate699_resident_surface_active_coverage\gate699_active_coverage_mainline_audit.json`
+  passed with `200` input lights and `193 / 7` active/masked frames.
+- A/B versus Gate698:
+  `C:\glass_runs\phase2_s2_gate699_resident_surface_active_coverage\gate699_active_coverage_vs_gate698_ab.json`
+  passed; elapsed ratio `0.9818270795336204`; worst component ratio
+  `0.9861023082024485`; component-ratio failures `0`; all six tracked
+  integration FITS hashes matched.
+
+Candidate contract evidence:
+
+- `active_frame_count_matches_positive_weights`: passed with `193` active
+  frames and `193` positive frame weights.
+- `coverage_max_within_active_frame_count`: passed with coverage max `193.0`.
+- `coverage_positive_pixels_match_post_rejection_pixels`: passed with
+  `61651200` positive coverage pixels.
+- `weight_positive_pixels_match_post_rejection_pixels`: passed with `61651200`
+  positive weight pixels.
+- `valid_samples_after_rejection`: `11761072908`; `rejected_samples`:
+  `47540364`.
+
+Candidate timing:
+
+- `resident_light_read_upload_calibrate`: `3.033154399949126 s`
+- `resident_registration_warp`: `0.26309880055487156 s`
+- `resident_local_normalization`: `0.3593616000143811 s`
+- `resident_integration`: `3.279866800061427 s`
+- `resident_output_write`: `0.27349980000872165 s`
+- `total_elapsed_s`: `11.957288500037976 s`
+
+Interpretation:
+
+- This gate strengthens the StackEngine default-path DQ/mask contract without
+  changing science pixels, frame admission, registration, local normalization,
+  rejection thresholds, or CUDA kernels.
+- The 200-light candidate is bit-identical to Gate698 for master, weight,
+  coverage, low/high rejection, and DQ maps.
+- Gate 700 should return to a larger runtime or algorithm target, preferably
+  resident registration/warp batching or a real reducer architecture change,
+  rather than more report or release-evidence gates.
+
 ### S2-Gate 698: Default Native Completion Prestart
 
 Gate 698 changes resident CUDA runtime behavior rather than adding another

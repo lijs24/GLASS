@@ -155,6 +155,31 @@ def _sample_match(actual: int | None, expected: int | None, tolerance: int = 0) 
     }
 
 
+def _positive_weight_count(weights_by_frame: dict[str, float]) -> int:
+    count = 0
+    for value in weights_by_frame.values():
+        try:
+            weight = float(value)
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(weight) and weight > 0.0:
+            count += 1
+    return count
+
+
+def _optional_float(stats: dict[str, Any], key: str) -> float | None:
+    value = stats.get(key)
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(numeric):
+        return None
+    return numeric
+
+
 def build_resident_integration_stack_surface_contract(
     *,
     filter_name: str,
@@ -306,11 +331,56 @@ def build_resident_integration_stack_surface_contract(
         coverage_stats = stats_by_map.get("coverage", {})
         coverage_zero = _optional_count(coverage_stats, "zero_or_less_pixels")
         valid_samples = _optional_count(coverage_stats, "rounded_sum")
+        coverage_positive_pixels = _optional_count(coverage_stats, "positive_pixels")
+        coverage_max = _optional_float(coverage_stats, "max")
         if coverage_zero is None or valid_samples is None:
             coverage = np.asarray(coverage_map, dtype=np.float32)
             coverage_zero = int(np.count_nonzero((~np.isfinite(coverage)) | (coverage <= 0.0)))
             valid_samples = int(round(float(np.nansum(coverage, dtype=np.float64))))
+            coverage_positive_pixels = int(np.count_nonzero(np.isfinite(coverage) & (coverage > 0.0)))
+            finite_coverage = coverage[np.isfinite(coverage)]
+            coverage_max = None if finite_coverage.size == 0 else float(np.max(finite_coverage))
         expected_valid = _int_value(dq_provenance_payload.get("valid_samples_after_rejection"))
+        active_frame_count = _int_value(dq_provenance_payload.get("active_frame_count"))
+        post_rejection_pixels = _int_value(dq_provenance_payload.get("post_rejection_pixels"))
+        positive_weight_count = _positive_weight_count(weights_by_frame)
+        checks.append(
+            _check(
+                "active_frame_count_matches_positive_weights",
+                active_frame_count is not None and active_frame_count == positive_weight_count,
+                {
+                    "active_frame_count": active_frame_count,
+                    "positive_weight_frame_count": positive_weight_count,
+                    "frame_count": len(frame_id_list),
+                },
+                "Resident active frame count must close against StackRequest positive frame weights.",
+            )
+        )
+        checks.append(
+            _check(
+                "coverage_max_within_active_frame_count",
+                active_frame_count is not None
+                and coverage_max is not None
+                and coverage_max <= float(active_frame_count) + 1.0e-3,
+                {
+                    "coverage_max": coverage_max,
+                    "active_frame_count": active_frame_count,
+                },
+                "Post-rejection coverage cannot exceed the active positive-weight frame count.",
+            )
+        )
+        if post_rejection_pixels is not None:
+            checks.append(
+                _check(
+                    "coverage_positive_pixels_match_post_rejection_pixels",
+                    coverage_positive_pixels == post_rejection_pixels,
+                    {
+                        "coverage_positive_pixels": coverage_positive_pixels,
+                        "post_rejection_pixels": post_rejection_pixels,
+                    },
+                    "Post-rejection pixel count and positive coverage pixels describe the same output support.",
+                )
+            )
         if dq_map is not None:
             if trust_precomputed_dq_summary:
                 dq_no_data = _summary_count(dq_summary_payload, "no_data")
@@ -330,6 +400,26 @@ def build_resident_integration_stack_surface_contract(
                     "coverage_sum_matches_provenance",
                     valid_samples == expected_valid,
                     {"coverage_sum": valid_samples, "provenance_valid_samples": expected_valid},
+                )
+            )
+
+    if weight_map is not None:
+        weight_stats = stats_by_map.get("weight", {})
+        weight_positive_pixels = _optional_count(weight_stats, "positive_pixels")
+        if weight_positive_pixels is None:
+            weight = np.asarray(weight_map, dtype=np.float32)
+            weight_positive_pixels = int(np.count_nonzero(np.isfinite(weight) & (weight > 0.0)))
+        post_rejection_pixels = _int_value(dq_provenance_payload.get("post_rejection_pixels"))
+        if post_rejection_pixels is not None:
+            checks.append(
+                _check(
+                    "weight_positive_pixels_match_post_rejection_pixels",
+                    weight_positive_pixels == post_rejection_pixels,
+                    {
+                        "weight_positive_pixels": weight_positive_pixels,
+                        "post_rejection_pixels": post_rejection_pixels,
+                    },
+                    "Resident weight support must match the post-rejection output support.",
                 )
             )
 
