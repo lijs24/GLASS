@@ -7,12 +7,60 @@ from glass.io.json_io import write_json
 from glass.report.phase2_mainline_ab import build_phase2_mainline_ab
 
 
+ACTIVE_COVERAGE_CHECKS = (
+    "active_frame_count_matches_positive_weights",
+    "coverage_max_within_active_frame_count",
+    "coverage_positive_pixels_match_post_rejection_pixels",
+    "weight_positive_pixels_match_post_rejection_pixels",
+)
+
+
+def _integration_results_payload(
+    *,
+    include_surface_contract: bool = True,
+    failed_surface_check: str | None = None,
+) -> dict:
+    output: dict = {
+        "filter": "H",
+        "backend": "cuda_resident_stack",
+    }
+    if include_surface_contract:
+        output["stack_engine_surface_contract"] = {
+            "contract_type": "resident_stack_engine_surface_contract",
+            "status": "passed" if failed_surface_check is None else "failed",
+            "passed": failed_surface_check is None,
+            "stack_result": {
+                "maps": [
+                    {"map": "master", "present": True, "required": True},
+                    {"map": "weight", "present": True, "required": True},
+                    {"map": "coverage", "present": True, "required": True},
+                ]
+            },
+            "checks": [
+                {
+                    "name": name,
+                    "passed": name != failed_surface_check,
+                    "evidence": {
+                        "active_frame_count": 193,
+                        "positive_weight_frame_count": 193,
+                        "coverage_max": 193.0,
+                        "post_rejection_pixels": 4,
+                    },
+                }
+                for name in ACTIVE_COVERAGE_CHECKS
+            ],
+        }
+    return {"outputs": [output]}
+
+
 def _write_run(
     root: Path,
     *,
     elapsed: float,
     master_bytes: bytes = b"same",
     frame_index_alignment: bool = True,
+    include_surface_contract: bool = True,
+    failed_surface_check: str | None = None,
     component_elapsed: dict[str, float] | None = None,
 ) -> None:
     component_elapsed = {
@@ -41,6 +89,13 @@ def _write_run(
     )
     write_json(root / "pipeline_contract.json", {"passed": True, "status": "passed"})
     write_json(root / "resident_result_contract.json", {"passed": True, "status": "passed"})
+    write_json(
+        root / "integration_results.json",
+        _integration_results_payload(
+            include_surface_contract=include_surface_contract,
+            failed_surface_check=failed_surface_check,
+        ),
+    )
     write_json(
         root / "resident_component_timing.json",
         {
@@ -186,6 +241,41 @@ def test_phase2_mainline_ab_fails_without_candidate_frame_index_alignment(tmp_pa
         check["name"] for check in payload["failed_checks"]
     ]
     assert payload["candidate_frame_index_alignment"]["status"] == "missing_resident_frame_masks"
+
+
+def test_phase2_mainline_ab_fails_without_active_coverage_contract(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _write_run(baseline, elapsed=10.0)
+    _write_run(candidate, elapsed=10.5, include_surface_contract=False)
+
+    payload = build_phase2_mainline_ab(baseline, candidate)
+
+    assert payload["passed"] is False
+    assert "candidate_active_coverage_stack_surface_contract" in [
+        check["name"] for check in payload["failed_checks"]
+    ]
+    assert payload["candidate_active_coverage_contract"]["failed_output_count"] == 1
+
+
+def test_phase2_mainline_ab_fails_failed_active_coverage_check(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _write_run(baseline, elapsed=10.0)
+    _write_run(
+        candidate,
+        elapsed=10.5,
+        failed_surface_check="coverage_max_within_active_frame_count",
+    )
+
+    payload = build_phase2_mainline_ab(baseline, candidate)
+
+    assert payload["passed"] is False
+    assert "candidate_active_coverage_stack_surface_contract" in [
+        check["name"] for check in payload["failed_checks"]
+    ]
+    output = payload["candidate_active_coverage_contract"]["outputs"][0]
+    assert output["failed_required_checks"] == ["coverage_max_within_active_frame_count"]
 
 
 def test_phase2_mainline_ab_fails_hash_drift_when_required(tmp_path: Path) -> None:

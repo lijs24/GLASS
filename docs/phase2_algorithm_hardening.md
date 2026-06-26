@@ -98,6 +98,60 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 700: Mainline Active-Coverage Gate
+
+Gate 700 connects the Gate699 resident active/coverage surface checks to the
+actual Phase 2 mainline gates. After this gate, a resident 200-light audit or
+A/B candidate cannot pass only because top-level contract files are green; the
+candidate must also expose passing active-frame, coverage, and weight-support
+checks on applicable resident StackEngine integration surfaces.
+
+Implementation:
+
+- Added `resident_active_coverage_contract`, a shared report helper that reads
+  `integration_results.json` and inspects each output
+  `stack_engine_surface_contract`.
+- Applicable outputs must carry these checks and pass them:
+  `active_frame_count_matches_positive_weights`,
+  `coverage_max_within_active_frame_count`,
+  `coverage_positive_pixels_match_post_rejection_pixels`, and
+  `weight_positive_pixels_match_post_rejection_pixels`.
+- The helper treats source-DQ-only outputs without coverage/weight-map surface
+  support as not applicable, so small source-DQ validation paths remain valid
+  while full audit-map resident outputs stay gated.
+- `phase2-mainline-audit` now emits and requires
+  `resident_active_coverage_stack_surface_contract`.
+- `phase2-mainline-ab` now emits and requires
+  `candidate_active_coverage_stack_surface_contract`, and records the status in
+  its summary and Markdown.
+
+Validation:
+
+- Focused mainline/framework/source-DQ tests: `33 passed`.
+- Full pytest passed: `1448 passed in 70.49 s`.
+
+Real 200-light validation:
+
+- Candidate reused the Gate699 real run:
+  `C:\glass_runs\phase2_s2_gate699_resident_surface_active_coverage\runs_20260627_100000\active_coverage_contract_candidate`
+- Mainline audit with the new hard gate:
+  `C:\glass_runs\phase2_s2_gate700_active_coverage_gate\gate700_mainline_audit_v2.json`
+  passed; the new `resident_active_coverage_stack_surface_contract` check was
+  `True`.
+- A/B versus Gate698:
+  `C:\glass_runs\phase2_s2_gate700_active_coverage_gate\gate700_vs_gate698_ab_v2.json`
+  passed; active/coverage contract status `passed`; elapsed ratio
+  `0.9818270795336204`; hash mismatch/missing counts `0 / 0`.
+
+Interpretation:
+
+- Gate700 is a framework-completeness gate: it promotes the Gate699 DQ/mask
+  invariant from a generated surface check to an enforced real-run postcondition.
+- It does not change science pixels, CUDA kernels, or runtime scheduling.
+- The next gate should move back to runtime/algorithm work: resident
+  registration/warp batching, reduced host/device orchestration, or a larger
+  reducer change with measured 200-light impact.
+
 ### S2-Gate 699: Resident Active-Coverage Contract
 
 Gate 699 returns to the Phase 2 mainline DQ/mask contract. It does not add a

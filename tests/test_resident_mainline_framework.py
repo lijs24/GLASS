@@ -25,6 +25,50 @@ from glass.io.json_io import read_json, write_json
 from glass.models import PipelineArtifact, now_iso
 
 
+ACTIVE_COVERAGE_CHECKS = (
+    "active_frame_count_matches_positive_weights",
+    "coverage_max_within_active_frame_count",
+    "coverage_positive_pixels_match_post_rejection_pixels",
+    "weight_positive_pixels_match_post_rejection_pixels",
+)
+
+
+def _integration_results_payload() -> dict:
+    return {
+        "outputs": [
+            {
+                "filter": "H",
+                "backend": "cuda_resident_stack",
+                "stack_engine_surface_contract": {
+                    "contract_type": "resident_stack_engine_surface_contract",
+                    "status": "passed",
+                    "passed": True,
+                    "stack_result": {
+                        "maps": [
+                            {"map": "master", "present": True, "required": True},
+                            {"map": "weight", "present": True, "required": True},
+                            {"map": "coverage", "present": True, "required": True},
+                        ]
+                    },
+                    "checks": [
+                        {
+                            "name": name,
+                            "passed": True,
+                            "evidence": {
+                                "active_frame_count": 3,
+                                "positive_weight_frame_count": 3,
+                                "coverage_max": 3.0,
+                                "post_rejection_pixels": 4,
+                            },
+                        }
+                        for name in ACTIVE_COVERAGE_CHECKS
+                    ],
+                },
+            }
+        ]
+    }
+
+
 def _touch(path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.suffix.lower() in {".fit", ".fits", ".fts"}:
@@ -268,7 +312,6 @@ def _write_minimal_green_resident_run(
         "warp_quality_contract.json",
         "resident_result_contract.json",
         "resident_calibration_contract.json",
-        "integration_results.json",
         "calibration_artifacts.json",
         "frame_quality.json",
         "resident_registration_quality.json",
@@ -276,6 +319,7 @@ def _write_minimal_green_resident_run(
         "resident_stage_ledger.json",
     ):
         write_json(run / name, {"passed": True, "status": "passed"})
+    write_json(run / "integration_results.json", _integration_results_payload())
     write_json(
         run / "registration_results.json",
         {

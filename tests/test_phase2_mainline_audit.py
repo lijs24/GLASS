@@ -14,13 +14,64 @@ from glass.io.json_io import read_json, write_json
 from glass.report.phase2_mainline_audit import build_phase2_mainline_audit
 
 
+ACTIVE_COVERAGE_CHECKS = (
+    "active_frame_count_matches_positive_weights",
+    "coverage_max_within_active_frame_count",
+    "coverage_positive_pixels_match_post_rejection_pixels",
+    "weight_positive_pixels_match_post_rejection_pixels",
+)
+
+
+def _integration_results_payload(
+    *,
+    include_surface_contract: bool = True,
+    failed_surface_check: str | None = None,
+) -> dict:
+    output: dict = {
+        "filter": "H",
+        "backend": "cuda_resident_stack",
+    }
+    if include_surface_contract:
+        output["stack_engine_surface_contract"] = {
+            "contract_type": "resident_stack_engine_surface_contract",
+            "status": "passed" if failed_surface_check is None else "failed",
+            "passed": failed_surface_check is None,
+            "stack_result": {
+                "maps": [
+                    {"map": "master", "present": True, "required": True},
+                    {"map": "weight", "present": True, "required": True},
+                    {"map": "coverage", "present": True, "required": True},
+                ]
+            },
+            "checks": [
+                {
+                    "name": name,
+                    "passed": name != failed_surface_check,
+                    "evidence": {
+                        "active_frame_count": 193,
+                        "positive_weight_frame_count": 193,
+                        "coverage_max": 193.0,
+                        "post_rejection_pixels": 4,
+                    },
+                }
+                for name in ACTIVE_COVERAGE_CHECKS
+            ],
+        }
+    return {"outputs": [output]}
+
+
 def _touch(path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("fixture", encoding="utf-8")
     return str(path)
 
 
-def _write_green_run(run: Path) -> None:
+def _write_green_run(
+    run: Path,
+    *,
+    include_surface_contract: bool = True,
+    failed_surface_check: str | None = None,
+) -> None:
     integration = run / "integration"
     maps = {
         "master_path": _touch(integration / "resident_master_H.fits"),
@@ -201,8 +252,14 @@ def _write_green_run(run: Path) -> None:
         "resident_calibration_contract.json",
     ):
         write_json(run / name, {"passed": True, "status": "passed"})
+    write_json(
+        run / "integration_results.json",
+        _integration_results_payload(
+            include_surface_contract=include_surface_contract,
+            failed_surface_check=failed_surface_check,
+        ),
+    )
     for name in (
-        "integration_results.json",
         "calibration_artifacts.json",
         "frame_quality.json",
         "resident_registration_quality.json",
@@ -298,6 +355,35 @@ def test_phase2_mainline_audit_fails_missing_output_map(tmp_path: Path) -> None:
 
     assert audit["passed"] is False
     assert "resident_output_maps_present" in audit["failed_checks"]
+
+
+def test_phase2_mainline_audit_fails_missing_active_coverage_contract(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_green_run(run, include_surface_contract=False)
+
+    audit = build_phase2_mainline_audit(run)
+
+    assert audit["passed"] is False
+    assert "resident_active_coverage_stack_surface_contract" in audit["failed_checks"]
+    checks = {check["name"]: check for check in audit["checks"]}
+    evidence = checks["resident_active_coverage_stack_surface_contract"]["evidence"]
+    assert evidence["failed_output_count"] == 1
+    assert evidence["outputs"][0]["status"] == "missing_stack_engine_surface_contract"
+
+
+def test_phase2_mainline_audit_fails_failed_active_coverage_check(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    _write_green_run(run, failed_surface_check="weight_positive_pixels_match_post_rejection_pixels")
+
+    audit = build_phase2_mainline_audit(run)
+
+    assert audit["passed"] is False
+    assert "resident_active_coverage_stack_surface_contract" in audit["failed_checks"]
+    checks = {check["name"]: check for check in audit["checks"]}
+    output = checks["resident_active_coverage_stack_surface_contract"]["evidence"]["outputs"][0]
+    assert output["failed_required_checks"] == [
+        "weight_positive_pixels_match_post_rejection_pixels"
+    ]
 
 
 def test_phase2_mainline_audit_fails_missing_component_ledger_artifact(tmp_path: Path) -> None:

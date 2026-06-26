@@ -10,6 +10,9 @@ from glass.engine.resident_component_timing import (
 from glass.engine.resident_stage_ledger import build_resident_stage_ledger
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.resident_active_coverage_contract import (
+    build_resident_active_coverage_contract_state,
+)
 
 
 REQUIRED_CORE_ARTIFACTS = (
@@ -429,6 +432,7 @@ def build_phase2_mainline_audit(
     stage_ledger_state = _stage_ledger_state(run_root)
     memory_lifecycle_state = _resident_memory_lifecycle_state(run_root, timing)
     registration_runtime = _registration_runtime_state(run_root)
+    active_coverage_contract = build_resident_active_coverage_contract_state(run_root)
 
     default_route_evidence = {
         "backend": timing.get("backend"),
@@ -602,6 +606,12 @@ def build_phase2_mainline_audit(
             output_maps,
         ),
         _check(
+            "resident_active_coverage_stack_surface_contract",
+            bool(active_coverage_contract["passed"]),
+            active_coverage_contract,
+            "Resident StackEngine output support must close active frames, coverage, and weight maps.",
+        ),
+        _check(
             "timing_components_available",
             timing_state["total_elapsed_s"] is not None
             and timing_state["stages"]["resident_calibration_integration"] is not None
@@ -721,6 +731,11 @@ def build_phase2_mainline_audit(
             "largest_resident_component": timing_state["largest_resident_component"],
             "resident_memory_lifecycle": memory_lifecycle_state["summary"],
             "resident_registration_runtime": registration_runtime,
+            "resident_active_coverage_contract": {
+                "status": active_coverage_contract["status"],
+                "output_count": active_coverage_contract["output_count"],
+                "failed_output_count": active_coverage_contract["failed_output_count"],
+            },
         },
         "checks": checks,
         "next_priorities": next_priorities,

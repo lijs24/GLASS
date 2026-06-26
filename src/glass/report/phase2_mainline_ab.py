@@ -6,6 +6,9 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.resident_active_coverage_contract import (
+    build_resident_active_coverage_contract_state,
+)
 from glass.report.resident_runtime_compare import build_resident_runtime_compare
 
 
@@ -397,6 +400,7 @@ def build_phase2_mainline_ab(
     candidate_contracts = _contract_status(candidate)
     candidate_components = _component_summary(_component_rows(candidate))
     candidate_frame_index_alignment = _frame_index_alignment_status(candidate)
+    candidate_active_coverage_contract = build_resident_active_coverage_contract_state(candidate)
     component_ratio_budget = _component_ratio_budget_state(
         runtime_delta,
         max_component_ratio=max_component_ratio,
@@ -447,6 +451,11 @@ def build_phase2_mainline_ab(
             candidate_frame_index_alignment,
         ),
         _check(
+            "candidate_active_coverage_stack_surface_contract",
+            bool(candidate_active_coverage_contract.get("passed")),
+            candidate_active_coverage_contract,
+        ),
+        _check(
             "component_ratios_within_budget",
             bool(component_ratio_budget.get("passed")),
             {
@@ -487,6 +496,7 @@ def build_phase2_mainline_ab(
         "candidate_components": candidate_components,
         "candidate_contracts": candidate_contracts,
         "candidate_frame_index_alignment": candidate_frame_index_alignment,
+        "candidate_active_coverage_contract": candidate_active_coverage_contract,
         "candidate_active_frames": active_summary,
         "map_comparison": map_comparison,
         "checks": checks,
@@ -513,6 +523,8 @@ def build_phase2_mainline_ab(
             "component_ratio_failed_count": component_ratio_budget["failed_count"],
             "frame_index_alignment_passed": candidate_frame_index_alignment.get("passed"),
             "frame_index_alignment_status": candidate_frame_index_alignment.get("status"),
+            "active_coverage_contract_passed": candidate_active_coverage_contract.get("passed"),
+            "active_coverage_contract_status": candidate_active_coverage_contract.get("status"),
             "hash_mismatch_count": map_comparison["mismatch_count"],
             "hash_missing_map_count": map_comparison["missing_map_count"],
         },
@@ -533,6 +545,7 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Candidate active/masked frames: `{summary.get('candidate_active_frame_count')}` / `{summary.get('candidate_masked_frame_count')}`",
         f"- Largest candidate component: `{largest.get('component')}` = `{largest.get('elapsed_s')}` s",
         f"- Worst component ratio: `{summary.get('worst_component_ratio_name')}` = `{summary.get('worst_component_ratio')}`",
+        f"- Active/coverage contract: `{summary.get('active_coverage_contract_status')}`",
         f"- Hash mismatches/missing maps: `{summary.get('hash_mismatch_count')}` / `{summary.get('hash_missing_map_count')}`",
         "",
         "## Checks",
