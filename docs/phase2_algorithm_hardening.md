@@ -2742,6 +2742,104 @@ Interpretation:
   - the resident read/upload/calibration pipeline, where pinned-buffer
     scheduling and decode/H2D overlap still cost about `3.1 s`.
 
+### S2-Gate 695: Index-Select Reuse Probe Rejected
+
+Gate695 turns the Gate694 integration evidence into a guarded reducer
+experiment instead of another report-only handoff. The hypothesis was that the
+resident hardened winsorized reducer could preserve the first collected
+frame-axis sample array, run quartile quickselect over an index scratch buffer,
+and then reuse the original-order `values[]` for winsor mean, winsor variance,
+reject counting, and final accumulation. This should remove several resident
+stack rereads without duplicating the sample values as the older local-reuse
+probe did.
+
+Implementation:
+
+- Added `GLASS_CUDA_UNIT_WEIGHT_INDEX_SELECT_REUSE=1` as an opt-in diagnostic
+  path.
+- Added indexed quartile quickselect helpers in
+  `glass_integrate_resident_hardened_winsorized_sigma_f32_kernel`.
+- The enabled branch keeps `values[]` in frame-axis order and mutates only an
+  `unsigned short` index scratch array for quartile selection.
+- The branch is admitted only for unit-positive mask-scan resident hardened
+  winsorized integration and does not change the default path.
+- Native profiles now record:
+  - `unit_positive_index_select_reuse_requested`;
+  - `unit_positive_index_select_reuse_enabled`;
+  - `unit_positive_index_select_reuse_reason`;
+  - `percentile_strategy=
+    indexed_quartile_quickselect_preserve_frame_axis_samples`;
+  - `sample_reuse_strategy=
+    index_select_original_order_reuse_unit_positive_weights`.
+- Added a CUDA/CPU parity test covering zero-weight frames, finite samples, NaN
+  samples, and the opt-in profile fields.
+
+Validation:
+
+- Native CUDA rebuild passed.
+- New focused opt-in test passed:
+  `1 passed in 4.72 s`.
+- Focused resident hardened winsorized tests passed:
+  `22 passed, 57 deselected in 4.90 s`.
+- Ruff on the touched CUDA test file passed.
+- Real 200-light opt-in candidate:
+  `C:\glass_runs\phase2_s2_gate695_index_select\runs_20260627_062000\index_select_candidate`.
+- Opt-in candidate audit passed:
+  `C:\glass_runs\phase2_s2_gate695_index_select\gate695_index_select_mainline_audit.json`.
+- Opt-in candidate A/B versus Gate694 failed component budget:
+  `C:\glass_runs\phase2_s2_gate695_index_select\gate695_index_select_vs_gate694_ab.json`.
+- Current-code default run:
+  `C:\glass_runs\phase2_s2_gate695_index_select\runs_20260627_063000\default_after_index_code`.
+- Current-code default A/B versus Gate694 passed:
+  `C:\glass_runs\phase2_s2_gate695_index_select\gate695_default_after_code_vs_gate694_ab.json`;
+  failed checks `[]`, active/masked frames `193 / 7`, tracked map count `6`,
+  hash mismatches `0`, frame-index alignment `passed`, component budget
+  failures `0`.
+
+Real 200-light opt-in candidate timing versus Gate694:
+
+| Component | Gate694 s | Index-select candidate s | Ratio |
+| --- | ---: | ---: | ---: |
+| light read/upload/calibrate | `3.161795800086111` | `3.5421303999610245` | `1.120296984763049` |
+| resident registration/warp | `0.2603286998346448` | `0.28471500100567937` | `1.093673167314227` |
+| resident local normalization | `0.3541327000129968` | `0.4981502000009641` | `1.4066766496928462` |
+| resident integration | `3.261199799948372` | `4.369750200072303` | `1.3399210315606793` |
+| output write | `0.22860800009220839` | `0.23890899994876236` | `1.045059667902979` |
+
+Native hardened profile:
+
+- Gate694 kernel sync: `3.140564 s`.
+- Index-select candidate kernel sync: `4.2502007 s`.
+- Index-select candidate strategy:
+  `index_select_original_order_reuse_unit_positive_weights`.
+- Index-select candidate produced zero hash mismatches across all six tracked
+  integration FITS outputs, but failed the `resident_integration <= 1.25x`
+  component budget.
+
+Current-code default verification:
+
+- Default sample strategy remains
+  `frame_mask_global_reread_unit_positive_weights`.
+- Default kernel sync stayed effectively unchanged:
+  `3.1433856 s`.
+- Default resident integration stayed effectively unchanged:
+  `3.2635820999275893 s`.
+- Default output maps stayed bitwise-identical to Gate694.
+
+Interpretation:
+
+- The index-scratch idea is scientifically valid and output-stable, but it is a
+  measured performance regression on the 200-light benchmark.
+- The likely cost is extra local-memory pressure and indirect indexing, which
+  is worse than the resident stack rereads it tried to remove.
+- The branch remains opt-in diagnostic only and must not be promoted.
+- Gate695 narrows the next real choices:
+  - implement a more radical cooperative/segmented reducer that avoids
+    per-thread index/value scratch pressure; or
+  - implement native-completion read-prestart/master-overlap so raw read
+    workers begin before warm master load/upload, targeting the measured
+    `~0.55 s` master/cache gap without changing science math.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

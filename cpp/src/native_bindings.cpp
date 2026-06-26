@@ -734,7 +734,8 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
     bool unit_positive_weights,
     bool unit_positive_weight_mask_enabled,
     bool unit_positive_local_reuse,
-    bool unit_positive_selected_reuse);
+    bool unit_positive_selected_reuse,
+    bool unit_positive_index_select_reuse);
 void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     const float* stack,
     const float* weights,
@@ -755,7 +756,8 @@ void glass_integrate_resident_hardened_winsorized_sigma_f32_u16_counts_launch(
     bool unit_positive_weights,
     bool unit_positive_weight_mask_enabled,
     bool unit_positive_local_reuse,
-    bool unit_positive_selected_reuse);
+    bool unit_positive_selected_reuse,
+    bool unit_positive_index_select_reuse);
 void glass_integrate_resident_hardened_winsorized_sigma_f32_radix_select_launch(
     const float* stack,
     const float* weights,
@@ -12779,6 +12781,35 @@ class ResidentCalibratedStack {
         unit_positive_selected_reuse_requested && !radix_select_enabled &&
         unit_positive_weights && unit_positive_weight_mask_enabled &&
         !unit_positive_active_index_enabled && !unit_positive_local_reuse_enabled;
+    const std::string unit_index_select_reuse_env_value =
+        glass_get_env_string("GLASS_CUDA_UNIT_WEIGHT_INDEX_SELECT_REUSE");
+    const bool unit_positive_index_select_reuse_env_enabled =
+        glass_env_flag_enabled_strict(unit_index_select_reuse_env_value);
+    const std::string unit_positive_index_select_reuse_env_reason =
+        glass_env_flag_reason_strict(unit_index_select_reuse_env_value);
+    const bool unit_positive_index_select_reuse_requested =
+        !unit_index_select_reuse_env_value.empty() && unit_positive_index_select_reuse_env_enabled;
+    const bool unit_positive_index_select_reuse_enabled =
+        unit_positive_index_select_reuse_requested && !radix_select_enabled &&
+        unit_positive_weights && unit_positive_weight_mask_enabled &&
+        !unit_positive_active_index_enabled && !unit_positive_local_reuse_enabled &&
+        !unit_positive_selected_reuse_enabled;
+    std::string unit_positive_index_select_reuse_reason =
+        unit_index_select_reuse_env_value.empty()
+            ? "disabled"
+            : unit_positive_index_select_reuse_env_reason;
+    if (unit_positive_index_select_reuse_requested && !unit_positive_index_select_reuse_enabled) {
+      if (radix_select_enabled) {
+        unit_positive_index_select_reuse_reason = "disabled_by_radix_select";
+      } else if (!unit_positive_weights) {
+        unit_positive_index_select_reuse_reason = "disabled_non_unit_weights";
+      } else if (!unit_positive_weight_mask_enabled) {
+        unit_positive_index_select_reuse_reason = "requires_unit_positive_mask_scan";
+      } else if (unit_positive_active_index_enabled || unit_positive_local_reuse_enabled ||
+                 unit_positive_selected_reuse_enabled) {
+        unit_positive_index_select_reuse_reason = "disabled_by_precedence";
+      }
+    }
     std::string unit_positive_weight_mask_reason = unit_positive_weight_mask_policy_source;
     if (unit_positive_weight_mask_enabled) {
       unit_positive_weight_mask_reason = unit_positive_weight_mask_policy_source;
@@ -12814,7 +12845,9 @@ class ResidentCalibratedStack {
     const std::size_t unit_positive_active_frame_count = unit_positive_frame_indices.size();
     const std::string percentile_strategy = radix_select_enabled
         ? "radix_select_order_statistics_scan"
-        : "ascending_unique_quartile_quickselect_order_statistics";
+        : (unit_positive_index_select_reuse_enabled
+               ? "indexed_quartile_quickselect_preserve_frame_axis_samples"
+               : "ascending_unique_quartile_quickselect_order_statistics");
     const std::string sample_reuse_strategy = radix_select_enabled
         ? "radix_select_global_rescan_weighted_samples"
         : (unit_positive_active_index_enabled
@@ -12823,9 +12856,11 @@ class ResidentCalibratedStack {
                       ? "local_ordered_reuse_unit_positive_weights"
                       : (unit_positive_selected_reuse_enabled
                              ? "selected_buffer_reuse_unit_positive_weights"
-                             : (unit_positive_weight_mask_enabled
-                                    ? "frame_mask_global_reread_unit_positive_weights"
-                                    : "global_reread_weighted_samples"))));
+                             : (unit_positive_index_select_reuse_enabled
+                                    ? "index_select_original_order_reuse_unit_positive_weights"
+                                    : (unit_positive_weight_mask_enabled
+                                           ? "frame_mask_global_reread_unit_positive_weights"
+                                           : "global_reread_weighted_samples")))));
     const unsigned long long native_admission_frame_limit =
         radix_select_enabled ? 0ull : static_cast<unsigned long long>(512);
     const unsigned long long native_kernel_frame_capacity =
@@ -13005,7 +13040,8 @@ class ResidentCalibratedStack {
               unit_positive_active_index_enabled,
               unit_positive_weight_mask_enabled,
               unit_positive_local_reuse_enabled,
-              unit_positive_selected_reuse_enabled);
+              unit_positive_selected_reuse_enabled,
+              unit_positive_index_select_reuse_enabled);
         }
         check_cuda(
             cudaGetLastError(),
@@ -13121,6 +13157,12 @@ class ResidentCalibratedStack {
             unit_positive_selected_reuse_enabled;
         profile_info["unit_positive_selected_reuse_reason"] =
             unit_positive_selected_reuse_reason;
+        profile_info["unit_positive_index_select_reuse_requested"] =
+            unit_positive_index_select_reuse_requested;
+        profile_info["unit_positive_index_select_reuse_enabled"] =
+            unit_positive_index_select_reuse_enabled;
+        profile_info["unit_positive_index_select_reuse_reason"] =
+            unit_positive_index_select_reuse_reason;
         profile_info["unit_positive_active_index_requested"] = unit_positive_active_index_requested;
         profile_info["unit_positive_active_index_reason"] = unit_positive_active_index_enabled
             ? (unit_positive_active_count_admission ? "native_active_count_admission_over_frame_limit"
@@ -13313,7 +13355,8 @@ class ResidentCalibratedStack {
             unit_positive_active_index_enabled,
             unit_positive_weight_mask_enabled,
             unit_positive_local_reuse_enabled,
-            unit_positive_selected_reuse_enabled);
+            unit_positive_selected_reuse_enabled,
+            unit_positive_index_select_reuse_enabled);
       }
       check_cuda(
           cudaGetLastError(),
@@ -13421,6 +13464,12 @@ class ResidentCalibratedStack {
           unit_positive_selected_reuse_enabled;
       profile_info["unit_positive_selected_reuse_reason"] =
           unit_positive_selected_reuse_reason;
+      profile_info["unit_positive_index_select_reuse_requested"] =
+          unit_positive_index_select_reuse_requested;
+      profile_info["unit_positive_index_select_reuse_enabled"] =
+          unit_positive_index_select_reuse_enabled;
+      profile_info["unit_positive_index_select_reuse_reason"] =
+          unit_positive_index_select_reuse_reason;
       profile_info["unit_positive_active_index_requested"] = unit_positive_active_index_requested;
       profile_info["unit_positive_active_index_reason"] = unit_positive_active_index_enabled
           ? (unit_positive_active_count_admission ? "native_active_count_admission_over_frame_limit"

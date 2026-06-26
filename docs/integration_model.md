@@ -525,6 +525,23 @@ resident integration stayed effectively flat (`3.2597308000549674 s` to
 win must reduce the repeated winsorized statistics/order-statistic work rather
 than only the final no-reject accumulation reread.
 
+S2-Gate 695 tests one such order-statistic reuse idea as an opt-in diagnostic
+path, `GLASS_CUDA_UNIT_WEIGHT_INDEX_SELECT_REUSE=1`. In that branch, quartile
+quickselect mutates an `unsigned short` index scratch array instead of the
+sample `values[]` array, leaving samples in their original frame-axis order for
+the later winsor mean, winsor variance, reject count, and final accumulation
+passes. Profiles record
+`percentile_strategy=indexed_quartile_quickselect_preserve_frame_axis_samples`
+and `sample_reuse_strategy=
+index_select_original_order_reuse_unit_positive_weights`. The branch is
+scientifically valid on the focused CUDA/CPU parity test and produced
+byte-identical 200-light output maps, but the real 200-light A/B rejected it:
+resident integration regressed from `3.261199799948372 s` to
+`4.369750200072303 s`, with kernel sync rising from `3.140564 s` to
+`4.2502007 s`. It remains opt-in only. The default remains
+`frame_mask_global_reread_unit_positive_weights` and was revalidated against
+Gate694 with zero output-map hash mismatches.
+
 S2-Gate 688 makes resident DQ/count-map sample accounting a hard integration
 contract. Any resident CUDA integration output that writes DQ, coverage,
 low-rejection, or high-rejection surfaces must include
