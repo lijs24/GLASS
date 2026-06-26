@@ -22,7 +22,7 @@ TRACKED_INTEGRATION_PATTERNS = (
 )
 
 DEFAULT_COMPONENT_RATIO_BUDGETS = {
-    "light_read_upload_calibrate": 1.50,
+    "light_read_upload_calibrate": 1.05,
     "resident_registration_warp": 1.50,
     "resident_local_normalization": 1.50,
     "resident_integration": 1.25,

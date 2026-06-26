@@ -98,6 +98,78 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 706: Mainline Calibration-Lane Budget Guard
+
+Gate706 returns to the real 200-light mainline after Gate705 and tests the
+obvious calibration-lane scaling candidate directly. The candidate doubled the
+native-completion calibration lane count and wave size from `4/4` to `8/8`.
+It preserved output hashes and passed the ordinary mainline contracts, but it
+made the read/upload/calibration hot component slower. Gate706 therefore
+tightens the default `phase2-mainline-ab` budget for that component so default
+promotion decisions cannot be hidden behind a looser total-elapsed threshold.
+
+Implementation:
+
+- Changed `glass phase2-mainline-ab` default
+  `light_read_upload_calibrate` component budget from `1.50x` to `1.05x`.
+- Kept the other default component budgets unchanged:
+  - `resident_registration_warp <= 1.50x`;
+  - `resident_local_normalization <= 1.50x`;
+  - `resident_integration <= 1.25x`;
+  - `output_write <= 2.00x`.
+- Added a focused unit test proving that a candidate can pass total elapsed
+  budget and still fail the A/B gate when the calibration hot component
+  regresses.
+- No CUDA kernel, calibration formula, registration, warp, LN, rejection, or
+  output-map math changed.
+
+Validation:
+
+- Focused tests:
+  `python -m pytest -q tests/test_phase2_mainline_ab.py`:
+  `8 passed`.
+- Ruff:
+  `python -m ruff check src/glass/report/phase2_mainline_ab.py tests/test_phase2_mainline_ab.py`:
+  passed.
+- Real 200-light 8-lane candidate:
+  `C:\glass_runs\phase2_s2_gate706_calibration_lanes\runs_20260626_123000\streams8_wave8_candidate`.
+- Mainline audit for the candidate passed:
+  `C:\glass_runs\phase2_s2_gate706_calibration_lanes\runs_20260626_123000\gate706_streams8_mainline_audit.json`.
+- Resident regression gate versus Gate705 passed under the total elapsed
+  threshold:
+  `C:\glass_runs\phase2_s2_gate706_calibration_lanes\runs_20260626_123000\gate706_streams8_vs_gate705_regression.json`.
+- Phase 2 mainline A/B versus Gate705 failed only
+  `component_ratios_within_budget`:
+  `C:\glass_runs\phase2_s2_gate706_calibration_lanes\runs_20260626_123000\gate706_streams8_phase2_mainline_ab.json`.
+- Tracked integration maps stayed hash-identical and complete:
+  hash mismatches `0`, missing maps `0`.
+- Active/masked frame accounting stayed `193 / 7`.
+
+Real 200-light A/B result:
+
+| Metric | Gate705 default | Gate706 8-lane candidate | Ratio / status |
+| --- | ---: | ---: | --- |
+| Total elapsed | `10.727156800101511 s` | `11.078275900450535 s` | `1.0327317952829496`, total budget passed |
+| Light read/upload/calibrate | `2.982370199984871 s` | `3.173723299987614 s` | `1.0641614176548955`, component budget failed |
+| Resident registration/warp | `0.2618988004978746 s` | `0.26980750053189695 s` | `1.030197542023819`, passed |
+| Resident local normalization | `0.36368009995203465 s` | `0.3742712000384927 s` | `1.029122022590334`, passed |
+| Resident integration | `2.627562499954365 s` | `2.6184864999959245 s` | `0.9965458481164203`, passed |
+| Output write | `0.24713369994424284 s` | `0.28219420008827 s` | `1.1418685519293297`, passed |
+
+Interpretation:
+
+- The 8-lane/8-wave candidate is rejected for default promotion even though it
+  preserved output pixels and stayed within the total elapsed ratio.
+- The current 4-lane Gate705 default remains the mainline calibration schedule.
+- The next substantive improvement should reduce actual H2D/calibration work
+  or resident integration work, not merely add calibration lanes.
+
+Clean-room note:
+
+- This gate uses GLASS-owned A/B tooling, GLASS-generated artifacts, and
+  user-owned benchmark data.
+- No external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 705: Multi-Wait Native Completion Lane Fill
 
 Gate705 targets the new post-Gate704 largest resident component:
@@ -3252,7 +3324,7 @@ Implementation:
 
 - `glass phase2-mainline-ab` now includes component-ratio budgets.
 - Built-in tracked budgets are:
-  - `light_read_upload_calibrate <= 1.50x`;
+  - `light_read_upload_calibrate <= 1.05x` as of S2-Gate 706;
   - `resident_registration_warp <= 1.50x`;
   - `resident_local_normalization <= 1.50x`;
   - `resident_integration <= 1.25x`;
@@ -3287,7 +3359,7 @@ Real 200-light component ratios versus Gate692:
 
 | Component | Baseline s | Candidate s | Ratio | Budget |
 | --- | ---: | ---: | ---: | ---: |
-| light read/upload/calibrate | `3.0809543000068516` | `3.1031843000091612` | `1.0072152968975425` | `1.50` |
+| light read/upload/calibrate | `3.0809543000068516` | `3.1031843000091612` | `1.0072152968975425` | `1.05` |
 | resident registration/warp | `0.2612904004054144` | `0.2666722999420017` | `1.0205973871532854` | `1.50` |
 | resident local normalization | `0.3862151000648737` | `0.38270870002452284` | `0.9909211213135843` | `1.50` |
 | resident integration | `3.266167899942957` | `3.2597308000549674` | `0.9980291583025778` | `1.25` |

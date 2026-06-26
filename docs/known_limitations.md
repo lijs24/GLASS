@@ -124,9 +124,15 @@ Current code is intentionally gated:
   short `micro_poll_yield` loop for requested waits up to 500 us; Gate682 then
   promoted `single_wait_250us`. Gate705 supersedes that current default with
   `multi_wait_1000us` after real 200-light validation showed much fuller
-  calibration waves and no output drift. This is still a scheduling
-  optimization only; the remaining H2D/calibration and resident integration
-  costs require larger pipeline or reducer work.
+  calibration waves and no output drift. Gate706 retested the larger
+  8-lane/8-wave schedule after Gate705 and rejected it again: the run preserved
+  output hashes and passed mainline contracts, but
+  `light_read_upload_calibrate` regressed by about `6.4%`. The
+  `phase2-mainline-ab` default budget for that component is now `1.05x` so
+  similar hot-component regressions cannot pass default-promotion A/B checks
+  solely because total elapsed time remains inside a looser threshold. This is
+  still a scheduling optimization only; the remaining H2D/calibration and
+  resident integration costs require larger pipeline or reducer work.
 - S2-Gate 672 adds resident master DQ sidecars, but their scope is intentionally
   narrower than CPU/tile StackEngine master DQ. Resident sidecars mark
   non-finite output master pixels as `NO_DATA`; they do not yet encode

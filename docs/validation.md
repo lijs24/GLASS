@@ -744,6 +744,23 @@ Current Phase 2 latest mainline acceptance:
   `3.266167899942957 s`. A sequential wave-fill `0 us` probe also passed but
   was not promoted because the same-session current default was slightly faster
   than the wave0 candidate.
+- Gate705 promoted the current resident native-completion default to
+  `multi_wait_1000us` after the real 200-light default run at
+  `C:\glass_runs\phase2_s2_gate705_completion_wavefill\runs_20260626_120000\default_promoted_multi1000`
+  passed mainline and regression checks with zero output drift. The run
+  recorded total elapsed `10.727156800101511 s`, light read/upload/calibrate
+  `2.982370199984871 s`, resident integration `2.627562499954365 s`, native
+  completion lane fill `0.9090909090909091`, and `55` native-completion waves.
+- Gate706 retested the larger `8` stream / `8` frame calibration-wave candidate
+  on the same 200-light mainline. The candidate at
+  `C:\glass_runs\phase2_s2_gate706_calibration_lanes\runs_20260626_123000\streams8_wave8_candidate`
+  passed the mainline audit and preserved all tracked integration FITS hashes,
+  but `glass phase2-mainline-ab` failed `component_ratios_within_budget`:
+  total elapsed ratio was `1.0327317952829496`, while
+  `light_read_upload_calibrate` regressed from `2.982370199984871 s` to
+  `3.173723299987614 s` (`1.0641614176548955x`). The default A/B budget for
+  that component is now `1.05x`, so this candidate remains rejected despite
+  correct output maps.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

@@ -228,6 +228,36 @@ def test_phase2_mainline_ab_fails_component_ratio_regression(tmp_path: Path) -> 
     assert failed[0]["ratio"] == 1.6
 
 
+def test_phase2_mainline_ab_default_budget_blocks_light_pipeline_regression(
+    tmp_path: Path,
+) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _write_run(baseline, elapsed=10.0)
+    _write_run(
+        candidate,
+        elapsed=10.3,
+        component_elapsed={"light_read_upload_calibrate": 3.2},
+    )
+
+    payload = build_phase2_mainline_ab(
+        baseline,
+        candidate,
+        max_elapsed_ratio=1.1,
+        min_active_frame_count=190,
+    )
+
+    assert payload["passed"] is False
+    assert payload["summary"]["elapsed_ratio"] == 1.03
+    assert "component_ratios_within_budget" in [
+        check["name"] for check in payload["failed_checks"]
+    ]
+    failed = payload["component_ratio_budget"]["failed_rows"]
+    assert failed[0]["component"] == "light_read_upload_calibrate"
+    assert failed[0]["ratio"] == 3.2 / 3.0
+    assert failed[0]["max_ratio"] == 1.05
+
+
 def test_phase2_mainline_ab_fails_without_candidate_frame_index_alignment(tmp_path: Path) -> None:
     baseline = tmp_path / "baseline"
     candidate = tmp_path / "candidate"
