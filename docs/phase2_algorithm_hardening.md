@@ -98,6 +98,92 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 703: Post-Resident Reference Health Reuse
+
+Gate703 returns to the measured Phase 2 mainline instead of adding another
+release/report handoff gate. Gate702 showed that the guarded CUDA-attempt
+reference path still spent wall time in `resident_reference_health` before the
+resident compute stage, even though the official reference had already fallen
+back to CPU scout rows and the later resident run produced registration quality
+and active-frame mask artifacts. Gate703 changes the default `auto` scheduling
+only for that specific CPU-guarded CUDA-attempt fallback: explicit CUDA scouts
+still run pre-compute health and can still block before resident memory
+admission, while CPU-fallback auto scouts are validated after the resident run
+using GLASS-owned registration-quality and frame-mask artifacts.
+
+Implementation:
+
+- Added `DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE` and
+  `--resident-reference-health-phase auto|pre|post` for `glass run` and
+  `glass audit`.
+- Added `resolve_resident_reference_health_phase()` so default `auto` keeps
+  explicit CUDA scout references on the previous pre-compute health path, but
+  routes CUDA-auto CPU-fallback scouts to post-resident artifact reuse.
+- Added `build_resident_reference_post_health()`, which writes the same
+  `resident_reference_health.json` artifact shape while recording
+  `effective_phase=post`, `health_model=post_resident_artifact_reuse`,
+  `summary.post_resident_artifact_reused=true`, reused CPU scout evidence, the
+  selected reference's registration-quality decision, and whether the reference
+  remains active after resident frame masks.
+- Connected both resident `run` and resident `audit` flows so post health runs
+  after `resident_registration_health` and before postcondition contracts.
+  Blocking post health still updates `run_state.json` and returns failure.
+- Updated Phase 2 mainline audit priorities so post-resident reference-health
+  reuse is recognized as covered evidence rather than reported as the next
+  calibrated-health reuse target.
+
+Focused validation:
+
+- Ruff over touched files: passed.
+- Focused reference health / CLI tests:
+  `9 passed, 85 deselected`.
+- Focused reference health plus Phase 2 mainline audit tests:
+  `17 passed, 88 deselected`.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate703_post_reference_health\runs_20260626_104630\post_reference_health_candidate`.
+- Baseline run:
+  `C:\glass_runs\phase2_s2_gate702_pipeline_dq_ledger\runs_20260626_102533\pipeline_dq_ledger_candidate`.
+- Stage order changed from
+  `resident_reference_scout -> resident_reference_health -> resident_reference_admission`
+  to
+  `resident_reference_scout -> resident_reference_admission -> resident_memory_admission -> resident_calibration_integration -> resident_registration_health -> resident_reference_health`.
+- `resident_reference_health.json` recorded
+  `effective_phase=post`, `health_model=post_resident_artifact_reuse`,
+  `cpu_crosscheck_reused=true`,
+  `post_resident_artifact_reused=true`,
+  `reference_registration_accepted=true`, and
+  `reference_active_after_frame_masks=true`.
+- Reference health elapsed time improved from `0.424323600018397 s` in Gate702
+  to `0.0033238999312743545 s` in Gate703.
+- Total elapsed time improved from `12.230225099949166 s` to
+  `11.912095099687576 s`, ratio `0.9739882138176744`.
+- Resident calibration/integration remained the dominant stage:
+  `10.474013799917884 s`.
+- Mainline audit:
+  `C:\glass_runs\phase2_s2_gate703_post_reference_health\runs_20260626_104630\gate703_mainline_audit.json`,
+  status passed with no failed checks.
+- Resident regression gate versus Gate702:
+  `C:\glass_runs\phase2_s2_gate703_post_reference_health\runs_20260626_104630\gate703_vs_gate702_regression.json`,
+  status passed, failed checks `[]`, determinism difference counts all zero,
+  elapsed ratio `0.9739882138176744`.
+
+Interpretation:
+
+- This is an execution-path improvement. It removes the pre-compute calibrated
+  and CUDA-calibrated sample health pass from the default auto CPU-fallback
+  reference route while preserving explicit CUDA pre-compute blocking.
+- Science pixels, registration matrices, frame accounting, DQ/mask semantics,
+  rejection, output maps, and StackEngine contracts are unchanged; the
+  regression gate reported zero output, registration, frame-accounting, frame
+  signature, and artifact differences versus Gate702.
+- The largest remaining target is still resident calibration/integration,
+  especially read/upload/calibrate and resident integration kernel time. The
+  next substantive gate should return there or exercise nonzero source-DQ/mask
+  semantics with synthetic plus real validation.
+
 ### S2-Gate 702: Pipeline DQ Ledger Contract
 
 Gate 702 promotes DQ/mask state from scattered audit sections into a canonical

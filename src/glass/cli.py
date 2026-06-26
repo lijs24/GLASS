@@ -55,9 +55,12 @@ from glass.engine.resident_reference_health import (
     DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE,
     DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
     DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
+    DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE,
+    build_resident_reference_post_health,
     build_resident_reference_health,
     resident_reference_health_action_backend,
     resolve_resident_reference_health_action,
+    resolve_resident_reference_health_phase,
 )
 from glass.engine.resident_registration_health import (
     DEFAULT_RESIDENT_REGISTRATION_HEALTH_GATE,
@@ -1386,6 +1389,21 @@ def _resident_reference_health_is_needed(run: Path, args: argparse.Namespace) ->
     return action != "off"
 
 
+def _resident_reference_health_effective_phase(run: Path, args: argparse.Namespace) -> str:
+    scout_path = _resident_reference_scout_path(run)
+    if not scout_path.exists():
+        return "pre"
+    try:
+        scout = read_json(scout_path)
+    except Exception:
+        scout = None
+    return resolve_resident_reference_health_phase(
+        getattr(args, "resident_reference_health_phase", DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE),
+        scout=scout if isinstance(scout, dict) else None,
+        requested_action=getattr(args, "resident_reference_health_gate", DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE),
+    )
+
+
 def _write_resident_reference_health(
     run: Path,
     args: argparse.Namespace,
@@ -1441,6 +1459,37 @@ def _write_resident_reference_health(
     return health_path
 
 
+def _write_resident_reference_post_health(
+    run: Path,
+    args: argparse.Namespace,
+) -> Path:
+    health = build_resident_reference_post_health(
+        run,
+        requested_action=getattr(args, "resident_reference_health_gate", DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE),
+        requested_phase=getattr(args, "resident_reference_health_phase", DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE),
+        min_cpu_star_ratio=getattr(
+            args,
+            "resident_reference_health_min_cpu_star_ratio",
+            DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
+        ),
+        max_cpu_rank_fraction=getattr(
+            args,
+            "resident_reference_health_max_cpu_rank_fraction",
+            DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
+        ),
+    )
+    health_path = run / "resident_reference_health.json"
+    write_json(health_path, health, compact=True)
+    args._resident_reference_health = health
+    if health.get("blocking"):
+        raise ResidentReferenceHealthBlocked(
+            _resident_reference_health_message(health),
+            health=health,
+            path=health_path,
+        )
+    return health_path
+
+
 def _write_resident_reference_health_failed_state(
     run: Path,
     exc: ResidentReferenceHealthBlocked,
@@ -1452,6 +1501,28 @@ def _write_resident_reference_health_failed_state(
     state.failed_stage = "resident_reference_health"
     state.completed_stages = list(completed_stages or [])
     state.errors.append(str(exc))
+    state.artifacts.append(
+        PipelineArtifact(
+            stage="resident_reference_health",
+            path=str(exc.path),
+            format="json",
+            created_at=now_iso(),
+            source_frames=[],
+        )
+    )
+    write_run_state(run, state)
+
+
+def _write_resident_reference_health_failed_runtime_state(
+    run: Path,
+    state,
+    exc: ResidentReferenceHealthBlocked,
+) -> None:
+    state.current_stage = "resident_reference_health"
+    state.failed_stage = "resident_reference_health"
+    message = str(exc)
+    if message not in state.errors:
+        state.errors.append(message)
     state.artifacts.append(
         PipelineArtifact(
             stage="resident_reference_health",
@@ -3154,7 +3225,13 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 lambda: _write_resident_reference_scout_if_needed(out, args, plan_path=plan_path),
             )
         resident_reference_health_path = None
-        if _resident_reference_health_is_needed(out, args):
+        resident_reference_health_needed = _resident_reference_health_is_needed(out, args)
+        resident_reference_health_phase = (
+            _resident_reference_health_effective_phase(out, args)
+            if resident_reference_health_needed
+            else "off"
+        )
+        if resident_reference_health_needed and resident_reference_health_phase == "pre":
             try:
                 resident_reference_health_path = _timed_stage(
                     out,
@@ -3358,6 +3435,29 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 _write_resident_registration_health_failed_state(out, state, exc)
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
+        if resident_reference_health_needed and resident_reference_health_phase == "post":
+            try:
+                resident_reference_health_path = _timed_stage(
+                    out,
+                    timing,
+                    "resident_reference_health",
+                    lambda: _write_resident_reference_post_health(out, args),
+                )
+            except ResidentReferenceHealthBlocked as exc:
+                _write_resident_reference_health_failed_runtime_state(out, state, exc)
+                console.print({"status": "failed", "stage": "resident_reference_health", "error": str(exc)})
+                return 2
+            state.artifacts.append(
+                PipelineArtifact(
+                    stage="resident_reference_health",
+                    path=str(resident_reference_health_path),
+                    format="json",
+                    created_at=now_iso(),
+                    source_frames=[],
+                )
+            )
+            if "resident_reference_health" not in state.completed_stages:
+                state.completed_stages.append("resident_reference_health")
         _write_resident_component_timing_artifact(out, state, timing)
         _write_resident_memory_lifecycle_artifact(out, state, timing)
         postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
@@ -3440,7 +3540,13 @@ def cmd_run(args: argparse.Namespace) -> int:
                 lambda: _write_resident_reference_scout_if_needed(out, args, plan_path=args.plan),
             )
         resident_reference_health_path = None
-        if _resident_reference_health_is_needed(out, args):
+        resident_reference_health_needed = _resident_reference_health_is_needed(out, args)
+        resident_reference_health_phase = (
+            _resident_reference_health_effective_phase(out, args)
+            if resident_reference_health_needed
+            else "off"
+        )
+        if resident_reference_health_needed and resident_reference_health_phase == "pre":
             try:
                 resident_reference_health_path = _timed_stage(
                     out,
@@ -3692,6 +3798,29 @@ def cmd_run(args: argparse.Namespace) -> int:
                 _write_resident_registration_health_failed_state(out, state, exc)
                 console.print({"status": "failed", "stage": "resident_registration_health", "error": str(exc)})
                 return 2
+        if resident_reference_health_needed and resident_reference_health_phase == "post":
+            try:
+                resident_reference_health_path = _timed_stage(
+                    out,
+                    timing,
+                    "resident_reference_health",
+                    lambda: _write_resident_reference_post_health(out, args),
+                )
+            except ResidentReferenceHealthBlocked as exc:
+                _write_resident_reference_health_failed_runtime_state(out, state, exc)
+                console.print({"status": "failed", "stage": "resident_reference_health", "error": str(exc)})
+                return 2
+            state.artifacts.append(
+                PipelineArtifact(
+                    stage="resident_reference_health",
+                    path=str(resident_reference_health_path),
+                    format="json",
+                    created_at=now_iso(),
+                    source_frames=[],
+                )
+            )
+            if "resident_reference_health" not in state.completed_stages:
+                state.completed_stages.append("resident_reference_health")
         _write_resident_component_timing_artifact(out, state, timing)
         _write_resident_memory_lifecycle_artifact(out, state, timing)
         postcondition_paths = _write_resident_postcondition_artifacts(out, args, state, timing)
@@ -7855,6 +7984,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-reference-health-phase",
+        choices=["auto", "pre", "post"],
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE,
+        help=(
+            "resident reference health scheduling; auto keeps explicit CUDA scouts pre-compute and "
+            "defers CUDA-auto CPU-fallback scouts to post-resident artifact validation"
+        ),
+    )
+    run.add_argument(
         "--resident-reference-health-min-cpu-star-ratio",
         type=float,
         default=DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
@@ -8482,6 +8620,15 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "off", "warn", "fail"],
         default=DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE,
         help="early resident reference-scout health action for audit runs",
+    )
+    audit.add_argument(
+        "--resident-reference-health-phase",
+        choices=["auto", "pre", "post"],
+        default=DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE,
+        help=(
+            "resident reference health scheduling for audit runs; auto can defer CUDA-auto CPU-fallback "
+            "scouts to post-resident artifact validation"
+        ),
     )
     audit.add_argument(
         "--resident-reference-health-min-cpu-star-ratio",

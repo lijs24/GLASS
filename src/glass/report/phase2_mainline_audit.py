@@ -703,8 +703,11 @@ def build_phase2_mainline_audit(
     reference_scout_s = timing_state["stages"].get("resident_reference_scout") or 0.0
     reference_health_s = timing_state["stages"].get("resident_reference_health") or 0.0
     cpu_crosscheck_reused = reference_health_summary.get("cpu_crosscheck_reused") is True
+    post_resident_reused = reference_health_summary.get("post_resident_artifact_reused") is True
     reference_reuse_reason = (
-        "CPU scout rows are reused; calibrated and CUDA-calibrated health still add wall time"
+        "post-resident artifacts validate the CPU-guarded reference without pre-compute calibrated sampling"
+        if post_resident_reused
+        else "CPU scout rows are reused; calibrated and CUDA-calibrated health still add wall time"
         if cpu_crosscheck_reused
         else "reference scout plus calibrated health are correctness gates but add wall time"
     )
@@ -718,7 +721,9 @@ def build_phase2_mainline_audit(
         {
             "priority": 2,
             "area": (
-                "reference calibrated-health resident reuse"
+                "reference health post-resident artifact reuse monitoring"
+                if post_resident_reused
+                else "reference calibrated-health resident reuse"
                 if cpu_crosscheck_reused
                 else "reference scout/health resident reuse"
             ),
@@ -728,6 +733,7 @@ def build_phase2_mainline_audit(
                 "resident_reference_scout_s": reference_scout_s,
                 "resident_reference_health_s": reference_health_s,
                 "cpu_crosscheck_reused": cpu_crosscheck_reused,
+                "post_resident_artifact_reused": post_resident_reused,
                 "calibrated_available": reference_health_summary.get("calibrated_available"),
                 "cuda_calibrated_available": reference_health_summary.get("cuda_calibrated_available"),
             },

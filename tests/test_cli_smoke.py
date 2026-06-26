@@ -43,13 +43,14 @@ def _write_resident_registration_quality(
     *,
     frame_count: int,
     accepted_count: int,
+    reference_frame_id: str | None = None,
     registration_mode: str = "similarity_cuda_triangle",
 ) -> None:
     run.mkdir(parents=True, exist_ok=True)
     accepted_count = max(0, min(int(accepted_count), int(frame_count)))
     decisions = []
     for index in range(int(frame_count)):
-        frame_id = f"F{index + 1:06d}"
+        frame_id = str(reference_frame_id) if index == 0 and reference_frame_id else f"F{index + 1:06d}"
         if index == 0 and accepted_count > 0:
             status = "reference"
             final_status = "reference"
@@ -1856,6 +1857,7 @@ def test_cli_resident_run_writes_reference_health_for_auto_cuda_attempt_fallback
     run = tmp_path / "auto_cuda_attempt_health_cli"
     assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
     assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    strong_id = _light_frame_id_by_stem(plan, "light_002")
 
     def fake_cuda_prefers_weak(
         data,
@@ -1896,7 +1898,12 @@ def test_cli_resident_run_writes_reference_health_for_auto_cuda_attempt_fallback
         state = initialize_run(Path(out_dir))
         state.current_stage = "integration"
         state.completed_stages.append("resident_calibration_integration")
-        _write_resident_registration_quality(Path(out_dir), frame_count=2, accepted_count=2)
+        _write_resident_registration_quality(
+            Path(out_dir),
+            frame_count=2,
+            accepted_count=2,
+            reference_frame_id=strong_id,
+        )
         return state
 
     monkeypatch.setattr("glass.cli.capability_report", lambda: {"cuda_available": True})
@@ -1929,16 +1936,22 @@ def test_cli_resident_run_writes_reference_health_for_auto_cuda_attempt_fallback
     assert scout["catalog_backend"] == "cpu"
     assert scout["catalog_backend_resolution"]["attempted"] == "cuda"
     assert health["effective_action"] == "fail"
+    assert health["effective_phase"] == "post"
+    assert health["health_model"] == "post_resident_artifact_reuse"
     assert health["health_action_backend"] == "cuda"
     assert health["passed"] is True
     assert health["summary"]["cpu_crosscheck_reused"] is True
+    assert health["summary"]["post_resident_artifact_reused"] is True
+    assert health["summary"]["reference_registration_accepted"] is True
     assert health["cpu_crosscheck"]["reuse"]["used"] is True
     assert "resident_reference_health" in [item["stage"] for item in timing["stages"]]
-    assert [item["stage"] for item in timing["stages"][:3]] == [
+    stage_names = [item["stage"] for item in timing["stages"]]
+    assert stage_names[:3] == [
         "resident_reference_scout",
-        "resident_reference_health",
         "resident_reference_admission",
+        "resident_memory_admission",
     ]
+    assert stage_names.index("resident_reference_health") > stage_names.index("resident_calibration_integration")
 
 
 def test_resident_reference_scout_auto_keeps_cuda_when_cpu_guard_passes(

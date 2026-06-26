@@ -23,8 +23,10 @@ DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MIN_STAR_RATIO = 0.75
 DEFAULT_RESIDENT_REFERENCE_HEALTH_CALIBRATED_MAX_RANK_FRACTION = 0.25
 DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MIN_STAR_RATIO = 0.75
 DEFAULT_RESIDENT_REFERENCE_HEALTH_CUDA_CALIBRATED_MAX_RANK_FRACTION = 0.25
+DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE = "auto"
 
 _SUPPORTED_ACTIONS = {"auto", "off", "warn", "fail"}
+_SUPPORTED_PHASES = {"auto", "pre", "post"}
 
 
 def resolve_resident_reference_health_action(
@@ -46,6 +48,40 @@ def resident_reference_health_action_backend(scout: dict[str, Any]) -> str:
     if isinstance(resolution, dict) and str(resolution.get("attempted") or "").lower() == "cuda":
         return "cuda"
     return backend
+
+
+def resolve_resident_reference_health_phase(
+    requested_phase: str,
+    *,
+    scout: dict[str, Any] | None,
+    requested_action: str = DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE,
+) -> str:
+    phase = str(requested_phase or DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE).lower()
+    if phase not in _SUPPORTED_PHASES:
+        raise ValueError("resident reference health phase must be auto, pre, or post")
+    if phase != "auto":
+        return phase
+    if not isinstance(scout, dict):
+        return "pre"
+    health_backend = resident_reference_health_action_backend(scout)
+    action = resolve_resident_reference_health_action(requested_action, scout_backend=health_backend)
+    if action == "off":
+        return "pre"
+    backend = str(scout.get("catalog_backend") or "").lower()
+    resolution = scout.get("catalog_backend_resolution")
+    attempted = str(resolution.get("attempted") or "").lower() if isinstance(resolution, dict) else ""
+    reason = str(resolution.get("reason") or "").lower() if isinstance(resolution, dict) else ""
+    cpu_guard = resolution.get("cpu_guard") if isinstance(resolution, dict) else None
+    has_cpu_guard = isinstance(cpu_guard, dict)
+    auto_cuda_cpu_fallback = (
+        backend == "cpu"
+        and health_backend.lower() == "cuda"
+        and attempted == "cuda"
+        and (reason == "cuda_reference_scout_auto_cpu_guard_fallback" or has_cpu_guard)
+        and bool(_frame_quality_rows(scout))
+        and bool(scout.get("reference_frame_id"))
+    )
+    return "post" if auto_cuda_cpu_fallback else "pre"
 
 
 def _selection_key(row: dict[str, Any]) -> tuple[int, float, float, float, float]:
@@ -827,6 +863,306 @@ def _cuda_calibrated_crosscheck(
         "failed_checks": [item["name"] for item in checks if not item["passed"]],
         "error_count": len(errors),
         "errors": errors[:25],
+    }
+
+
+def _json_if_exists(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = read_json(path)
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _registration_decision_by_id(registration_quality: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    decisions = (
+        registration_quality.get("decisions")
+        if isinstance(registration_quality.get("decisions"), list)
+        else []
+    )
+    return {
+        str(item.get("frame_id")): item
+        for item in decisions
+        if isinstance(item, dict) and item.get("frame_id") is not None
+    }
+
+
+def build_resident_reference_post_health(
+    run_dir: str | Path,
+    *,
+    requested_action: str = DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE,
+    requested_phase: str = DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE,
+    min_cpu_star_ratio: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_MIN_CPU_STAR_RATIO,
+    max_cpu_rank_fraction: float = DEFAULT_RESIDENT_REFERENCE_HEALTH_MAX_CPU_RANK_FRACTION,
+) -> dict[str, Any]:
+    if float(min_cpu_star_ratio) < 0.0:
+        raise ValueError("resident reference health min CPU star ratio must be non-negative")
+    if not 0.0 <= float(max_cpu_rank_fraction) <= 1.0:
+        raise ValueError("resident reference health max CPU rank fraction must be in [0, 1]")
+
+    run = Path(run_dir)
+    scout_path = run / "resident_reference_scout.json"
+    registration_quality_path = run / "resident_registration_quality.json"
+    frame_masks_path = run / "resident_frame_masks.json"
+    created_at = now_iso()
+
+    scout = _json_if_exists(scout_path)
+    health_action_backend = resident_reference_health_action_backend(scout) if scout else ""
+    action = resolve_resident_reference_health_action(requested_action, scout_backend=health_action_backend)
+    phase = resolve_resident_reference_health_phase(
+        requested_phase,
+        scout=scout,
+        requested_action=requested_action,
+    )
+    enabled = action in {"warn", "fail"}
+    reference_frame_id = str(scout.get("reference_frame_id") or "") if scout else ""
+    scout_backend = str(scout.get("catalog_backend") or "") if scout else ""
+
+    cpu_crosscheck, cpu_crosscheck_reuse = _cpu_crosscheck_from_scout_if_reusable(
+        scout,
+        scout_path=scout_path,
+    ) if scout else (None, {
+        "used": False,
+        "reason": "resident_reference_scout_missing",
+        "source_artifact": str(scout_path),
+    })
+    cpu_rows = _frame_quality_rows(cpu_crosscheck or {})
+    ranked = sorted(cpu_rows, key=_selection_key, reverse=True)
+    cpu_reference_frame_id = str((cpu_crosscheck or {}).get("reference_frame_id") or "")
+    selected_cpu_row = next((row for row in ranked if str(row.get("frame_id")) == reference_frame_id), None)
+    cpu_reference_row = next((row for row in ranked if str(row.get("frame_id")) == cpu_reference_frame_id), None)
+    selected_rank = ranked.index(selected_cpu_row) + 1 if selected_cpu_row in ranked else None
+    rank_fraction = (
+        (float(selected_rank) - 1.0) / float(max(len(ranked) - 1, 1))
+        if selected_rank is not None and ranked
+        else None
+    )
+    selected_star_count = int(selected_cpu_row.get("star_count") or 0) if selected_cpu_row is not None else 0
+    cpu_reference_star_count = int(cpu_reference_row.get("star_count") or 0) if cpu_reference_row is not None else 0
+    star_ratio = (
+        float(selected_star_count) / float(cpu_reference_star_count)
+        if cpu_reference_star_count > 0
+        else (1.0 if selected_star_count > 0 else 0.0)
+    )
+
+    registration_quality = _json_if_exists(registration_quality_path)
+    registration_summary = (
+        registration_quality.get("summary")
+        if isinstance(registration_quality.get("summary"), dict)
+        else {}
+    )
+    decision = _registration_decision_by_id(registration_quality).get(reference_frame_id)
+    final_status = str(decision.get("final_status") or "") if isinstance(decision, dict) else ""
+    decision_status = str(decision.get("decision_status") or "") if isinstance(decision, dict) else ""
+    accepted = bool(decision.get("accepted")) if isinstance(decision, dict) else False
+    registration_reference_ok = (
+        isinstance(decision, dict)
+        and final_status in {"reference", "ok"}
+        and decision_status in {"reference", "accepted"}
+        and accepted
+    )
+
+    frame_masks = _json_if_exists(frame_masks_path)
+    frame_mask_summary = (
+        frame_masks.get("summary") if isinstance(frame_masks.get("summary"), dict) else {}
+    )
+    active_ids = {
+        str(item)
+        for item in frame_mask_summary.get("active_frame_ids", [])
+        if item is not None
+    } if isinstance(frame_mask_summary.get("active_frame_ids"), list) else set()
+    masked_ids = {
+        str(item)
+        for item in frame_mask_summary.get("masked_frame_ids", [])
+        if item is not None
+    } if isinstance(frame_mask_summary.get("masked_frame_ids"), list) else set()
+    reference_active = reference_frame_id in active_ids if active_ids else registration_reference_ok
+    reference_masked = reference_frame_id in masked_ids
+
+    checks = [
+        {
+            "name": "resident_reference_scout_present",
+            "passed": bool(scout),
+            "evidence": {"path": str(scout_path), "exists": bool(scout)},
+        },
+        {
+            "name": "reference_frame_id_recorded",
+            "passed": bool(reference_frame_id),
+            "evidence": {"reference_frame_id": reference_frame_id},
+        },
+        {
+            "name": "post_resident_cpu_scout_rows_reused",
+            "passed": bool(cpu_crosscheck_reuse.get("used")),
+            "evidence": cpu_crosscheck_reuse,
+        },
+        {
+            "name": "selected_reference_present_in_cpu_crosscheck",
+            "passed": selected_cpu_row is not None,
+            "evidence": {"reference_frame_id": reference_frame_id, "present": selected_cpu_row is not None},
+        },
+        {
+            "name": "selected_reference_cpu_star_ratio",
+            "passed": not enabled or star_ratio >= float(min_cpu_star_ratio),
+            "evidence": {
+                "selected_cpu_star_count": selected_star_count,
+                "cpu_reference_star_count": cpu_reference_star_count,
+                "star_ratio": star_ratio,
+                "min_cpu_star_ratio": float(min_cpu_star_ratio),
+            },
+        },
+        {
+            "name": "selected_reference_cpu_rank_fraction",
+            "passed": not enabled
+            or (rank_fraction is not None and rank_fraction <= float(max_cpu_rank_fraction)),
+            "evidence": {
+                "selected_cpu_rank": selected_rank,
+                "cpu_measured_frame_count": len(ranked),
+                "rank_fraction": rank_fraction,
+                "max_cpu_rank_fraction": float(max_cpu_rank_fraction),
+            },
+        },
+        {
+            "name": "resident_registration_quality_present",
+            "passed": bool(registration_quality),
+            "evidence": {"path": str(registration_quality_path), "exists": bool(registration_quality)},
+        },
+        {
+            "name": "selected_reference_present_in_registration_quality",
+            "passed": isinstance(decision, dict),
+            "evidence": {"reference_frame_id": reference_frame_id, "present": isinstance(decision, dict)},
+        },
+        {
+            "name": "selected_reference_not_excluded_by_registration_quality",
+            "passed": not enabled or registration_reference_ok,
+            "evidence": {
+                "reference_frame_id": reference_frame_id,
+                "decision_status": decision_status,
+                "final_status": final_status,
+                "accepted": accepted,
+            },
+        },
+        {
+            "name": "resident_frame_mask_contract_passed",
+            "passed": not frame_mask_summary or frame_mask_summary.get("passed") is True,
+            "evidence": {
+                "path": str(frame_masks_path),
+                "exists": bool(frame_masks),
+                "passed": frame_mask_summary.get("passed"),
+            },
+        },
+        {
+            "name": "selected_reference_active_after_frame_masks",
+            "passed": not enabled or (reference_active and not reference_masked),
+            "evidence": {
+                "reference_frame_id": reference_frame_id,
+                "active": reference_active,
+                "masked": reference_masked,
+                "active_frame_count": frame_mask_summary.get("active_frame_count"),
+                "masked_frame_count": frame_mask_summary.get("masked_frame_count"),
+            },
+        },
+    ]
+    raw_passed = all(item["passed"] for item in checks)
+    passed = raw_passed or action == "warn"
+    status = "disabled" if action == "off" else ("passed" if raw_passed else "warning" if action == "warn" else "failed")
+    failed_checks = [item["name"] for item in checks if not item["passed"]]
+    return {
+        "schema_version": 1,
+        "artifact_type": "resident_reference_health",
+        "created_at": created_at,
+        "run_dir": str(run),
+        "scout_path": str(scout_path),
+        "scout_backend": scout_backend,
+        "health_action_backend": health_action_backend,
+        "requested_action": str(requested_action or DEFAULT_RESIDENT_REFERENCE_HEALTH_GATE).lower(),
+        "effective_action": action,
+        "requested_phase": str(requested_phase or DEFAULT_RESIDENT_REFERENCE_HEALTH_PHASE).lower(),
+        "effective_phase": phase,
+        "health_model": "post_resident_artifact_reuse",
+        "status": status,
+        "passed": passed,
+        "blocking": action == "fail" and not raw_passed,
+        "thresholds": {
+            "min_cpu_star_ratio": float(min_cpu_star_ratio),
+            "max_cpu_rank_fraction": float(max_cpu_rank_fraction),
+        },
+        "summary": {
+            "reference_frame_id": reference_frame_id,
+            "cpu_reference_frame_id": cpu_reference_frame_id,
+            "selected_cpu_rank": selected_rank,
+            "cpu_measured_frame_count": len(ranked),
+            "selected_cpu_star_count": selected_star_count,
+            "cpu_reference_star_count": cpu_reference_star_count,
+            "selected_cpu_star_ratio": star_ratio,
+            "selected_cpu_rank_fraction": rank_fraction,
+            "cpu_crosscheck_reused": bool(cpu_crosscheck_reuse.get("used")),
+            "post_resident_artifact_reused": True,
+            "post_resident_reuse_available": raw_passed,
+            "calibrated_available": False,
+            "cuda_calibrated_available": False,
+            "reference_registration_decision_status": decision_status or None,
+            "reference_registration_final_status": final_status or None,
+            "reference_registration_accepted": accepted,
+            "reference_active_after_frame_masks": reference_active,
+            "reference_masked_after_frame_masks": reference_masked,
+            "registration_quality_frame_count": registration_summary.get("frame_count"),
+            "registration_quality_summary": registration_summary,
+        },
+        "cpu_crosscheck": {
+            "artifact_type": (cpu_crosscheck or {}).get("artifact_type"),
+            "catalog_backend": (cpu_crosscheck or {}).get("catalog_backend"),
+            "reference_frame_id": cpu_reference_frame_id,
+            "dominant_orientation_key": (cpu_crosscheck or {}).get("dominant_orientation_key"),
+            "orientation_constraint_applied": (cpu_crosscheck or {}).get("orientation_constraint_applied"),
+            "measured_frame_count": len(cpu_rows),
+            "reuse": cpu_crosscheck_reuse,
+            "top_reference_candidates": [
+                {
+                    "frame_id": row.get("frame_id"),
+                    "star_count": row.get("star_count"),
+                    "quality_score": row.get("quality_score"),
+                    "fwhm_px": row.get("fwhm_px"),
+                    "eccentricity": row.get("eccentricity"),
+                    "background_rms": row.get("background_rms"),
+                }
+                for row in ranked[:10]
+            ],
+        },
+        "post_resident_crosscheck": {
+            "registration_quality_path": str(registration_quality_path),
+            "frame_masks_path": str(frame_masks_path),
+            "reference_decision": decision if isinstance(decision, dict) else None,
+            "frame_mask_summary": frame_mask_summary,
+        },
+        "calibrated_crosscheck": {
+            "status": "replaced_by_post_resident_artifact_reuse",
+            "available": False,
+            "reason": "post_resident_reference_health_uses_registration_quality_and_frame_masks",
+            "checks": [],
+            "failed_checks": [],
+        },
+        "cuda_calibrated_crosscheck": {
+            "status": "replaced_by_post_resident_artifact_reuse",
+            "available": False,
+            "reason": "post_resident_reference_health_uses_registration_quality_and_frame_masks",
+            "checks": [],
+            "failed_checks": [],
+        },
+        "checks": checks,
+        "effective_checks": checks,
+        "failed_checks": failed_checks,
+        "recommended_actions": [
+            "inspect resident_reference_scout.json",
+            "inspect resident_registration_quality.json",
+            "rerun with --resident-reference-health-phase pre for pre-compute calibrated sampling",
+            "provide --reference-frame-id for an explicit reference",
+        ],
+        "clean_room_note": (
+            "Project-defined post-resident reference health over GLASS-owned scout, "
+            "registration quality, and frame-mask artifacts."
+        ),
     }
 
 
