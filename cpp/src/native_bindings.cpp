@@ -13462,11 +13462,21 @@ class ResidentCalibratedStack {
       radix_select_env_value = radix_select_env;
     }
 #endif
+    constexpr std::size_t radix_select_positive_sample_threshold = 512;
     const bool radix_select_requested =
         !radix_select_env_value.empty() && radix_select_env_value != "0" &&
         radix_select_env_value != "false" && radix_select_env_value != "FALSE";
     const bool radix_select_enabled =
-        radix_select_requested && unit_positive_weight_frame_count > 512;
+        radix_select_requested &&
+        unit_positive_weight_frame_count > radix_select_positive_sample_threshold;
+    std::string radix_select_reason = "disabled_not_requested";
+    if (radix_select_enabled) {
+      radix_select_reason = "enabled_positive_samples_exceed_threshold";
+    } else if (radix_select_requested) {
+      radix_select_reason = "disabled_positive_samples_within_bounded_kernel_capacity";
+    } else if (!radix_select_env_value.empty()) {
+      radix_select_reason = "disabled_by_environment_value";
+    }
     if (unit_positive_weight_frame_count == 0) {
       throw std::invalid_argument(
           "hardened resident winsorized sigma requires at least one positive-weight resident frame");
@@ -13892,6 +13902,9 @@ class ResidentCalibratedStack {
         profile_info["hardened_kernel_threads_per_block"] = hardened_kernel_threads_per_block;
         profile_info["radix_select_requested"] = radix_select_requested;
         profile_info["radix_select_enabled"] = radix_select_enabled;
+        profile_info["radix_select_reason"] = radix_select_reason;
+        profile_info["radix_select_positive_sample_threshold"] =
+            static_cast<unsigned long long>(radix_select_positive_sample_threshold);
         profile_info["radix_select_positive_sample_count"] =
             static_cast<unsigned long long>(unit_positive_weight_frame_count);
         profile_info["unit_positive_weights_detected"] = unit_positive_weights;
@@ -14204,6 +14217,9 @@ class ResidentCalibratedStack {
       profile_info["hardened_kernel_threads_per_block"] = hardened_kernel_threads_per_block;
       profile_info["radix_select_requested"] = radix_select_requested;
       profile_info["radix_select_enabled"] = radix_select_enabled;
+      profile_info["radix_select_reason"] = radix_select_reason;
+      profile_info["radix_select_positive_sample_threshold"] =
+          static_cast<unsigned long long>(radix_select_positive_sample_threshold);
       profile_info["radix_select_positive_sample_count"] =
           static_cast<unsigned long long>(unit_positive_weight_frame_count);
       profile_info["unit_positive_weights_detected"] = unit_positive_weights;

@@ -3215,6 +3215,74 @@ def test_resident_stack_hardened_winsorized_sigma_over_limit_active_count_reject
         )
 
 
+def test_resident_stack_hardened_winsorized_sigma_radix_request_within_capacity_reports_bounded_reason(
+    monkeypatch,
+):
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+    monkeypatch.setenv("GLASS_CUDA_RADIX_SELECT_WINSORIZED", "1")
+
+    frames = np.array(
+        [
+            [[1.0, 2.0], [3.0, 4.0]],
+            [[1.1, 1.9], [3.1, 4.1]],
+            [[0.9, 2.1], [2.9, 3.9]],
+            [[14.0, 2.0], [3.0, 41.0]],
+        ],
+        dtype=np.float32,
+    )
+    weights = np.ones((frames.shape[0],), dtype=np.float32)
+    resident_stack = module.ResidentCalibratedStack(
+        frames.shape[0],
+        frames.shape[1],
+        frames.shape[2],
+    )
+    for index, frame in enumerate(frames):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(
+            weights,
+            2.4,
+            2.4,
+            count_map_dtype="uint16",
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            frames,
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.4,
+            high_sigma=2.4,
+        )
+    )
+
+    profile = timing["native_profile"]
+    assert timing["native_kernel_frame_capacity"] == 256
+    assert timing["native_kernel_capacity_selector"] == "small_256"
+    assert profile["radix_select_requested"] is True
+    assert profile["radix_select_enabled"] is False
+    assert profile["radix_select_reason"] == (
+        "disabled_positive_samples_within_bounded_kernel_capacity"
+    )
+    assert profile["radix_select_positive_sample_threshold"] == 512
+    assert profile["radix_select_positive_sample_count"] == frames.shape[0]
+    assert profile["percentile_strategy"] == (
+        "ascending_unique_quartile_quickselect_order_statistics"
+    )
+    assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5)
+    assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject.astype(np.float32), expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject.astype(np.float32), expected_high, rtol=0.0, atol=0.0)
+
+
 def test_resident_stack_hardened_winsorized_sigma_radix_select_over_512_matches_cpu(monkeypatch):
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
@@ -3269,6 +3337,8 @@ def test_resident_stack_hardened_winsorized_sigma_radix_select_over_512_matches_
     assert timing["native_kernel_capacity_selector"] == "radix_select_unbounded_positive_samples"
     assert profile["radix_select_requested"] is True
     assert profile["radix_select_enabled"] is True
+    assert profile["radix_select_reason"] == "enabled_positive_samples_exceed_threshold"
+    assert profile["radix_select_positive_sample_threshold"] == 512
     assert profile["radix_select_positive_sample_count"] == 545
     assert profile["native_admission_frame_limit"] == 0
     assert profile["percentile_strategy"] == "radix_select_order_statistics_scan"
@@ -3341,6 +3411,10 @@ def test_resident_stack_hardened_winsorized_sigma_radix_select_mixed_valid_match
 
     assert timing["native_kernel_capacity_selector"] == "radix_select_unbounded_positive_samples"
     assert timing["native_profile"]["radix_select_enabled"] is True
+    assert timing["native_profile"]["radix_select_reason"] == (
+        "enabled_positive_samples_exceed_threshold"
+    )
+    assert timing["native_profile"]["radix_select_positive_sample_threshold"] == 512
     assert timing["native_profile"]["radix_select_positive_sample_count"] == 545
     assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-4)
     assert np.allclose(weight_map, expected_weight, rtol=2e-5, atol=2e-4)

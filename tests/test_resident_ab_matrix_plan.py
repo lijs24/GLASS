@@ -18,6 +18,7 @@ def test_resident_ab_matrix_plan_builds_v1_v2_commands(tmp_path: Path) -> None:
         glass_scale=1.25,
         glass_offset=0.5,
         gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+        min_disk_free_gib=0.0,
     )
 
     assert payload["artifact_type"] == "resident_ab_matrix_plan"
@@ -56,6 +57,7 @@ def test_resident_ab_matrix_plan_marks_busy_gpu_waiting(tmp_path: Path) -> None:
         wbpp_result=tmp_path / "wbpp_result.json",
         reference=tmp_path / "wbpp_master.xisf",
         gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 20000, 97, 596.21",
+        min_disk_free_gib=0.0,
     )
 
     assert payload["ready_to_execute"] is False
@@ -108,6 +110,7 @@ def test_resident_ab_matrix_execution_dry_run_records_steps(tmp_path: Path) -> N
         wbpp_result=tmp_path / "wbpp_result.json",
         reference=tmp_path / "wbpp_master.xisf",
         gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+        min_disk_free_gib=0.0,
     )
     write_json(plan_path, plan)
 
@@ -132,6 +135,7 @@ def test_resident_ab_matrix_execution_blocks_non_dry_run_when_not_ready(tmp_path
         wbpp_result=tmp_path / "wbpp_result.json",
         reference=tmp_path / "wbpp_master.xisf",
         gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 20000, 97, 596.21",
+        min_disk_free_gib=0.0,
     )
     write_json(plan_path, plan)
 
@@ -155,6 +159,7 @@ def test_resident_ab_matrix_execution_rechecks_stale_ready_plan(tmp_path: Path) 
         wbpp_result=tmp_path / "wbpp_result.json",
         reference=tmp_path / "wbpp_master.xisf",
         gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+        min_disk_free_gib=0.0,
     )
     write_json(plan_path, plan)
 
@@ -178,6 +183,7 @@ def test_resident_ab_matrix_execution_waits_until_ready(tmp_path: Path) -> None:
         wbpp_result=tmp_path / "wbpp_result.json",
         reference=tmp_path / "wbpp_master.xisf",
         gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 20000, 95, 596.21",
+        min_disk_free_gib=0.0,
     )
     for variant in plan["variants"]:
         acceptance = Path(variant["artifacts"]["acceptance_json"])
@@ -215,6 +221,7 @@ def test_resident_ab_matrix_execution_blocks_without_required_consecutive_ready(
         wbpp_result=tmp_path / "wbpp_result.json",
         reference=tmp_path / "wbpp_master.xisf",
         gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 20000, 95, 596.21",
+        min_disk_free_gib=0.0,
     )
     write_json(plan_path, plan)
 
@@ -242,6 +249,7 @@ def test_resident_ab_matrix_execution_records_launch_errors(tmp_path: Path) -> N
         wbpp_result=tmp_path / "wbpp_result.json",
         reference=tmp_path / "wbpp_master.xisf",
         gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+        min_disk_free_gib=0.0,
     )
     plan["variants"][0]["commands"]["run"] = "definitely_missing_glass_executable_476 --version"
     write_json(plan_path, plan)
@@ -269,6 +277,7 @@ def test_cli_resident_ab_matrix_execute_writes_dry_run(tmp_path: Path) -> None:
         wbpp_result=tmp_path / "wbpp_result.json",
         reference=tmp_path / "wbpp_master.xisf",
         gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97886, 1000, 5, 596.21",
+        min_disk_free_gib=0.0,
     )
     write_json(plan_path, plan)
 

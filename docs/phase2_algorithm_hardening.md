@@ -98,6 +98,75 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 701: Radix Reducer Admission Evidence
+
+Gate 701 turns the opt-in resident radix-select winsorized reducer from an
+ambiguous experimental switch into an auditable admission decision. The real
+200-light benchmark has only `193` positive-weight active frames, so forcing
+`GLASS_CUDA_RADIX_SELECT_WINSORIZED=1` should not be interpreted as a radix
+performance measurement. The native profile now records why the bounded
+`small_256` kernel remains the selected path.
+
+Implementation:
+
+- Added `radix_select_reason` and
+  `radix_select_positive_sample_threshold` to the resident hardened
+  winsorized native profile in both output-map and master-only timing paths.
+- The profile now distinguishes `enabled_positive_samples_exceed_threshold`
+  from `disabled_positive_samples_within_bounded_kernel_capacity`.
+- Added CUDA parity coverage for the requested-but-bounded case and extended
+  the existing over-512 radix tests to assert the enabled reason and threshold.
+- Fixed resident A/B matrix live-readiness default handling so explicit zero
+  thresholds such as `min_disk_free_gib=0.0` are preserved instead of being
+  replaced by the production `8.0 GiB` default. Production defaults remain
+  unchanged.
+
+Validation:
+
+- Native rebuild through the VS BuildTools developer environment:
+  `_glass_cuda_native` rebuilt successfully against CUDA `13.2`.
+- Focused radix/active-count tests: `5 passed`.
+- Focused hardened winsorized resident tests: `23 passed`.
+- Focused resident A/B matrix tests after the readiness fix: `10 passed`.
+- Full pytest passed: `1449 passed in 70.44 s`.
+
+Real 200-light validation:
+
+- Candidate run:
+  `C:\glass_runs\phase2_s2_gate701_radix_admission\runs_20260626_100214\radix_reason_candidate`
+- Mainline audit:
+  `C:\glass_runs\phase2_s2_gate701_radix_admission\gate701_radix_reason_mainline_audit.json`
+  passed with `200` input lights and `193` active frames.
+- A/B versus Gate699:
+  `C:\glass_runs\phase2_s2_gate701_radix_admission\gate701_radix_reason_vs_gate699_ab.json`
+  passed with elapsed ratio `0.9838090132320593`, worst component ratio
+  `1.0081475096798698`, and hash mismatch/missing counts `0 / 0`.
+- Candidate timing: total elapsed `11.76368820015341 s`; largest component
+  `resident_integration=3.263650399981998 s`; read/upload/calibrate
+  `2.9798155000898987 s`; registration/warp `0.2652424005791545 s`;
+  local normalization `0.35907689994201064 s`; output write
+  `0.2730445000343025 s`.
+- Native integration profile recorded
+  `native_kernel_capacity_selector=small_256`,
+  `native_kernel_frame_capacity=256`,
+  `native_admission_sample_count=193`,
+  `radix_select_requested=true`,
+  `radix_select_enabled=false`,
+  `radix_select_reason=disabled_positive_samples_within_bounded_kernel_capacity`,
+  `radix_select_positive_sample_threshold=512`, and
+  `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`.
+
+Interpretation:
+
+- The 200-light data set remains a bounded-kernel resident integration case;
+  it is not large enough to measure the over-512 radix-select reducer.
+- The gate changes telemetry and guardrail behavior only. It does not change
+  calibration, frame admission, registration, warp, local normalization,
+  rejection math, output pixels, or default reducer selection.
+- A future substantive reducer gate should use a real or synthetic group with
+  more than `512` positive-weight active frames before considering radix
+  promotion or further cooperative-kernel work.
+
 ### S2-Gate 700: Mainline Active-Coverage Gate
 
 Gate 700 connects the Gate699 resident active/coverage surface checks to the

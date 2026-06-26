@@ -610,16 +610,19 @@ def _live_readiness_from_plan(
     gpu_error = None
     if gpu_query_text is None and probe_gpu:
         gpu_query_text, gpu_error = _probe_gpu_text()
+    min_gpu_free_mib = plan_gpu.get("min_free_mib")
+    max_gpu_utilization = plan_gpu.get("max_utilization_percent")
+    min_disk_free_gib = plan_disk.get("min_free_gib")
     gpu = _parse_gpu_readiness(
         gpu_query_text,
-        min_free_mib=int(plan_gpu.get("min_free_mib") or 65000),
-        max_utilization=int(plan_gpu.get("max_utilization_percent") or 20),
+        min_free_mib=int(65000 if min_gpu_free_mib is None else min_gpu_free_mib),
+        max_utilization=int(20 if max_gpu_utilization is None else max_gpu_utilization),
     )
     if gpu_error is not None:
         gpu["probe_error"] = gpu_error
     disk = _disk_readiness(
         Path(str(plan.get("root") or ".")),
-        min_free_gib=float(plan_disk.get("min_free_gib") or 8.0),
+        min_free_gib=float(8.0 if min_disk_free_gib is None else min_disk_free_gib),
     )
     return {
         "source": "live_recheck",
