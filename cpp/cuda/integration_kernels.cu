@@ -2318,6 +2318,8 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   float initial_weighted_sum = 0.0f;
   float initial_weight_sum = 0.0f;
   float initial_coverage = 0.0f;
+  float sample_min = 0.0f;
+  float sample_max = 0.0f;
   const std::size_t sample_frame_count = UnitPositiveWeights ? active_frame_count : frame_count;
   for (std::size_t sample_pos = 0; sample_pos < sample_frame_count; ++sample_pos) {
     const std::size_t frame =
@@ -2341,6 +2343,13 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
       continue;
     }
     if (count < MaxFrames) {
+      if (count == 0) {
+        sample_min = value;
+        sample_max = value;
+      } else {
+        sample_min = fminf(sample_min, value);
+        sample_max = fmaxf(sample_max, value);
+      }
       values[count] = value;
       ordered_values.set(count, value);
       indexed_quartiles.set(count);
@@ -2561,7 +2570,10 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   int low_reject_count = 0;
   int high_reject_count = 0;
   bool rejection_guard_disallowed = false;
-  if (scale > 0.0f) {
+  const bool rejection_candidate_bounds_empty =
+      scale > 0.0f && isfinite(low_threshold) && isfinite(high_threshold) &&
+      sample_min >= low_threshold && sample_max <= high_threshold;
+  if (scale > 0.0f && !rejection_candidate_bounds_empty) {
     if (ReuseLocalUnitSamples || ReuseSelectedUnitSamples || ReuseIndexedUnitSamples) {
       for (int i = 0; i < count; ++i) {
         const float value = ReuseLocalUnitSamples ? ordered_values.get(i) : values[i];
@@ -2909,6 +2921,11 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_radix_sel
   }
 
   double mean_sum = 0.0;
+  double initial_weighted_sum = 0.0;
+  double initial_weight_sum = 0.0;
+  float sample_min = 0.0f;
+  float sample_max = 0.0f;
+  int initial_count = 0;
   for (std::size_t frame = 0; frame < frame_count; ++frame) {
     const float weight = weights[frame];
     if (weight <= 0.0f || !isfinite(weight)) {
@@ -2917,6 +2934,16 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_radix_sel
     const float value = stack[frame * pixels_per_frame + pixel];
     if (isfinite(value)) {
       mean_sum += static_cast<double>(value);
+      initial_weighted_sum += static_cast<double>(value) * static_cast<double>(weight);
+      initial_weight_sum += static_cast<double>(weight);
+      if (initial_count == 0) {
+        sample_min = value;
+        sample_max = value;
+      } else {
+        sample_min = fminf(sample_min, value);
+        sample_max = fmaxf(sample_max, value);
+      }
+      ++initial_count;
     }
   }
   const float mean = static_cast<float>(mean_sum / static_cast<double>(count));
@@ -2995,7 +3022,10 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_radix_sel
 
   int low_reject_count = 0;
   int high_reject_count = 0;
-  if (scale > 0.0f) {
+  const bool rejection_candidate_bounds_empty =
+      scale > 0.0f && isfinite(low_threshold) && isfinite(high_threshold) &&
+      sample_min >= low_threshold && sample_max <= high_threshold;
+  if (scale > 0.0f && !rejection_candidate_bounds_empty) {
     for (std::size_t frame = 0; frame < frame_count; ++frame) {
       const float weight = weights[frame];
       if (weight <= 0.0f || !isfinite(weight)) {
@@ -3026,26 +3056,32 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_radix_sel
   float coverage = 0.0f;
   float low_reject = 0.0f;
   float high_reject = 0.0f;
-  for (std::size_t frame = 0; frame < frame_count; ++frame) {
-    const float weight = weights[frame];
-    if (weight <= 0.0f || !isfinite(weight)) {
-      continue;
+  if (!allow_rejection) {
+    sum = initial_weighted_sum;
+    weight_sum = initial_weight_sum;
+    coverage = static_cast<float>(count);
+  } else {
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      const float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < low_threshold) {
+        low_reject += 1.0f;
+        continue;
+      }
+      if (value > high_threshold) {
+        high_reject += 1.0f;
+        continue;
+      }
+      sum += static_cast<double>(value) * static_cast<double>(weight);
+      weight_sum += static_cast<double>(weight);
+      coverage += 1.0f;
     }
-    const float value = stack[frame * pixels_per_frame + pixel];
-    if (!isfinite(value)) {
-      continue;
-    }
-    if (allow_rejection && value < low_threshold) {
-      low_reject += 1.0f;
-      continue;
-    }
-    if (allow_rejection && value > high_threshold) {
-      high_reject += 1.0f;
-      continue;
-    }
-    sum += static_cast<double>(value) * static_cast<double>(weight);
-    weight_sum += static_cast<double>(weight);
-    coverage += 1.0f;
   }
 
   master[pixel] = weight_sum > 0.0 ? static_cast<float>(sum / weight_sum) : 0.0f;

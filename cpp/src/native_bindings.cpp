@@ -13872,6 +13872,11 @@ class ResidentCalibratedStack {
         profile_info["rejection_guard_no_reject_accumulation_branch_enabled"] = true;
         profile_info["rejection_guard_no_reject_accumulation_model"] =
             "skip_threshold_checks_when_rejection_guard_disallows_or_no_candidates";
+        profile_info["rejection_candidate_bounds_fast_path_enabled"] = true;
+        profile_info["rejection_candidate_bounds_fast_path_model"] =
+            "skip_rejection_count_scan_when_sample_min_max_within_final_thresholds";
+        profile_info["rejection_candidate_bounds_fast_path_counter"] =
+            "not_materialized_to_avoid_default_atomic_overhead";
         profile_info["no_rejection_initial_accumulation_fast_path_enabled"] = true;
         profile_info["no_rejection_initial_accumulation_model"] =
             "reuse_first_frame_axis_sum_when_rejection_is_not_allowed";
@@ -14179,6 +14184,11 @@ class ResidentCalibratedStack {
       profile_info["rejection_guard_no_reject_accumulation_branch_enabled"] = true;
       profile_info["rejection_guard_no_reject_accumulation_model"] =
           "skip_threshold_checks_when_rejection_guard_disallows_or_no_candidates";
+      profile_info["rejection_candidate_bounds_fast_path_enabled"] = true;
+      profile_info["rejection_candidate_bounds_fast_path_model"] =
+          "skip_rejection_count_scan_when_sample_min_max_within_final_thresholds";
+      profile_info["rejection_candidate_bounds_fast_path_counter"] =
+          "not_materialized_to_avoid_default_atomic_overhead";
       profile_info["no_rejection_initial_accumulation_fast_path_enabled"] = true;
       profile_info["no_rejection_initial_accumulation_model"] =
           "reuse_first_frame_axis_sum_when_rejection_is_not_allowed";

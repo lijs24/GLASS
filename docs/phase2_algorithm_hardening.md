@@ -98,6 +98,86 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 697: Hardened Rejection-Candidate Bounds Skip
+
+Gate 697 returns to the resident hardened winsorized integration path and adds
+an exact default kernel branch for pixels that have no possible low/high
+rejection candidates.
+
+Implementation:
+
+- The bounded resident hardened CUDA reducer now records finite-sample
+  `min/max` while collecting the per-pixel sample buffer.
+- After the existing median/IQR, winsorized mean/std, and final low/high
+  thresholds are computed, the kernel skips the rejection-count scan when
+  `sample_min >= low_threshold` and `sample_max <= high_threshold`.
+- The final no-rejection accumulation still reuses the existing first-pass
+  frame-axis sum, so accepted samples, weight maps, coverage maps, low/high
+  rejection maps, and DQ maps are unchanged.
+- The over-512 radix prototype now also reuses its first finite-sample pass for
+  no-rejection accumulation instead of rescanning all frames when rejection is
+  disabled by the guard or by zero candidates.
+- Native profiles record
+  `rejection_candidate_bounds_fast_path_enabled`,
+  `rejection_candidate_bounds_fast_path_model`, and
+  `rejection_candidate_bounds_fast_path_counter`.
+
+Validation:
+
+- Native rebuild:
+  `cmake --build build --config Release --target _glass_cuda_native`.
+- Focused CUDA/CLI validation:
+  `3 passed`.
+- Real 200-light candidate:
+  `C:\glass_runs\phase2_s2_gate697_bounds_skip\runs_20260627_080000\bounds_skip_candidate`.
+- Phase 2 mainline audit:
+  `C:\glass_runs\phase2_s2_gate697_bounds_skip\gate697_bounds_skip_mainline_audit.json`,
+  passed with `200` input lights and `193 / 7` active/masked frames.
+- A/B gates:
+  - versus Gate695 default:
+    `gate697_bounds_skip_vs_gate695_default_ab.json`, passed, elapsed ratio
+    `1.0421339130508445`;
+  - versus Gate696 prestart:
+    `gate697_bounds_skip_vs_gate696_prestart_ab.json`, passed, elapsed ratio
+    `1.0403123150886688`;
+  - versus Gate694:
+    `gate697_bounds_skip_vs_gate694_ab.json`, passed, elapsed ratio
+    `1.095392429864429`.
+- All three A/B gates compared six integration FITS maps and reported
+  `all_hashes_match=true`.
+- Candidate component timings:
+  - light read/upload/calibrate: `3.6238525999942794 s`;
+  - registration/warp: `0.26383820036426187 s`;
+  - local normalization: `0.3621815999504179 s`;
+  - resident integration: `3.2714636999880895 s`;
+  - output write: `0.26158560009207577 s`.
+- Native hardened profile:
+  - `kernel_sync_s=3.1450256`;
+  - `download_s=0.1223979`;
+  - `sample_reuse_strategy=frame_mask_global_reread_unit_positive_weights`;
+  - `rejection_candidate_bounds_fast_path_enabled=true`.
+
+Interpretation:
+
+- This is a correctness-preserving reducer branch, not a speed victory.
+- The real 200-light output is bitwise identical to Gate694, Gate695, and
+  Gate696 for master, weight, coverage, low rejection, high rejection, and DQ
+  maps.
+- The measured resident integration component was essentially neutral
+  (`~1.002x` versus Gate695/Gate696), while total elapsed variance was dominated
+  by the light read/upload/calibration stage.
+- Keep the branch because it is exact and may help lower-rejection datasets,
+  but do not present it as a visible benchmark acceleration. The next
+  substantive integration work should move beyond per-thread local-array
+  reductions toward a cooperative/segmented device reducer, or return to a
+  larger measured 200-light component.
+
+Clean-room note:
+
+- This gate uses GLASS-owned CPUStackEngine semantics, GLASS CUDA kernels,
+  GLASS tests, and user-owned benchmark artifacts.
+- No external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 629: Unit-Positive Weight Mask-Scan Probe
 
 Gate 629 returns to the resident integration hot path and adds a guarded native

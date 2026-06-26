@@ -3273,6 +3273,12 @@ def test_resident_stack_hardened_winsorized_sigma_radix_select_over_512_matches_
     assert profile["native_admission_frame_limit"] == 0
     assert profile["percentile_strategy"] == "radix_select_order_statistics_scan"
     assert profile["sample_reuse_strategy"] == "radix_select_global_rescan_weighted_samples"
+    assert profile["rejection_candidate_bounds_fast_path_enabled"] is True
+    assert (
+        profile["rejection_candidate_bounds_fast_path_model"]
+        == "skip_rejection_count_scan_when_sample_min_max_within_final_thresholds"
+    )
+    assert profile["no_rejection_initial_accumulation_fast_path_enabled"] is True
     assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-4)
     assert np.allclose(weight_map, expected_weight, rtol=2e-5, atol=2e-4)
     assert np.allclose(coverage.astype(np.float32), expected_coverage, rtol=0.0, atol=0.0)
@@ -3735,6 +3741,15 @@ def test_resident_stack_hardened_winsorized_sigma_no_reject_initial_sum_matches_
     assert (
         profile["no_rejection_initial_accumulation_model"]
         == "reuse_first_frame_axis_sum_when_rejection_is_not_allowed"
+    )
+    assert profile["rejection_candidate_bounds_fast_path_enabled"] is True
+    assert (
+        profile["rejection_candidate_bounds_fast_path_model"]
+        == "skip_rejection_count_scan_when_sample_min_max_within_final_thresholds"
+    )
+    assert (
+        profile["rejection_candidate_bounds_fast_path_counter"]
+        == "not_materialized_to_avoid_default_atomic_overhead"
     )
     assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5, equal_nan=True)
     assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5, equal_nan=True)
