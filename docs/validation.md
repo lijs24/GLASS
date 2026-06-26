@@ -780,6 +780,16 @@ Current Phase 2 latest mainline acceptance:
   `24 x 32` synthetic bias master with DQ summary `valid=768` and
   `master_postprocess_operation=bias_mean`. This is CPU baseline/API contract
   consolidation only; it does not change the resident CUDA 200-light hot path.
+- Gate709 corrected the public GPU master-frame helper metadata after Gate708
+  introduced `MasterFrameResult.engine`. The synthetic validation artifact
+  `runs/checkpoints/s2_gate_709_gpu_master_helper_contract/validation.json`
+  records CPU baseline `engine=stack_engine_cpu`, no-CUDA fallback
+  `engine=cpu_tile_streaming_mean_fallback` with exact CPU agreement,
+  fake-native `engine=cuda_tile_streaming_mean` with `60` native calls, and
+  actual-native `engine=cuda_tile_streaming_mean` with CUDA accumulator used.
+  The fake and actual native routes both matched the CPU baseline to max
+  absolute difference `6.103515625e-05`. This keeps GPU helper parity artifacts
+  from being mistaken for CPUStackEngine contract output.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

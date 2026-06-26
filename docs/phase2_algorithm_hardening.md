@@ -98,6 +98,68 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 709: GPU Master Helper Metadata Contract
+
+Gate709 fixes a contract regression exposed by Gate708. After
+`MasterFrameResult` gained default `engine=stack_engine_cpu`, the older
+`glass.gpu.master_frames` helper could return CUDA tile-streaming master frames
+while being mislabeled as StackEngine CPU output. Gate709 makes the GPU helper
+write explicit execution metadata so CPUStackEngine, no-CUDA fallback, fake
+native CUDA, and real native CUDA results are distinguishable in tests and
+artifacts.
+
+Implementation:
+
+- `glass.gpu.master_frames.mean_stack_paths_tile_streaming(...)` now records:
+  - `engine=cuda_tile_streaming_mean` when the native CUDA mean accumulator is
+    actually used;
+  - `engine=cpu_tile_streaming_mean_fallback` when CUDA is unavailable or the
+    required native wrapper is missing;
+  - `cuda_native_available`, `cuda_accumulator_used`, `tile_count`,
+    `tile_size`, `frame_count`, shape, combine/rejection labels, and DQ-map
+    capability flags in `MasterFrameResult.metrics`.
+- The GPU helper now writes minimal `dq_provenance` explaining that this helper
+  is a CUDA-vs-CPU master-frame parity path and does not produce DQ masks. The
+  large-data CPU/tile pipeline remains the sink-oriented StackEngine path for
+  full master-frame DQ provenance.
+- `make_master_bias`, `make_master_dark`, and `make_master_flat` preserve the
+  GPU helper metadata and record their postprocess operation.
+- No resident CUDA 200-light hot-path kernels, calibration formulas,
+  registration, warp, LN, rejection, or integration defaults changed.
+
+Validation:
+
+- Focused tests:
+  `python -m pytest -q tests/test_gpu_master_frames_vs_cpu.py tests/test_cpu_master_frames.py`:
+  `6 passed`.
+- Ruff:
+  `python -m ruff check src/glass/gpu/master_frames.py tests/test_gpu_master_frames_vs_cpu.py`:
+  passed.
+- Synthetic validation artifact:
+  `runs/checkpoints/s2_gate_709_gpu_master_helper_contract/validation.json`.
+  It records:
+  - CPU baseline engine `stack_engine_cpu` with result contract passed;
+  - no-CUDA fallback engine `cpu_tile_streaming_mean_fallback` and exact
+    agreement with CPU baseline;
+  - fake-native engine `cuda_tile_streaming_mean`, `60` native calls, and
+    max absolute difference `6.103515625e-05` versus CPU baseline;
+  - actual-native engine `cuda_tile_streaming_mean`, CUDA accumulator used, and
+    max absolute difference `6.103515625e-05` versus CPU baseline.
+
+Interpretation:
+
+- This is an audit/contract correctness fix on the GPU master helper surface,
+  not a resident CUDA performance optimization.
+- The helper no longer masquerades as `stack_engine_cpu` after Gate708.
+- Future gates can still decide whether the GPU master helper should consume or
+  emit DQ masks. Gate709 only makes the current capability explicit.
+
+Clean-room note:
+
+- This gate uses GLASS-owned GPU helper code, GLASS tests, and GLASS-generated
+  synthetic fixtures only.
+- No external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 708: CPU Master Helper StackEngine Default
 
 Gate708 returns to the StackEngine default-path objective rather than another

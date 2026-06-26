@@ -29,6 +29,11 @@ Current code is intentionally gated:
   promise master DQ artifacts, and later gates should keep moving any remaining
   large StackEngine call sites behind sink-oriented APIs before claiming
   universal out-of-core StackEngine execution.
+- The public GPU master-frame helper now records accurate
+  `cuda_tile_streaming_mean` or `cpu_tile_streaming_mean_fallback` metadata as
+  of S2-Gate 709, but it is still a parity/helper path and does not emit DQ
+  masks. Full master-frame DQ remains owned by the CPU/tile StackEngine sink
+  path and the resident master DQ sidecar path.
 - The resident CUDA path keeps calibrated light frames in VRAM and is fast on
   large same-shape mono datasets. It currently performs calibration, resident
   similarity-triangle registration, Lanczos3 matrix warp, local normalization,

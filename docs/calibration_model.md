@@ -42,6 +42,13 @@ and the result contract through `MasterFrameResult`. These helpers still return
 the full master array for API compatibility, so the large-data pipeline remains
 the streaming sink path described above.
 
+As of S2-Gate 709, the public `glass.gpu.master_frames` helpers also return
+explicit engine metadata. CUDA-backed helper results record
+`engine=cuda_tile_streaming_mean`, no-CUDA fallback results record
+`engine=cpu_tile_streaming_mean_fallback`, and both record that this helper path
+does not produce DQ masks. This prevents GPU helper parity artifacts from being
+mistaken for CPUStackEngine contract output.
+
 As of S2-Gate 672, resident CUDA calibration artifacts also materialize master
 DQ FITS sidecars when resident master cache arrays are readable. These sidecars
 record output-master validity only: non-finite resident master pixels are
