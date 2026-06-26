@@ -98,6 +98,66 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 708: CPU Master Helper StackEngine Default
+
+Gate708 returns to the StackEngine default-path objective rather than another
+resident telemetry micro-gate. The main CPU/tile pipeline already uses
+sink-oriented StackEngine master calibration for bias, dark, and flat masters,
+but the public `glass.cpu.master_frames` helper still used a legacy mean
+accumulator without StackEngine DQ provenance. Gate708 moves that public CPU
+baseline helper onto `CPUStackEngine` by default, so direct API users, tests,
+and GPU-vs-CPU comparisons share the same valid-sample and DQ contract family
+as the Phase 2 pipeline.
+
+Implementation:
+
+- `glass.cpu.master_frames.mean_stack(...)` now opens FITS/XISF-backed
+  `ImageSource` adapters and calls `CPUStackEngine` with mean combine,
+  no-rejection policy, and optional output DQ surfaces.
+- `MasterFrameResult` now carries `engine`, `metrics`, `dq_provenance`, and
+  `dq_mask` in addition to the existing `data` and `stats` fields.
+- `make_master_bias`, `make_master_dark`, and `make_master_flat` preserve the
+  StackEngine metadata and record the public-helper postprocess operation.
+- Non-finite source samples are now treated by the public helper using
+  StackEngine validity semantics instead of being silently averaged through a
+  raw accumulator.
+- No resident CUDA kernel, calibration math, registration, warp, LN, rejection,
+  or output-map default changed.
+
+Validation:
+
+- Focused tests:
+  `python -m pytest -q tests/test_cpu_master_frames.py tests/test_gpu_master_frames_vs_cpu.py`:
+  `5 passed`.
+- Ruff:
+  `python -m ruff check src/glass/cpu/master_frames.py tests/test_cpu_master_frames.py`:
+  passed.
+- Synthetic validation artifact:
+  `runs/checkpoints/s2_gate_708_cpu_master_stack_engine_helper/validation.json`.
+  It verifies:
+  - invalid/non-finite input samples `2`;
+  - valid samples after rejection `6`;
+  - public helper engine `stack_engine_cpu`;
+  - result contract passed;
+  - synthetic bias master `24 x 32` with DQ summary `valid=768`.
+
+Interpretation:
+
+- This closes one more API-level StackEngine-default gap while preserving
+  backward-compatible access to `result.data` and `result.stats`.
+- The change intentionally stays on the CPU baseline/public-helper surface.
+  The resident CUDA 200-light hot path is unaffected, so no real 200-light
+  performance A/B was required for default promotion.
+- Future gates should continue moving remaining compatibility helpers and GPU
+  master-frame helpers toward the same contract surface, while keeping the
+  pipeline sink-oriented implementation as the large-data path.
+
+Clean-room note:
+
+- This gate uses GLASS-owned StackEngine contracts, GLASS image source adapters,
+  and GLASS synthetic fixtures only.
+- No external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 707: Native Completion H2D Timing Policy
 
 Gate707 tests a tempting calibration hot-path simplification: skipping per-buffer

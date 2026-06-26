@@ -771,6 +771,15 @@ Current Phase 2 latest mainline acceptance:
   default at elapsed ratio `1.0361399053534472`, so
   `GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING=0` remains a diagnostic opt-out
   rather than a promoted default.
+- Gate708 moved the public CPU master-frame helpers onto `CPUStackEngine` by
+  default. The synthetic validation artifact
+  `runs/checkpoints/s2_gate_708_cpu_master_stack_engine_helper/validation.json`
+  records `engine=stack_engine_cpu`, invalid/non-finite input samples `2`,
+  valid samples after rejection `6`, and a passing StackEngine result contract
+  for a generated invalid-sample fixture. The same artifact records a generated
+  `24 x 32` synthetic bias master with DQ summary `valid=768` and
+  `master_postprocess_operation=bias_mean`. This is CPU baseline/API contract
+  consolidation only; it does not change the resident CUDA 200-light hot path.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

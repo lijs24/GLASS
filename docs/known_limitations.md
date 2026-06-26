@@ -22,10 +22,13 @@ Current code is intentionally gated:
   same sink pattern for bias, dark, and per-flat normalized flat masters, and it
   writes explicit `dq_master_*.fits` artifacts for those masters. Direct
   `CPUStackEngine.stack(...)` API calls can still return full result arrays by
-  design, explicit legacy calibration fallback does not promise master DQ
-  artifacts, and later gates should keep moving any remaining large StackEngine
-  call sites behind sink-oriented APIs before claiming universal out-of-core
-  StackEngine execution.
+  design. S2-Gate 708 moves the public `glass.cpu.master_frames` helpers onto
+  `CPUStackEngine` by default and returns StackEngine metrics/DQ provenance,
+  but those helpers still return a full in-memory `MasterFrameResult.data`
+  array for API compatibility. Explicit legacy calibration fallback does not
+  promise master DQ artifacts, and later gates should keep moving any remaining
+  large StackEngine call sites behind sink-oriented APIs before claiming
+  universal out-of-core StackEngine execution.
 - The resident CUDA path keeps calibrated light frames in VRAM and is fast on
   large same-shape mono datasets. It currently performs calibration, resident
   similarity-triangle registration, Lanczos3 matrix warp, local normalization,

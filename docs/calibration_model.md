@@ -36,6 +36,12 @@ summary is mirrored in StackEngine DQ provenance. The DQ mask marks no-data
 pixels and pixels touched by low/high rejection according to GLASS DQ flag
 semantics; this makes master-frame DQ inspectable instead of JSON-only.
 
+As of S2-Gate 708, the public `glass.cpu.master_frames` CPU baseline helpers
+also default to `CPUStackEngine` and return StackEngine metrics, DQ provenance,
+and the result contract through `MasterFrameResult`. These helpers still return
+the full master array for API compatibility, so the large-data pipeline remains
+the streaming sink path described above.
+
 As of S2-Gate 672, resident CUDA calibration artifacts also materialize master
 DQ FITS sidecars when resident master cache arrays are readable. These sidecars
 record output-master validity only: non-finite resident master pixels are

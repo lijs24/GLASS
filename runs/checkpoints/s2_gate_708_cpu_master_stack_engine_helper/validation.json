@@ -1,0 +1,39 @@
+{
+  "gate": "S2-Gate 708",
+  "validation": "cpu_master_public_helper_stack_engine_contract",
+  "invalid_fixture": {
+    "fixture_source": "generated transient FITS frames",
+    "master": [
+      [
+        2.0,
+        9.0
+      ],
+      [
+        5.0,
+        9.0
+      ]
+    ],
+    "engine": "stack_engine_cpu",
+    "input_invalid_samples_before_rejection": 2,
+    "input_nonfinite_samples": 2,
+    "valid_samples_after_rejection": 6,
+    "result_contract_passed": true,
+    "dq_summary": {
+      "valid": 4
+    }
+  },
+  "synthetic_bias": {
+    "fixture_source": "generated transient synthetic calibration frames",
+    "engine": "stack_engine_cpu",
+    "shape": [
+      24,
+      32
+    ],
+    "mean": 999.8694458007812,
+    "result_contract_passed": true,
+    "master_postprocess_operation": "bias_mean",
+    "dq_summary": {
+      "valid": 768
+    }
+  }
+}
