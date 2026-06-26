@@ -118,17 +118,15 @@ Current code is intentionally gated:
   `resident_light_pipeline_profile.native_completion` now records lane-fill,
   queue-buffer, worker, wave-fill, and slot-reuse metrics so the next
   substantive improvement can target wave-fill/overlap instead of blindly
-  increasing lane count. Gate632 keeps the 4-lane default but changes the
-  default wave-fill mode to `single_wait`, reducing repeated completion-queue
-  condition-variable waits on the real 200-light benchmark while preserving
-  output parity. The previous `multi_wait` behavior remains available through
-  `--resident-native-completion-wave-fill-mode multi_wait` for hardware or disk
-  configurations where repeated fill waits are beneficial. Gate676 changes
-  sub-millisecond native-completion wave-fill waits from Windows condition
-  variable sleeps to a short `micro_poll_yield` loop for requested waits up to
-  500 us, reducing measured oversleep on the real 200-light default path. This
-  is still a scheduling optimization only; the remaining H2D/calibration and
-  resident integration costs require larger pipeline or reducer work.
+  increasing lane count. Gate632 kept the 4-lane default and changed the then
+  default wave-fill mode to `single_wait`; Gate676 changed sub-millisecond
+  native-completion wave-fill waits from Windows condition-variable sleeps to a
+  short `micro_poll_yield` loop for requested waits up to 500 us; Gate682 then
+  promoted `single_wait_250us`. Gate705 supersedes that current default with
+  `multi_wait_1000us` after real 200-light validation showed much fuller
+  calibration waves and no output drift. This is still a scheduling
+  optimization only; the remaining H2D/calibration and resident integration
+  costs require larger pipeline or reducer work.
 - S2-Gate 672 adds resident master DQ sidecars, but their scope is intentionally
   narrower than CPU/tile StackEngine master DQ. Resident sidecars mark
   non-finite output master pixels as `NO_DATA`; they do not yet encode

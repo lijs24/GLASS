@@ -98,6 +98,75 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 705: Multi-Wait Native Completion Lane Fill
+
+Gate705 targets the new post-Gate704 largest resident component:
+`resident_light_read_upload_calibrate`. Gate704 recorded a
+`resident_light_pipeline_profile` recommendation of
+`improve_native_completion_wave_fill_before_adding_lanes`; the default
+`single_wait_250us` native-completion consumer drained only `144` waves at a
+lane-fill ratio of `0.3472222222222222`, leaving the four calibration lanes
+under-filled even though the cumulative raw FITS read work was mostly hidden by
+native prestart.
+
+Implementation:
+
+- Promoted the `throughput-v4-native-completion` preset from
+  `resident_native_completion_wave_fill_mode=single_wait` and
+  `resident_native_completion_wave_fill_us=250` to
+  `resident_native_completion_wave_fill_mode=multi_wait` and
+  `resident_native_completion_wave_fill_us=1000`.
+- The change uses the existing native completion-queue scheduler and CUDA
+  calibration kernels. It changes only how long and how often the consumer
+  waits for nearby completed raw reads before launching a calibration wave.
+- Explicit CLI overrides remain supported. Users can still restore the previous
+  scheduling family with
+  `--resident-native-completion-wave-fill-mode single_wait` and, when desired,
+  `--resident-native-completion-wave-fill-us 250`.
+
+Validation:
+
+- Focused CLI/runtime tests passed:
+  - `tests/test_cli_smoke.py -k "runtime_preset"`:
+    `12 passed, 82 deselected`.
+  - `tests/test_resident_cuda_run.py -k "native_completion_wave_fill or native_u16_completion_calibration_is_opt_in or native_completion_queue_buffer"`:
+    `3 passed, 138 deselected`.
+- Real 200-light explicit probe:
+  `C:\glass_runs\phase2_s2_gate705_completion_wavefill\runs_20260626_120000\multi_wait_1000us_candidate`.
+- Real 200-light promoted default probe:
+  `C:\glass_runs\phase2_s2_gate705_completion_wavefill\runs_20260626_120000\default_promoted_multi1000`.
+- Phase 2 mainline audit for the promoted default passed:
+  `C:\glass_runs\phase2_s2_gate705_completion_wavefill\runs_20260626_120000\gate705_default_mainline_audit.json`.
+- Resident regression gate versus Gate704 passed:
+  `C:\glass_runs\phase2_s2_gate705_completion_wavefill\runs_20260626_120000\gate705_default_vs_gate704_regression.json`.
+- Determinism summary reported zero artifact, frame-accounting, frame
+  signature, output, numerical-drift, and registration differences.
+
+Real 200-light timing result:
+
+| Metric | Gate704 default | Gate705 explicit multi-wait 1000us | Gate705 promoted default |
+| --- | ---: | ---: | ---: |
+| Total elapsed | `11.090906699886546 s` | `10.542253200197592 s` | `10.727156800101511 s` |
+| Resident calibration + integration stage | `9.755395399988629 s` | `9.194300799979828 s` | `9.385764499893412 s` |
+| Light read/upload/calibrate | `3.101156600052491 s` | `2.879372700001113 s` | `2.982370199984871 s` |
+| Resident integration | `2.6184026999399066 s` | `2.6162375999847427 s` | `2.627562499954365 s` |
+| Native completion lane fill | `0.3472222222222222` | `0.9803921568627451` | `0.9090909090909091` |
+| Native completion wave count | `144` | `51` | `55` |
+| Multi-frame wave fraction | `0.2638888888888889` | `0.9803921568627451` | `0.9272727272727272` |
+
+The single-wait 1000us probe also passed regression, but it did not improve
+the default route: total elapsed was `11.129275600076653 s`, lane fill improved
+only to `0.5376344086021505`, and `light_read_upload_calibrate` was
+`3.134771700017154 s`. The promoted default is therefore the repeated
+multi-wait policy, not merely a longer single wait.
+
+Next gate:
+
+- Treat Gate705 as the new resident calibration/read baseline.
+- The next substantive calibration gate should reduce
+  `native_h2d_calibrate_store` itself or the remaining Python/orchestration
+  time; increasing lane count alone is still rejected by Gate631 evidence.
+
 ### S2-Gate 704: Default Compact Unit-Weight Active Indices
 
 Gate704 returns to the measured resident hardened winsorized integration

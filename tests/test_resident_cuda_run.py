@@ -8344,6 +8344,8 @@ def test_cli_resident_cuda_native_completion_runtime_preset_is_cli_opt_in(
             "native_u16_gpu",
             "--resident-native-completion-wave-fill-mode",
             "single_wait",
+            "--resident-native-completion-wave-fill-us",
+            "250",
             "--flat-floor",
             "0.05",
         ]

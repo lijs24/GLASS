@@ -465,6 +465,21 @@ recorded `183` waves, `17` multi-frame waves, and `max_wave_frames=2`; the
 was bitwise identical across all six integration FITS outputs, and improved
 total elapsed time from `12.245715199969709 s` to `11.735124099999666 s`.
 
+S2-Gate 705 promotes the same preset again after Gate704 made the resident
+light read/upload/calibrate component the largest remaining default-stage
+component. The new default is
+`resident_native_completion_wave_fill_mode=multi_wait` with
+`resident_native_completion_wave_fill_us=1000`. This reuses the existing native
+completion queue and CUDA calibration kernels, but lets the consumer repeatedly
+wait for nearby raw-read completions until a calibration wave is full or the
+timeout expires. The real 200-light promoted default raised lane fill from
+`0.3472222222222222` to `0.9090909090909091`, reduced consumer waves from
+`144` to `55`, preserved zero deterministic output drift versus Gate704, and
+reduced `light_read_upload_calibrate` from `3.101156600052491 s` to
+`2.982370199984871 s`. Explicit CLI overrides can still restore
+`single_wait` and the previous `250us` wait for A/B or hardware-specific
+fallbacks.
+
 S2-Gate 683 changes the Windows native raw-FITS read helper used by the
 resident native-completion calibration path from portable `std::ifstream` to
 `CreateFileW` with `FILE_FLAG_SEQUENTIAL_SCAN`, while keeping the portable
