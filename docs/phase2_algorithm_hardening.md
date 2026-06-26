@@ -98,6 +98,90 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 707: Native Completion H2D Timing Policy
+
+Gate707 tests a tempting calibration hot-path simplification: skipping per-buffer
+native-completion H2D elapsed-time sampling. The hypothesis was that avoiding
+`cudaEventElapsedTime` calls might reduce the remaining
+`light_read_upload_calibrate` cost. The real 200-light A/B rejected that as a
+default optimization: the disabled candidate preserved outputs but was slower
+than the same-code default that keeps detailed H2D elapsed telemetry enabled.
+
+Implementation:
+
+- Added `native_completion_collect_h2d_elapsed` to the native completion
+  calibration policy. The direct native C++ API defaults this policy to `true`
+  for backward-compatible detailed timing.
+- Added resident policy parsing for
+  `GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING`:
+  - unset: `default_enabled`;
+  - `1`, `true`, `yes`, `on`: `env_enabled`;
+  - `0`, `false`, `no`, `off`: `env_disabled`;
+  - any other non-empty value: `env_invalid_disabled`.
+- When collection is disabled, the native path still records and checks the
+  H2D completion events needed for pinned-buffer reuse safety. It skips only
+  `cudaEventElapsedTime` sampling and records skipped/sample counts.
+- Resident artifacts and `resident_light_pipeline_profile.json` now expose
+  `native_completion_h2d_elapsed_collection_policy`,
+  `native_completion_h2d_elapsed_collection_enabled`,
+  `native_completion_h2d_elapsed_sample_count`, and
+  `native_completion_h2d_elapsed_skipped_count`.
+- No CUDA kernel, calibration formula, registration, warp, LN, rejection, DQ,
+  frame admission, or output-map math changed.
+
+Validation:
+
+- Native CUDA extension rebuilt successfully with Visual Studio Build Tools and
+  CMake target `_glass_cuda_native`.
+- Focused tests:
+  `python -m pytest -q tests/test_resident_light_pipeline_profile.py tests/test_cuda_resident_stack.py -k "native_completion or prestart" tests/test_resident_cuda_run.py -k "native_completion"`:
+  `7 passed, 220 deselected`.
+- Ruff:
+  `python -m ruff check src/glass/engine/resident_cuda.py src/glass/engine/resident_light_pipeline_profile.py tests/test_resident_light_pipeline_profile.py tests/test_resident_cuda_run.py`:
+  passed.
+- Real 200-light default run after restoring default-enabled telemetry:
+  `C:\glass_runs\phase2_s2_gate707_h2d_timing_policy\runs_20260626_130000\default_h2d_timing_enabled`.
+- Mainline audit for that default passed:
+  `C:\glass_runs\phase2_s2_gate707_h2d_timing_policy\runs_20260626_130000\gate707_default_mainline_audit.json`.
+- Phase 2 mainline A/B versus Gate705 passed:
+  `C:\glass_runs\phase2_s2_gate707_h2d_timing_policy\runs_20260626_130000\gate707_default_vs_gate705_phase2_mainline_ab.json`.
+- Resident regression versus Gate705 passed:
+  `C:\glass_runs\phase2_s2_gate707_h2d_timing_policy\runs_20260626_130000\gate707_default_vs_gate705_regression.json`.
+- Same-code disabled-vs-default A/B passed for output contracts but proved the
+  disabled policy was slower:
+  `C:\glass_runs\phase2_s2_gate707_h2d_timing_policy\runs_20260626_130000\gate707_disabled_vs_default_phase2_mainline_ab.json`.
+
+Real 200-light timing result:
+
+| Metric | Gate705 default | Gate707 default-enabled | Gate707 disabled candidate |
+| --- | ---: | ---: | ---: |
+| Total elapsed | `10.727156800101511 s` | `10.697529399883933 s` | `11.084137099911459 s` |
+| Light read/upload/calibrate | `2.982370199984871 s` | `2.9152304000454023 s` | `3.044296000036411 s` |
+| Resident integration | `2.627562499954365 s` | `2.589988899999298 s` | `2.6099305000388995 s` |
+| H2D elapsed policy | not recorded | `default_enabled` | `default_disabled` in the pre-correction artifact |
+| H2D elapsed samples/skips | not recorded | `200 / 0` | `0 / 200` |
+| Calibration wave H2D elapsed | `4.082878628015518 s` | `3.855197174310684 s` | `0.0 s` |
+
+A/B interpretation:
+
+- Gate707 default versus Gate705: elapsed ratio `0.997238093861246`, hash
+  mismatches `0`, missing tracked maps `0`, active/masked frames `193 / 7`,
+  and no failed component-budget checks.
+- Disabled candidate versus Gate707 default: elapsed ratio
+  `1.0361399053534472`; `light_read_upload_calibrate` ratio
+  `1.0442728643296937`. It is retained only as an explicit diagnostic
+  experiment through `GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING=0`.
+- The mainline should not spend another gate trying to promote this telemetry
+  disable by default. The next substantive target remains actual native
+  read/H2D/calibration overlap, resident registration/warp batching, or a
+  larger reducer redesign.
+
+Clean-room note:
+
+- This gate uses GLASS-owned native bindings, resident runtime code, tests, and
+  user-owned benchmark artifacts.
+- No external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 706: Mainline Calibration-Lane Budget Guard
 
 Gate706 returns to the real 200-light mainline after Gate705 and tests the

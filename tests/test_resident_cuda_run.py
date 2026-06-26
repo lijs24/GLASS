@@ -7926,6 +7926,7 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_BATCH_READ", raising=False)
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_QUEUE_READ", raising=False)
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", raising=False)
+    monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING", "0")
     monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION", "1")
     monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_US", "25")
     assert main(
@@ -8059,6 +8060,14 @@ def test_cli_resident_cuda_native_u16_completion_calibration_is_opt_in(tmp_path:
     assert io_pipeline["native_completion_calibration_consumer_max_wave_frames"] >= 1
     assert io_pipeline["native_completion_calibration_slot_reuse_count"] == 0
     assert io_pipeline["native_completion_calibration_final_h2d_collect_count"] == 2
+    assert io_pipeline["native_completion_h2d_elapsed_collection_policy"] == "env_disabled"
+    assert io_pipeline["native_completion_h2d_elapsed_collection_enabled"] is False
+    assert io_pipeline["native_completion_h2d_elapsed_sample_count"] == 0
+    assert io_pipeline["native_completion_h2d_elapsed_skipped_count"] == 2
+    assert native_completion_profile["h2d_elapsed_collection_policy"] == "env_disabled"
+    assert native_completion_profile["h2d_elapsed_collection_enabled"] is False
+    assert native_completion_profile["h2d_elapsed_sample_count"] == 0
+    assert native_completion_profile["h2d_elapsed_skipped_count"] == 2
     assert io_pipeline["raw_gpu_h2d_bytes"] == 2 * 24 * 24 * 2
     assert io_pipeline["raw_gpu_float32_host_bytes_avoided"] == 2 * 24 * 24 * 4
 
@@ -8085,6 +8094,7 @@ def test_cli_resident_cuda_native_completion_prestart_is_default_for_completion(
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_QUEUE_READ", raising=False)
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", raising=False)
     monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION", "1")
+    monkeypatch.delenv("GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING", raising=False)
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_COMPLETION_PRESTART", raising=False)
     assert main(
         [
@@ -8131,6 +8141,10 @@ def test_cli_resident_cuda_native_completion_prestart_is_default_for_completion(
     assert io_pipeline["native_completion_prestart_batch_index_mismatch_count"] == 0
     assert io_pipeline["native_completion_calibration_submit_count"] == 2
     assert io_pipeline["native_completion_calibration_completion_count"] == 2
+    assert io_pipeline["native_completion_h2d_elapsed_collection_policy"] == "default_enabled"
+    assert io_pipeline["native_completion_h2d_elapsed_collection_enabled"] is True
+    assert io_pipeline["native_completion_h2d_elapsed_sample_count"] == 2
+    assert io_pipeline["native_completion_h2d_elapsed_skipped_count"] == 0
     assert io_pipeline["native_path_calibration_host_buffer_model"] == (
         "cuda_host_alloc_portable_pinned_completion_prestart_ring"
     )
@@ -8164,6 +8178,7 @@ def test_cli_resident_cuda_native_completion_prestart_honors_env_enable(
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_QUEUE_READ", raising=False)
     monkeypatch.delenv("GLASS_RESIDENT_NATIVE_PATH_CALIBRATION", raising=False)
     monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_CALIBRATION", "1")
+    monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING", "1")
     monkeypatch.setenv("GLASS_RESIDENT_NATIVE_COMPLETION_PRESTART", "1")
     assert main(
         [
@@ -8210,6 +8225,10 @@ def test_cli_resident_cuda_native_completion_prestart_honors_env_enable(
     assert io_pipeline["native_completion_prestart_batch_index_mismatch_count"] == 0
     assert io_pipeline["native_completion_calibration_submit_count"] == 2
     assert io_pipeline["native_completion_calibration_completion_count"] == 2
+    assert io_pipeline["native_completion_h2d_elapsed_collection_policy"] == "env_enabled"
+    assert io_pipeline["native_completion_h2d_elapsed_collection_enabled"] is True
+    assert io_pipeline["native_completion_h2d_elapsed_sample_count"] == 2
+    assert io_pipeline["native_completion_h2d_elapsed_skipped_count"] == 0
     assert io_pipeline["native_path_calibration_host_buffer_model"] == (
         "cuda_host_alloc_portable_pinned_completion_prestart_ring"
     )

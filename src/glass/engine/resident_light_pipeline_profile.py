@@ -334,6 +334,20 @@ def build_resident_light_pipeline_profile(
                 resident_io_pipeline,
                 "native_completion_calibration_slot_reuse_wait_s",
             ),
+            "h2d_elapsed_collection_policy": resident_io_pipeline.get(
+                "native_completion_h2d_elapsed_collection_policy"
+            ),
+            "h2d_elapsed_collection_enabled": bool(
+                resident_io_pipeline.get("native_completion_h2d_elapsed_collection_enabled", False)
+            ),
+            "h2d_elapsed_sample_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_h2d_elapsed_sample_count",
+            ),
+            "h2d_elapsed_skipped_count": _int_value(
+                resident_io_pipeline,
+                "native_completion_h2d_elapsed_skipped_count",
+            ),
             "consumer_schedule_mode": resident_io_pipeline.get(
                 "native_completion_calibration_consumer_schedule_mode"
             ),

@@ -761,6 +761,16 @@ Current Phase 2 latest mainline acceptance:
   `3.173723299987614 s` (`1.0641614176548955x`). The default A/B budget for
   that component is now `1.05x`, so this candidate remains rejected despite
   correct output maps.
+- Gate707 added an explicit native-completion H2D elapsed telemetry policy and
+  kept detailed collection enabled by default. The default run at
+  `C:\glass_runs\phase2_s2_gate707_h2d_timing_policy\runs_20260626_130000\default_h2d_timing_enabled`
+  passed mainline and regression checks versus Gate705 with elapsed ratio
+  `0.997238093861246`, zero tracked-map hash mismatches, active/masked frames
+  `193 / 7`, and `native_completion_h2d_elapsed_collection_policy=default_enabled`.
+  The same-code disabled candidate preserved outputs but was slower than the
+  default at elapsed ratio `1.0361399053534472`, so
+  `GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING=0` remains a diagnostic opt-out
+  rather than a promoted default.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

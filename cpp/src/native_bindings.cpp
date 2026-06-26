@@ -7639,6 +7639,8 @@ class ResidentCalibratedStack {
     if (!policy_obj.is_none()) {
       policy = py::cast<py::dict>(policy_obj);
     }
+    const bool collect_h2d_elapsed =
+        dict_bool(policy, "native_completion_collect_h2d_elapsed", true);
     const int consumer_wave_fill_wait_us =
         dict_int(policy, "native_completion_consumer_wave_fill_wait_us", 0);
     if (consumer_wave_fill_wait_us < 0 || consumer_wave_fill_wait_us > 10000) {
@@ -7711,6 +7713,8 @@ class ResidentCalibratedStack {
     unsigned long long slot_reuse_ready_count = 0;
     unsigned long long slot_reuse_wait_count = 0;
     unsigned long long final_h2d_collect_count = 0;
+    unsigned long long h2d_elapsed_sample_count = 0;
+    unsigned long long h2d_elapsed_skipped_count = 0;
     unsigned long long consumer_wave_count = 0;
     unsigned long long consumer_max_wave_frames = 0;
     unsigned long long consumer_multi_frame_wave_count = 0;
@@ -7723,11 +7727,17 @@ class ResidentCalibratedStack {
       if (!buffer_h2d_recorded[buffer_index]) {
         return;
       }
+      if (!collect_h2d_elapsed) {
+        ++h2d_elapsed_skipped_count;
+        buffer_h2d_recorded[buffer_index] = 0;
+        return;
+      }
       const double lane_h2d_s = cuda_event_elapsed_s(
           queue->buffer_h2d_start_events[buffer_index]->get(),
           queue->buffer_h2d_done_events[buffer_index]->get(),
           "cudaEventElapsedTime(resident native completion prestart buffer h2d)");
       h2d_elapsed_samples.push_back(lane_h2d_s);
+      ++h2d_elapsed_sample_count;
       h2d_event_elapsed_s = std::max(h2d_event_elapsed_s, lane_h2d_s);
       buffer_h2d_recorded[buffer_index] = 0;
     };
@@ -8048,6 +8058,9 @@ class ResidentCalibratedStack {
     out["native_completion_slot_reuse_wait_count"] = slot_reuse_wait_count;
     out["native_completion_slot_reuse_wait_s"] = slot_reuse_wait_s;
     out["native_completion_final_h2d_collect_count"] = final_h2d_collect_count;
+    out["native_completion_h2d_elapsed_collection_enabled"] = collect_h2d_elapsed;
+    out["native_completion_h2d_elapsed_sample_count"] = h2d_elapsed_sample_count;
+    out["native_completion_h2d_elapsed_skipped_count"] = h2d_elapsed_skipped_count;
     out["native_completion_consumer_schedule_mode"] = "completion_prestart_lane_wave_drain";
     out["native_completion_consumer_wave_fill_mode"] = consumer_wave_fill_mode;
     out["native_completion_consumer_wave_fill_policy"] = consumer_wave_fill_policy;
@@ -8125,6 +8138,8 @@ class ResidentCalibratedStack {
       throw std::invalid_argument(
           "native_completion_read_backend must be auto, std_ifstream, or win32_sequential_scan");
     }
+    const bool collect_h2d_elapsed =
+        dict_bool(policy, "native_completion_collect_h2d_elapsed", true);
     const std::string consumer_wave_fill_policy =
         consumer_wave_fill_wait_us <= 0
             ? "disabled"
@@ -8183,6 +8198,9 @@ class ResidentCalibratedStack {
       out["native_completion_slot_reuse_wait_count"] = 0;
       out["native_completion_slot_reuse_wait_s"] = 0.0;
       out["native_completion_final_h2d_collect_count"] = 0;
+      out["native_completion_h2d_elapsed_collection_enabled"] = collect_h2d_elapsed;
+      out["native_completion_h2d_elapsed_sample_count"] = 0;
+      out["native_completion_h2d_elapsed_skipped_count"] = 0;
       out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
       out["native_completion_consumer_wave_fill_mode"] = consumer_wave_fill_mode;
       out["native_completion_consumer_wave_fill_policy"] = consumer_wave_fill_policy;
@@ -8306,6 +8324,8 @@ class ResidentCalibratedStack {
     unsigned long long slot_reuse_ready_count = 0;
     unsigned long long slot_reuse_wait_count = 0;
     unsigned long long final_h2d_collect_count = 0;
+    unsigned long long h2d_elapsed_sample_count = 0;
+    unsigned long long h2d_elapsed_skipped_count = 0;
     unsigned long long consumer_wave_count = 0;
     unsigned long long consumer_max_wave_frames = 0;
     unsigned long long consumer_multi_frame_wave_count = 0;
@@ -8350,11 +8370,17 @@ class ResidentCalibratedStack {
       if (!buffer_h2d_recorded[buffer_index]) {
         return;
       }
+      if (!collect_h2d_elapsed) {
+        ++h2d_elapsed_skipped_count;
+        buffer_h2d_recorded[buffer_index] = 0;
+        return;
+      }
       const double lane_h2d_s = cuda_event_elapsed_s(
           buffer_h2d_start_events[buffer_index]->get(),
           buffer_h2d_done_events[buffer_index]->get(),
           "cudaEventElapsedTime(resident native completion buffer h2d)");
       h2d_elapsed_samples.push_back(lane_h2d_s);
+      ++h2d_elapsed_sample_count;
       h2d_event_elapsed_s = std::max(h2d_event_elapsed_s, lane_h2d_s);
       buffer_h2d_recorded[buffer_index] = 0;
     };
@@ -8718,6 +8744,9 @@ class ResidentCalibratedStack {
     out["native_completion_slot_reuse_wait_count"] = slot_reuse_wait_count;
     out["native_completion_slot_reuse_wait_s"] = slot_reuse_wait_s;
     out["native_completion_final_h2d_collect_count"] = final_h2d_collect_count;
+    out["native_completion_h2d_elapsed_collection_enabled"] = collect_h2d_elapsed;
+    out["native_completion_h2d_elapsed_sample_count"] = h2d_elapsed_sample_count;
+    out["native_completion_h2d_elapsed_skipped_count"] = h2d_elapsed_skipped_count;
     out["native_completion_consumer_schedule_mode"] = "completion_lane_wave_drain";
     out["native_completion_consumer_wave_fill_mode"] = consumer_wave_fill_mode;
     out["native_completion_consumer_wave_fill_policy"] = consumer_wave_fill_policy;

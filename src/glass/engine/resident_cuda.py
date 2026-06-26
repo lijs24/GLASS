@@ -8023,6 +8023,9 @@ def run_resident_calibration_integration(
             native_completion_wave_fill_mode_env = str(
                 os.environ.get("GLASS_RESIDENT_NATIVE_COMPLETION_WAVE_FILL_MODE", "")
             ).strip().lower()
+            native_completion_h2d_timing_env = str(
+                os.environ.get("GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING", "")
+            ).strip().lower()
             native_completion_wave_fill_wait_us = int(resident_native_completion_wave_fill_us)
             native_completion_wave_fill_source = (
                 "cli" if native_completion_wave_fill_wait_us > 0 else "default_disabled"
@@ -8051,6 +8054,20 @@ def run_resident_calibration_integration(
                 if native_completion_wave_fill_mode == "multi_wait":
                     native_completion_wave_fill_mode = native_completion_wave_fill_mode_env
                     native_completion_wave_fill_mode_source = "env"
+            native_completion_h2d_timing_enable_values = {"1", "true", "yes", "on"}
+            native_completion_h2d_timing_disable_values = {"0", "false", "no", "off"}
+            if native_completion_h2d_timing_env in native_completion_h2d_timing_enable_values:
+                native_completion_h2d_timing_policy = "env_enabled"
+                native_completion_h2d_timing_enabled = True
+            elif native_completion_h2d_timing_env in native_completion_h2d_timing_disable_values:
+                native_completion_h2d_timing_policy = "env_disabled"
+                native_completion_h2d_timing_enabled = False
+            elif native_completion_h2d_timing_env:
+                native_completion_h2d_timing_policy = "env_invalid_disabled"
+                native_completion_h2d_timing_enabled = False
+            else:
+                native_completion_h2d_timing_policy = "default_enabled"
+                native_completion_h2d_timing_enabled = True
             native_path_calibration_policy = (
                 "env_enabled"
                 if native_path_calibration_env in {"1", "true", "yes", "on"}
@@ -8305,6 +8322,8 @@ def run_resident_calibration_integration(
             native_completion_calibration_consumer_wave_count = 0
             native_completion_calibration_consumer_max_wave_frames = 0
             native_completion_calibration_consumer_multi_frame_wave_count = 0
+            native_completion_calibration_h2d_elapsed_sample_count = 0
+            native_completion_calibration_h2d_elapsed_skipped_count = 0
             native_completion_prestart_batch_count = 0
             native_completion_prestart_frame_count = 0
             native_completion_prestart_begin_submit_s = 0.0
@@ -8478,6 +8497,9 @@ def run_resident_calibration_integration(
                                         ] = str(native_completion_wave_fill_mode)
                                         native_completion_policy["native_completion_read_backend"] = str(
                                             resident_native_read_backend
+                                        )
+                                        native_completion_policy["native_completion_collect_h2d_elapsed"] = bool(
+                                            native_completion_h2d_timing_enabled
                                         )
                                         begin_timing = stack.begin_fits_u16be_bzero_paths_completion_queue_read_timed(
                                             prestart_indices,
@@ -8660,6 +8682,9 @@ def run_resident_calibration_integration(
                                 native_completion_policy["native_completion_read_backend"] = str(
                                     resident_native_read_backend
                                 )
+                                native_completion_policy["native_completion_collect_h2d_elapsed"] = bool(
+                                    native_completion_h2d_timing_enabled
+                                )
                                 prestarted_batch_matches = (
                                     native_completion_prestart_started
                                     and native_completion_prestart_indices == batch_indices
@@ -8745,6 +8770,20 @@ def run_resident_calibration_integration(
                                 )
                                 native_completion_calibration_final_h2d_collect_count += int(
                                     calibration_timing.get("native_completion_final_h2d_collect_count", 0) or 0
+                                )
+                                native_completion_calibration_h2d_elapsed_sample_count += int(
+                                    calibration_timing.get(
+                                        "native_completion_h2d_elapsed_sample_count",
+                                        0,
+                                    )
+                                    or 0
+                                )
+                                native_completion_calibration_h2d_elapsed_skipped_count += int(
+                                    calibration_timing.get(
+                                        "native_completion_h2d_elapsed_skipped_count",
+                                        0,
+                                    )
+                                    or 0
                                 )
                                 timing_consumer_schedule_mode = str(
                                     calibration_timing.get("native_completion_consumer_schedule_mode", "") or ""
@@ -13827,6 +13866,18 @@ def run_resident_calibration_integration(
                 ),
                 "native_completion_calibration_final_h2d_collect_count": int(
                     native_completion_calibration_final_h2d_collect_count
+                ),
+                "native_completion_h2d_elapsed_collection_policy": str(
+                    native_completion_h2d_timing_policy
+                ),
+                "native_completion_h2d_elapsed_collection_enabled": bool(
+                    native_completion_h2d_timing_enabled
+                ),
+                "native_completion_h2d_elapsed_sample_count": int(
+                    native_completion_calibration_h2d_elapsed_sample_count
+                ),
+                "native_completion_h2d_elapsed_skipped_count": int(
+                    native_completion_calibration_h2d_elapsed_skipped_count
                 ),
                 "native_completion_calibration_consumer_schedule_mode": (
                     native_completion_calibration_consumer_schedule_mode

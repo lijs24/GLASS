@@ -130,9 +130,15 @@ Current code is intentionally gated:
   `light_read_upload_calibrate` regressed by about `6.4%`. The
   `phase2-mainline-ab` default budget for that component is now `1.05x` so
   similar hot-component regressions cannot pass default-promotion A/B checks
-  solely because total elapsed time remains inside a looser threshold. This is
-  still a scheduling optimization only; the remaining H2D/calibration and
-  resident integration costs require larger pipeline or reducer work.
+  solely because total elapsed time remains inside a looser threshold. Gate707
+  also tested whether disabling native-completion H2D elapsed telemetry should
+  become the default. It should not: the default-enabled run passed against
+  Gate705 with elapsed ratio `0.997238093861246`, while the disabled candidate
+  was slower than the same-code default at `1.0361399053534472`. The opt-out
+  `GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING=0` remains available for
+  diagnostics only. This is still a scheduling/telemetry area; the remaining
+  H2D/calibration and resident integration costs require larger pipeline or
+  reducer work.
 - S2-Gate 672 adds resident master DQ sidecars, but their scope is intentionally
   narrower than CPU/tile StackEngine master DQ. Resident sidecars mark
   non-finite output master pixels as `NO_DATA`; they do not yet encode

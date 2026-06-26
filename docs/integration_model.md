@@ -480,6 +480,19 @@ reduced `light_read_upload_calibrate` from `3.101156600052491 s` to
 `single_wait` and the previous `250us` wait for A/B or hardware-specific
 fallbacks.
 
+S2-Gate 707 makes native-completion H2D elapsed-time collection an explicit
+resident policy while keeping detailed collection enabled by default. The
+environment variable `GLASS_RESIDENT_NATIVE_COMPLETION_H2D_TIMING=0` disables
+only the `cudaEventElapsedTime` sampling used for telemetry; the completion
+events still gate pinned-buffer reuse safety. The real 200-light default run at
+`C:\glass_runs\phase2_s2_gate707_h2d_timing_policy\runs_20260626_130000\default_h2d_timing_enabled`
+passed mainline and regression checks against Gate705 with elapsed ratio
+`0.997238093861246` and zero tracked-map hash mismatches. The same-code
+disabled candidate was slower than that default, with elapsed ratio
+`1.0361399053534472` and `light_read_upload_calibrate` ratio
+`1.0442728643296937`, so disabled collection remains a diagnostic opt-out
+rather than a default optimization.
+
 S2-Gate 683 changes the Windows native raw-FITS read helper used by the
 resident native-completion calibration path from portable `std::ifstream` to
 `CreateFileW` with `FILE_FLAG_SEQUENTIAL_SCAN`, while keeping the portable

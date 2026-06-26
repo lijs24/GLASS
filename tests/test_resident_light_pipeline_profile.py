@@ -112,6 +112,10 @@ def test_light_pipeline_profile_exposes_native_completion_lane_fill() -> None:
             "native_completion_calibration_slot_reuse_count": 168,
             "native_completion_calibration_slot_reuse_wait_count": 0,
             "native_completion_calibration_slot_reuse_wait_s": 0.0,
+            "native_completion_h2d_elapsed_collection_policy": "env_disabled",
+            "native_completion_h2d_elapsed_collection_enabled": False,
+            "native_completion_h2d_elapsed_sample_count": 0,
+            "native_completion_h2d_elapsed_skipped_count": 200,
             "native_completion_calibration_consumer_schedule_mode": "completion_lane_wave_drain",
             "native_completion_calibration_consumer_wave_count": 41,
             "native_completion_calibration_consumer_max_wave_frames": 8,
@@ -162,6 +166,10 @@ def test_light_pipeline_profile_exposes_native_completion_lane_fill() -> None:
     assert native["worker_count"] == 16
     assert native["queue_buffer_count"] == 32
     assert native["queue_buffers_per_stream"] == 4.0
+    assert native["h2d_elapsed_collection_policy"] == "env_disabled"
+    assert native["h2d_elapsed_collection_enabled"] is False
+    assert native["h2d_elapsed_sample_count"] == 0
+    assert native["h2d_elapsed_skipped_count"] == 200
     assert native["consumer_lane_fill_ratio"] == 200 / (41 * 8)
     assert native["consumer_multi_frame_wave_fraction"] == 33 / 41
     assert native["consumer_wave_fill_mode"] == "single_wait"
