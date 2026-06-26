@@ -2664,6 +2664,84 @@ Interpretation:
 - Future optimizer gates should use this A/B surface so a total-time win cannot
   hide a component regression, missing maps, hash drift, or frame-index drift.
 
+### S2-Gate 694: No-Reject Initial Sum Fast Path
+
+Gate694 continues the Phase 2 integration mainline by testing a real CUDA
+kernel-internal simplification on the current 200-light resident path. The
+resident hardened winsorized reducer already scans every valid frame sample
+once before it knows whether the rejection guard will allow any low/high
+rejection for the pixel. This gate accumulates the frame-axis sum, weight sum,
+and coverage during that first scan and reuses those values when
+`allow_rejection=false`, instead of rereading the resident stack for the final
+no-reject accumulation.
+
+Implementation:
+
+- Added first-pass `initial_weighted_sum`, `initial_weight_sum`, and
+  `initial_coverage` accumulation inside
+  `glass_integrate_resident_hardened_winsorized_sigma_f32_kernel`.
+- Preserved the existing frame-axis accumulation order for the default
+  unit-positive mask-scan route.
+- Kept the selected-buffer reuse experiment excluded from this fast path so
+  its opt-in semantics do not change.
+- Added native profile fields:
+  - `no_rejection_initial_accumulation_fast_path_enabled=true`;
+  - `no_rejection_initial_accumulation_model=
+    reuse_first_frame_axis_sum_when_rejection_is_not_allowed`.
+- Added a CPU-parity CUDA test with zero-weight frames, finite samples, NaN
+  samples, and `max_reject_fraction=0.0`.
+
+Validation:
+
+- Native CUDA target checked:
+  `cmake --build build --config Release --target _glass_cuda_native`.
+- New focused test passed:
+  `1 passed in 0.18 s`.
+- Focused resident hardened winsorized tests passed:
+  `21 passed, 57 deselected in 0.31 s`.
+- Ruff on touched test file passed.
+- Real 200-light candidate:
+  `C:\glass_runs\phase2_s2_gate694_no_reject_initial_sum\runs_20260627_050000\no_reject_initial_sum_candidate`.
+- Phase 2 mainline audit passed:
+  `C:\glass_runs\phase2_s2_gate694_no_reject_initial_sum\gate694_phase2_mainline_audit.json`;
+  failed checks `[]`, input lights `200`, active/masked frames `193 / 7`.
+- Phase 2 mainline A/B versus Gate693 passed:
+  `C:\glass_runs\phase2_s2_gate694_no_reject_initial_sum\gate694_phase2_mainline_ab.json`;
+  tracked map count `6`, hash mismatches `0`, frame-index alignment `passed`,
+  component budget failures `0`.
+
+Real 200-light timing versus Gate693:
+
+| Component | Gate693 s | Gate694 s | Ratio |
+| --- | ---: | ---: | ---: |
+| light read/upload/calibrate | `3.1031843000091612` | `3.161795800086111` | `1.018887534355203` |
+| resident registration/warp | `0.2666722999420017` | `0.2603286998346448` | `0.9762120021136932` |
+| resident local normalization | `0.38270870002452284` | `0.3541327000129968` | `0.9253373813182576` |
+| resident integration | `3.2597308000549674` | `3.261199799948372` | `1.000450653720632` |
+| output write | `0.224569599959068` | `0.22860800009220839` | `1.0179828693778298` |
+
+Native hardened profile:
+
+- Gate693 kernel sync: `3.1401549 s`.
+- Gate694 kernel sync: `3.140564 s`.
+- Gate694 download: `0.1160999 s`.
+- Gate694 weight-map host synthesis: `0.0353835 s`.
+- Gate694 route stayed `frame_mask_global_reread_unit_positive_weights` with
+  `native_kernel_capacity_selector=small_256`.
+
+Interpretation:
+
+- This is a green, output-stable CUDA reducer change, but it is not a measured
+  speed win on the 200-light benchmark.
+- The evidence shows that final no-reject reread elimination is too small to
+  move the current resident integration bottleneck.
+- The next substantive gate should avoid another narrow reread micro-change and
+  instead target one of two larger surfaces:
+  - a redesigned deterministic cooperative/segmented winsorized reducer that
+    reduces the repeated median/IQR/winsorized-statistics passes; or
+  - the resident read/upload/calibration pipeline, where pinned-buffer
+    scheduling and decode/H2D overlap still cost about `3.1 s`.
+
 ### S2-Gate 667: Active-Registered CUDA Source-DQ Admission Default
 
 Gate667 promotes the Gate660 active-registered admission policy from a manual

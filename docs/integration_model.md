@@ -509,6 +509,22 @@ low-rejection, high-rejection, and DQ maps versus Gate686 while reducing
 resident integration from `3.2561724999686703 s` to `3.234628599951975 s` in the
 recorded run.
 
+S2-Gate 694 extends this no-reject branch by accumulating the first-pass
+frame-axis sum, weight sum, and coverage while samples are initially collected.
+If `allow_rejection=false`, the native hardened kernel reuses those first-pass
+totals instead of rereading the resident stack for the final no-reject
+accumulation. The default unit-positive mask-scan route preserves the original
+frame-axis accumulation order, and selected-buffer reuse remains excluded from
+the fast path. Native profiles record
+`no_rejection_initial_accumulation_fast_path_enabled=true` and
+`no_rejection_initial_accumulation_model=
+reuse_first_frame_axis_sum_when_rejection_is_not_allowed`. The 200-light
+Gate694 A/B produced byte-identical master and map outputs versus Gate693, but
+resident integration stayed effectively flat (`3.2597308000549674 s` to
+`3.261199799948372 s`), so this is evidence that the next large integration
+win must reduce the repeated winsorized statistics/order-statistic work rather
+than only the final no-reject accumulation reread.
+
 S2-Gate 688 makes resident DQ/count-map sample accounting a hard integration
 contract. Any resident CUDA integration output that writes DQ, coverage,
 low-rejection, or high-rejection surfaces must include

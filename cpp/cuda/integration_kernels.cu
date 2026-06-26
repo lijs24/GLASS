@@ -2191,10 +2191,14 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   float values[MaxFrames];
   GlassOrderedSampleStore<CountT, MaxFrames, ReuseLocalUnitSamples> ordered_values;
   int count = 0;
+  float initial_weighted_sum = 0.0f;
+  float initial_weight_sum = 0.0f;
+  float initial_coverage = 0.0f;
   const std::size_t sample_frame_count = UnitPositiveWeights ? active_frame_count : frame_count;
   for (std::size_t sample_pos = 0; sample_pos < sample_frame_count; ++sample_pos) {
     const std::size_t frame =
         UnitPositiveWeights ? static_cast<std::size_t>(active_indices[sample_pos]) : sample_pos;
+    float sample_weight = 1.0f;
     if (!UnitPositiveWeights) {
       if (UnitPositiveWeightMask) {
         if (unit_positive_weight_mask[frame] == 0) {
@@ -2205,6 +2209,7 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
         if (weight <= 0.0f || !isfinite(weight)) {
           continue;
         }
+        sample_weight = weight;
       }
     }
     const float value = stack[frame * pixels_per_frame + pixel];
@@ -2214,6 +2219,14 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
     if (count < MaxFrames) {
       values[count] = value;
       ordered_values.set(count, value);
+      if (UnitPositiveWeights || UnitPositiveWeightMask) {
+        initial_weighted_sum += value;
+        initial_weight_sum += 1.0f;
+      } else {
+        initial_weighted_sum += value * sample_weight;
+        initial_weight_sum += sample_weight;
+      }
+      initial_coverage += 1.0f;
       ++count;
     }
   }
@@ -2507,7 +2520,11 @@ __global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
   float coverage = 0.0f;
   float low_reject = 0.0f;
   float high_reject = 0.0f;
-  if (!allow_rejection) {
+  if (!allow_rejection && !ReuseSelectedUnitSamples) {
+    sum = initial_weighted_sum;
+    weight_sum = initial_weight_sum;
+    coverage = initial_coverage;
+  } else if (!allow_rejection) {
     if (ReuseLocalUnitSamples || ReuseSelectedUnitSamples) {
       for (int i = 0; i < count; ++i) {
         const float value = ReuseLocalUnitSamples ? ordered_values.get(i) : values[i];

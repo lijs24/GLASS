@@ -13094,6 +13094,9 @@ class ResidentCalibratedStack {
         profile_info["rejection_guard_no_reject_accumulation_branch_enabled"] = true;
         profile_info["rejection_guard_no_reject_accumulation_model"] =
             "skip_threshold_checks_when_rejection_guard_disallows_or_no_candidates";
+        profile_info["no_rejection_initial_accumulation_fast_path_enabled"] = true;
+        profile_info["no_rejection_initial_accumulation_model"] =
+            "reuse_first_frame_axis_sum_when_rejection_is_not_allowed";
         profile_info["sample_reuse_strategy"] = sample_reuse_strategy;
         profile_info["native_frame_count_exceeds_limit"] = frame_count_ > 512;
         profile_info["native_active_count_admission_enabled"] =
@@ -13391,6 +13394,9 @@ class ResidentCalibratedStack {
       profile_info["rejection_guard_no_reject_accumulation_branch_enabled"] = true;
       profile_info["rejection_guard_no_reject_accumulation_model"] =
           "skip_threshold_checks_when_rejection_guard_disallows_or_no_candidates";
+      profile_info["no_rejection_initial_accumulation_fast_path_enabled"] = true;
+      profile_info["no_rejection_initial_accumulation_model"] =
+          "reuse_first_frame_axis_sum_when_rejection_is_not_allowed";
       profile_info["sample_reuse_strategy"] = sample_reuse_strategy;
       profile_info["native_frame_count_exceeds_limit"] = frame_count_ > 512;
       profile_info["native_active_count_admission_enabled"] =
