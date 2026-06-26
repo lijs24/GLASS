@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from glass.cpu.master_frames import make_master_bias as make_master_bias_cpu
+from glass.engine.contracts import DQFlag
 import glass.gpu.master_frames as master_frames_module
 from glass.gpu.master_frames import (
     make_master_bias,
@@ -12,6 +13,7 @@ from glass.gpu.master_frames import (
     make_master_flat,
     mean_stack_paths_tile_streaming,
 )
+from glass.io.fits_io import write_fits_data
 from glass.synthetic.generator import generate_synthetic_dataset
 from tests.conftest import cuda_module_or_skip
 
@@ -37,7 +39,10 @@ def test_mean_stack_streaming_accumulator_without_cuda_stack(tmp_path: Path, mon
     assert streaming.metrics["tile_count"] > 1
     assert streaming.dq_provenance is not None
     assert streaming.dq_provenance["engine"] == "cpu_tile_streaming_mean_fallback"
-    assert streaming.dq_mask is None
+    assert streaming.metrics["dq_mask_produced"] is True
+    assert streaming.metrics["result_contract_passed"] is True
+    assert streaming.dq_mask is not None
+    assert streaming.dq_mask.summary()["valid"] == 32 * 24
 
 
 def test_mean_stack_streaming_accumulator_reports_fake_native_usage(tmp_path: Path, monkeypatch):
@@ -68,6 +73,41 @@ def test_mean_stack_streaming_accumulator_reports_fake_native_usage(tmp_path: Pa
     assert streaming.metrics["public_helper"] == "glass.gpu.master_frames.mean_stack_paths_tile_streaming"
     assert streaming.dq_provenance is not None
     assert streaming.dq_provenance["execution_path"] == "gpu_master_tile_streaming_mean"
+    assert streaming.metrics["result_contract_passed"] is True
+    assert streaming.dq_mask is not None
+
+
+def test_mean_stack_streaming_accumulator_fake_native_uses_finite_sample_dq(tmp_path: Path, monkeypatch):
+    frame_a = np.array([[np.nan, np.nan], [5.0, 7.0]], dtype=np.float32)
+    frame_b = np.array([[np.nan, 9.0], [np.nan, 11.0]], dtype=np.float32)
+    paths = []
+    for index, frame in enumerate([frame_a, frame_b]):
+        path = tmp_path / f"frame_{index}.fits"
+        write_fits_data(path, frame)
+        paths.append(path)
+
+    class FakeNative:
+        def integrate_accumulate_mean_tile_f32(self, frame_tile, weight_tile, sum_tile, weight_sum_tile):
+            return sum_tile + frame_tile * weight_tile, weight_sum_tile + weight_tile
+
+    monkeypatch.setattr(master_frames_module, "_native_module", lambda: FakeNative())
+
+    streaming = mean_stack_paths_tile_streaming(paths, tile_size=1)
+
+    assert streaming.engine == "cuda_tile_streaming_mean"
+    assert np.allclose(streaming.data, np.array([[0.0, 9.0], [5.0, 9.0]], dtype=np.float32))
+    assert streaming.metrics is not None
+    assert streaming.metrics["input_samples"] == 8
+    assert streaming.metrics["input_valid_samples"] == 4
+    assert streaming.metrics["input_invalid_samples"] == 4
+    assert streaming.metrics["valid_samples"] == 4
+    assert streaming.metrics["coverage_zero_pixels"] == 1
+    assert streaming.metrics["result_contract_passed"] is True
+    assert streaming.dq_provenance is not None
+    assert streaming.dq_provenance["input_invalid_samples_before_rejection"] == 4
+    assert streaming.dq_mask is not None
+    assert streaming.dq_mask.count(DQFlag.NO_DATA) == 1
+    assert streaming.dq_mask.summary()["valid"] == 3
 
 
 def test_gpu_mean_stack_matches_cpu(tmp_path: Path):
@@ -102,4 +142,7 @@ def test_gpu_master_bias_dark_flat_match_cpu_shape_and_stats(tmp_path: Path):
     assert bias.metrics["master_postprocess_operation"] == "bias_mean"
     assert dark.metrics["master_postprocess_operation"] == "dark_mean_minus_master_bias"
     assert flat.metrics["master_postprocess_operation"] == "flat_mean_calibrated_normalized"
+    assert bias.metrics["dq_mask_produced"] is True
+    assert bias.metrics["result_contract_passed"] is True
+    assert bias.dq_mask is not None
     assert 0.98 < flat.stats["median"] < 1.02

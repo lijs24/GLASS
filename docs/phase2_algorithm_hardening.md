@@ -98,6 +98,67 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 710: GPU Master Helper Finite-Sample DQ
+
+Gate710 continues the DQ/mask contract work from Gates 708 and 709. Gate709 made
+the GPU master helper honest about its execution engine but still recorded that
+it did not produce DQ masks. Gate710 upgrades that helper to finite-sample
+DQ/coverage semantics: finite source samples have weight `1`, non-finite source
+samples have weight `0`, and output pixels with no finite input samples are
+marked `NO_DATA` in a `DQMask`.
+
+Implementation:
+
+- `glass.gpu.master_frames.mean_stack_paths_tile_streaming(...)` now builds a
+  per-pixel coverage map while streaming tiles.
+- The CUDA helper path feeds existing
+  `integrate_accumulate_mean_tile_f32` with:
+  - `safe_frame = where(isfinite(frame), frame, 0)`;
+  - `weight_tile = isfinite(frame)`.
+- The no-CUDA fallback uses the same finite-sample weighting in CPU tile
+  accumulation.
+- The helper now returns a `DQMask`, records DQ summary, input sample closure,
+  finite/invalid sample counts, valid sample count, coverage-zero pixels, and a
+  StackEngine result contract over the helper's master/coverage/DQ surfaces.
+- The helper still does not consume source DQ sidecars; it handles non-finite
+  sample validity only.
+- Resident CUDA calibration, registration, warp, LN, rejection, integration,
+  and 200-light runtime defaults are unchanged.
+
+Validation:
+
+- Focused tests:
+  `python -m pytest -q tests/test_gpu_master_frames_vs_cpu.py tests/test_cpu_master_frames.py`:
+  `7 passed`.
+- Ruff:
+  `python -m ruff check src/glass/gpu/master_frames.py tests/test_gpu_master_frames_vs_cpu.py`:
+  passed.
+- Synthetic validation artifact:
+  `runs/checkpoints/s2_gate_710_gpu_master_dq_contract/validation.json`.
+  It records CPUStackEngine, no-CUDA fallback, fake-native CUDA, and actual
+  native CUDA all producing the same master:
+  `[[0.0, 9.0], [5.0, 9.0]]`.
+- The artifact records for fallback, fake-native, and actual-native routes:
+  - input samples `8`;
+  - valid samples `4`;
+  - invalid/non-finite samples `4`;
+  - coverage-zero pixels `1`;
+  - DQ summary `{"valid": 3, "no_data": 1}`;
+  - result contract passed.
+
+Interpretation:
+
+- This is a DQ/mask contract improvement for the public GPU master helper.
+- The helper now aligns with CPUStackEngine finite-sample behavior for
+  non-finite inputs while keeping CUDA optional.
+- Full source-DQ sidecar consumption for GPU helper inputs remains future work.
+
+Clean-room note:
+
+- This gate uses GLASS-owned GPU helper code, GLASS DQ contracts, GLASS tests,
+  and GLASS-generated synthetic fixtures only.
+- No external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 709: GPU Master Helper Metadata Contract
 
 Gate709 fixes a contract regression exposed by Gate708. After

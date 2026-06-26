@@ -790,6 +790,15 @@ Current Phase 2 latest mainline acceptance:
   The fake and actual native routes both matched the CPU baseline to max
   absolute difference `6.103515625e-05`. This keeps GPU helper parity artifacts
   from being mistaken for CPUStackEngine contract output.
+- Gate710 adds finite-sample DQ semantics to the public GPU master-frame
+  helper. The synthetic validation artifact
+  `runs/checkpoints/s2_gate_710_gpu_master_dq_contract/validation.json` records
+  CPUStackEngine, no-CUDA fallback, fake-native CUDA, and actual-native CUDA all
+  producing master `[[0.0, 9.0], [5.0, 9.0]]` from a fixture with four finite
+  and four non-finite input samples. Fallback, fake-native, and actual-native
+  routes all record input samples `8`, valid samples `4`, invalid samples `4`,
+  coverage-zero pixels `1`, DQ summary `{"valid": 3, "no_data": 1}`, and
+  passing result contracts.
 - Coverage-masked compare to the reference master with coverage >= `190`:
   shape match true, RMS `0.005624135079195954`, p99 absolute difference
   `0.0021429822302888963`, coverage fraction `0.9749333995120938`, compared

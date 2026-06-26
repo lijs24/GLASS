@@ -1,0 +1,126 @@
+{
+  "gate": "S2-Gate 710",
+  "validation": "gpu_master_helper_finite_sample_dq_contract",
+  "expected_master": [
+    [
+      0.0,
+      9.0
+    ],
+    [
+      5.0,
+      9.0
+    ]
+  ],
+  "cpu_stackengine": {
+    "engine": "stack_engine_cpu",
+    "master": [
+      [
+        0.0,
+        9.0
+      ],
+      [
+        5.0,
+        9.0
+      ]
+    ],
+    "max_abs_vs_expected": 0.0,
+    "max_abs_vs_cpu": 0.0,
+    "input_samples": 8,
+    "input_valid_samples": 4,
+    "input_invalid_samples": 4,
+    "valid_samples": 4,
+    "coverage_zero_pixels": 1,
+    "dq_mask_produced": true,
+    "result_contract_passed": true,
+    "dq_summary": {
+      "valid": 3,
+      "no_data": 1
+    },
+    "no_data_pixels": 1
+  },
+  "fallback": {
+    "engine": "cpu_tile_streaming_mean_fallback",
+    "master": [
+      [
+        0.0,
+        9.0
+      ],
+      [
+        5.0,
+        9.0
+      ]
+    ],
+    "max_abs_vs_expected": 0.0,
+    "max_abs_vs_cpu": 0.0,
+    "input_samples": 8,
+    "input_valid_samples": 4,
+    "input_invalid_samples": 4,
+    "valid_samples": 4,
+    "coverage_zero_pixels": 1,
+    "dq_mask_produced": true,
+    "result_contract_passed": true,
+    "dq_summary": {
+      "valid": 3,
+      "no_data": 1
+    },
+    "no_data_pixels": 1
+  },
+  "fake_native": {
+    "engine": "cuda_tile_streaming_mean",
+    "master": [
+      [
+        0.0,
+        9.0
+      ],
+      [
+        5.0,
+        9.0
+      ]
+    ],
+    "max_abs_vs_expected": 0.0,
+    "max_abs_vs_cpu": 0.0,
+    "input_samples": 8,
+    "input_valid_samples": 4,
+    "input_invalid_samples": 4,
+    "valid_samples": 4,
+    "coverage_zero_pixels": 1,
+    "dq_mask_produced": true,
+    "result_contract_passed": true,
+    "dq_summary": {
+      "valid": 3,
+      "no_data": 1
+    },
+    "no_data_pixels": 1,
+    "native_calls": 8,
+    "cuda_accumulator_used": true
+  },
+  "actual_native": {
+    "engine": "cuda_tile_streaming_mean",
+    "master": [
+      [
+        0.0,
+        9.0
+      ],
+      [
+        5.0,
+        9.0
+      ]
+    ],
+    "max_abs_vs_expected": 0.0,
+    "max_abs_vs_cpu": 0.0,
+    "input_samples": 8,
+    "input_valid_samples": 4,
+    "input_invalid_samples": 4,
+    "valid_samples": 4,
+    "coverage_zero_pixels": 1,
+    "dq_mask_produced": true,
+    "result_contract_passed": true,
+    "dq_summary": {
+      "valid": 3,
+      "no_data": 1
+    },
+    "no_data_pixels": 1,
+    "cuda_native_available": true,
+    "cuda_accumulator_used": true
+  }
+}
