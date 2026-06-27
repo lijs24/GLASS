@@ -65,6 +65,7 @@ def test_speedup_summary_reads_glass_and_wbpp_blackbox_artifacts(tmp_path: Path)
                     "timing_s": {
                         "light_read_upload_calibrate": 2.5,
                         "resident_registration_warp": 0.4,
+                        "resident_local_normalization": 0.3,
                         "resident_integration": 0.2,
                         "output_write": 0.1,
                     },
@@ -96,8 +97,29 @@ def test_speedup_summary_reads_glass_and_wbpp_blackbox_artifacts(tmp_path: Path)
             "comparison_region": {"coverage_fraction": 0.96, "compared_pixels": 123},
         },
     )
+    history = tmp_path / "fastintegration_history.json"
+    write_json(
+        history,
+        {
+            "history_class": "FastIntegration",
+            "time": {"span": 25.0},
+            "summary": {
+                "target_count": 3,
+                "accepted_count": 2,
+                "failed_count": 1,
+                "failed_target_image_names": ["F3"],
+            },
+            "parameters": {"pixelInterpolation": "Lanczos3", "rejectionAlgorithm": "WinsorizedSigmaClipping"},
+        },
+    )
 
-    summary = summarize_wbpp_speedup(gp_run, wbpp_result, compare_json=compare, min_speedup=5.0)
+    summary = summarize_wbpp_speedup(
+        gp_run,
+        wbpp_result,
+        compare_json=compare,
+        wbpp_history=history,
+        min_speedup=5.0,
+    )
 
     assert summary["speedup_vs_wbpp"] == 10.0
     assert summary["meets_min_speedup"] is True
@@ -110,6 +132,13 @@ def test_speedup_summary_reads_glass_and_wbpp_blackbox_artifacts(tmp_path: Path)
     assert summary["glass"]["weighted_frame_count"] == 2
     assert summary["glass"]["zero_weight_frame_count"] == 1
     assert summary["wbpp_blackbox"]["dataset"] == "M38_H"
+    assert summary["wbpp_blackbox"]["fastintegration_history"]["elapsed_s"] == 25.0
+    assert summary["wbpp_blackbox"]["fastintegration_history"]["accepted_count"] == 2
+    paired = summary["stage_timing_comparison"]["paired_stage_estimates"]
+    assert paired[0]["stage"] == "total_pipeline_blackbox"
+    assert paired[1]["stage"] == "alignment_ln_integration_estimate"
+    assert abs(paired[1]["glass_s"] - 0.9) < 1e-12
+    assert paired[1]["wbpp_s"] == 25.0
     assert summary["comparison"]["coverage_fraction"] == 0.96
     assert summary["comparison"]["compare_speedup_vs_reference"] == 10.0
     assert summary["clean_room"]["status"] == "compliant"
@@ -131,11 +160,28 @@ def test_write_speedup_summary_writes_json_and_markdown(tmp_path: Path):
             "resident_timing_s": {
                 "light_read_upload_calibrate": 2.5,
                 "resident_registration_warp": 0.4,
+                "resident_local_normalization": 0.3,
                 "resident_integration": 0.2,
                 "output_write": 0.1,
             },
         },
         "wbpp_blackbox": {"elapsed_s": 20.0, "dataset": "fixture"},
+        "stage_timing_comparison": {
+            "paired_stage_estimates": [
+                {
+                    "stage": "total_pipeline_blackbox",
+                    "glass_s": 10.0,
+                    "wbpp_s": 20.0,
+                    "speedup_vs_wbpp": 2.0,
+                },
+                {
+                    "stage": "alignment_ln_integration_estimate",
+                    "glass_s": 0.9,
+                    "wbpp_s": 5.0,
+                    "speedup_vs_wbpp": 5.555555555555555,
+                },
+            ]
+        },
         "speedup_vs_wbpp": 2.0,
         "min_speedup": 1.25,
         "meets_min_speedup": True,
@@ -162,6 +208,8 @@ def test_write_speedup_summary_writes_json_and_markdown(tmp_path: Path):
     assert "Master cache hits/misses: 1/0" in markdown
     assert "FITS read mode: native_u16_gpu" in markdown
     assert "Light read/upload/calibrate: 2.5 s" in markdown
+    assert "Local normalization: 0.3 s" in markdown
+    assert "alignment_ln_integration_estimate" in markdown
     assert "compare timing speedup: 1.9" in markdown
     assert "clean-room note" in markdown
 
@@ -179,6 +227,8 @@ def test_speedup_summary_cli_writes_outputs(tmp_path: Path):
     )
     wbpp_result = tmp_path / "wbpp_result.json"
     write_json(wbpp_result, {"elapsed_s": 20.0, "dataset": "fixture"})
+    history = tmp_path / "fastintegration_history.json"
+    write_json(history, {"history_class": "FastIntegration", "time": {"span": 7.0}, "summary": {}})
     out_json = tmp_path / "summary.json"
     out_md = tmp_path / "summary.md"
 
@@ -189,6 +239,8 @@ def test_speedup_summary_cli_writes_outputs(tmp_path: Path):
             str(gp_run),
             "--wbpp-result",
             str(wbpp_result),
+            "--wbpp-history",
+            str(history),
             "--out",
             str(out_json),
             "--markdown",
@@ -199,4 +251,7 @@ def test_speedup_summary_cli_writes_outputs(tmp_path: Path):
     ) == 0
 
     assert json.loads(out_json.read_text(encoding="utf-8"))["speedup_vs_wbpp"] == 4.0
+    assert json.loads(out_json.read_text(encoding="utf-8"))["wbpp_blackbox"]["fastintegration_history"][
+        "elapsed_s"
+    ] == 7.0
     assert "Speedup: 4.000x" in out_md.read_text(encoding="utf-8")

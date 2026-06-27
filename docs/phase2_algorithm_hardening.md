@@ -98,6 +98,149 @@ Regression interpretation:
 - CUDA-package numerical differences are acceptable only when documented and
   reference-level image agreement remains within the recorded tolerance family.
 
+### S2-Gate 711: Real 200-Light StackEngine A/B Baseline
+
+Gate711 is the user-requested return to the Phase 2 mainline. It stops pure
+release/default-promotion paperwork and verifies the real 200-light default
+StackEngine route against the existing black-box reference evidence.
+
+Acceptance scope:
+
+- the real 200-light dataset must run;
+- GLASS must produce a result comparison against the reference master;
+- the gate must publish per-stage timing for GLASS and the available
+  user-generated reference stages.
+
+Implementation:
+
+- Extended `glass speedup-summary` with optional `--wbpp-history`.
+- The speedup summary now records:
+  - GLASS `run_timing.json` stages;
+  - resident component timings;
+  - WBPP total black-box runtime from `wbpp_blackbox_result.json`;
+  - WBPP FastIntegration span from user-generated ProcessingHistory JSON when
+    supplied;
+  - paired total-pipeline and alignment/LN/integration timing estimates.
+- No computation-path behavior changed in this gate.
+
+Real 200-light run:
+
+- Run directory:
+  `C:\glass_runs\phase2_s2_gate711_real_200_stackengine_ab_baseline\runs_20260627_080659\real_200_stackengine_default`
+- Command:
+  `glass run --plan C:\glass_runs\phase2_s2_gate540_plan_spec_cache\runs_20260623_140314\processing_plan.json --out C:\glass_runs\phase2_s2_gate711_real_200_stackengine_ab_baseline\runs_20260627_080659\real_200_stackengine_default --backend cuda --memory-mode resident --integration-weighting none --flat-floor 0.05 --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-tolerance-px 3 --resident-ncc-sample-stride 4 --resident-output-maps audit --resident-master-cache-dir C:\glass_runs\phase2_s2_gate597_async_master_cache\resident_master_cache_async_final`
+- Dataset:
+  - `200` light frames;
+  - `20` bias frames;
+  - `20` dark frames;
+  - `20` flat frames.
+- GLASS route:
+  - backend: `cuda`;
+  - memory mode: `resident`;
+  - runtime preset: `throughput-v4-native-completion`;
+  - registration: `similarity_cuda_triangle`;
+  - warp interpolation: `lanczos3`;
+  - integration rejection: `winsorized_sigma`;
+  - output maps: `audit`.
+- Result:
+  - run completed through integration;
+  - active weighted frames: `193`;
+  - zero-weight frames: `7`;
+  - master:
+    `integration\resident_master_H.fits`;
+  - coverage, DQ, low-rejection, high-rejection, and weight maps were written.
+
+Timing:
+
+- GLASS total elapsed:
+  `35.32760219998454 s`.
+- GLASS stages:
+  - `resident_reference_scout`: `5.083710200000496 s`;
+  - `resident_memory_admission`: `0.005026099999668077 s`;
+  - `resident_calibration_integration`: `29.529289199999766 s`;
+  - `local_norm_contract`: `0.2572809999983292 s`;
+  - `pipeline_contract`: `0.25120619999506744 s`;
+  - `stack_engine_contract`: `0.027099799997813534 s`;
+  - `warp_quality_contract`: `0.03394760000082897 s`;
+  - `resident_mainline_framework`: `0.07065229999716394 s`.
+- GLASS resident components:
+  - master build/load: `1.2489556000000448 s`;
+  - light read/upload/calibrate: `22.819604300006176 s`;
+  - registration/warp: `0.3021223999458016 s`;
+  - local normalization: `0.4433688999997685 s`;
+  - integration: `2.6087407000013627 s`;
+  - output write: `0.23423470000125235 s`.
+- Reference total black-box runtime:
+  `1092.541 s`.
+- Reference FastIntegration ProcessingHistory span:
+  `225.69198 s`.
+- Total-pipeline speedup:
+  `30.925987951723428x`.
+- Alignment/LN/integration estimate:
+  `3.3542319999469328 s` GLASS versus `225.69198 s` reference,
+  `67.28573932976929x`.
+
+Result comparison:
+
+- Compare report:
+  `C:\glass_runs\phase2_s2_gate711_real_200_stackengine_ab_baseline\runs_20260627_080659\glass_vs_wbpp_full_compare.html`
+- Compare JSON:
+  `C:\glass_runs\phase2_s2_gate711_real_200_stackengine_ab_baseline\runs_20260627_080659\glass_vs_wbpp_full_compare.json`
+- Shape match: `true`.
+- Compared pixels: `61,651,200`.
+- Coverage fraction with `min_coverage=1`: `1.0`.
+- Full-frame RMS difference: `319.70719017059304`.
+- Full-frame absolute difference p99: `140.8788137563224`.
+- Diagnostic previews and hotspot tiles:
+  `C:\glass_runs\phase2_s2_gate711_real_200_stackengine_ab_baseline\runs_20260627_080659\compare_diagnostics`
+
+Contracts and audits:
+
+- `pipeline_contract.json`: passed.
+- `stack_engine_contract.json`: passed.
+- `warp_quality_contract.json`: passed.
+- `resident_result_contract.json`: passed.
+- Gate acceptance audit:
+  `C:\glass_runs\phase2_s2_gate711_real_200_stackengine_ab_baseline\runs_20260627_080659\gate711_acceptance_audit.json`,
+  status `passed`, failed checks `0`.
+- Mainline audit:
+  `C:\glass_runs\phase2_s2_gate711_real_200_stackengine_ab_baseline\runs_20260627_080659\gate711_mainline_audit.json`,
+  status `passed`, failed checks `0`.
+- Speedup summary:
+  `C:\glass_runs\phase2_s2_gate711_real_200_stackengine_ab_baseline\runs_20260627_080659\gate711_speedup_summary.json`.
+
+Runtime interpretation:
+
+- This gate satisfies the requested baseline: real data ran, a result compare
+  exists, and per-stage timings are published.
+- The run was slower than Gate707's `10.697529399883933 s` warm/default run.
+  The runtime compare shows the regression is dominated by
+  `light_read_upload_calibrate` (`22.819604300006176 s` here versus
+  `2.9152304000454023 s` in Gate707) and read-supply cumulative time. The next
+  substantive optimization should therefore focus on resident I/O, upload, and
+  calibration scheduling before changing scientific algorithms.
+- The DQ/mask pipeline is no longer just a report-side promise for this real
+  run: DQ, coverage, low/high rejection maps, sample accounting closure, and
+  StackEngine result contracts are present on the actual integration artifact.
+
+Validation:
+
+- Focused tests:
+  `python -m pytest -q tests/test_speedup_report.py tests/test_cli_smoke.py -q`:
+  `97 passed`.
+- Ruff:
+  `python -m ruff check src/glass/report/speedup_report.py src/glass/cli.py tests/test_speedup_report.py`:
+  passed.
+- Full pytest:
+  `python -m pytest -q`:
+  `1455 passed in 65.83 s`.
+
+Clean-room note:
+
+- This gate uses GLASS-owned run artifacts and user-generated black-box timing,
+  ProcessingHistory, and output masters as reference evidence.
+- No external or proprietary implementation source was inspected or used.
+
 ### S2-Gate 710: GPU Master Helper Finite-Sample DQ
 
 Gate710 continues the DQ/mask contract work from Gates 708 and 709. Gate709 made

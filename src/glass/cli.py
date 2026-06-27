@@ -4859,6 +4859,7 @@ def cmd_speedup_summary(args: argparse.Namespace) -> int:
         args.glass_run,
         args.wbpp_result,
         compare_json=args.compare_json,
+        wbpp_history=args.wbpp_history,
         min_speedup=args.min_speedup,
     )
     write_speedup_summary(args.out, summary, markdown=args.markdown)
@@ -9639,6 +9640,10 @@ def build_parser() -> argparse.ArgumentParser:
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")
     speedup.add_argument("--wbpp-result", required=True, help="user-generated PixInsight/WBPP black-box result JSON")
+    speedup.add_argument(
+        "--wbpp-history",
+        help="optional user-generated FastIntegration ProcessingHistory JSON for per-stage WBPP timing",
+    )
     speedup.add_argument("--compare-json", help="optional GLASS compare JSON with image-difference metrics")
     speedup.add_argument("--out", required=True, help="output summary JSON")
     speedup.add_argument("--markdown", help="optional output Markdown summary")
